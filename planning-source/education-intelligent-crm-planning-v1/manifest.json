@@ -1,0 +1,78 @@
+{
+  "package": "education-intelligent-crm-planning-v1",
+  "version": "1.0",
+  "schema_checks": {
+    "brace_balance": "pass",
+    "duplicate_definitions": "pass",
+    "named_relation_pairing": "pass",
+    "sql_table_reference_check": "pass",
+    "prisma_cli_validate": "not_run_schema_engine_unavailable"
+  },
+  "files": [
+    {
+      "path": ".env.example",
+      "bytes": 89,
+      "sha256": "ff189e050846e0ea1b60ff31e80e4f759dc37670a9ad591870eb194693ff116f"
+    },
+    {
+      "path": "00_README.md",
+      "bytes": 2793,
+      "sha256": "674eb5787908f4ad2a10e906b6b8843fd22b4d8a0ae152cdd9957788e6b5bec7"
+    },
+    {
+      "path": "01_PRD.md",
+      "bytes": 26066,
+      "sha256": "11cd4a55c668fa69947e6aec7b57ce9db6525a632fa012e65ce62d908d256faf"
+    },
+    {
+      "path": "02_PAGE_INFORMATION_ARCHITECTURE.md",
+      "bytes": 16730,
+      "sha256": "66b946f0480f145a2c2c06bc13bc31a4fdb8b5cfe2847640c992ab602d18ff47"
+    },
+    {
+      "path": "03_DATA_MODEL_AND_POSTGRESQL_DESIGN.md",
+      "bytes": 12541,
+      "sha256": "f8503b2ae1c7ace9d98d0bba7ffb12d43901db91e3a8c977089693c1801f59be"
+    },
+    {
+      "path": "04_ENGINEERING_TASK_PLAN.md",
+      "bytes": 25950,
+      "sha256": "5256a01a1f350b36e7389daf75c2081b199203b8099eecb08e9062c03dccc869"
+    },
+    {
+      "path": "05_ACCEPTANCE_CRITERIA.md",
+      "bytes": 4355,
+      "sha256": "d2a7f959a17b999ceac5c6492bcb094f67c84a885ec9637a684a6b17dd2fa2ae"
+    },
+    {
+      "path": "06_SEED_DICTIONARIES.md",
+      "bytes": 4649,
+      "sha256": "5413d3c51bc8dd490b12a4caaa715e31065a2b1ce345c13fc82f4758d21ea900"
+    },
+    {
+      "path": "docs/ERD.mmd",
+      "bytes": 854,
+      "sha256": "997f4fbb1fbd6ed9e0ce23d8871c7ab969fe0dce70206e4fd0dec6620e90267f"
+    },
+    {
+      "path": "package.json",
+      "bytes": 431,
+      "sha256": "c2bb0b4d75ec34abbb44615bbf880e29ad9c8c61d098da0af1b82a4b9b68447a"
+    },
+    {
+      "path": "prisma/migrations/0001_domain_constraints.sql",
+      "bytes": 16737,
+      "sha256": "5287939d7bb902f8966fc2ac3cc2c03a69c8ca45af880c2b103be0e49fb5e121"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "bytes": 101158,
+      "sha256": "dbb28f5511a698ac2314e20205d7cdeb3f4dd1ca98e30e0e92bfd69cdf529c83"
+    },
+    {
+      "path": "prisma.config.ts",
+      "bytes": 247,
+      "sha256": "a6863b170cbc5f508697680fa2dc4088e64a9ac47fbd38098b71693a26908d15"
+    }
+  ]
+}
