@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { ContractsPage } from "@/components/contracts-page";
+import { localizedPageMetadata } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: "客户合同与续约" };
+export const generateMetadata = () => localizedPageMetadata("meta.contracts");
 
 export default function Page() {
   return <ContractsPage />;

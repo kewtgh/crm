@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
 import { AuthForm, AuthLayout } from "@/components/auth-form";
 import { redirectAuthenticatedUser } from "@/lib/auth";
+import { localizedPageMetadata } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: "登录 · Lumina CRM" };
+export const generateMetadata = () => localizedPageMetadata("meta.login");
 
 export default async function LoginPage() {
   await redirectAuthenticatedUser();

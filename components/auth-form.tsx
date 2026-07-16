@@ -215,9 +215,9 @@ export function AuthForm({ mode, demoMode = false }: { mode: FormMode; demoMode?
   }
 
   return (
-    <form className="auth-form" onSubmit={submit} noValidate>
+    <form className="auth-form" method="post" action={`/api/auth/${mode}`} onSubmit={submit} noValidate>
       <div className="auth-form-heading">
-        <p className="eyebrow">{isLogin ? "SECURE SIGN IN" : "GUARDIAN REGISTRATION"}</p>
+        <p className="eyebrow">{t(isLogin ? "eyebrow.secureSignIn" : "eyebrow.guardianRegistration")}</p>
         <h1>{t(isLogin ? "auth.login.title" : "auth.register.title")}</h1>
         <p>{t(isLogin ? "auth.login.subtitle" : "auth.register.subtitle")}</p>
       </div>
@@ -264,7 +264,7 @@ export function AuthForm({ mode, demoMode = false }: { mode: FormMode; demoMode?
         </>
       )}
 
-      {isLogin && demoMode && (
+      {isLogin && (
         <div className="login-extras">
           <label className="checkbox-field compact">
             <input type="checkbox" name="remember" />
@@ -291,7 +291,7 @@ export function AuthForm({ mode, demoMode = false }: { mode: FormMode; demoMode?
         {!pending && <ArrowRight size={18} />}
       </button>
 
-      {isLogin && (
+      {isLogin && demoMode && (
         <div className="demo-note">
           <Sparkles size={16} />
           <span>{t("auth.demo")}</span>
@@ -328,7 +328,7 @@ export function AuthLayout({ children }: { children: React.ReactNode; mode: Form
           </div>
         </div>
         <div className="brand-orbit" aria-hidden="true"><span /><span /><span /></div>
-        <p className="auth-brand-footer">© 2026 Lumina Education · Taipei / Shanghai / Singapore</p>
+        <p className="auth-brand-footer">{t("auth.brandFooter")}</p>
       </section>
       <section className="auth-form-panel">
         <div className="language-chip"><LocaleSwitcher compact /></div>

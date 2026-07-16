@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { ProductsPage } from "@/components/products-page";
+import { localizedPageMetadata } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: "销售产品与服务" };
+export const generateMetadata = () => localizedPageMetadata("meta.products");
 
 export default function Page() {
   return <ProductsPage />;

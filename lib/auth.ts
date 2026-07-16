@@ -1,29 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { APP_ROLES, type AppRole } from "./roles";
+import type { AppUser } from "./user";
 
-export type AppUser = {
-  id: string;
-  username: string;
-  email: string;
-  displayName: string;
-  displayNameZh: string;
-  role: "SUPER_ADMIN" | "ADMIN" | "SALES_DIRECTOR" | "SALES_MANAGER" | "SALES_SPECIALIST" | "SALES_SUPPORT";
-  initials: string;
-};
-
-export type AppRole = AppUser["role"];
-
-export const ADMIN_ROLES: AppRole[] = ["SUPER_ADMIN", "ADMIN"];
-export const SALES_ROLES: AppRole[] = ["SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"];
-
-export const roleMessageKey: Record<AppRole, string> = {
-  SUPER_ADMIN: "role.superAdmin",
-  ADMIN: "role.admin",
-  SALES_DIRECTOR: "role.salesDirector",
-  SALES_MANAGER: "role.salesManager",
-  SALES_SPECIALIST: "role.salesSpecialist",
-  SALES_SUPPORT: "role.salesSupport",
-};
+export type { AppRole } from "./roles";
+export type { AppUser } from "./user";
 
 const demoUser: AppUser = {
   id: "demo-admin",
@@ -49,7 +30,7 @@ export function userFromSupabase(payload: Record<string, unknown>): AppUser | nu
   const username = String(metadata.username ?? "");
   const role = String(appMetadata.role ?? "").toUpperCase();
   const accountStatus = String(appMetadata.account_status ?? "ACTIVE").toUpperCase();
-  if (!["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"].includes(role) || accountStatus !== "ACTIVE") {
+  if (!APP_ROLES.includes(role as AppRole) || accountStatus !== "ACTIVE") {
     return null;
   }
   return {

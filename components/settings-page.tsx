@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { BellRing, Camera, Check, ChevronRight, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
-import { useAppUser } from "@/components/app-shell";
-import { roleMessageKey, type AppUser } from "@/lib/auth";
+import { useAppUser } from "@/components/app-user-context";
+import type { AppUser } from "@/lib/user";
+import { roleMessageKey } from "@/lib/roles";
 import { useI18n } from "./i18n-provider";
 import type { Locale } from "@/lib/i18n";
 
@@ -22,7 +23,8 @@ export function SettingsPage({ section }: { section: string }) {
   return <div className="page-stack settings-page"><section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.personalSettings")}</p><h1>{t("settings.title")}</h1><p>{t("settings.description")}</p></div><StatusBadge tone="green">{t("settings.accountNormal")}</StatusBadge></section><div className="settings-layout"><aside className="settings-nav">{tabs.map(({ href, key, icon: Icon }) => <Link key={href} className={pathname === href ? "active" : ""} href={href}><Icon size={17} /><span>{t(key)}</span><ChevronRight size={14} /></Link>)}<div className="settings-role-note"><LockKeyhole size={17} /><div><b>{t("settings.protected")}</b><p>{t("settings.protectedHelp")}</p></div></div></aside><section className="settings-content"><InlineMessage type="warning">{t("settings.prototypeWarning")}</InlineMessage>{section === "profile" && <ProfileSettings user={user} onSave={prototypeSave} />}{section === "account" && <AccountSettings user={user} onSave={prototypeSave} />}{section === "notifications" && <NotificationSettings onSave={prototypeSave} />}{section === "security" && <SecuritySettings onSave={prototypeSave} />}{section === "privacy" && <PrivacySettings onSave={prototypeSave} />}</section></div>{toast && <Toast message={toast} onClose={() => setToast("")} />}</div>;
 }
 
-function SettingsHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div className="settings-section-heading"><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{description}</p></div>; }
+const settingsEyebrowKeys: Record<string, string> = { PROFILE: "eyebrow.profile", "ACCOUNT & LANGUAGE": "eyebrow.accountLanguage", NOTIFICATIONS: "eyebrow.notifications", "PASSWORD & SECURITY": "eyebrow.passwordSecurity", "PRIVACY & DEVICES": "eyebrow.privacyDevices" };
+function SettingsHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { const { t } = useI18n(); return <div className="settings-section-heading"><p className="eyebrow">{t(settingsEyebrowKeys[eyebrow] ?? eyebrow)}</p><h2>{title}</h2><p>{description}</p></div>; }
 
 function ProfileSettings({ user, onSave }: { user: AppUser; onSave: () => void }) {
   const { t } = useI18n(); const fileRef = useRef<HTMLInputElement>(null); const [avatar, setAvatar] = useState<string>(); const [title, setTitle] = useState("ms");

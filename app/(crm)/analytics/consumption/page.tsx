@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { ConsumptionAnalysisPage } from "@/components/consumption-analysis-page";
+import { localizedPageMetadata } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: "客户消费分析" };
+export const generateMetadata = () => localizedPageMetadata("meta.consumption");
 
 export default function Page() {
   return <ConsumptionAnalysisPage />;

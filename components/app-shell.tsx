@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Bell,
   BookOpenCheck,
@@ -32,8 +32,10 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { ADMIN_ROLES, roleMessageKey, type AppUser } from "@/lib/auth";
+import type { AppUser } from "@/lib/user";
+import { ADMIN_ROLES, roleMessageKey } from "@/lib/roles";
 import { APP_VERSION } from "@/lib/version";
+import { AppUserProvider } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
 
@@ -87,14 +89,6 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   ]},
 ];
 
-const AppUserContext = createContext<AppUser | null>(null);
-
-export function useAppUser() {
-  const user = useContext(AppUserContext);
-  if (!user) throw new Error("useAppUser must be used inside AppShell");
-  return user;
-}
-
 export function AppShell({ user, children }: { user: AppUser; children: React.ReactNode }) {
   const { locale, t } = useI18n();
   const pathname = usePathname();
@@ -137,7 +131,7 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <AppUserContext.Provider value={user}>
+    <AppUserProvider user={user}>
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
       {mobileOpen && <button className="mobile-overlay" onClick={closeMobile} aria-label={t("nav.close")} />}
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")}>
@@ -190,7 +184,7 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
         <main className="app-content">{children}</main>
       </div>
     </div>
-    </AppUserContext.Provider>
+    </AppUserProvider>
   );
 }
 

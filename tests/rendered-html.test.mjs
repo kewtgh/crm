@@ -29,21 +29,41 @@ test("keeps authentication failures local to their forms", async () => {
   assert.doesNotMatch(registerRoute, /searchParams|URLSearchParams/);
 });
 
+test("keeps authentication and user context safe across hydration and client bundles", async () => {
+  const [authForm, shell, context, settings, governance, switcher, loginPage] = await Promise.all([
+    readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-user-context.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/governance-pages.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/locale-switcher.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/(auth)/login/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(authForm, /method="post" action=\{`\/api\/auth\/\$\{mode\}`\}/);
+  assert.match(authForm, /\{isLogin && demoMode && \(\s*<div className="demo-note">/s);
+  assert.match(authForm, /\{isLogin && \(\s*<div className="login-extras">/s);
+  for (const source of [shell, settings, governance]) assert.doesNotMatch(source, /from "@\/lib\/auth"/);
+  assert.match(context, /AppUserProvider/);
+  assert.match(switcher, /router\.refresh\(\)/);
+  assert.match(loginPage, /localizedPageMetadata\("meta\.login"\)/);
+});
+
 test("enforces server-owned roles and administrator boundaries", async () => {
-  const [auth, adminLayout, loginRoute, resetRoute, packageJson] = await Promise.all([
+  const [auth, roles, adminLayout, loginRoute, resetRoute, packageJson] = await Promise.all([
     readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/roles.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/(crm)/admin/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/password-reset/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(auth, /app_metadata/);
-  for (const role of ["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]) assert.match(auth, new RegExp(role));
+  for (const role of ["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]) assert.match(roles, new RegExp(role));
   assert.doesNotMatch(auth, /metadata\.role/);
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.4\.0"/);
+  assert.match(packageJson, /"version": "0\.4\.1"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -59,7 +79,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.4\.0"/);
+  assert.match(packageJson, /"version": "0\.4\.1"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -125,16 +145,16 @@ test("adds tiered approvals and non-duplicating manager performance allocation",
 });
 
 test("separates immutable user IDs, usernames, and bilingual names", async () => {
-  const [auth, registration, usernameRoute, migration, settings] = await Promise.all([
-    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+  const [userModel, registration, usernameRoute, migration, settings] = await Promise.all([
+    readFile(new URL("../lib/user.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/register/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/check-username/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/202607160001_user_identity.sql", import.meta.url), "utf8"),
     readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(auth, /id: string/);
-  assert.match(auth, /username: string/);
-  assert.match(auth, /displayNameZh/);
+  assert.match(userModel, /id: string/);
+  assert.match(userModel, /username: string/);
+  assert.match(userModel, /displayNameZh/);
   assert.match(registration, /username_available/);
   assert.match(usernameRoute, /USERNAME_CHECK_UNAVAILABLE/);
   assert.match(migration, /username citext not null unique/);
