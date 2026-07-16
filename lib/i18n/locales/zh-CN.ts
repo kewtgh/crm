@@ -2,11 +2,15 @@ import type { Messages } from "../types";
 import { zhSalesPlaybook } from "./sales-playbook";
 import { zhWorkspacePages } from "./workspace-pages";
 import { zhAnalysisPages } from "./analysis-pages";
+import { zhGovernancePages } from "./governance-pages";
+import { zhUiEyebrows } from "./ui-eyebrows";
 
 export const zhCN: Messages = {
   ...zhSalesPlaybook,
   ...zhWorkspacePages,
   ...zhAnalysisPages,
+  ...zhGovernancePages,
+  ...zhUiEyebrows,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.english": "English",
@@ -94,9 +98,6 @@ export const zhCN: Messages = {
   "nav.signOut": "安全退出",
   "nav.verified": "已验证",
   "nav.mfaEnabled": "MFA 已启用",
-  "role.admin": "管理员",
-  "role.operations": "运营成员",
-  "role.member": "业务成员",
   "nav.globalSearch": "搜索学校、人员、学生或任务…",
   "nav.noResults": "没有匹配结果",
   "nav.viewAll": "查看全部结果",

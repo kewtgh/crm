@@ -135,7 +135,7 @@ export function CalendarPage() {
         </div>
       </div>
       <aside className="surface reminder-panel">
-        <div className="surface-heading"><div><p className="eyebrow">REMINDERS</p><h2>{t("calendar.reminders")}</h2></div><span className="count-pill">{upcoming.length}</span></div>
+        <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.reminders")}</p><h2>{t("calendar.reminders")}</h2></div><span className="count-pill">{upcoming.length}</span></div>
         {upcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
           <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small></div>
@@ -148,7 +148,7 @@ export function CalendarPage() {
     {drawerOpen && <>
       <button className="drawer-overlay" type="button" aria-label={t("calendar.closeForm")} onClick={() => setDrawerOpen(false)} />
       <aside className="record-drawer" role="dialog" aria-modal="true" aria-label={t("calendar.new")}>
-        <div className="drawer-heading"><div><p className="eyebrow">NEW APPOINTMENT</p><h2>{t("calendar.new")}</h2><p>{t("calendar.formHelp")}</p></div><button ref={closeButtonRef} className="icon-button" type="button" aria-label={t("common.close")} onClick={() => setDrawerOpen(false)}><X size={20} /></button></div>
+        <div className="drawer-heading"><div><p className="eyebrow">{t("eyebrow.newAppointment")}</p><h2>{t("calendar.new")}</h2><p>{t("calendar.formHelp")}</p></div><button ref={closeButtonRef} className="icon-button" type="button" aria-label={t("common.close")} onClick={() => setDrawerOpen(false)}><X size={20} /></button></div>
         <form onSubmit={submitSchedule}>
           <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>

@@ -2,11 +2,15 @@ import type { Messages } from "../types";
 import { enSalesPlaybook } from "./sales-playbook";
 import { enWorkspacePages } from "./workspace-pages";
 import { enAnalysisPages } from "./analysis-pages";
+import { enGovernancePages } from "./governance-pages";
+import { enUiEyebrows } from "./ui-eyebrows";
 
 export const en: Messages = {
   ...enSalesPlaybook,
   ...enWorkspacePages,
   ...enAnalysisPages,
+  ...enGovernancePages,
+  ...enUiEyebrows,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.english": "English",
@@ -94,9 +98,6 @@ export const en: Messages = {
   "nav.signOut": "Sign out securely",
   "nav.verified": "Verified",
   "nav.mfaEnabled": "MFA enabled",
-  "role.admin": "Administrator",
-  "role.operations": "Operations member",
-  "role.member": "Team member",
   "nav.globalSearch": "Search schools, people, students, or tasks…",
   "nav.noResults": "No matching results",
   "nav.viewAll": "View all results",

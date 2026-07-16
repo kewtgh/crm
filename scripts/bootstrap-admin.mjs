@@ -33,7 +33,6 @@ const metadata = {
   username: (process.env.ADMIN_USERNAME || "lumina.admin").trim().toLowerCase(),
   chinese_name: process.env.ADMIN_CHINESE_NAME || "系统管理员",
   english_name: process.env.ADMIN_ENGLISH_NAME || "System Administrator",
-  role: "ADMIN",
   account_status: "ACTIVE",
   initialized_by: "bootstrap-admin",
 };
@@ -42,11 +41,11 @@ let synchronizedUser = existing;
 if (!existing) {
   synchronizedUser = await request("/auth/v1/admin/users", {
     method: "POST",
-    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: metadata, app_metadata: { role: "ADMIN", account_status: "ACTIVE" } }),
+    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: metadata, app_metadata: { role: "SUPER_ADMIN", account_status: "ACTIVE" } }),
   });
   process.stdout.write(`Created and verified Supabase Auth administrator: ${email}\n`);
 } else {
-  const update = { user_metadata: { ...(existing.user_metadata ?? {}), ...metadata }, app_metadata: { ...(existing.app_metadata ?? {}), role: "ADMIN", account_status: "ACTIVE" } };
+  const update = { user_metadata: { ...(existing.user_metadata ?? {}), ...metadata }, app_metadata: { ...(existing.app_metadata ?? {}), role: "SUPER_ADMIN", account_status: "ACTIVE" } };
   if (process.env.ADMIN_ROTATE_PASSWORD === "true") update.password = password;
   await request(`/auth/v1/admin/users/${existing.id}`, { method: "PUT", body: JSON.stringify(update) });
   process.stdout.write(`Synchronized existing Supabase Auth administrator: ${email}\n`);

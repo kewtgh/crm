@@ -38,12 +38,12 @@ test("enforces server-owned roles and administrator boundaries", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(auth, /app_metadata/);
-  assert.match(auth, /\["ADMIN", "SALES", "OPERATIONS"\]/);
+  for (const role of ["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]) assert.match(auth, new RegExp(role));
   assert.doesNotMatch(auth, /metadata\.role/);
-  assert.match(adminLayout, /requireRole\("ADMIN"\)/);
+  assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.3\.0"/);
+  assert.match(packageJson, /"version": "0\.4\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -59,7 +59,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.3\.0"/);
+  assert.match(packageJson, /"version": "0\.4\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -85,6 +85,8 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
     ["sales-playbook.ts", "zhSalesPlaybook", "enSalesPlaybook"],
     ["workspace-pages.ts", "zhWorkspacePages", "enWorkspacePages"],
     ["analysis-pages.ts", "zhAnalysisPages", "enAnalysisPages"],
+    ["governance-pages.ts", "zhGovernancePages", "enGovernancePages"],
+    ["ui-eyebrows.ts", "zhUiEyebrows", "enUiEyebrows"],
   ].map(async ([file, zhExport, enExport]) => ({ source: await readFile(new URL(`../lib/i18n/locales/${file}`, import.meta.url), "utf8"), zhExport, enExport })));
   const block = (source, name) => { const start = source.indexOf(`export const ${name}`); const next = source.indexOf("export const ", start + 13); return source.slice(start, next === -1 ? source.length : next); };
   const keys = (source) => [...source.matchAll(/"([a-z][^"]+)"\s*:/g)].map((match) => match[1]).sort();
@@ -93,6 +95,33 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
     assert.deepEqual(keys(zhBlock), keys(enBlock));
     assert.doesNotMatch(enBlock, /Object\.fromEntries|\[key,\s*key\]/);
   }
+});
+
+test("routes visible eyebrow labels through the locale catalog", async () => {
+  const files = ["admin-pages.tsx", "calendar-page.tsx", "dashboard-page.tsx", "module-page.tsx", "operations-pages.tsx", "password-reset-forms.tsx", "pipeline-page.tsx", "sales-performance-page.tsx", "settings-page.tsx"];
+  for (const file of files) {
+    const source = await readFile(new URL(`../components/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /className="eyebrow">[^<{]+/);
+  }
+});
+
+test("adds tiered approvals and non-duplicating manager performance allocation", async () => {
+  const [governance, allocationRoute, migration, shell, bootstrap] = await Promise.all([
+    readFile(new URL("../components/governance-pages.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/(crm)/sales/allocation/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607160004_approvals_and_performance_allocations.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/bootstrap-admin.mjs", import.meta.url), "utf8"),
+  ]);
+  for (const workflow of ["contractSign", "contractExport", "performanceSummary"]) assert.match(governance, new RegExp(workflow));
+  assert.match(governance, /allocation\.noDoubleCount/);
+  assert.match(governance, /Pagination/);
+  assert.match(allocationRoute, /SALES_DIRECTOR", "SALES_MANAGER/);
+  assert.match(migration, /allocation_total_exceeds_target/);
+  assert.match(migration, /requester_id <> auth\.uid\(\)/);
+  assert.match(shell, /nav\.approvals/);
+  assert.match(shell, /nav\.allocation/);
+  assert.match(bootstrap, /role: "SUPER_ADMIN"/);
 });
 
 test("separates immutable user IDs, usernames, and bilingual names", async () => {

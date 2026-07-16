@@ -1,8 +1,8 @@
-# Lumina CRM 部署指引（v0.3.0）
+# Lumina CRM 部署指引（v0.4.0）
 
 ## 部署边界
 
-v0.3.0 可以部署为受限的 UI/认证验收环境，但**不应作为真实客户数据的生产 CRM**。业务表、工作区 RLS、持久化设置、日程通知、销售目标版本、MFA 管理和服务端分页完成前，不要导入学生、家庭或学校真实资料。
+v0.4.0 可以部署为受限的 UI/认证验收环境，但**不应作为真实客户数据的生产 CRM**。审批与业绩分配表已经提供迁移和 RLS 基线，其余业务表、工作区 RLS、持久化设置、日程通知、MFA 管理和服务端分页完成前，不要导入学生、家庭或学校真实资料。
 
 ## 1. 发布前准备
 
@@ -47,7 +47,7 @@ ADMIN_ROTATE_PASSWORD=false
 npm run auth:bootstrap-admin
 ```
 
-在 Supabase Auth 控制台确认该用户已存在，且 `app_metadata.role=ADMIN`、`app_metadata.account_status=ACTIVE`，`user_profiles.username` 唯一且不等于姓名。首次登录后立即修改密码，并从本地文件、CI 变量和托管 secrets 中删除 `ADMIN_PASSWORD` 与 `SUPABASE_SERVICE_ROLE_KEY`。应用正常运行不需要 service-role key。
+在 Supabase Auth 控制台确认该用户已存在，且 `app_metadata.role=SUPER_ADMIN`、`app_metadata.account_status=ACTIVE`，`user_profiles.username` 唯一且不等于姓名。首次登录后立即修改密码，并从本地文件、CI 变量和托管 secrets 中删除 `ADMIN_PASSWORD` 与 `SUPABASE_SERVICE_ROLE_KEY`。应用正常运行不需要 service-role key。普通管理员使用 `ADMIN`；销售角色使用 `SALES_DIRECTOR`、`SALES_MANAGER`、`SALES_SPECIALIST` 或 `SALES_SUPPORT`，角色只能由可信服务端管理。
 
 ## 3. 质量门禁
 
@@ -72,6 +72,8 @@ npm test
 - 关系推进和关单 Playbook 在手机端自然堆叠，每阶段显示 3–5 条建议。
 - `/contracts` 搜索、分页、续约提醒和日历入口可用；`/products` 包含五个默认产品并支持会话内自定义。
 - `/analytics/consumption` 的月/季/年切换和 Dashboard 消费看板一致。
+- `/admin/approvals` 可搜索、分页并处理合同签订、合同导出和业绩汇总；驳回原因显示在当前审批表单内，高权限导出只能由超级管理员批准。
+- `/sales/allocation` 仅销售经理、销售总监和管理员可进入；分配总额不得超过经理目标，成员不可重复，销售支持贡献不重复累加团队业绩。
 
 ## 4. 使用 Sites 发布
 
@@ -82,13 +84,13 @@ npm test
 ## 5. 发布后检查
 
 1. 打开 `/login`，确认页面不显示演示账号。
-2. 使用真实管理员登录并检查 `/dashboard`、`/admin/guardians`、`/admin/users`、`/settings/security`。
+2. 使用真实超级管理员登录并检查 `/dashboard`、`/admin/approvals`、`/admin/guardians`、`/admin/users`、`/settings/security`。
 3. 检查 `/calendar` 的双月切换、日程创建、提醒完成和移动端布局。
 4. 检查 `/sales/performance` 的周期、团队、四级关系目标、两套 Playbook、预测和漏斗分析。
 5. 检查 `/contracts`、`/products`、`/analytics/consumption` 和首页消费看板。
 6. 在登录页和顶栏切换中英文，检查当前语言单语显示与人员姓名双语例外。
 7. 在注册页验证账户名可用与重复错误都显示在账户名字段附近。
-8. 使用无管理员角色账号请求 `/admin`，应被重定向到 `/dashboard`。
+8. 使用普通管理员确认不能完成需超级管理员的导出审批；使用销售专员或销售支持请求 `/sales/allocation` 应被重定向到 `/dashboard`。
 9. 等待或缩短 JWT 有效期，确认 refresh token 能恢复会话。
 10. 触发密码重置邮件，确认链接回到正式域名 `/reset-password`。
 11. 检查 Supabase Auth 日志、Turnstile 验证率和托管平台错误日志。

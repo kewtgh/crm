@@ -1,5 +1,6 @@
 import { UserManagementPage } from "@/components/admin-pages";
+import { RoleHierarchyNote } from "@/components/governance-pages";
 
 export default function Page() {
-  return <UserManagementPage />;
+  return <><RoleHierarchyNote /><UserManagementPage /></>;
 }

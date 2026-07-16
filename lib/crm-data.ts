@@ -188,12 +188,12 @@ function row(values: (string | number)[], owner: string): DataRow {
 }
 
 export const crmUsers = [
-  { id: "u1", name: "Example Person 3", english: "Olivia Chen", team: "上海 · 管理", role: "ADMIN", accounts: 28, status: "活跃", last: "今天 09:42", mfa: true },
-  { id: "u2", name: "Example Person 4", english: "Jason Wu", team: "台北 · 销售", role: "SALES", accounts: 34, status: "活跃", last: "昨天 18:05", mfa: true },
-  { id: "u3", name: "Example Person 5", english: "Sophia Lin", team: "新加坡 · 客户成功", role: "OPERATIONS", accounts: 22, status: "活跃", last: "今天 08:20", mfa: true },
-  { id: "u4", name: "Example Person 6", english: "Ethan Wang", team: "上海 · 运营", role: "OPERATIONS", accounts: 19, status: "休假", last: "7 月 12 日", mfa: true },
-  { id: "u5", name: "Example Person 12", english: "Alex Cheng", team: "台北 · 销售", role: "SALES", accounts: 0, status: "待激活", last: "尚未登录", mfa: false },
-  { id: "u6", name: "Example Person 13", english: "Hannah Chen", team: "新加坡 · 销售", role: "SALES", accounts: 16, status: "活跃", last: "2 天前", mfa: true },
+  { id: "u1", name: "Example Person 3", english: "Olivia Chen", team: "上海 · 管理", role: "SUPER_ADMIN", accounts: 28, status: "活跃", last: "今天 09:42", mfa: true },
+  { id: "u2", name: "Example Person 4", english: "Jason Wu", team: "台北 · 销售", role: "SALES_DIRECTOR", accounts: 34, status: "活跃", last: "昨天 18:05", mfa: true },
+  { id: "u3", name: "Example Person 5", english: "Sophia Lin", team: "新加坡 · 管理", role: "ADMIN", accounts: 22, status: "活跃", last: "今天 08:20", mfa: true },
+  { id: "u4", name: "Example Person 6", english: "Ethan Wang", team: "上海 · 销售", role: "SALES_MANAGER", accounts: 19, status: "休假", last: "7 月 12 日", mfa: true },
+  { id: "u5", name: "Example Person 12", english: "Alex Cheng", team: "台北 · 销售", role: "SALES_SPECIALIST", accounts: 0, status: "待激活", last: "尚未登录", mfa: false },
+  { id: "u6", name: "Example Person 13", english: "Hannah Chen", team: "新加坡 · 销售支持", role: "SALES_SUPPORT", accounts: 16, status: "活跃", last: "2 天前", mfa: true },
 ];
 export const guardians = [
   { id: "g1", name: "Example Person 2", english: "Maggie Zhao", email: "fixture-person-23@example.test", student: "赵子墨 / Ethan Zhao", match: "学籍 + 手机", submitted: "今天 10:12", risk: "低" },

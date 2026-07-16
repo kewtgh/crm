@@ -1,0 +1,19 @@
+import type { Messages } from "../types";
+
+export const zhUiEyebrows: Messages = {
+  "action.create": "新建", "action.update": "更新", "action.merge": "合并", "action.skip": "跳过", "action.skipError": "跳过 / 错误",
+  "eyebrow.auditTrail": "审计轨迹", "eyebrow.crmUsers": "CRM 用户与账号", "eyebrow.identityReview": "身份与关系审核", "eyebrow.messages": "消息", "eyebrow.operationsCenter": "运营控制中心", "eyebrow.priorityQueue": "优先队列", "eyebrow.readiness": "上线准备度", "eyebrow.securityAudit": "安全与审计", "eyebrow.securityEvents": "安全事件",
+  "eyebrow.newAppointment": "新建预约", "eyebrow.reminders": "提醒", "eyebrow.attention": "待关注", "eyebrow.consumptionPulse": "消费脉搏", "eyebrow.pipelinePulse": "销售管道脉搏", "eyebrow.relationshipHealth": "关系健康度", "eyebrow.todayFocus": "今日重点", "eyebrow.createRecord": "新建记录",
+  "eyebrow.academicProgression": "学业升阶", "eyebrow.dataOnboarding": "受控数据导入", "eyebrow.duplicateResolution": "重复数据处理", "eyebrow.executionPreview": "执行预览", "eyebrow.fieldMapping": "字段映射", "eyebrow.humanIntelligence": "人工复核智能", "eyebrow.promotionWindow": "2026 升阶窗口", "eyebrow.recentReports": "最近报告", "eyebrow.reportsInsights": "报告与洞察", "eyebrow.reviewQueue": "审核队列", "eyebrow.trustedData": "可信数据",
+  "eyebrow.accountRecovery": "账户恢复", "eyebrow.newPassword": "新密码", "eyebrow.revenueMomentum": "营收动能", "eyebrow.personalSettings": "个人设置",
+  "eyebrow.actionableInsights": "可执行洞察", "eyebrow.closingPlaybook": "关单手册", "eyebrow.conversionFunnel": "转化漏斗", "eyebrow.forecastHealth": "预测健康度", "eyebrow.relationshipGoals": "客户关系目标", "eyebrow.relationshipPlaybook": "关系推进手册", "eyebrow.relationshipTargets": "客户关系目标值", "eyebrow.salesTarget": "销售目标", "eyebrow.targetActual": "目标与实际", "eyebrow.teamContribution": "团队贡献",
+};
+
+export const enUiEyebrows: Messages = {
+  "action.create": "Create", "action.update": "Update", "action.merge": "Merge", "action.skip": "Skip", "action.skipError": "Skip / error",
+  "eyebrow.auditTrail": "Audit trail", "eyebrow.crmUsers": "CRM users and accounts", "eyebrow.identityReview": "Identity and relationship review", "eyebrow.messages": "Messages", "eyebrow.operationsCenter": "Operations control center", "eyebrow.priorityQueue": "Priority queue", "eyebrow.readiness": "Launch readiness", "eyebrow.securityAudit": "Security and audit", "eyebrow.securityEvents": "Security events",
+  "eyebrow.newAppointment": "New appointment", "eyebrow.reminders": "Reminders", "eyebrow.attention": "Attention needed", "eyebrow.consumptionPulse": "Consumption pulse", "eyebrow.pipelinePulse": "Pipeline pulse", "eyebrow.relationshipHealth": "Relationship health", "eyebrow.todayFocus": "Today's focus", "eyebrow.createRecord": "Create record",
+  "eyebrow.academicProgression": "Academic progression", "eyebrow.dataOnboarding": "Controlled data onboarding", "eyebrow.duplicateResolution": "Duplicate resolution", "eyebrow.executionPreview": "Execution preview", "eyebrow.fieldMapping": "Field mapping", "eyebrow.humanIntelligence": "Human-in-the-loop intelligence", "eyebrow.promotionWindow": "Promotion window · 2026", "eyebrow.recentReports": "Recent reports", "eyebrow.reportsInsights": "Reports and insights", "eyebrow.reviewQueue": "Review queue", "eyebrow.trustedData": "Trusted data",
+  "eyebrow.accountRecovery": "Account recovery", "eyebrow.newPassword": "New password", "eyebrow.revenueMomentum": "Revenue momentum", "eyebrow.personalSettings": "Personal settings",
+  "eyebrow.actionableInsights": "Actionable insights", "eyebrow.closingPlaybook": "Closing playbook", "eyebrow.conversionFunnel": "Conversion funnel", "eyebrow.forecastHealth": "Forecast health", "eyebrow.relationshipGoals": "Relationship goals", "eyebrow.relationshipPlaybook": "Relationship playbook", "eyebrow.relationshipTargets": "Relationship targets", "eyebrow.salesTarget": "Sales target", "eyebrow.targetActual": "Target vs actual", "eyebrow.teamContribution": "Team contribution",
+};
