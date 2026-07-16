@@ -32,7 +32,7 @@ export function PasswordResetRequestForm() {
   }
 
   return <form className="auth-form" onSubmit={submit} noValidate>
-    <div className="auth-form-heading"><p className="eyebrow">ACCOUNT RECOVERY</p><h1>{t("auth.reset.title")}</h1><p>{t("auth.reset.requestDescription")}</p></div>
+    <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.accountRecovery")}</p><h1>{t("auth.reset.title")}</h1><p>{t("auth.reset.requestDescription")}</p></div>
     <label className="field"><span>{t("auth.email")}</span><input type="email" name="email" autoComplete="email" required /></label>
     {error && <div className="form-message error" role="alert"><LockKeyhole size={17} /><span>{error}</span></div>}
     {success && <div className="form-message success" role="status"><Check size={17} /><span>{success}</span></div>}
@@ -93,7 +93,7 @@ export function NewPasswordForm() {
   }
 
   return <form className="auth-form" onSubmit={submit} noValidate>
-    <div className="auth-form-heading"><p className="eyebrow">NEW PASSWORD</p><h1>{t("auth.reset.newTitle")}</h1><p>{t("auth.reset.newDescription")}</p></div>
+    <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.newPassword")}</p><h1>{t("auth.reset.newTitle")}</h1><p>{t("auth.reset.newDescription")}</p></div>
     {!ready ? <div className="form-message" role="status"><LoaderCircle className="spin" size={17} /><span>{t("auth.reset.verifying")}</span></div> : <>
       <label className="field"><span>{t("auth.reset.newPassword")}</span><input type="password" name="password" autoComplete="new-password" required /></label>
       <label className="field"><span>{t("auth.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" required /></label>

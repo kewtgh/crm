@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  BellRing,
   CalendarClock,
   Check,
   ChevronRight,
   CircleDollarSign,
+  FileDown,
   FileCheck2,
   RefreshCcw,
   ShieldAlert,
+  Signature,
 } from "lucide-react";
 import { InlineMessage, Pagination, ProgressBar, SearchField, StatusBadge, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
@@ -65,29 +66,29 @@ export function ContractsPage() {
   const renewalValue = contracts.filter((contract) => contract.days <= 90).reduce((sum, contract) => sum + contract.value, 0);
 
   return <div className="page-stack contracts-page">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("contracts.eyebrow")}</p><h1>{t("contracts.title")}</h1><p>{t("contracts.description")}</p></div><div className="page-actions"><Link className="secondary-button" href="/calendar"><CalendarClock size={17} />{t("contracts.viewSchedule")}</Link><Link className="primary-button" href="/calendar"><BellRing size={17} />{t("contracts.scheduleMeeting")}</Link></div></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("contracts.eyebrow")}</p><h1>{t("contracts.title")}</h1><p>{t("contracts.description")}</p></div><div className="page-actions"><button className="secondary-button" type="button" onClick={() => setToast(t("flow.approvalRequested"))}><FileDown size={17} />{t("flow.requestExportApproval")}</button><button className="primary-button" type="button" onClick={() => setToast(t("flow.approvalRequested"))}><Signature size={17} />{t("flow.requestSignApproval")}</button></div></section>
     <InlineMessage type="warning">{t("contracts.prototypeWarning")}</InlineMessage>
 
     <section className="contract-kpis">
       <ContractKpi icon={FileCheck2} tone="green" value="10" label={t("contracts.valid")} detail={t("contracts.validDetail")} />
-      <ContractKpi icon={CalendarClock} tone="amber" value="4" label="90 天内到期" detail="2 份少于 30 天" />
+      <ContractKpi icon={CalendarClock} tone="amber" value="4" label={t("contracts.in90Days")} detail={t("contracts.under30Days")} />
       <ContractKpi icon={CircleDollarSign} tone="blue" value={money(renewalValue)} label={t("contracts.renewalAmount")} detail={t("contracts.quarterWindow")} />
       <ContractKpi icon={ShieldAlert} tone="red" value="1" label={t("contracts.highRisk")} detail={t("contracts.highRiskDetail")} />
     </section>
 
     <section className="surface contract-cycle-card">
-      <div className="surface-heading"><div><p className="eyebrow">LIFECYCLE OVERVIEW</p><h2>{t("contracts.lifecycle")}</h2></div><StatusBadge tone="blue">2026 Q3</StatusBadge></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("contracts.lifecycleEyebrow")}</p><h2>{t("contracts.lifecycle")}</h2></div><StatusBadge tone="blue">2026 Q3</StatusBadge></div>
       <div className="contract-cycle"><CycleStep label={t("contracts.cycle.signed")} count="2" detail={t("contracts.cycle.signedDetail")} tone="blue" /><CycleStep label={t("contracts.cycle.active")} count="6" detail={t("contracts.cycle.activeDetail")} tone="green" /><CycleStep label={t("contracts.cycle.preparing")} count="2" detail={t("contracts.cycle.preparingDetail")} tone="amber" /><CycleStep label={t("contracts.cycle.negotiating")} count="1" detail={t("contracts.cycle.negotiatingDetail")} tone="purple" /><CycleStep label={t("contracts.cycle.risk")} count="1" detail={t("contracts.cycle.riskDetail")} tone="red" /></div>
     </section>
 
     <section className="contracts-main-grid">
       <div className="surface contract-table-card">
         <div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("contracts.search")} /><div className="filter-chips"><button type="button" className={status === "all" ? "active" : ""} onClick={() => { setStatus("all"); setPage(1); }}>{t("common.all")}</button>{(["续约准备", "谈判中", "风险"] as Contract["status"][]).map((item) => <button type="button" className={status === item ? "active" : ""} onClick={() => { setStatus(item); setPage(1); }} key={item}>{t(statusKeys[item])}</button>)}</div></div>
-        <div className="table-scroll"><table className="contract-table"><thead><tr><th>{t("contracts.customer")}</th><th>{t("contracts.period")}</th><th>{t("contracts.expiry")}</th><th>{t("contracts.renewalValue")}</th><th>{t("contracts.relationshipGoal")}</th><th>{t("common.owner")}</th><th>{t("common.status")}</th></tr></thead><tbody>{visible.map((contract) => <tr key={contract.id}><td><b>{locale==="zh-CN"?contract.customer:contract.english}</b></td><td><span>{contract.start}</span><small>{t("contracts.to",{date:contract.end})}</small></td><td><b className={contract.days <= 30 ? "danger-text" : contract.days <= 90 ? "warn-text" : ""}>{t("contracts.days",{days:contract.days})}</b><small>{t(contract.days<=30?"contracts.renewNow":contract.days<=90?"contracts.prepareRenewal":"contracts.status.active")}</small></td><td><b>{money(contract.value)}</b><small>{t("contracts.annual")}</small></td><td><b>Level {contract.relationLevel}</b><small>{t(relationshipKeys[contract.relationLevel])}</small></td><td>{contract.owner}</td><td><StatusBadge tone={statusTone(contract.status)}>{t(statusKeys[contract.status])}</StatusBadge></td></tr>)}</tbody></table></div>
+        <div className="table-scroll"><table className="contract-table"><thead><tr><th>{t("contracts.customer")}</th><th>{t("contracts.period")}</th><th>{t("contracts.expiry")}</th><th>{t("contracts.renewalValue")}</th><th>{t("contracts.relationshipGoal")}</th><th>{t("common.owner")}</th><th>{t("common.status")}</th></tr></thead><tbody>{visible.map((contract) => <tr key={contract.id}><td><b>{locale==="zh-CN"?contract.customer:contract.english}</b></td><td><span>{contract.start}</span><small>{t("contracts.to",{date:contract.end})}</small></td><td><b className={contract.days <= 30 ? "danger-text" : contract.days <= 90 ? "warn-text" : ""}>{t("contracts.days",{days:contract.days})}</b><small>{t(contract.days<=30?"contracts.renewNow":contract.days<=90?"contracts.prepareRenewal":"contracts.status.active")}</small></td><td><b>{money(contract.value)}</b><small>{t("contracts.annual")}</small></td><td><b>{t("contracts.relationshipLevelShort",{level:contract.relationLevel})}</b><small>{t(relationshipKeys[contract.relationLevel])}</small></td><td>{contract.owner}</td><td><StatusBadge tone={statusTone(contract.status)}>{t(statusKeys[contract.status])}</StatusBadge></td></tr>)}</tbody></table></div>
         <Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage} />
       </div>
 
-      <aside className="surface renewal-reminder-panel"><div className="surface-heading"><div><p className="eyebrow">RENEWAL ALERTS</p><h2>{t("contracts.renewalAlerts")}</h2></div><span className="count-pill">{renewals.length}</span></div>{renewals.map((contract) => { const name=locale==="zh-CN"?contract.customer:contract.english; return <article className="renewal-reminder" key={contract.id}><span className={contract.days <= 30 ? "red" : "amber"}><RefreshCcw size={17} /></span><div><b>{name}</b><small>{t("contracts.daysRemaining",{days:contract.days})} · {money(contract.value)}</small><small>{t("contracts.relationshipLevel",{level:contract.relationLevel})} · {contract.owner}</small><ProgressBar value={Math.max(5, 100 - contract.days)} label={t(statusKeys[contract.status])} /></div><button type="button" aria-label={t("contracts.completeReminder",{name})} onClick={() => { setHandled((current) => [...current, contract.id]); setToast(t("contracts.reminderDone",{name})); }}><Check size={16} /></button></article>})}{!renewals.length && <div className="empty-state"><span>{t("contracts.allHandled")}</span><p>{t("contracts.newReminderHelp")}</p></div>}<Link className="card-link" href="/calendar">{t("contracts.calendar")} <ChevronRight size={15} /></Link></aside>
+      <aside className="surface renewal-reminder-panel"><div className="surface-heading"><div><p className="eyebrow">{t("contracts.renewalEyebrow")}</p><h2>{t("contracts.renewalAlerts")}</h2></div><span className="count-pill">{renewals.length}</span></div>{renewals.map((contract) => { const name=locale==="zh-CN"?contract.customer:contract.english; return <article className="renewal-reminder" key={contract.id}><span className={contract.days <= 30 ? "red" : "amber"}><RefreshCcw size={17} /></span><div><b>{name}</b><small>{t("contracts.daysRemaining",{days:contract.days})} · {money(contract.value)}</small><small>{t("contracts.relationshipLevel",{level:contract.relationLevel})} · {contract.owner}</small><ProgressBar value={Math.max(5, 100 - contract.days)} label={t(statusKeys[contract.status])} /></div><button type="button" aria-label={t("contracts.completeReminder",{name})} onClick={() => { setHandled((current) => [...current, contract.id]); setToast(t("contracts.reminderDone",{name})); }}><Check size={16} /></button></article>})}{!renewals.length && <div className="empty-state"><span>{t("contracts.allHandled")}</span><p>{t("contracts.newReminderHelp")}</p></div>}<Link className="card-link" href="/calendar">{t("contracts.calendar")} <ChevronRight size={15} /></Link></aside>
     </section>
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;

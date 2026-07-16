@@ -7,11 +7,23 @@ export type AppUser = {
   email: string;
   displayName: string;
   displayNameZh: string;
-  role: "ADMIN" | "SALES" | "OPERATIONS";
+  role: "SUPER_ADMIN" | "ADMIN" | "SALES_DIRECTOR" | "SALES_MANAGER" | "SALES_SPECIALIST" | "SALES_SUPPORT";
   initials: string;
 };
 
 export type AppRole = AppUser["role"];
+
+export const ADMIN_ROLES: AppRole[] = ["SUPER_ADMIN", "ADMIN"];
+export const SALES_ROLES: AppRole[] = ["SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"];
+
+export const roleMessageKey: Record<AppRole, string> = {
+  SUPER_ADMIN: "role.superAdmin",
+  ADMIN: "role.admin",
+  SALES_DIRECTOR: "role.salesDirector",
+  SALES_MANAGER: "role.salesManager",
+  SALES_SPECIALIST: "role.salesSpecialist",
+  SALES_SUPPORT: "role.salesSupport",
+};
 
 const demoUser: AppUser = {
   id: "demo-admin",
@@ -19,7 +31,7 @@ const demoUser: AppUser = {
   email: "admin@lumina-edu.com",
   displayName: "Olivia Chen",
   displayNameZh: "陈雅雯",
-  role: "ADMIN",
+  role: "SUPER_ADMIN",
   initials: "OC",
 };
 
@@ -37,7 +49,7 @@ export function userFromSupabase(payload: Record<string, unknown>): AppUser | nu
   const username = String(metadata.username ?? "");
   const role = String(appMetadata.role ?? "").toUpperCase();
   const accountStatus = String(appMetadata.account_status ?? "ACTIVE").toUpperCase();
-  if (!["ADMIN", "SALES", "OPERATIONS"].includes(role) || accountStatus !== "ACTIVE") {
+  if (!["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"].includes(role) || accountStatus !== "ACTIVE") {
     return null;
   }
   return {

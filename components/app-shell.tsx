@@ -32,7 +32,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { AppUser } from "@/lib/auth";
+import { ADMIN_ROLES, roleMessageKey, type AppUser } from "@/lib/auth";
 import { APP_VERSION } from "@/lib/version";
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
@@ -59,6 +59,7 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
       { labelKey: "nav.leads", href: "/leads", badge: "12" },
       { labelKey: "nav.opportunities", href: "/opportunities" },
       { labelKey: "nav.performance", href: "/sales/performance" },
+      { labelKey: "nav.allocation", href: "/sales/allocation" },
       { labelKey: "nav.contracts", href: "/contracts", badge: "4" },
       { labelKey: "nav.products", href: "/products" },
     ]},
@@ -77,6 +78,7 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   { titleKey: "nav.admin", items: [
     { labelKey: "nav.admin", icon: ShieldCheck, children: [
       { labelKey: "nav.dashboard", href: "/admin" },
+      { labelKey: "nav.approvals", href: "/admin/approvals", badge: "7" },
       { labelKey: "nav.guardians", href: "/admin/guardians", badge: "6" },
       { labelKey: "nav.users", href: "/admin/users" },
       { labelKey: "nav.security", href: "/admin/security" },
@@ -101,15 +103,15 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
-  const visibleNavigation = useMemo(
-    () => user.role === "ADMIN"
-      ? navigation
-      : navigation.map((group) => ({
-          ...group,
-          items: group.items.filter((item) => item.labelKey !== "nav.admin"),
-        })).filter((group) => group.items.length > 0),
-    [user.role],
-  );
+  const visibleNavigation = useMemo(() => {
+    const canAllocate = ADMIN_ROLES.includes(user.role) || user.role === "SALES_DIRECTOR" || user.role === "SALES_MANAGER";
+    return navigation.map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => item.labelKey !== "nav.admin" || ADMIN_ROLES.includes(user.role))
+        .map((item) => item.children ? { ...item, children: item.children.filter((child) => child.labelKey !== "nav.allocation" || canAllocate) } : item),
+    })).filter((group) => group.items.length > 0);
+  }, [user.role]);
   const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
   const searchResults = useMemo(() => {
     if (globalSearch.trim().length < 2) return [];
@@ -180,7 +182,7 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
             </div>
             <div className="topbar-divider" />
             <div className="popover-anchor">
-              <button className="profile-trigger" type="button" onClick={() => setProfileOpen((value) => !value)}><span>{user.initials}</span><span className="profile-copy"><b>{user.displayNameZh} / {user.displayName}</b><small>{user.role === "ADMIN" ? t("role.admin") : user.role === "OPERATIONS" ? t("role.operations") : t("role.member")}</small></span><ChevronDown size={15} /></button>
+              <button className="profile-trigger" type="button" onClick={() => setProfileOpen((value) => !value)}><span>{user.initials}</span><span className="profile-copy"><b>{user.displayNameZh} / {user.displayName}</b><small>{t(roleMessageKey[user.role])}</small></span><ChevronDown size={15} /></button>
               {profileOpen && <ProfilePopover user={user} close={() => setProfileOpen(false)} />}
             </div>
           </div>
@@ -207,7 +209,7 @@ function NotificationPopover({ user, close }: { user: AppUser; close: () => void
   const { t } = useI18n();
   return <div className="top-popover notifications"><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: 3 })}</small></span><button type="button">{t("nav.markAllRead")}</button></div>
     <Link href="/tasks" onClick={close}><span className="notification-icon red"><CalendarCheck2 size={17} /></span><span><b>{t("nav.notification.tasks")}</b><small>{t("nav.notification.tasksDetail")}</small><time>{t("nav.notification.fiveMinutes")}</time></span></Link>
-    {user.role === "ADMIN" && <Link href="/admin/guardians" onClick={close}><span className="notification-icon purple"><ClipboardCheck size={17} /></span><span><b>{t("nav.notification.guardian")}</b><small>{t("nav.notification.guardianDetail")}</small><time>{t("nav.notification.28Minutes")}</time></span></Link>}
+    {ADMIN_ROLES.includes(user.role) && <Link href="/admin/approvals" onClick={close}><span className="notification-icon purple"><ClipboardCheck size={17} /></span><span><b>{t("nav.notification.approval")}</b><small>{t("nav.notification.approvalDetail")}</small><time>{t("nav.notification.28Minutes")}</time></span></Link>}
     <Link href="/data-quality" onClick={close}><span className="notification-icon amber"><CircleGauge size={17} /></span><span><b>{t("nav.notification.quality")}</b><small>{t("nav.notification.qualityDetail")}</small><time>{t("nav.notification.oneHour")}</time></span></Link>
     <Link className="popover-footer" href="/messages" onClick={close}>{t("nav.notification.viewAll")} <ChevronRight size={15} /></Link>
   </div>;
@@ -215,10 +217,10 @@ function NotificationPopover({ user, close }: { user: AppUser; close: () => void
 
 function ProfilePopover({ user, close }: { user: AppUser; close: () => void }) {
   const { t } = useI18n();
-  const roleLabel = user.role === "ADMIN" ? t("role.admin") : user.role === "OPERATIONS" ? t("role.operations") : t("role.member");
+  const roleLabel = t(roleMessageKey[user.role]);
   return <div className="top-popover profile-popover"><div className="profile-card"><span>{user.initials}</span><div><b>{user.displayNameZh} / {user.displayName}</b><small>@{user.username} · {user.email}</small><em>{roleLabel} · {t("nav.verified")}</em></div></div>
     <Link href="/settings/profile" onClick={close}><Settings size={17} />{t("nav.profileSettings")}</Link>
-    <Link href={user.role === "ADMIN" ? "/admin/security" : "/settings/security"} onClick={close}><ShieldCheck size={17} />{t("nav.security")} <span className="mini-good">{t("nav.mfaEnabled")}</span></Link>
+    <Link href={ADMIN_ROLES.includes(user.role) ? "/admin/security" : "/settings/security"} onClick={close}><ShieldCheck size={17} />{t("nav.security")} <span className="mini-good">{t("nav.mfaEnabled")}</span></Link>
     <Link href="/help" onClick={close}><HelpCircle size={17} />{t("nav.support")}</Link>
     <form action="/api/auth/logout" method="post"><button type="submit"><LogOut size={17} />{t("nav.signOut")}</button></form>
   </div>;

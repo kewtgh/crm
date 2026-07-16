@@ -33,7 +33,7 @@ export function ModulePage({ config }: { config: ModuleConfig }) {
     {drawer && <>
       <button className="drawer-overlay" type="button" aria-label={t("common.close")} onClick={close} />
       <aside className="record-drawer" aria-label={t("modules.createRecord",{record:t(`${prefix}.singular`)})}>
-        <div className="drawer-heading"><div><p className="eyebrow">CREATE RECORD</p><h2>{t("modules.createRecord",{record:t(`${prefix}.singular`)})}</h2><p>{t("modules.createHelp")}</p></div><button className="icon-button" type="button" aria-label={t("common.close")} onClick={close}><X size={20} /></button></div>
+        <div className="drawer-heading"><div><p className="eyebrow">{t("eyebrow.createRecord")}</p><h2>{t("modules.createRecord",{record:t(`${prefix}.singular`)})}</h2><p>{t("modules.createHelp")}</p></div><button className="icon-button" type="button" aria-label={t("common.close")} onClick={close}><X size={20} /></button></div>
         <form onSubmit={(event) => { event.preventDefault(); if (!duplicateChecked) return; close(); setToast(`${config.singular}已创建，审计记录已保存`); }}>
           <div className="form-grid two-column"><label className="field"><span>{t("products.nameZh")} <b>*</b></span><input name="nameZh" required placeholder="例：林俊佑" /></label><label className="field"><span>{t("products.nameEn")} <b>*</b></span><input name="nameEn" required placeholder="e.g. Lumina International" /></label></div>
           <label className="field"><span>{t("modules.contact")}</span><input name="contact" placeholder={t("modules.duplicatePlaceholder")} /></label>

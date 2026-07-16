@@ -40,13 +40,13 @@ export function DashboardPage() {
     </section>
 
     <section className="surface consumption-dashboard-card">
-      <div className="surface-heading"><div><p className="eyebrow">CONSUMPTION PULSE</p><h2>{t("dashboard.consumptionTitle")}</h2></div><Link href="/analytics/consumption">{t("dashboard.viewAnalysis")} <ArrowRight size={15} /></Link></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.consumptionPulse")}</p><h2>{t("dashboard.consumptionTitle")}</h2></div><Link href="/analytics/consumption">{t("dashboard.viewAnalysis")} <ArrowRight size={15} /></Link></div>
       <div className="consumption-dashboard-body"><div className="consumption-board-metric"><span><ChartNoAxesCombined size={20} /></span><div><small>{t("dashboard.monthConfirmed")}</small><b>¥ 1.28M</b><em>{t("dashboard.monthChange")}</em></div></div><div className="consumption-mini-trend" aria-label={t("dashboard.sixMonthTrend")}>{[48,62,55,76,68,88].map((value,index)=><span style={{height:`${value}%`}} key={index} />)}</div><div className="consumption-board-mix"><span><b>{t("products.default.admissions")}</b><small>43%</small></span><span><b>{t("products.default.foundation")}</b><small>20%</small></span><span><b>{t("products.default.competition")}</b><small>15%</small></span><span><b>{t("products.default.summerCamp")} / {t("products.default.summerSchool")}</b><small>22%</small></span></div><Link className="card-link" href="/products">{t("dashboard.manageProducts")} <ChevronRight size={15} /></Link></div>
     </section>
 
     <section className="dashboard-main-grid">
       <article className="surface task-focus-card">
-        <div className="surface-heading"><div><p className="eyebrow">TODAY&apos;S FOCUS</p><h2>{t("dashboard.focus")}</h2></div><Link href="/tasks">{t("dashboard.allTasks")} <ArrowRight size={15} /></Link></div>
+        <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.todayFocus")}</p><h2>{t("dashboard.focus")}</h2></div><Link href="/tasks">{t("dashboard.allTasks")} <ArrowRight size={15} /></Link></div>
         <div className="focus-list">
           <FocusTask id="f1" done={completed.includes("f1")} onDone={complete} tone="red" time="10:30" title={t("dashboard.focus.renewal")} meta={t("dashboard.focus.schoolMeta")} tag={t("dashboard.highPriority")} />
           <FocusTask id="f2" done={completed.includes("f2")} onDone={complete} tone="amber" time="14:00" title={t("dashboard.focus.ucas")} meta={t("dashboard.focus.studentMeta")} tag={t("dashboard.dueToday")} />
@@ -56,7 +56,7 @@ export function DashboardPage() {
       </article>
 
       <article className="surface pipeline-card">
-        <div className="surface-heading"><div><p className="eyebrow">PIPELINE PULSE</p><h2>{t("dashboard.salesProgress")}</h2></div><select aria-label={t("dashboard.pipelineType")}><option>{t("dashboard.allPipeline")}</option><option>{t("dashboard.schoolSales")}</option><option>{t("dashboard.familySales")}</option></select></div>
+        <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.pipelinePulse")}</p><h2>{t("dashboard.salesProgress")}</h2></div><select aria-label={t("dashboard.pipelineType")}><option>{t("dashboard.allPipeline")}</option><option>{t("dashboard.schoolSales")}</option><option>{t("dashboard.familySales")}</option></select></div>
         <div className="pipeline-total"><div><small>{t("dashboard.weightedAmount")}</small><b>¥ 2.71M</b></div><span><TrendingUp size={15} /> 8.6%</span></div>
         <div className="pipeline-bars">
           <PipelineBar label={t("dashboard.needsConfirmed")} value="¥ 860K" count={12} width={76} color="var(--blue)" />
@@ -69,12 +69,12 @@ export function DashboardPage() {
     </section>
 
     <section className="dashboard-bottom-grid">
-      <article className="surface attention-card"><div className="surface-heading"><div><p className="eyebrow">ATTENTION NEEDED</p><h2>{t("dashboard.attention")}</h2></div><span className="count-pill">{t("admin.items", { count: 8 })}</span></div>
+      <article className="surface attention-card"><div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.attention")}</p><h2>{t("dashboard.attention")}</h2></div><span className="count-pill">{t("admin.items", { count: 8 })}</span></div>
         <AttentionRow icon={AlertTriangle} tone="red" title={t("dashboard.attention.stale")} meta={t("dashboard.attention.staleMeta")} href="/opportunities" />
         <AttentionRow icon={School} tone="amber" title={t("dashboard.attention.schools")} meta={t("dashboard.attention.schoolsMeta")} href="/schools" />
         <AttentionRow icon={GraduationCap} tone="purple" title={t("dashboard.attention.student")} meta={t("dashboard.attention.studentMeta")} href="/progression" />
       </article>
-      <article className="surface relationship-card"><div className="surface-heading"><div><p className="eyebrow">RELATIONSHIP HEALTH</p><h2>{t("dashboard.relationshipHealth")}</h2></div><Link href="/reports">{t("dashboard.report")}</Link></div>
+      <article className="surface relationship-card"><div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.relationshipHealth")}</p><h2>{t("dashboard.relationshipHealth")}</h2></div><Link href="/reports">{t("dashboard.report")}</Link></div>
         <div className="health-donut" style={{ "--score": "87%" } as React.CSSProperties}><div><b>87</b><small>{t("dashboard.overallHealth")}</small></div></div>
         <div className="health-legend"><span><i className="green" />{t("dashboard.healthy")} <b>68%</b></span><span><i className="amber" />{t("dashboard.attention")} <b>24%</b></span><span><i className="red" />{t("dashboard.risk")} <b>8%</b></span></div>
       </article>

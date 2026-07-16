@@ -1,4 +1,4 @@
-# Lumina Education CRM implementation status (v0.3.0)
+# Lumina Education CRM implementation status (v0.4.0)
 
 This repository now contains a runnable modern CRM application baseline built from the supplied planning package.
 
@@ -11,12 +11,14 @@ This repository now contains a runnable modern CRM application baseline built fr
 - Operations dashboard, schools, people, students, households, leads, opportunities, tasks, progression, imports, duplicate review, data quality, reports, AI review, products and message surfaces.
 - Shared search, pagination, status, progress, searchable select, toast and inline-message components.
 - User-settings interfaces for avatar, bilingual name, honorific, email, password, language, notifications, privacy, sessions and MFA. These controls remain prototype-only until the production profile/security services are connected.
-- Administrator portal with reminders, security events, progress, guardian verification and CRM user account management for sales and operations teams.
+- Administrator portal with reminders, security events, progress, guardian verification, approval queues, and CRM account management across two administrator tiers and four sales roles.
 - Responsive two-month calendar with meeting, consultation, follow-up and deadline views; local appointment creation and reminder handling are available for interaction acceptance.
 - Sales performance center with target/actual/forecast KPIs, team attainment, period comparison, conversion funnel and actionable analysis; target edits remain session-local until the data service is connected.
 - Four progressive customer-relationship goals, a four-stage relationship playbook, and a four-stage ethical payment/closing playbook with four actions per stage.
 - Contract lifecycle and renewal alerts, customizable sales products with five defaults (summer camp, admissions, competition programs, summer school, and foundation), plus monthly/quarterly/annual customer-consumption dashboards.
 - Immutable user IDs, independent unique usernames, bilingual names, field-local username availability checks, and Supabase uniqueness enforcement.
+- Contract-signing, contract-export, performance-summary, and performance-allocation approval models with audit actions and role-aware RLS.
+- Manager performance allocation across sales specialists and the separate sales-support branch, including total-allocation enforcement and explicit non-duplication rules.
 
 ## Production gates that require external infrastructure
 

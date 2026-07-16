@@ -1,8 +1,10 @@
 # Lumina Education CRM
 
-Current baseline: **v0.3.0**
+Current baseline: **v0.4.0**
 
 Lumina is an internationalized relationship CRM baseline for international education teams. Chinese and English UI copy use matched locale catalogs; personal names are the explicit exception and display Chinese and English together.
+
+v0.4.0 adds auditable administrator approvals for contract signing, contract exports, and performance summaries; manager performance allocation without double-counting; two administrator tiers; and sales director, manager, specialist, and sales-support roles.
 
 The original product plan is preserved under `planning-source/education-intelligent-crm-planning-v1/`. It describes a multi-phase production program; this repository implements the runnable MVP vertical slice and the production authentication boundary.
 
