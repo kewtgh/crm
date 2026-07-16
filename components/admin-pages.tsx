@@ -5,8 +5,8 @@ import { ArrowRight, CheckCircle2, ChevronRight, CircleGauge, KeyRound, MoreHori
 import { crmUsers, guardians } from "@/lib/crm-data";
 import { Pagination, SearchField, StatusBadge, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
-import { useAppUser } from "@/components/app-shell";
-import { roleMessageKey, type AppRole } from "@/lib/auth";
+import { useAppUser } from "@/components/app-user-context";
+import { roleMessageKey, type AppRole } from "@/lib/roles";
 
 function Metric({ icon: Icon, tone, value, label, note, href }: { icon: React.ElementType; tone: string; value: string; label: string; note: string; href: string }) { return <a className="admin-metric" href={href}><span className={tone}><Icon size={20} /></span><div><b>{value}</b><span>{label}</span><small>{note}</small></div><ChevronRight size={16} /></a>; }
 function Task({ icon: Icon, tone, title, meta, action }: { icon: React.ElementType; tone: string; title: string; meta: string; action: string }) { return <div className="admin-task"><span className={tone}><Icon size={18} /></span><div><b>{title}</b><small>{meta}</small></div><button type="button">{action}</button></div>; }

@@ -1,6 +1,8 @@
-# Lumina Education CRM implementation status (v0.4.0)
+# Lumina Education CRM implementation status (v0.4.1)
 
 This repository now contains a runnable modern CRM application baseline built from the supplied planning package.
+
+v0.4.1 is an audit hardening release. It separates client-safe roles and user context from server-only authentication, prevents native form fallback from placing credentials in a query string, hides demo credentials outside demo mode, restores password recovery for production sign-in, localizes page metadata and remaining section labels, and fixes the mobile allocation percentage display.
 
 ## Implemented vertical slice
 

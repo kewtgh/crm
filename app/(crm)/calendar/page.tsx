@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { CalendarPage } from "@/components/calendar-page";
+import { localizedPageMetadata } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: "双月日历与预约" };
+export const generateMetadata = () => localizedPageMetadata("meta.calendar");
 
 export default function Page() {
   return <CalendarPage />;
