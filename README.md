@@ -1,10 +1,10 @@
 # Lumina Education CRM
 
-Current baseline: **v0.4.1**
+Current baseline: **v0.5.0**
 
 Lumina is an internationalized relationship CRM baseline for international education teams. Chinese and English UI copy use matched locale catalogs; personal names are the explicit exception and display Chinese and English together.
 
-v0.4.1 keeps the v0.4 governance model and fixes the client/server authentication boundary, user-context ownership, pre-hydration form safety, production login affordances, localized metadata, and mobile allocation progress display found during Chromium 1228 regression testing.
+v0.5.0 adds the persisted CRM foundation: workspace-aware RLS and auditing, server-side pagination and duplicate checks for the core vertical slice, persisted products/contracts/calendar/settings, scheduled reminders, transaction-backed consumption analytics, approval workflows, and manager performance allocation.
 
 The original product plan is preserved under `planning-source/education-intelligent-crm-planning-v1/`. It describes a multi-phase production program; this repository implements the runnable MVP vertical slice and the production authentication boundary.
 

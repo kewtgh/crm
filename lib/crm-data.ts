@@ -6,6 +6,7 @@ export type DataRow = {
   secondary: string;
   owner: string;
   status: string;
+  statusKey?: string;
   statusTone: StatusTone;
   meta: string;
   extra: string;

@@ -63,7 +63,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.4\.1"/);
+  assert.match(packageJson, /"version": "0\.5\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -79,7 +79,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.4\.1"/);
+  assert.match(packageJson, /"version": "0\.5\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -162,15 +162,17 @@ test("separates immutable user IDs, usernames, and bilingual names", async () =>
 });
 
 test("includes contracts, custom products, consumption reporting, and exact relationship goals", async () => {
-  const [contracts, products, consumption, zh, sales, playbook] = await Promise.all([
+  const [contracts, products, consumption, zh, sales, playbook, coreMigration] = await Promise.all([
     readFile(new URL("../components/contracts-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/products-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/consumption-analysis-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/i18n/locales/zh-CN.ts", import.meta.url), "utf8"),
     readFile(new URL("../components/sales-performance-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/i18n/locales/sales-playbook.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170001_core_crm_architecture.sql", import.meta.url), "utf8"),
   ]);
-  assert.match(contracts, /90、60、30、14、7|contracts\.prototypeWarning/);
+  assert.match(contracts, /contracts\.loading/);
+  assert.match(coreMigration, /array\[90,60,30,14,7\]/);
   for (const name of ["夏令营", "升学", "竞赛", "夏校", "预科"]) assert.match(products, new RegExp(name));
   assert.match(consumption, /month/);
   assert.match(consumption, /quarter/);

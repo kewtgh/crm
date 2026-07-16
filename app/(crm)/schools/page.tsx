@@ -1,1 +1,2 @@
-import { ModulePage } from "@/components/module-page"; import { moduleConfigs } from "@/lib/crm-data"; export default function Page(){ return <ModulePage config={moduleConfigs.schools} />; }
+import { ModulePage } from "@/components/module-page"; import { moduleConfigs } from "@/lib/crm-data"; import { listCrmRows } from "@/lib/crm-repository";
+export default async function Page(){ const data=await listCrmRows("schools",{pageSize:5}).catch(()=>({items:moduleConfigs.schools.rows.slice(0,5),total:moduleConfigs.schools.rows.length,page:1,pageSize:5})); return <ModulePage config={{...moduleConfigs.schools,rows:data.items}} resource="schools" initialTotal={data.total}/>; }
