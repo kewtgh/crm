@@ -10,6 +10,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { useI18n } from "./i18n-provider";
 
 export function StatusBadge({ tone = "gray", children }: { tone?: string; children: React.ReactNode }) {
   return <span className={`status-badge ${tone}`}><i />{children}</span>;
@@ -25,31 +26,33 @@ export function ProgressBar({ value, label }: { value: number; label?: string })
 }
 
 export function SearchField({ value, onChange, placeholder, compact = false }: { value: string; onChange: (value: string) => void; placeholder: string; compact?: boolean }) {
+  const { t } = useI18n();
   return (
     <label className={`search-field ${compact ? "compact" : ""}`}>
       <Search size={17} />
       <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label={placeholder} />
-      {value && <button type="button" onClick={() => onChange("")} aria-label="清除搜索"><X size={15} /></button>}
+      {value && <button type="button" onClick={() => onChange("")} aria-label={t("common.clearSearch")}><X size={15} /></button>}
     </label>
   );
 }
 
 export function Pagination({ page, totalPages, total, pageSize, onPage }: { page: number; totalPages: number; total: number; pageSize: number; onPage: (page: number) => void }) {
+  const { t } = useI18n();
   const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter(
     (value) => value === 1 || value === totalPages || Math.abs(value - page) <= 1,
   );
   return (
-    <nav className="pagination" aria-label="分页">
-      <span>共 {total} 条 · 每页 {pageSize} 条</span>
+    <nav className="pagination" aria-label={t("common.pagination")}>
+      <span>{t("common.paginationSummary",{total,pageSize})}</span>
       <div>
-        <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="上一页"><ChevronLeft size={16} /></button>
+        <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label={t("common.previousPage")}><ChevronLeft size={16} /></button>
         {pages.map((value, index) => (
           <span key={value} className="page-number-wrap">
             {index > 0 && pages[index - 1] !== value - 1 ? <i>…</i> : null}
             <button type="button" className={value === page ? "active" : ""} onClick={() => onPage(value)} aria-current={value === page ? "page" : undefined}>{value}</button>
           </span>
         ))}
-        <button type="button" onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label="下一页"><ChevronRight size={16} /></button>
+        <button type="button" onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label={t("common.nextPage")}><ChevronRight size={16} /></button>
       </div>
     </nav>
   );
@@ -57,7 +60,9 @@ export function Pagination({ page, totalPages, total, pageSize, onPage }: { page
 
 export type SelectOption = { value: string; label: string; detail?: string };
 
-export function SearchableSelect({ label, options, value, onChange, placeholder = "请选择…" }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string }) {
+export function SearchableSelect({ label, options, value, onChange, placeholder }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string }) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("common.select");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -107,11 +112,11 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
     <div className="select-field" ref={ref} onKeyDown={handleKeyDown}>
       <span className="select-label">{label}</span>
       <button ref={triggerRef} type="button" className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
-        <span className={selected ? "" : "placeholder"}>{selected?.label ?? placeholder}</span><ChevronDown size={17} />
+        <span className={selected ? "" : "placeholder"}>{selected?.label ?? resolvedPlaceholder}</span><ChevronDown size={17} />
       </button>
       {open && (
         <div className="select-popover">
-          <SearchField value={search} onChange={(nextSearch) => { setSearch(nextSearch); setActiveIndex(0); }} placeholder="输入关键词搜索…" compact />
+          <SearchField value={search} onChange={(nextSearch) => { setSearch(nextSearch); setActiveIndex(0); }} placeholder={t("common.typeToSearch")} compact />
           <div className="select-options" id={listboxId} role="listbox" aria-label={label}>
             {filtered.map((option, index) => (
               <button key={option.value} type="button" className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option.value)} role="option" aria-selected={option.value === value}>
@@ -119,7 +124,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
                 {option.value === value ? <Check size={16} /> : null}
               </button>
             ))}
-            {!filtered.length && <p className="select-empty">没有匹配选项</p>}
+            {!filtered.length && <p className="select-empty">{t("common.noOptions")}</p>}
           </div>
         </div>
       )}

@@ -30,6 +30,7 @@ async function request(path, options = {}) {
 const usersResult = await request("/auth/v1/admin/users?per_page=1000");
 const existing = (usersResult.users ?? []).find((user) => String(user.email).toLowerCase() === email);
 const metadata = {
+  username: (process.env.ADMIN_USERNAME || "lumina.admin").trim().toLowerCase(),
   chinese_name: process.env.ADMIN_CHINESE_NAME || "系统管理员",
   english_name: process.env.ADMIN_ENGLISH_NAME || "System Administrator",
   role: "ADMIN",
@@ -37,8 +38,9 @@ const metadata = {
   initialized_by: "bootstrap-admin",
 };
 
+let synchronizedUser = existing;
 if (!existing) {
-  await request("/auth/v1/admin/users", {
+  synchronizedUser = await request("/auth/v1/admin/users", {
     method: "POST",
     body: JSON.stringify({ email, password, email_confirm: true, user_metadata: metadata, app_metadata: { role: "ADMIN", account_status: "ACTIVE" } }),
   });
@@ -49,6 +51,12 @@ if (!existing) {
   await request(`/auth/v1/admin/users/${existing.id}`, { method: "PUT", body: JSON.stringify(update) });
   process.stdout.write(`Synchronized existing Supabase Auth administrator: ${email}\n`);
 }
+
+await request("/rest/v1/user_profiles?on_conflict=user_id", {
+  method: "POST",
+  headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+  body: JSON.stringify({ user_id: synchronizedUser.id, username: metadata.username, display_name_zh: metadata.chinese_name, display_name_en: metadata.english_name }),
+});
 
 await mkdir("work", { recursive: true });
 await writeFile(

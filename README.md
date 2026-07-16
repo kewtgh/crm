@@ -1,8 +1,8 @@
 # Lumina Education CRM
 
-Current baseline: **v0.2.0**
+Current baseline: **v0.3.0**
 
-Lumina is a bilingual relationship CRM baseline for international education teams. It connects schools, people, students, households, sales work, tasks, data quality and operations in one responsive product interface.
+Lumina is an internationalized relationship CRM baseline for international education teams. Chinese and English UI copy use matched locale catalogs; personal names are the explicit exception and display Chinese and English together.
 
 The original product plan is preserved under `planning-source/education-intelligent-crm-planning-v1/`. It describes a multi-phase production program; this repository implements the runnable MVP vertical slice and the production authentication boundary.
 
@@ -15,12 +15,15 @@ npm install
 npm run dev
 ```
 
-When the existing local Supabase stack is running, configure and initialize the real local Auth environment with:
+Start the repository's isolated `lumina-crm` Supabase project, then configure and initialize its Auth environment:
 
 ```bash
+npx supabase start
 npm run env:configure-local
 npm run auth:bootstrap-admin
 ```
+
+The local stack uses ports 56321–56324 and must not reuse another application's Supabase containers or database.
 
 The generated administrator password is removed from `.env.local` after initialization and stored only in the Git-ignored `work/local-admin-credentials.txt` file. Change it after the first interactive sign-in.
 

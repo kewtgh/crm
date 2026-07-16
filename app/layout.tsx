@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { I18nProvider } from "@/components/i18n-provider";
+import { isLocale } from "@/lib/i18n";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -23,14 +25,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <html lang="zh-CN">
-      <body>{children}</body>
-    </html>
-  );
+  const cookieStore = await cookies();
+  const requestedLocale = cookieStore.get("lumina-locale")?.value;
+  const locale = isLocale(requestedLocale) ? requestedLocale : "zh-CN";
+  return <html lang={locale}>
+      <body><I18nProvider initialLocale={locale}>{children}</I18nProvider></body>
+    </html>;
 }
