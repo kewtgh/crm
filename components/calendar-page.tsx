@@ -66,16 +66,17 @@ function monthCells(month: Date) {
   ];
 }
 
-export function CalendarPage() {
+export function CalendarPage({ initialCalendarEvents = initialEvents, persistent = false }: { initialCalendarEvents?: CalendarEvent[]; persistent?: boolean }) {
   const { locale, t } = useI18n();
   const relatedOptions = relatedRecords.map(item=>({value:item.value,label:locale==="zh-CN"?item.zh:item.en,detail:locale==="zh-CN"?item.detailZh:item.detailEn}));
   const [month, setMonth] = useState(() => new Date(2026, 6, 1));
-  const [events, setEvents] = useState(initialEvents);
+  const [events, setEvents] = useState(initialCalendarEvents);
   const [selectedDate, setSelectedDate] = useState("2026-07-16");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [related, setRelated] = useState("");
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  const [formError, setFormError] = useState("");
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
@@ -98,12 +99,21 @@ export function CalendarPage() {
     setDrawerOpen(true);
   };
 
-  const submitSchedule = (event: React.FormEvent<HTMLFormElement>) => {
+  const submitSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError("");
     const form = new FormData(event.currentTarget);
     const relation = relatedOptions.find((option) => option.value === related)?.label ?? t("calendar.unlinked");
+    const reminderValues: Record<string, number> = { [t("calendar.reminder.start")]: 0, [t("calendar.reminder.30m")]: 30, [t("calendar.reminder.2h")]: 120, [t("calendar.reminder.day")]: 1440, [t("calendar.reminder.3d")]: 4320 };
+    let id = `local-${Date.now()}`;
+    if (persistent) {
+      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, reminder: reminderValues[String(form.get("reminder"))] ?? 1440 }) });
+      const result = await response.json() as { item?: { id?: string } };
+      if (!response.ok || !result.item?.id) { setFormError(t("calendar.saveFailed")); return; }
+      id = result.item.id;
+    }
     setEvents((current) => [...current, {
-      id: `local-${Date.now()}`,
+      id,
       date: String(form.get("date")),
       time: String(form.get("time")),
       title: String(form.get("title")),
@@ -113,7 +123,12 @@ export function CalendarPage() {
       reminder: String(form.get("reminder")),
     }]);
     setDrawerOpen(false);
-    setToast(t("calendar.savedPrototype"));
+    setToast(t("calendar.saved"));
+  };
+
+  const completeEvent = async (id: string) => {
+    if (persistent) { const response = await fetch(`/api/calendar/${id}`, { method: "PATCH" }); if (!response.ok) { setToast(t("calendar.completeFailed")); return; } }
+    setDismissed((current) => [...current, id]);
   };
 
   return <div className="page-stack calendar-page">
@@ -121,7 +136,6 @@ export function CalendarPage() {
       <div><p className="eyebrow">{t("calendar.eyebrow")}</p><h1>{t("calendar.title")}</h1><p>{t("calendar.description")}</p></div>
       <div className="page-actions"><button className="secondary-button" type="button" onClick={() => setMonth(new Date(2026, 6, 1))}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
     </section>
-    <InlineMessage type="warning">{t("calendar.prototypeWarning")}</InlineMessage>
     <section className="calendar-layout">
       <div className="surface calendar-surface">
         <div className="calendar-toolbar">
@@ -139,7 +153,7 @@ export function CalendarPage() {
         {upcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
           <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small></div>
-          <button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => setDismissed((current) => [...current, item.id])}><Check size={16} /></button>
+          <button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button>
         </article>)}
         {!upcoming.length && <div className="empty-state"><span>{t("calendar.empty")}</span><p>{t("calendar.emptyHelp")}</p></div>}
       </aside>
@@ -156,6 +170,7 @@ export function CalendarPage() {
           <SearchableSelect label={t("calendar.related")} options={relatedOptions} value={related} onChange={setRelated} placeholder={t("calendar.relatedPlaceholder")} />
           <label className="field"><span>{t("calendar.remindAt")}</span><select name="reminder" defaultValue={t("calendar.reminder.day")}><option>{t("calendar.reminder.start")}</option><option>{t("calendar.reminder.30m")}</option><option>{t("calendar.reminder.2h")}</option><option>{t("calendar.reminder.day")}</option><option>{t("calendar.reminder.3d")}</option></select></label>
           <div className="appointment-hints"><span><Users size={16} />{t("calendar.inviteHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
+          {formError && <InlineMessage type="error">{formError}</InlineMessage>}
           <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit"><CalendarDays size={17} />{t("calendar.save")}</button></div>
         </form>
       </aside>

@@ -1,0 +1,14 @@
+import { supabaseRequest } from "./supabase-server";
+
+export type ContractRecord = { id: string; customer: string; english: string; start: string; end: string; days: number; value: number; owner: string; status: "DRAFT"|"PENDING_APPROVAL"|"ACTIVE"|"RENEWAL_PREP"|"NEGOTIATING"|"EXPIRED"|"CANCELLED"|"RISK"; relationLevel: 1|2|3|4 };
+type Row = { id:string; start_date:string; end_date:string; contract_value:number|string; status:ContractRecord["status"]; relationship_level:1|2|3|4; owner_id:string|null; organizations:{name_zh:string;name_en:string}|null };
+export async function listContracts(input:{page:number;pageSize:number;query?:string;status?:string}) {
+  const page=Math.max(1,input.page);const pageSize=Math.max(1,Math.min(100,input.pageSize));const params=new URLSearchParams({select:"id,start_date,end_date,contract_value,status,relationship_level,owner_id,organizations(name_zh,name_en)",order:"end_date.asc"});
+  if(input.status&&input.status!=="all")params.set("status",`eq.${input.status}`);
+  if(input.query?.trim()){const q=input.query.trim().replaceAll(/[,*()]/g,"");const organizationResponse=await supabaseRequest(`/rest/v1/organizations?select=id&or=(name_zh.ilike.*${encodeURIComponent(q)}*,name_en.ilike.*${encodeURIComponent(q)}*)&limit=100`);const organizationIds=(await organizationResponse.json() as Array<{id:string}>).map(item=>item.id);params.set("or",organizationIds.length?`(contract_number.ilike.*${q}*,organization_id.in.(${organizationIds.join(",")}))`:`(contract_number.ilike.*${q}*)`);}
+  const response=await supabaseRequest(`/rest/v1/contracts?${params}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});const rows=await response.json() as Row[];const range=response.headers.get("content-range");const total=range?.split("/")[1]==="*"?rows.length:Number(range?.split("/")[1]??rows.length);
+  const ownerIds=[...new Set(rows.map(row=>row.owner_id).filter(Boolean))] as string[];const owners=new Map<string,string>();
+  if(ownerIds.length){const ownerResponse=await supabaseRequest(`/rest/v1/sales_team_members?select=auth_user_id,name_en&auth_user_id=in.(${ownerIds.join(",")})`);const members=await ownerResponse.json() as Array<{auth_user_id:string|null;name_en:string}>;members.forEach(item=>item.auth_user_id&&owners.set(item.auth_user_id,item.name_en));}
+  const today=new Date();today.setHours(0,0,0,0);
+  return {total,items:rows.map((row):ContractRecord=>({id:row.id,customer:row.organizations?.name_zh??"",english:row.organizations?.name_en??"",start:row.start_date,end:row.end_date,days:Math.ceil((new Date(`${row.end_date}T00:00:00`).getTime()-today.getTime())/86400000),value:Number(row.contract_value),owner:row.owner_id?owners.get(row.owner_id)??"—":"—",status:row.status,relationLevel:row.relationship_level}))};
+}

@@ -1,33 +1,37 @@
-# Lumina Education CRM implementation status (v0.4.1)
+# Lumina Education CRM implementation status (v0.5.0)
 
-This repository now contains a runnable modern CRM application baseline built from the supplied planning package.
+v0.5.0 turns the earlier interaction prototype into a production-oriented CRM foundation. It keeps the restrained Vinext/Next + Supabase architecture and adds a real workspace data boundary instead of introducing a microservice or monorepo rewrite.
 
-v0.4.1 is an audit hardening release. It separates client-safe roles and user context from server-only authentication, prevents native form fallback from placing credentials in a query string, hides demo credentials outside demo mode, restores password recovery for production sign-in, localizes page metadata and remaining section labels, and fixes the mobile allocation percentage display.
+## Persisted and enforced
 
-## Implemented vertical slice
+- Isolated Supabase project, workspace and membership model, row-level security, audit events, and server-owned role checks.
+- Separate login and parent registration, field-local errors, Turnstile reset, refresh-token flow, and one-shot administrator bootstrap that removes `ADMIN_PASSWORD` after initialization.
+- Unique usernames, immutable UUIDs, and independent Chinese/English name fields. Personal names remain the only intentional simultaneous bilingual display.
+- Server-side search, sort, page limits, exact counts, CSV export, and duplicate revalidation for the school, contact, and task vertical slice.
+- Product catalog with the five defaults, custom products, versioned effective prices, currencies, and deactivation history.
+- Contract records, renewal dates, relationship level, owner, server pagination/search, and idempotent 90/60/30/14/7-day reminder generation.
+- Two-month calendar backed by appointments; create/complete actions persist and generate reminders.
+- In-app reminder processing with `pg_cron` where available, plus an external-runner fallback. Email work is written to an outbox and is not marked sent by this application.
+- Confirmed-payment monthly/quarterly/annual aggregation, product mix, customer segments, and customer ranking.
+- Contract-sign, contract-export, performance-summary, and performance-allocation approval requests with maker/checker protection and audit actions.
+- Versioned manager targets and allocations to sales specialists and the separate sales-support branch, with allocation caps and duplicate-contributor constraints.
+- Profile, honorific, bio, language, time zone, date format, notifications and quiet hours; private avatar storage; password update; other-session revocation; Supabase TOTP MFA enrollment and verification.
+- Shared internationalization catalogs, language switch, searchable select, pagination, status, inline message, progress, and feedback components.
 
-- Separate sign-in and guardian registration routes with a persistent Chinese/English switch and matched locale catalogs.
-- Inline form errors and automatic Turnstile reset on verification failure.
-- Supabase Auth REST integration boundary, refresh route and a one-shot administrator bootstrap script.
-- Protected CRM route group, server-enforced administrator routes, responsive main menu and nested administration menu.
-- Operations dashboard, schools, people, students, households, leads, opportunities, tasks, progression, imports, duplicate review, data quality, reports, AI review, products and message surfaces.
-- Shared search, pagination, status, progress, searchable select, toast and inline-message components.
-- User-settings interfaces for avatar, bilingual name, honorific, email, password, language, notifications, privacy, sessions and MFA. These controls remain prototype-only until the production profile/security services are connected.
-- Administrator portal with reminders, security events, progress, guardian verification, approval queues, and CRM account management across two administrator tiers and four sales roles.
-- Responsive two-month calendar with meeting, consultation, follow-up and deadline views; local appointment creation and reminder handling are available for interaction acceptance.
-- Sales performance center with target/actual/forecast KPIs, team attainment, period comparison, conversion funnel and actionable analysis; target edits remain session-local until the data service is connected.
-- Four progressive customer-relationship goals, a four-stage relationship playbook, and a four-stage ethical payment/closing playbook with four actions per stage.
-- Contract lifecycle and renewal alerts, customizable sales products with five defaults (summer camp, admissions, competition programs, summer school, and foundation), plus monthly/quarterly/annual customer-consumption dashboards.
-- Immutable user IDs, independent unique usernames, bilingual names, field-local username availability checks, and Supabase uniqueness enforcement.
-- Contract-signing, contract-export, performance-summary, and performance-allocation approval models with audit actions and role-aware RLS.
-- Manager performance allocation across sales specialists and the separate sales-support branch, including total-allocation enforcement and explicit non-duplication rules.
+## Intentionally still bounded
 
-## Production gates that require external infrastructure
+The repository is not presented as a finished enterprise CRM. Students, households, leads, opportunity pipeline, imports, merge review, data-quality rules, AI workbench, the executive dashboard, and parts of administrator user management still use acceptance fixtures. The sales analysis page has complete target/forecast/playbook UX, but some team figures and relationship-coverage edits remain local presentation data; the persisted target/allocation workflow is under `/sales/allocation`.
 
-The original planning package describes a multi-quarter product, not a completed application. The current UI and staff authentication boundary are runnable, but business records are still fixture data and most mutations are interaction prototypes. Production completion requires application tables and workspace-aware RLS, server-side search/pagination, persisted settings, calendar synchronization and notification delivery, versioned/approved targets and playbooks, contract reminder workers, product price versions, consumption queries, object storage, real MFA/session management, AI provider configuration, legal review, recovery drills and UAT with anonymized business data.
+Production rollout also needs an email outbox sender, organization-specific retention/legal review, backup and recovery exercises, monitoring, formal permission-matrix UAT for every role, and load/accessibility testing with anonymized high-volume data.
 
-## Local environment status
+## Local environment
 
-The CRM must use its own `lumina-crm` Supabase project and must never reuse another application's database. `npm run env:configure-local` reads keys only from the exact `supabase_studio_lumina-crm` container, configures official Cloudflare Turnstile testing keys, and disables demo authentication. `npm run auth:bootstrap-admin` creates or synchronizes `admin@lumina.local`, stores its initial credential in the Git-ignored `work/` directory, and removes `ADMIN_PASSWORD` from `.env.local` after success.
+The CRM stack uses ports 56321–56324 and must not reuse another application's containers or database. Run:
 
-Do not enable `CRM_DEMO_MODE` in production. Run `npm run auth:bootstrap-admin` with one-shot secrets against the deployed Supabase project, confirm the Auth user exists, then remove `ADMIN_PASSWORD` from every environment.
+```bash
+npx supabase start
+npm run env:configure-local
+npm run auth:bootstrap-admin
+```
+
+`auth:bootstrap-admin` creates or synchronizes the actual Supabase Auth user, saves the initial local credential only under the Git-ignored `work/` directory, and removes `ADMIN_PASSWORD` from `.env.local`. Environment variables alone never create an account. Never enable `CRM_DEMO_MODE` or Turnstile test keys in production.

@@ -90,6 +90,7 @@ export function SalesPerformancePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [relationshipDrawerOpen, setRelationshipDrawerOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [flowError,setFlowError]=useState("");
   const closeRef = useRef<HTMLButtonElement>(null);
   const relationshipCloseRef = useRef<HTMLButtonElement>(null);
 
@@ -125,6 +126,7 @@ export function SalesPerformancePage() {
     setRelationshipDrawerOpen(false);
     setToast(t("sales.relationshipUpdated"));
   };
+  const requestSummaryApproval=async()=>{setFlowError("");const response=await fetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({type:"PERFORMANCE_SUMMARY",objectType:"PERFORMANCE_SUMMARY",objectId:`${period}-${team}`,reason:t("approval.reason.summary")})});if(response.ok)setToast(t("flow.approvalRequested"));else setFlowError(t("flow.approvalFailed"));};
 
   useEffect(() => {
     if (!drawerOpen && !relationshipDrawerOpen) return;
@@ -137,8 +139,9 @@ export function SalesPerformancePage() {
   return <div className="page-stack sales-performance-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("sales.eyebrow")}</p><h1>{t("sales.title")}</h1><p>{t("sales.description")}</p></div>
-      <div className="page-actions"><Link className="secondary-button" href="/sales/allocation">{t("nav.allocation")}</Link><button className="secondary-button" type="button" onClick={() => setToast(t("flow.approvalRequested"))}>{t("flow.requestSummaryApproval")}</button><button className="primary-button" type="button" onClick={() => setDrawerOpen(true)}><Goal size={17} />{t("sales.setTarget")}</button></div>
+      <div className="page-actions"><Link className="secondary-button" href="/sales/allocation">{t("nav.allocation")}</Link><button className="secondary-button" type="button" onClick={requestSummaryApproval}>{t("flow.requestSummaryApproval")}</button><button className="primary-button" type="button" onClick={() => setDrawerOpen(true)}><Goal size={17} />{t("sales.setTarget")}</button></div>
     </section>
+    {flowError&&<InlineMessage type="error">{flowError}</InlineMessage>}
     <InlineMessage type="warning">{t("sales.prototypeWarning")}</InlineMessage>
 
     <section className="sales-filterbar surface">

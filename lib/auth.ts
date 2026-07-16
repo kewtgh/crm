@@ -72,12 +72,17 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     if (!response.ok) return null;
     const baseUser = userFromSupabase((await response.json()) as Record<string, unknown>);
     if (!baseUser) return null;
-    const profileResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, {
+    const profileResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, {
       headers: { apikey: anonKey, authorization: `Bearer ${accessToken}` }, cache: "no-store",
     });
     if (profileResponse.ok) {
-      const profiles = (await profileResponse.json()) as { username?: string }[];
+      const profiles = (await profileResponse.json()) as { username?: string; display_name_zh?: string; display_name_en?: string }[];
       if (profiles[0]?.username) baseUser.username = profiles[0].username;
+      if (profiles[0]?.display_name_zh) baseUser.displayNameZh = profiles[0].display_name_zh;
+      if (profiles[0]?.display_name_en) {
+        baseUser.displayName = profiles[0].display_name_en;
+        baseUser.initials = profiles[0].display_name_en.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+      }
     }
     return baseUser;
   } catch {
