@@ -11,7 +11,9 @@ function Get-ContainerEnvironment([string]$ContainerName) {
   return $result
 }
 
-$studio = Get-ContainerEnvironment 'supabase_studio_little-spark'
+$projectId = 'lumina-crm'
+$studioContainer = "supabase_studio_$projectId"
+$studio = Get-ContainerEnvironment $studioContainer
 $anonKey = $studio['SUPABASE_ANON_KEY']
 $serviceKey = $studio['SUPABASE_SERVICE_KEY']
 if (-not $anonKey -or -not $serviceKey) {
@@ -26,15 +28,16 @@ $randomPart = [Convert]::ToBase64String($bytes).Replace('+', 'A').Replace('/', '
 $adminPassword = "L!9$randomPart"
 
 $lines = @(
-  '# Generated for the existing local Supabase stack. Ignored by Git.',
+  '# Generated for the isolated Lumina CRM Supabase stack. Ignored by Git.',
   'CRM_DEMO_MODE=false',
-  'NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321',
+  'NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:56321',
   "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anonKey",
   "SUPABASE_SERVICE_ROLE_KEY=$serviceKey",
   'ADMIN_EMAIL=admin@lumina.local',
   "ADMIN_PASSWORD=$adminPassword",
   "ADMIN_CHINESE_NAME=$([char]0x7CFB)$([char]0x7EDF)$([char]0x7BA1)$([char]0x7406)$([char]0x5458)",
   'ADMIN_ENGLISH_NAME=Lumina Administrator',
+  'ADMIN_USERNAME=lumina.admin',
   'ADMIN_ROTATE_PASSWORD=true',
   '# Official Cloudflare testing keys. Never deploy these as production secrets.',
   'NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA',
@@ -42,4 +45,4 @@ $lines = @(
 )
 
 [System.IO.File]::WriteAllLines((Join-Path $PWD '.env.local'), $lines, [System.Text.UTF8Encoding]::new($false))
-Write-Output 'Configured local Supabase and Turnstile development environment without exposing secret values.'
+Write-Output "Configured the isolated $projectId Supabase and Turnstile development environment without exposing secret values."

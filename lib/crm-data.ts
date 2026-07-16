@@ -13,6 +13,7 @@ export type DataRow = {
 };
 
 export type ModuleConfig = {
+  key: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -30,6 +31,7 @@ const owners = ["Olivia Chen", "Jason Wu", "Sophia Lin", "Ethan Wang"];
 
 export const moduleConfigs: Record<string, ModuleConfig> = {
   schools: {
+    key: "schools",
     eyebrow: "RELATIONSHIP NETWORK",
     title: "学校与机构",
     description: "查看学校组织、关键人覆盖和关系健康度。",
@@ -56,6 +58,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
     ].map((r, index) => row(r, owners[index % owners.length])),
   },
   people: {
+    key: "people",
     eyebrow: "UNIFIED PERSON RECORDS",
     title: "人员与联系人",
     description: "同一人只保留一份档案，身份与任职按时间记录。",
@@ -71,7 +74,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
       ["p2", "周子谦", "Leo Chou", "家长 · 付款人", "待跟进", "amber", "+886 912 668 205", "3 天前", 82],
       ["p3", "李映雪", "Iris Li", "招生主任 · 上海惠灵顿", "活跃", "green", "iris.li@wellingtoncollege.cn", "昨天", 91],
       ["p4", "陈守仁", "Ryan Chen", "家长 · 法定监护人", "已验证", "blue", "ryan.chen@example.com", "5 天前", 88],
-      ["p5", "徐嘉敏", "Jasmine Hsu", "导师 · 数学", "活跃", "green", "jasmine.hsu@lumina.edu", "今天", 96],
+      ["p5", "徐嘉敏", "Jasmine Hsu", "客户成功 · 国际学校", "活跃", "green", "jasmine.hsu@lumina.edu", "今天", 96],
       ["p6", "林俊佑", "Jay Lin", "学生 · IB Year 1", "受保护", "purple", "监护人可见", "2 天前", 86],
       ["p7", "何明哲", "Marcus Ho", "校长 · 苏州新加坡学校", "任职待确认", "red", "marcus.ho@ssis.edu", "31 天前", 67],
       ["p8", "张诗涵", "Sienna Zhang", "家长 · 主要联系人", "活跃", "green", "+86 138 6620 9183", "昨天", 90],
@@ -80,6 +83,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
     ].map((r, index) => row(r, owners[index % owners.length])),
   },
   students: {
+    key: "students",
     eyebrow: "STUDENT JOURNEYS",
     title: "学生档案",
     description: "课程、年级、目标与家庭关系保持连续历史。",
@@ -103,6 +107,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
     ].map((r, index) => row(r, owners[index % owners.length])),
   },
   households: {
+    key: "households",
     eyebrow: "FAMILY CONTEXT",
     title: "家庭与监护关系",
     description: "以家庭为长期主体，明确监护、付款与决策角色。",
@@ -124,6 +129,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
     ].map((r, index) => row(r, owners[index % owners.length])),
   },
   leads: {
+    key: "leads",
     eyebrow: "QUALIFICATION FLOW",
     title: "线索管理",
     description: "线索转化前先查重、预览并明确下一步。",
@@ -144,6 +150,7 @@ export const moduleConfigs: Record<string, ModuleConfig> = {
     ].map((r, index) => row(r, owners[index % owners.length])),
   },
   tasks: {
+    key: "tasks",
     eyebrow: "WORK MANAGEMENT",
     title: "任务与日历",
     description: "让每次有效沟通都落到清晰、可追踪的下一步。",
@@ -180,13 +187,13 @@ function row(values: (string | number)[], owner: string): DataRow {
   };
 }
 
-export const mentors = [
-  { id: "m1", name: "徐嘉敏", english: "Jasmine Hsu", subject: "数学 · IB / A-Level", students: 18, status: "活跃", last: "今天 09:42", mfa: true },
-  { id: "m2", name: "林韦廷", english: "Wayne Lin", subject: "经济 · IB / AP", students: 14, status: "活跃", last: "昨天 18:05", mfa: true },
-  { id: "m3", name: "高思远", english: "Simon Gao", subject: "升学规划 · 英美", students: 22, status: "活跃", last: "今天 08:20", mfa: false },
-  { id: "m4", name: "叶依晨", english: "Erin Yeh", subject: "英文写作 · TOEFL", students: 11, status: "休假", last: "7 月 12 日", mfa: true },
-  { id: "m5", name: "郑宇翔", english: "Alex Cheng", subject: "计算机 · AP /竞赛", students: 16, status: "待激活", last: "尚未登录", mfa: false },
-  { id: "m6", name: "陈芷涵", english: "Hannah Chen", subject: "心理学 · AP", students: 9, status: "活跃", last: "2 天前", mfa: true },
+export const crmUsers = [
+  { id: "u1", name: "陈雅雯", english: "Olivia Chen", team: "上海 · 管理", role: "ADMIN", accounts: 28, status: "活跃", last: "今天 09:42", mfa: true },
+  { id: "u2", name: "吴俊杰", english: "Jason Wu", team: "台北 · 销售", role: "SALES", accounts: 34, status: "活跃", last: "昨天 18:05", mfa: true },
+  { id: "u3", name: "林书妍", english: "Sophia Lin", team: "新加坡 · 客户成功", role: "OPERATIONS", accounts: 22, status: "活跃", last: "今天 08:20", mfa: true },
+  { id: "u4", name: "王以恒", english: "Ethan Wang", team: "上海 · 运营", role: "OPERATIONS", accounts: 19, status: "休假", last: "7 月 12 日", mfa: true },
+  { id: "u5", name: "郑宇翔", english: "Alex Cheng", team: "台北 · 销售", role: "SALES", accounts: 0, status: "待激活", last: "尚未登录", mfa: false },
+  { id: "u6", name: "陈芷涵", english: "Hannah Chen", team: "新加坡 · 销售", role: "SALES", accounts: 16, status: "活跃", last: "2 天前", mfa: true },
 ];
 export const guardians = [
   { id: "g1", name: "赵嘉敏", english: "Maggie Zhao", email: "maggie.zhao@example.com", student: "赵子墨 / Ethan Zhao", match: "学籍 + 手机", submitted: "今天 10:12", risk: "低" },

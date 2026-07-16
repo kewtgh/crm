@@ -23,7 +23,7 @@ test("keeps authentication failures local to their forms", async () => {
   ]);
   assert.match(authForm, /role="alert"/);
   assert.match(authForm, /crm:reset-turnstile/);
-  assert.match(loginRoute, /Incorrect email or password/);
+  assert.match(loginRoute, /INVALID_CREDENTIALS/);
   assert.match(registerRoute, /TURNSTILE_FAILED/);
   assert.doesNotMatch(loginRoute, /searchParams|URLSearchParams/);
   assert.doesNotMatch(registerRoute, /searchParams|URLSearchParams/);
@@ -38,9 +38,98 @@ test("enforces server-owned roles and administrator boundaries", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(auth, /app_metadata/);
+  assert.match(auth, /\["ADMIN", "SALES", "OPERATIONS"\]/);
   assert.doesNotMatch(auth, /metadata\.role/);
   assert.match(adminLayout, /requireRole\("ADMIN"\)/);
-  assert.match(loginRoute, /not approved for staff access/);
+  assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.2\.0"/);
+  assert.match(packageJson, /"version": "0\.3\.0"/);
+});
+
+test("includes calendar scheduling and sales performance workspaces", async () => {
+  const [calendar, sales, navigation, packageJson] = await Promise.all([
+    readFile(new URL("../components/calendar-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/sales-performance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(calendar, /double-calendar/);
+  assert.match(calendar, /calendar\.new/);
+  assert.match(calendar, /calendar\.reminders/);
+  assert.match(sales, /sales\.targetTrend/);
+  assert.match(sales, /sales\.funnel/);
+  assert.match(navigation, /\/sales\/performance/);
+  assert.match(packageJson, /"version": "0\.3\.0"/);
+});
+
+test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
+  const [zh, en, provider, switcher, shell, authForm] = await Promise.all([
+    readFile(new URL("../lib/i18n/locales/zh-CN.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/en.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/i18n-provider.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/locale-switcher.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
+  ]);
+  const keys = (source) => [...source.matchAll(/^\s*"([^"]+)"\s*:/gm)].map((match) => match[1]).sort();
+  assert.deepEqual(keys(zh), keys(en));
+  assert.match(provider, /lumina-locale/);
+  assert.match(provider, /document\.documentElement\.lang/);
+  assert.match(switcher, /locale\.switch/);
+  assert.match(shell, /LocaleSwitcher/);
+  assert.match(authForm, /LocaleSwitcher/);
+});
+
+test("keeps every split locale catalog aligned and avoids key-shaped English fallbacks", async () => {
+  const pairs = await Promise.all([
+    ["sales-playbook.ts", "zhSalesPlaybook", "enSalesPlaybook"],
+    ["workspace-pages.ts", "zhWorkspacePages", "enWorkspacePages"],
+    ["analysis-pages.ts", "zhAnalysisPages", "enAnalysisPages"],
+  ].map(async ([file, zhExport, enExport]) => ({ source: await readFile(new URL(`../lib/i18n/locales/${file}`, import.meta.url), "utf8"), zhExport, enExport })));
+  const block = (source, name) => { const start = source.indexOf(`export const ${name}`); const next = source.indexOf("export const ", start + 13); return source.slice(start, next === -1 ? source.length : next); };
+  const keys = (source) => [...source.matchAll(/"([a-z][^"]+)"\s*:/g)].map((match) => match[1]).sort();
+  for (const { source, zhExport, enExport } of pairs) {
+    const zhBlock = block(source, zhExport); const enBlock = block(source, enExport);
+    assert.deepEqual(keys(zhBlock), keys(enBlock));
+    assert.doesNotMatch(enBlock, /Object\.fromEntries|\[key,\s*key\]/);
+  }
+});
+
+test("separates immutable user IDs, usernames, and bilingual names", async () => {
+  const [auth, registration, usernameRoute, migration, settings] = await Promise.all([
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/register/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/check-username/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607160001_user_identity.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(auth, /id: string/);
+  assert.match(auth, /username: string/);
+  assert.match(auth, /displayNameZh/);
+  assert.match(registration, /username_available/);
+  assert.match(usernameRoute, /USERNAME_CHECK_UNAVAILABLE/);
+  assert.match(migration, /username citext not null unique/);
+  assert.match(settings, /settings\.internalId/);
+});
+
+test("includes contracts, custom products, consumption reporting, and exact relationship goals", async () => {
+  const [contracts, products, consumption, zh, sales, playbook] = await Promise.all([
+    readFile(new URL("../components/contracts-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/products-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/consumption-analysis-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/zh-CN.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/sales-performance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/sales-playbook.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(contracts, /90、60、30、14、7|contracts\.prototypeWarning/);
+  for (const name of ["夏令营", "升学", "竞赛", "夏校", "预科"]) assert.match(products, new RegExp(name));
+  assert.match(consumption, /month/);
+  assert.match(consumption, /quarter/);
+  assert.match(consumption, /year/);
+  for (const goal of ["拿到客户联系方式", "和客户吃过一餐饭", "可以和客户聊家长里短", "随时可以让客户帮忙在学校做宣传"]) assert.match(zh, new RegExp(goal));
+  assert.match(sales, /relationshipPlaybook/);
+  assert.match(sales, /closingPlaybook/);
+  assert.match(playbook, /初步了解/);
+  assert.match(playbook, /付款执行/);
+  assert.match(playbook, /不得使用虚假折扣/);
 });

@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 
 export type AppUser = {
   id: string;
+  username: string;
   email: string;
   displayName: string;
   displayNameZh: string;
-  role: "ADMIN" | "MENTOR" | "SUPERVISOR" | "SALES";
+  role: "ADMIN" | "SALES" | "OPERATIONS";
   initials: string;
 };
 
@@ -14,6 +15,7 @@ export type AppRole = AppUser["role"];
 
 const demoUser: AppUser = {
   id: "demo-admin",
+  username: "olivia.admin",
   email: "admin@lumina-edu.com",
   displayName: "Olivia Chen",
   displayNameZh: "陈雅雯",
@@ -32,13 +34,15 @@ export function userFromSupabase(payload: Record<string, unknown>): AppUser | nu
   const appMetadata = (payload.app_metadata ?? {}) as Record<string, unknown>;
   const englishName = String(metadata.english_name ?? metadata.full_name ?? "CRM User");
   const chineseName = String(metadata.chinese_name ?? "");
+  const username = String(metadata.username ?? "");
   const role = String(appMetadata.role ?? "").toUpperCase();
   const accountStatus = String(appMetadata.account_status ?? "ACTIVE").toUpperCase();
-  if (!["ADMIN", "MENTOR", "SUPERVISOR", "SALES"].includes(role) || accountStatus !== "ACTIVE") {
+  if (!["ADMIN", "SALES", "OPERATIONS"].includes(role) || accountStatus !== "ACTIVE") {
     return null;
   }
   return {
     id: String(payload.id ?? ""),
+    username,
     email: String(payload.email ?? ""),
     displayName: englishName,
     displayNameZh: chineseName,
@@ -73,7 +77,16 @@ export async function getCurrentUser(): Promise<AppUser | null> {
       cache: "no-store",
     });
     if (!response.ok) return null;
-    return userFromSupabase((await response.json()) as Record<string, unknown>);
+    const baseUser = userFromSupabase((await response.json()) as Record<string, unknown>);
+    if (!baseUser) return null;
+    const profileResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, {
+      headers: { apikey: anonKey, authorization: `Bearer ${accessToken}` }, cache: "no-store",
+    });
+    if (profileResponse.ok) {
+      const profiles = (await profileResponse.json()) as { username?: string }[];
+      if (profiles[0]?.username) baseUser.username = profiles[0].username;
+    }
+    return baseUser;
   } catch {
     return null;
   }

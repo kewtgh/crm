@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const parsed = loginSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "登录信息无效" },
+      { code: parsed.error.issues[0]?.message ?? "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") },
       { status: 400 },
     );
   }
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       email.toLowerCase() === "admin@lumina-edu.com" && password === "Demo123!";
     if (!isDemoUser) {
       return NextResponse.json(
-        { error: "邮箱或密码不正确 / Incorrect email or password" },
+        { code: "INVALID_CREDENTIALS" },
         { status: 401 },
       );
     }
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) {
     return NextResponse.json(
-      { error: "认证服务尚未配置，请联系管理员 / Authentication is not configured" },
+      { code: "AUTH_NOT_CONFIGURED" },
       { status: 503 },
     );
   }
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const result = (await upstream.json()) as Record<string, unknown>;
   if (!upstream.ok) {
     return NextResponse.json(
-      { error: "邮箱或密码不正确 / Incorrect email or password" },
+      { code: "INVALID_CREDENTIALS" },
       { status: 401 },
     );
   }
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const authorizedUser = userFromSupabase((result.user ?? {}) as Record<string, unknown>);
   if (!authorizedUser) {
     return NextResponse.json(
-      { error: "账号尚未获准访问工作人员工作区 / This account is not approved for staff access" },
+      { code: "STAFF_ACCESS_DENIED" },
       { status: 403 },
     );
   }

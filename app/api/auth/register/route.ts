@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       {
-        error: parsed.error.issues[0]?.message ?? "注册信息无效",
+        code: parsed.error.issues[0]?.message ?? "INVALID_INPUT",
         field: String(parsed.error.issues[0]?.path[0] ?? "form"),
       },
       { status: 400 },
@@ -39,7 +39,6 @@ export async function POST(request: Request) {
   if (!validChallenge) {
     return NextResponse.json(
       {
-        error: "验证已失效，请重新完成验证 / Verification expired, please try again",
         code: "TURNSTILE_FAILED",
       },
       { status: 400 },
@@ -47,9 +46,12 @@ export async function POST(request: Request) {
   }
 
   if (process.env.CRM_DEMO_MODE === "true") {
+    if (["admin", "olivia.admin", "system", "support"].includes(parsed.data.username)) {
+      return NextResponse.json({ code: "USERNAME_TAKEN", field: "username" }, { status: 409 });
+    }
     return NextResponse.json({
       ok: true,
-      message: "申请已提交，管理员将在 1 个工作日内审核。",
+      code: "REGISTRATION_SUBMITTED",
     });
   }
 
@@ -57,10 +59,18 @@ export async function POST(request: Request) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) {
     return NextResponse.json(
-      { error: "认证服务尚未配置，请联系管理员 / Authentication is not configured" },
+      { code: "AUTH_NOT_CONFIGURED" },
       { status: 503 },
     );
   }
+
+  const usernameCheck = await fetch(`${supabaseUrl}/rest/v1/rpc/username_available`, {
+    method: "POST",
+    headers: { apikey: anonKey, authorization: `Bearer ${anonKey}`, "content-type": "application/json" },
+    body: JSON.stringify({ candidate: parsed.data.username }),
+  }).catch(() => null);
+  if (!usernameCheck?.ok) return NextResponse.json({ code: "USERNAME_CHECK_UNAVAILABLE", field: "username" }, { status: 503 });
+  if ((await usernameCheck.json()) !== true) return NextResponse.json({ code: "USERNAME_TAKEN", field: "username" }, { status: 409 });
 
   const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
     method: "POST",
@@ -69,6 +79,7 @@ export async function POST(request: Request) {
       email: parsed.data.email,
       password: parsed.data.password,
       data: {
+        username: parsed.data.username,
         chinese_name: parsed.data.chineseName,
         english_name: parsed.data.englishName,
         registration_type: "guardian",
@@ -81,15 +92,13 @@ export async function POST(request: Request) {
     const duplicate = String(result.msg ?? result.message ?? "").toLowerCase().includes("registered");
     return NextResponse.json(
       {
-        error: duplicate
-          ? "此邮箱已注册，请直接登录 / This email is already registered"
-          : "注册暂时无法完成，请稍后重试 / Registration is temporarily unavailable",
+        code: duplicate ? "DUPLICATE" : "REGISTRATION_UNAVAILABLE",
       },
       { status: duplicate ? 409 : 502 },
     );
   }
   return NextResponse.json({
     ok: true,
-    message: "请查收验证邮件。完成邮箱验证后，申请将进入管理员审核。",
+    code: "REGISTRATION_SUBMITTED",
   });
 }
