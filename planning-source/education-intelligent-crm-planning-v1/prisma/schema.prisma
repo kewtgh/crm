@@ -1,0 +1,2803 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum SystemRole {
+  WORKSPACE_OWNER
+  ADMIN
+  TEAM_LEAD
+  SALES
+  SCHOOL_RELATIONSHIP_MANAGER
+  COUNSELOR
+  OPERATIONS
+  FINANCE
+  DATA_ADMIN
+  VIEWER
+}
+
+enum VisibilityScope {
+  PRIVATE
+  OWNER_TEAM
+  WORKSPACE
+  RESTRICTED
+}
+
+enum OrganizationType {
+  EDUCATION_GROUP
+  SCHOOL
+  CAMPUS
+  OTHER_ORGANIZATION
+}
+
+enum OrganizationStatus {
+  PROSPECT
+  ACTIVE_CUSTOMER
+  PARTNER
+  INACTIVE
+  ARCHIVED
+}
+
+enum SchoolType {
+  PUBLIC
+  PRIVATE
+  INTERNATIONAL
+  BILINGUAL
+  VOCATIONAL
+  TUTORING_OR_TRAINING
+  OTHER
+}
+
+enum OrganizationUnitType {
+  EXECUTIVE_OFFICE
+  INTERNATIONAL_DIVISION
+  UNIVERSITY_COUNSELING
+  ADMISSIONS
+  ACADEMIC_AFFAIRS
+  GRADE_GROUP
+  SUBJECT_DEPARTMENT
+  FINANCE
+  PROCUREMENT
+  MARKETING
+  ADMINISTRATION
+  PROJECT_TEAM
+  OTHER
+}
+
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+  DECEASED
+  ARCHIVED
+}
+
+enum Gender {
+  FEMALE
+  MALE
+  NON_BINARY
+  UNDISCLOSED
+  UNKNOWN
+}
+
+enum ContactMethodType {
+  MOBILE
+  PHONE
+  EMAIL
+  WECHAT
+  WHATSAPP
+  LINKEDIN
+  TELEGRAM
+  OTHER
+}
+
+enum ContactMethodStatus {
+  UNVERIFIED
+  VERIFIED
+  INVALID
+  OPTED_OUT
+  ARCHIVED
+}
+
+enum ConsentStatus {
+  UNKNOWN
+  IMPLIED
+  EXPLICIT
+  WITHDRAWN
+  NOT_REQUIRED
+}
+
+enum EmploymentStatus {
+  CURRENT
+  FUTURE
+  ENDED
+  UNKNOWN
+}
+
+enum DecisionRole {
+  FINAL_DECISION_MAKER
+  BUSINESS_CHAMPION
+  INFLUENCER
+  END_USER
+  BUDGET_APPROVER
+  PROCUREMENT
+  PAYMENT_APPROVER
+  BLOCKER
+  INFORMED_PARTY
+  UNKNOWN
+}
+
+enum InfluenceLevel {
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+  UNKNOWN
+}
+
+enum RelationshipStrength {
+  UNKNOWN
+  WEAK
+  DEVELOPING
+  GOOD
+  STRONG
+  TRUSTED
+}
+
+enum RelationshipSentiment {
+  UNKNOWN
+  NEGATIVE
+  NEUTRAL
+  POSITIVE
+  ADVOCATE
+}
+
+enum PersonRelationshipType {
+  REPORTS_TO
+  MANAGES
+  COLLEAGUE
+  INTRODUCED_BY
+  PROFESSIONAL_CONNECTION
+  FAMILY_CONNECTION
+  OTHER
+}
+
+enum HouseholdStatus {
+  PROSPECT
+  ACTIVE_CUSTOMER
+  SERVICE_COMPLETED
+  INACTIVE
+  ARCHIVED
+}
+
+enum HouseholdMemberRole {
+  STUDENT
+  PARENT
+  STEPPARENT
+  LEGAL_GUARDIAN
+  GRANDPARENT
+  SIBLING
+  OTHER_RELATIVE
+  OTHER
+}
+
+enum GuardianRelationshipType {
+  FATHER
+  MOTHER
+  STEPFATHER
+  STEPMOTHER
+  LEGAL_GUARDIAN
+  GRANDFATHER
+  GRANDMOTHER
+  OTHER
+}
+
+enum DecisionInfluence {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  FINAL
+  UNKNOWN
+}
+
+enum StudentStatus {
+  PROSPECT
+  ACTIVE
+  ON_HOLD
+  GRADUATED
+  ALUMNI
+  WITHDRAWN
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  TRANSFERRED
+  WITHDRAWN
+  SUSPENDED
+}
+
+enum AcademicProgressionStatus {
+  DISCOVERED
+  PENDING_REVIEW
+  APPROVED
+  SCHEDULED
+  APPLYING
+  APPLIED
+  SKIPPED
+  FAILED
+  ROLLED_BACK
+  CANCELLED
+}
+
+enum ProgressionExceptionType {
+  REPEAT_GRADE
+  SKIP_GRADE
+  TRANSFER
+  LEAVE_OF_ABSENCE
+  GAP_YEAR
+  DELAYED_GRADUATION
+  EARLY_GRADUATION
+  MISSING_DATA
+  MANUAL_OVERRIDE
+  OTHER
+}
+
+enum ProgressionTransitionType {
+  STANDARD_PROMOTION
+  REPEAT_GRADE
+  SKIP_GRADE
+  TRANSFER
+  GRADUATION
+  MANUAL
+}
+
+enum StudentIntentStatus {
+  EXPLORING
+  FORMING
+  CONFIRMED
+  APPLYING
+  COMPLETED
+  PAUSED
+  ARCHIVED
+}
+
+enum TargetPreferenceType {
+  COUNTRY
+  REGION
+  CITY
+  INSTITUTION
+  MAJOR
+  PROGRAM
+}
+
+enum StudentExperienceCategory {
+  COMPETITION
+  RESEARCH
+  INTERNSHIP
+  VOLUNTEERING
+  LEADERSHIP
+  ART
+  SPORTS
+  AWARD
+  PORTFOLIO
+  OTHER
+}
+
+enum PipelineType {
+  SCHOOL_SALES
+  HOUSEHOLD_SALES
+  OTHER
+}
+
+enum LeadType {
+  SCHOOL
+  HOUSEHOLD
+  STUDENT
+  PERSON
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  UNVERIFIED
+  CONTACTED
+  QUALIFYING
+  NURTURING
+  QUALIFIED
+  CONVERTED
+  DISQUALIFIED
+  CLOSED
+}
+
+enum LeadQuality {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+enum OpportunityType {
+  SCHOOL
+  HOUSEHOLD
+  STUDENT
+  RENEWAL
+  UPSELL
+  OTHER
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  CANCELLED
+  ON_HOLD
+}
+
+enum OpportunityContactRoleType {
+  FINAL_DECISION_MAKER
+  CHAMPION
+  INFLUENCER
+  USER
+  BUDGET_APPROVER
+  PROCUREMENT
+  PAYER
+  BLOCKER
+  OTHER
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ContractStatus {
+  DRAFT
+  UNDER_REVIEW
+  SENT
+  SIGNED
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PLANNED
+  DUE
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  WAIVED
+  REFUNDED
+  CANCELLED
+}
+
+enum ActivityType {
+  CALL
+  WECHAT
+  EMAIL
+  WHATSAPP
+  SMS
+  VIDEO_MEETING
+  IN_PERSON_MEETING
+  SCHOOL_VISIT
+  EVENT
+  DOCUMENT_SENT
+  PROPOSAL
+  CONTRACT_DISCUSSION
+  PAYMENT_DISCUSSION
+  STUDENT_CONSULTATION
+  PARENT_CONVERSATION
+  INTERNAL_NOTE
+  OTHER
+}
+
+enum ActivityDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+  MIXED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  WAITING
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DocumentType {
+  GENERAL
+  PROPOSAL
+  QUOTE
+  CONTRACT
+  INVOICE
+  TRANSCRIPT
+  TEST_SCORE
+  PROFILE
+  MEETING_NOTE
+  REPORT
+  IMPORT_SOURCE
+  OTHER
+}
+
+enum ImportObjectType {
+  ORGANIZATION
+  ORGANIZATION_UNIT
+  PERSON
+  STAFF_ASSIGNMENT
+  HOUSEHOLD
+  HOUSEHOLD_MEMBER
+  STUDENT
+  GUARDIAN_RELATIONSHIP
+  ENROLLMENT
+  ACADEMIC_SNAPSHOT
+  ASSESSMENT
+  LEAD
+  OPPORTUNITY
+  ACTIVITY
+  CONTRACT
+  MIXED
+}
+
+enum ImportJobStatus {
+  UPLOADED
+  ANALYZING
+  MAPPING_REQUIRED
+  VALIDATING
+  REVIEW_REQUIRED
+  READY
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  ROLLING_BACK
+  ROLLED_BACK
+  CANCELLED
+}
+
+enum ImportIssueSeverity {
+  INFO
+  WARNING
+  ERROR
+  BLOCKING
+}
+
+enum ImportRowAction {
+  CREATE
+  UPDATE
+  MERGE
+  SKIP
+  ERROR
+}
+
+enum ReportJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum ReportFormat {
+  PDF
+  XLSX
+  HTML
+}
+
+enum AiProviderStatus {
+  ACTIVE
+  INACTIVE
+  DEGRADED
+}
+
+enum AiRunPurpose {
+  EXTRACTION
+  SUMMARY
+  NEXT_BEST_ACTION
+  DUPLICATE_SUGGESTION
+  NATURAL_LANGUAGE_FILTER
+  REPORT_NARRATIVE
+  DATA_QUALITY
+  OTHER
+}
+
+enum AiRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  NEEDS_REVIEW
+}
+
+enum AuditAction {
+  CREATE
+  READ_SENSITIVE
+  UPDATE
+  SOFT_DELETE
+  RESTORE
+  HARD_DELETE
+  MERGE
+  IMPORT
+  IMPORT_ROLLBACK
+  EXPORT
+  DOWNLOAD
+  LOGIN
+  LOGOUT
+  PERMISSION_CHANGE
+  OWNER_CHANGE
+  STAGE_CHANGE
+  PROGRESSION_APPLY
+  PROGRESSION_ROLLBACK
+  AI_ACCEPT
+  AI_REJECT
+  OTHER
+}
+
+enum EntityType {
+  WORKSPACE
+  USER
+  TEAM
+  ORGANIZATION
+  ORGANIZATION_UNIT
+  PERSON
+  STAFF_ASSIGNMENT
+  HOUSEHOLD
+  STUDENT
+  ENROLLMENT
+  LEAD
+  OPPORTUNITY
+  ACTIVITY
+  TASK
+  CONTRACT
+  PAYMENT
+  DOCUMENT
+  IMPORT_JOB
+  REPORT_JOB
+  AI_RUN
+  OTHER
+}
+
+enum DataQualityStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+model Workspace {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String          @unique
+  status      WorkspaceStatus @default(ACTIVE)
+  timezone    String          @default("Asia/Shanghai")
+  defaultCurrency String       @default("CNY") @db.VarChar(3)
+  settings    Json?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  archivedAt  DateTime?       @db.Timestamptz(3)
+
+  memberships              WorkspaceMembership[]
+  teams                    Team[]
+  accessRoles              AccessRole[]
+  organizations            Organization[]
+  organizationUnits        OrganizationUnit[]
+  curricula                Curriculum[]
+  standardPositions        StandardPosition[]
+  people                   Person[]
+  personContacts           PersonContactMethod[]
+  staffProfiles            SchoolStaffProfile[]
+  parentProfiles           ParentProfile[]
+  staffAssignments         StaffAssignment[]
+  personRelationships      PersonRelationship[]
+  households               Household[]
+  householdMembers         HouseholdMember[]
+  students                 StudentProfile[]
+  guardianRelationships    StudentGuardianRelationship[]
+  academicCalendars        AcademicCalendar[]
+  gradeLevels              GradeLevel[]
+  progressionRules         GradeProgressionRule[]
+  enrollments              StudentEnrollment[]
+  academicSnapshots        StudentAcademicSnapshot[]
+  subjectRecords           StudentSubjectRecord[]
+  assessmentTypes          AssessmentType[]
+  assessmentAttempts       StudentAssessmentAttempt[]
+  studentIntents           StudentIntent[]
+  targetPreferences        StudentTargetPreference[]
+  studentExperiences       StudentExperience[]
+  progressionExceptions   StudentProgressionException[]
+  progressionEvents       StudentProgressionEvent[]
+  pipelines                Pipeline[]
+  pipelineStages           PipelineStage[]
+  leads                    Lead[]
+  leadHistories            LeadStatusHistory[]
+  opportunities            Opportunity[]
+  opportunityHistories     OpportunityStageHistory[]
+  opportunityContacts      OpportunityContactRole[]
+  products                 Product[]
+  opportunityProducts      OpportunityProduct[]
+  contracts                Contract[]
+  payments                 Payment[]
+  activities               Activity[]
+  activityParticipants     ActivityParticipant[]
+  tasks                    Task[]
+  taskCollaborators        TaskCollaborator[]
+  documents                Document[]
+  tags                     Tag[]
+  organizationTags         OrganizationTag[]
+  personTags               PersonTag[]
+  householdTags            HouseholdTag[]
+  studentTags              StudentTag[]
+  leadTags                 LeadTag[]
+  opportunityTags          OpportunityTag[]
+  importJobs               ImportJob[]
+  importSourceFiles        ImportSourceFile[]
+  importMappings           ImportMapping[]
+  importIssues             ImportRowIssue[]
+  importResults            ImportEntityResult[]
+  importRollbacks          ImportRollback[]
+  reportTemplates          ReportTemplate[]
+  reportJobs               ReportJob[]
+  aiProviders              AiProvider[]
+  aiModels                 AiModel[]
+  aiPromptTemplates        AiPromptTemplate[]
+  aiRuns                   AiRun[]
+  aiEvidence               AiEvidence[]
+  savedViews               SavedView[]
+  customFieldDefinitions   CustomFieldDefinition[]
+  customFieldValues        CustomFieldValue[]
+  mergeRecords             EntityMerge[]
+  dataQualityIssues        DataQualityIssue[]
+  auditLogs                AuditLog[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  normalizedEmail String   @unique
+  displayName     String
+  avatarUrl       String?
+  isPlatformAdmin Boolean  @default(false)
+  lastLoginAt     DateTime? @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  disabledAt      DateTime? @db.Timestamptz(3)
+
+  memberships WorkspaceMembership[]
+  auditLogs   AuditLog[] @relation("AuditActor")
+
+  @@map("users")
+}
+
+model WorkspaceMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  workspaceId    String           @db.Uuid
+  userId         String           @db.Uuid
+  status         MembershipStatus @default(INVITED)
+  systemRole     SystemRole       @default(VIEWER)
+  jobTitle       String?
+  invitedAt      DateTime?        @db.Timestamptz(3)
+  joinedAt       DateTime?        @db.Timestamptz(3)
+  lastActiveAt   DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  teamMemberships       TeamMembership[]
+  roleAssignments       MembershipAccessRole[]
+  ownedOrganizations    Organization[] @relation("OrganizationOwner")
+  ownedPeople           Person[] @relation("PersonOwner")
+  ownedHouseholds       Household[] @relation("HouseholdOwner")
+  ownedStudents         StudentProfile[] @relation("StudentOwner")
+  ownedLeads            Lead[] @relation("LeadOwner")
+  ownedOpportunities    Opportunity[] @relation("OpportunityOwner")
+  ownedActivities       Activity[] @relation("ActivityOwner")
+  assignedTasks         Task[] @relation("TaskAssignee")
+  createdTasks          Task[] @relation("TaskCreator")
+  progressionApprovals  StudentProgressionEvent[] @relation("ProgressionApprover")
+  createdImportJobs     ImportJob[] @relation("ImportCreator")
+  createdReportJobs     ReportJob[] @relation("ReportCreator")
+  createdDocuments      Document[] @relation("DocumentCreator")
+  requestedExports      ReportJob[] @relation("ReportRequester")
+  createdMerges         EntityMerge[] @relation("MergeCreator")
+  assignedQualityIssues        DataQualityIssue[] @relation("QualityIssueAssignee")
+  relationshipOwnedAssignments StaffAssignment[] @relation("StaffRelationshipOwner")
+  leadStatusChanges             LeadStatusHistory[] @relation("LeadStatusChanger")
+  opportunityStageChanges       OpportunityStageHistory[] @relation("OpportunityStageChanger")
+  taskCollaborations            TaskCollaborator[] @relation("TaskCollaboratorMembership")
+  requestedImportRollbacks      ImportRollback[] @relation("ImportRollbackRequester")
+  reviewedAiRuns                AiRun[] @relation("AiRunReviewer")
+  savedViews                    SavedView[] @relation("SavedViewOwner")
+  membershipAuditLogs           AuditLog[] @relation("AuditMembershipActor")
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, status])
+  @@map("workspace_memberships")
+}
+
+model Team {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  parentTeamId String?  @db.Uuid
+  name        String
+  code        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Team?     @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  children  Team[]    @relation("TeamHierarchy")
+
+  memberships  TeamMembership[]
+  organizations Organization[]
+  people        Person[]
+  households    Household[]
+  students      StudentProfile[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  tasks         Task[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, parentTeamId])
+  @@map("teams")
+}
+
+model TeamMembership {
+  id           String   @id @default(uuid()) @db.Uuid
+  teamId       String   @db.Uuid
+  membershipId String   @db.Uuid
+  isTeamLead   Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  team       Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  membership WorkspaceMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, membershipId])
+  @@index([membershipId])
+  @@map("team_memberships")
+}
+
+model AccessRole {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions AccessRolePermission[]
+  memberships MembershipAccessRole[]
+
+  @@unique([workspaceId, name])
+  @@map("access_roles")
+}
+
+model Permission {
+  id          String @id @default(uuid()) @db.Uuid
+  code        String @unique
+  name        String
+  description String?
+
+  roles AccessRolePermission[]
+
+  @@map("permissions")
+}
+
+model AccessRolePermission {
+  id           String @id @default(uuid()) @db.Uuid
+  accessRoleId String @db.Uuid
+  permissionId String @db.Uuid
+
+  accessRole AccessRole @relation(fields: [accessRoleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([accessRoleId, permissionId])
+  @@map("access_role_permissions")
+}
+
+model MembershipAccessRole {
+  id           String @id @default(uuid()) @db.Uuid
+  membershipId String @db.Uuid
+  accessRoleId String @db.Uuid
+
+  membership WorkspaceMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  accessRole AccessRole          @relation(fields: [accessRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, accessRoleId])
+  @@map("membership_access_roles")
+}
+
+model Organization {
+  id                         String             @id @default(uuid()) @db.Uuid
+  workspaceId                String             @db.Uuid
+  parentOrganizationId       String?            @db.Uuid
+  ownerMembershipId          String?            @db.Uuid
+  teamId                     String?            @db.Uuid
+  type                       OrganizationType
+  status                     OrganizationStatus @default(PROSPECT)
+  schoolType                 SchoolType?
+  legalName                  String?
+  displayName                String
+  englishName                String?
+  normalizedName             String
+  aliases                    String[]           @default([])
+  countryCode                String?            @db.VarChar(2)
+  administrativeArea         String?
+  city                       String?
+  district                   String?
+  addressLine                String?
+  postalCode                 String?
+  websiteUrl                 String?
+  websiteDomain              String?
+  phone                      String?
+  establishedYear            Int?
+  studentCount               Int?
+  internationalStudentCount Int?
+  graduationStudentCount     Int?
+  relationshipTier           String?
+  relationshipHealthScore    Int?
+  dataCompletenessScore      Int?
+  lastContactAt              DateTime?          @db.Timestamptz(3)
+  nextFollowUpAt             DateTime?          @db.Timestamptz(3)
+  source                     String?
+  notes                      String?
+  customFields               Json?
+  visibility                 VisibilityScope    @default(OWNER_TEAM)
+  createdAt                  DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime           @updatedAt @db.Timestamptz(3)
+  deletedAt                  DateTime?          @db.Timestamptz(3)
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Organization?         @relation("OrganizationHierarchy", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
+  children  Organization[]        @relation("OrganizationHierarchy")
+  owner     WorkspaceMembership?  @relation("OrganizationOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team      Team?                 @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  units                 OrganizationUnit[]
+  curricula             OrganizationCurriculum[]
+  staffAssignments      StaffAssignment[]
+  staffProfilesAsEmployer SchoolStaffProfile[]
+  parentProfilesAsEmployer ParentProfile[]
+  personRelationships   PersonRelationship[]
+  academicCalendars     AcademicCalendar[]
+  enrollments           StudentEnrollment[]
+  leads                 Lead[]
+  opportunities         Opportunity[]
+  activities            Activity[]
+  tasks                 Task[]
+  documents             Document[]
+  tags                  OrganizationTag[]
+  contracts             Contract[]
+  dataQualityIssues     DataQualityIssue[]
+
+  @@index([workspaceId, type, status])
+  @@index([workspaceId, normalizedName])
+  @@index([workspaceId, city])
+  @@index([workspaceId, websiteDomain])
+  @@index([ownerMembershipId])
+  @@index([teamId])
+  @@map("organizations")
+}
+
+model OrganizationUnit {
+  id          String               @id @default(uuid()) @db.Uuid
+  workspaceId String               @db.Uuid
+  organizationId String            @db.Uuid
+  parentUnitId String?              @db.Uuid
+  type        OrganizationUnitType
+  name        String
+  code        String?
+  description String?
+  sortOrder   Int                  @default(0)
+  isActive    Boolean              @default(true)
+  effectiveFrom DateTime?          @db.Date
+  effectiveTo DateTime?            @db.Date
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?            @db.Timestamptz(3)
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       OrganizationUnit? @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  children     OrganizationUnit[] @relation("OrganizationUnitHierarchy")
+
+  staffAssignments StaffAssignment[]
+  enrollments      StudentEnrollment[]
+
+  @@unique([organizationId, parentUnitId, name])
+  @@index([workspaceId, organizationId, parentUnitId])
+  @@map("organization_units")
+}
+
+model Curriculum {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  code        String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace       Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizations   OrganizationCurriculum[]
+  gradeLevels     GradeLevel[]
+  progressionRules GradeProgressionRule[]
+  enrollments     StudentEnrollment[]
+
+  @@unique([workspaceId, code])
+  @@unique([workspaceId, name])
+  @@map("curricula")
+}
+
+model OrganizationCurriculum {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  curriculumId   String   @db.Uuid
+  isPrimary      Boolean  @default(false)
+  startedAt      DateTime? @db.Date
+  endedAt        DateTime? @db.Date
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  curriculum   Curriculum   @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, curriculumId, startedAt])
+  @@index([curriculumId])
+  @@map("organization_curricula")
+}
+
+model StandardPosition {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  code        String
+  name        String
+  category    String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  staffAssignments StaffAssignment[]
+
+  @@unique([workspaceId, code])
+  @@unique([workspaceId, name])
+  @@map("standard_positions")
+}
+
+model Person {
+  id                  String       @id @default(uuid()) @db.Uuid
+  workspaceId         String       @db.Uuid
+  ownerMembershipId   String?      @db.Uuid
+  teamId              String?      @db.Uuid
+  status              PersonStatus @default(ACTIVE)
+  firstName           String?
+  middleName          String?
+  lastName            String?
+  displayName         String
+  normalizedName      String
+  chineseName         String?
+  englishName         String?
+  aliases             String[]     @default([])
+  gender              Gender       @default(UNKNOWN)
+  birthDate           DateTime?    @db.Date
+  countryCode         String?      @db.VarChar(2)
+  city                String?
+  preferredLanguage   String?
+  preferredChannel    ContactMethodType?
+  avatarUrl           String?
+  source              String?
+  sourceReference     String?
+  notes               String?
+  customFields        Json?
+  visibility          VisibilityScope @default(OWNER_TEAM)
+  dataCompletenessScore Int?
+  lastContactAt       DateTime?    @db.Timestamptz(3)
+  nextFollowUpAt      DateTime?    @db.Timestamptz(3)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime?    @db.Timestamptz(3)
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMembership? @relation("PersonOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team      Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  contactMethods          PersonContactMethod[]
+  schoolStaffProfile      SchoolStaffProfile?
+  parentProfile           ParentProfile?
+  studentProfile          StudentProfile?
+  staffAssignments        StaffAssignment[]
+  relationshipsFrom       PersonRelationship[] @relation("PersonRelationshipFrom")
+  relationshipsTo         PersonRelationship[] @relation("PersonRelationshipTo")
+  householdMemberships    HouseholdMember[]
+  guardianOf              StudentGuardianRelationship[] @relation("GuardianPerson")
+  opportunityRoles        OpportunityContactRole[]
+  activityParticipants    ActivityParticipant[]
+  documents               Document[]
+  tags                    PersonTag[]
+  leads                   Lead[]
+  activities              Activity[]
+  tasks                   Task[]
+
+  @@index([workspaceId, normalizedName])
+  @@index([workspaceId, chineseName])
+  @@index([workspaceId, englishName])
+  @@index([ownerMembershipId])
+  @@index([teamId])
+  @@map("people")
+}
+
+model PersonContactMethod {
+  id              String              @id @default(uuid()) @db.Uuid
+  workspaceId     String              @db.Uuid
+  personId        String              @db.Uuid
+  type            ContactMethodType
+  label           String?
+  value           String
+  normalizedValue String
+  status          ContactMethodStatus @default(UNVERIFIED)
+  consentStatus   ConsentStatus       @default(UNKNOWN)
+  isPrimary       Boolean             @default(false)
+  verifiedAt      DateTime?           @db.Timestamptz(3)
+  invalidAt       DateTime?           @db.Timestamptz(3)
+  source          String?
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?           @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, type, normalizedValue])
+  @@index([personId, type, isPrimary])
+  @@map("person_contact_methods")
+}
+
+model SchoolStaffProfile {
+  id                     String   @id @default(uuid()) @db.Uuid
+  workspaceId            String   @db.Uuid
+  personId               String   @unique @db.Uuid
+  employerOrganizationId String?  @db.Uuid
+  professionalSummary    String?
+  expertiseAreas         String[] @default([])
+  relationshipNotes      String?
+  lastVerifiedAt         DateTime? @db.Timestamptz(3)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace            Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person               Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  employerOrganization Organization? @relation(fields: [employerOrganizationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, employerOrganizationId])
+  @@map("school_staff_profiles")
+}
+
+model ParentProfile {
+  id                     String   @id @default(uuid()) @db.Uuid
+  workspaceId            String   @db.Uuid
+  personId               String   @unique @db.Uuid
+  employerOrganizationId String?  @db.Uuid
+  employerName           String?
+  jobTitle               String?
+  industry               String?
+  educationLevel         String?
+  overseasExperience     String?
+  communicationTraits    Json?
+  budgetAttitude         String?
+  decisionSpeed          String?
+  riskPreference         String?
+  mainConcerns           String?
+  observationConfidence Int?
+  observationSource      String?
+  observationUpdatedAt   DateTime? @db.Timestamptz(3)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace            Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person               Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  employerOrganization Organization? @relation(fields: [employerOrganizationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, employerOrganizationId])
+  @@map("parent_profiles")
+}
+
+model StaffAssignment {
+  id                     String               @id @default(uuid()) @db.Uuid
+  workspaceId            String               @db.Uuid
+  personId               String               @db.Uuid
+  organizationId         String               @db.Uuid
+  organizationUnitId     String?              @db.Uuid
+  standardPositionId     String?              @db.Uuid
+  rawTitle               String
+  employmentStatus       EmploymentStatus     @default(CURRENT)
+  startDate              DateTime?            @db.Date
+  endDate                DateTime?             @db.Date
+  isPrimary              Boolean              @default(false)
+  decisionRole           DecisionRole         @default(UNKNOWN)
+  influenceLevel         InfluenceLevel       @default(UNKNOWN)
+  relationshipStrength   RelationshipStrength @default(UNKNOWN)
+  sentiment              RelationshipSentiment @default(UNKNOWN)
+  internalRelationshipOwnerId String?          @db.Uuid
+  source                 String?
+  sourceUrl              String?
+  lastVerifiedAt         DateTime?             @db.Timestamptz(3)
+  notes                  String?
+  createdAt              DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime              @updatedAt @db.Timestamptz(3)
+  deletedAt              DateTime?             @db.Timestamptz(3)
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person           Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
+  standardPosition StandardPosition? @relation(fields: [standardPositionId], references: [id], onDelete: SetNull)
+  internalRelationshipOwner WorkspaceMembership? @relation("StaffRelationshipOwner", fields: [internalRelationshipOwnerId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, organizationId, employmentStatus])
+  @@index([personId, employmentStatus])
+  @@index([standardPositionId])
+  @@index([lastVerifiedAt])
+  @@map("staff_assignments")
+}
+
+model PersonRelationship {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  workspaceId           String                 @db.Uuid
+  fromPersonId          String                 @db.Uuid
+  toPersonId            String                 @db.Uuid
+  contextOrganizationId String?                @db.Uuid
+  type                  PersonRelationshipType
+  strength              RelationshipStrength   @default(UNKNOWN)
+  startDate             DateTime?              @db.Date
+  endDate               DateTime?              @db.Date
+  source                String?
+  notes                 String?
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?              @db.Timestamptz(3)
+
+  workspace           Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromPerson          Person        @relation("PersonRelationshipFrom", fields: [fromPersonId], references: [id], onDelete: Cascade)
+  toPerson            Person        @relation("PersonRelationshipTo", fields: [toPersonId], references: [id], onDelete: Cascade)
+  contextOrganization Organization? @relation(fields: [contextOrganizationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, fromPersonId])
+  @@index([workspaceId, toPersonId])
+  @@index([contextOrganizationId])
+  @@map("person_relationships")
+}
+
+model Household {
+  id                    String          @id @default(uuid()) @db.Uuid
+  workspaceId           String          @db.Uuid
+  ownerMembershipId     String?         @db.Uuid
+  teamId                String?         @db.Uuid
+  name                  String
+  status                HouseholdStatus @default(PROSPECT)
+  countryCode           String?         @db.VarChar(2)
+  city                  String?
+  budgetMin             Decimal?        @db.Decimal(18, 2)
+  budgetMax             Decimal?        @db.Decimal(18, 2)
+  budgetCurrency        String?         @db.VarChar(3)
+  overallIntent         String?
+  targetCountries       String[]        @default([])
+  decisionSummary       String?
+  primaryConcerns       String?
+  lifetimeValue         Decimal?        @db.Decimal(18, 2)
+  lastContactAt         DateTime?       @db.Timestamptz(3)
+  nextFollowUpAt        DateTime?       @db.Timestamptz(3)
+  source                String?
+  notes                 String?
+  customFields          Json?
+  visibility            VisibilityScope @default(OWNER_TEAM)
+  dataCompletenessScore Int?
+  createdAt             DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime        @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?       @db.Timestamptz(3)
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMembership? @relation("HouseholdOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team      Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  members       HouseholdMember[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  tasks         Task[]
+  documents     Document[]
+  tags          HouseholdTag[]
+  contracts     Contract[]
+  dataQualityIssues DataQualityIssue[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, city])
+  @@index([ownerMembershipId])
+  @@map("households")
+}
+
+model HouseholdMember {
+  id                 String              @id @default(uuid()) @db.Uuid
+  workspaceId        String              @db.Uuid
+  householdId        String              @db.Uuid
+  personId           String              @db.Uuid
+  role               HouseholdMemberRole
+  isPrimaryHousehold Boolean             @default(false)
+  isPrimaryContact   Boolean             @default(false)
+  startDate          DateTime?           @db.Date
+  endDate            DateTime?           @db.Date
+  notes              String?
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, personId, role])
+  @@index([workspaceId, personId])
+  @@map("household_members")
+}
+
+model StudentProfile {
+  id                    String        @id @default(uuid()) @db.Uuid
+  workspaceId           String        @db.Uuid
+  personId              String        @unique @db.Uuid
+  ownerMembershipId     String?       @db.Uuid
+  teamId                String?       @db.Uuid
+  status                StudentStatus @default(PROSPECT)
+  externalStudentId     String?
+  applicationYear       Int?
+  expectedGraduationDate DateTime?    @db.Date
+  serviceStage          String?
+  autoPromotionEnabled  Boolean       @default(true)
+  academicRiskSummary   String?
+  serviceRiskSummary    String?
+  customFields          Json?
+  visibility            VisibilityScope @default(RESTRICTED)
+  dataCompletenessScore Int?
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?     @db.Timestamptz(3)
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  person    Person               @relation(fields: [personId], references: [id], onDelete: Cascade)
+  owner     WorkspaceMembership? @relation("StudentOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team      Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  guardianRelationships StudentGuardianRelationship[]
+  enrollments           StudentEnrollment[]
+  academicSnapshots     StudentAcademicSnapshot[]
+  assessmentAttempts    StudentAssessmentAttempt[]
+  intents               StudentIntent[]
+  experiences           StudentExperience[]
+  progressionExceptions StudentProgressionException[]
+  progressionEvents     StudentProgressionEvent[]
+  leads                 Lead[]
+  opportunities         Opportunity[]
+  activities            Activity[]
+  tasks                 Task[]
+  documents             Document[]
+  tags                  StudentTag[]
+  contracts             Contract[]
+  dataQualityIssues     DataQualityIssue[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, applicationYear])
+  @@index([ownerMembershipId])
+  @@map("student_profiles")
+}
+
+model StudentGuardianRelationship {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  workspaceId           String                   @db.Uuid
+  studentProfileId      String                   @db.Uuid
+  guardianPersonId      String                   @db.Uuid
+  relationshipType      GuardianRelationshipType
+  isLegalGuardian       Boolean                  @default(false)
+  isPrimaryContact      Boolean                  @default(false)
+  isPayer               Boolean                  @default(false)
+  decisionInfluence     DecisionInfluence        @default(UNKNOWN)
+  livesTogether         Boolean?
+  contactRestrictions   String?
+  startDate             DateTime?                @db.Date
+  endDate               DateTime?                @db.Date
+  source                String?
+  verifiedAt            DateTime?                @db.Timestamptz(3)
+  notes                 String?
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  guardianPerson Person         @relation("GuardianPerson", fields: [guardianPersonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, guardianPersonId, relationshipType])
+  @@index([workspaceId, guardianPersonId])
+  @@map("student_guardian_relationships")
+}
+
+model AcademicCalendar {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workspaceId           String   @db.Uuid
+  organizationId        String?  @db.Uuid
+  name                  String
+  academicYearLabel     String?
+  timezone              String
+  yearStartMonth        Int
+  yearStartDay          Int
+  yearEndMonth          Int
+  yearEndDay            Int
+  promotionWindowStartMonth Int
+  promotionWindowStartDay Int
+  promotionEffectiveMonth Int
+  promotionEffectiveDay Int
+  effectiveFrom         DateTime? @db.Date
+  effectiveTo           DateTime? @db.Date
+  version               Int      @default(1)
+  isDefault             Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  progressionRules GradeProgressionRule[]
+  enrollments      StudentEnrollment[]
+
+  @@index([workspaceId, organizationId, isActive])
+  @@map("academic_calendars")
+}
+
+model GradeLevel {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @db.Uuid
+  curriculumId     String   @db.Uuid
+  code             String
+  displayName      String
+  sortOrder        Int
+  isEntryGrade     Boolean  @default(false)
+  isGraduationGrade Boolean @default(false)
+  nextGradeLevelId String?  @db.Uuid
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  nextGrade  GradeLevel? @relation("GradeSequence", fields: [nextGradeLevelId], references: [id], onDelete: SetNull)
+  previousGrades GradeLevel[] @relation("GradeSequence")
+
+  fromRules           GradeProgressionRule[] @relation("ProgressionFromGrade")
+  toRules             GradeProgressionRule[] @relation("ProgressionToGrade")
+  enrollments         StudentEnrollment[]
+  academicSnapshots   StudentAcademicSnapshot[]
+  progressionEventsFrom StudentProgressionEvent[] @relation("ProgressionEventFromGrade")
+  progressionEventsTo   StudentProgressionEvent[] @relation("ProgressionEventToGrade")
+
+  @@unique([workspaceId, curriculumId, code])
+  @@unique([curriculumId, sortOrder])
+  @@map("grade_levels")
+}
+
+model GradeProgressionRule {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @db.Uuid
+  academicCalendarId String   @db.Uuid
+  curriculumId       String   @db.Uuid
+  fromGradeLevelId   String   @db.Uuid
+  toGradeLevelId     String?  @db.Uuid
+  transitionType     ProgressionTransitionType @default(STANDARD_PROMOTION)
+  effectiveMonth     Int?
+  effectiveDay       Int?
+  requiresReview     Boolean  @default(false)
+  ruleVersion        Int      @default(1)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  academicCalendar AcademicCalendar @relation(fields: [academicCalendarId], references: [id], onDelete: Cascade)
+  curriculum       Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  fromGrade        GradeLevel       @relation("ProgressionFromGrade", fields: [fromGradeLevelId], references: [id], onDelete: Restrict)
+  toGrade          GradeLevel?      @relation("ProgressionToGrade", fields: [toGradeLevelId], references: [id], onDelete: Restrict)
+  progressionEvents StudentProgressionEvent[]
+
+  @@unique([academicCalendarId, curriculumId, fromGradeLevelId, ruleVersion])
+  @@index([workspaceId, isActive])
+  @@map("grade_progression_rules")
+}
+
+model StudentEnrollment {
+  id                   String           @id @default(uuid()) @db.Uuid
+  workspaceId          String           @db.Uuid
+  studentProfileId     String           @db.Uuid
+  organizationId       String           @db.Uuid
+  organizationUnitId   String?          @db.Uuid
+  curriculumId         String           @db.Uuid
+  gradeLevelId         String?          @db.Uuid
+  academicCalendarId   String?          @db.Uuid
+  status               EnrollmentStatus @default(ACTIVE)
+  isCurrent            Boolean          @default(true)
+  startDate            DateTime?        @db.Date
+  endDate              DateTime?        @db.Date
+  expectedGraduationDate DateTime?      @db.Date
+  externalStudentNumber String?
+  source               String?
+  notes                String?
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @db.Timestamptz(3)
+  deletedAt            DateTime?        @db.Timestamptz(3)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile   StudentProfile   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
+  curriculum       Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  gradeLevel       GradeLevel?      @relation(fields: [gradeLevelId], references: [id], onDelete: SetNull)
+  academicCalendar AcademicCalendar? @relation(fields: [academicCalendarId], references: [id], onDelete: SetNull)
+
+  academicSnapshots StudentAcademicSnapshot[]
+  progressionEvents StudentProgressionEvent[]
+
+  @@index([workspaceId, studentProfileId, isCurrent])
+  @@index([organizationId, status])
+  @@index([gradeLevelId])
+  @@map("student_enrollments")
+}
+
+model StudentAcademicSnapshot {
+  id                   String   @id @default(uuid()) @db.Uuid
+  workspaceId          String   @db.Uuid
+  studentProfileId     String   @db.Uuid
+  enrollmentId         String?  @db.Uuid
+  gradeLevelId         String?  @db.Uuid
+  academicYearLabel    String
+  termLabel            String?
+  capturedAt           DateTime @default(now()) @db.Timestamptz(3)
+  gpa                   Decimal? @db.Decimal(6, 3)
+  gpaScale              Decimal? @db.Decimal(6, 3)
+  classRank             Int?
+  cohortSize            Int?
+  predictedGrades       Json?
+  overallAssessment     String?
+  riskSummary           String?
+  source                String?
+  notes                 String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile    @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  enrollment     StudentEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  gradeLevel     GradeLevel?       @relation(fields: [gradeLevelId], references: [id], onDelete: SetNull)
+
+  subjectRecords StudentSubjectRecord[]
+
+  @@index([workspaceId, studentProfileId, academicYearLabel])
+  @@map("student_academic_snapshots")
+}
+
+model StudentSubjectRecord {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @db.Uuid
+  academicSnapshotId String   @db.Uuid
+  subjectCode        String?
+  subjectName        String
+  level              String?
+  gradeText          String?
+  score              Decimal? @db.Decimal(10, 3)
+  scoreScale         Decimal? @db.Decimal(10, 3)
+  predictedGradeText String?
+  teacherComment     String?
+  source             String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace        Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  academicSnapshot StudentAcademicSnapshot @relation(fields: [academicSnapshotId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, academicSnapshotId])
+  @@map("student_subject_records")
+}
+
+model AssessmentType {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @db.Uuid
+  code           String
+  name           String
+  category       String?
+  defaultScale   Decimal? @db.Decimal(10, 3)
+  scoreSchema    Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  attempts  StudentAssessmentAttempt[]
+
+  @@unique([workspaceId, code])
+  @@map("assessment_types")
+}
+
+model StudentAssessmentAttempt {
+  id                  String   @id @default(uuid()) @db.Uuid
+  workspaceId         String   @db.Uuid
+  studentProfileId    String   @db.Uuid
+  assessmentTypeId    String   @db.Uuid
+  testDate            DateTime? @db.Date
+  resultDate          DateTime? @db.Date
+  totalScore          Decimal? @db.Decimal(10, 3)
+  targetScore         Decimal? @db.Decimal(10, 3)
+  scoreScale          Decimal? @db.Decimal(10, 3)
+  componentScores     Json?
+  isOfficial          Boolean  @default(false)
+  source              String?
+  notes               String?
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  assessmentType AssessmentType @relation(fields: [assessmentTypeId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, studentProfileId, testDate])
+  @@map("student_assessment_attempts")
+}
+
+model StudentIntent {
+  id                   String              @id @default(uuid()) @db.Uuid
+  workspaceId          String              @db.Uuid
+  studentProfileId     String              @db.Uuid
+  status               StudentIntentStatus @default(EXPLORING)
+  applicationYear      Int?
+  certaintyScore       Int?
+  budgetMin            Decimal?            @db.Decimal(18, 2)
+  budgetMax            Decimal?            @db.Decimal(18, 2)
+  budgetCurrency       String?             @db.VarChar(3)
+  scholarshipRequired  Boolean?
+  boardingPreference   String?
+  multiCountryStrategy Boolean             @default(false)
+  careerInterests      String[]            @default([])
+  summary              String?
+  riskSummary          String?
+  validFrom            DateTime            @default(now()) @db.Timestamptz(3)
+  validTo              DateTime?           @db.Timestamptz(3)
+  isCurrent            Boolean             @default(true)
+  source               String?
+  createdAt            DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime            @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  targets StudentTargetPreference[]
+
+  @@index([workspaceId, studentProfileId, isCurrent])
+  @@map("student_intents")
+}
+
+model StudentTargetPreference {
+  id          String               @id @default(uuid()) @db.Uuid
+  workspaceId String               @db.Uuid
+  intentId    String               @db.Uuid
+  type        TargetPreferenceType
+  externalRef String?
+  value       String
+  priority    Int                  @default(1)
+  isRequired  Boolean              @default(false)
+  notes       String?
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  intent    StudentIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, type, value])
+  @@index([intentId, priority])
+  @@map("student_target_preferences")
+}
+
+model StudentExperience {
+  id               String                    @id @default(uuid()) @db.Uuid
+  workspaceId      String                    @db.Uuid
+  studentProfileId String                    @db.Uuid
+  category         StudentExperienceCategory
+  title            String
+  organizationName String?
+  role              String?
+  startDate         DateTime?                 @db.Date
+  endDate           DateTime?                 @db.Date
+  isOngoing         Boolean                   @default(false)
+  description       String?
+  outcome           String?
+  evidenceUrl       String?
+  source            String?
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                  @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, studentProfileId, category])
+  @@map("student_experiences")
+}
+
+model StudentProgressionException {
+  id               String                   @id @default(uuid()) @db.Uuid
+  workspaceId      String                   @db.Uuid
+  studentProfileId String                   @db.Uuid
+  type             ProgressionExceptionType
+  academicYearLabel String?
+  effectiveDate    DateTime?                @db.Date
+  expiresAt        DateTime?                @db.Date
+  reason           String
+  overrideData     Json?
+  isActive         Boolean                  @default(true)
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                 @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, studentProfileId, isActive])
+  @@map("student_progression_exceptions")
+}
+
+model StudentProgressionEvent {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  workspaceId          String                    @db.Uuid
+  studentProfileId     String                    @db.Uuid
+  enrollmentId         String?                   @db.Uuid
+  progressionRuleId    String?                   @db.Uuid
+  fromGradeLevelId     String?                   @db.Uuid
+  toGradeLevelId       String?                   @db.Uuid
+  status               AcademicProgressionStatus @default(DISCOVERED)
+  transitionType       ProgressionTransitionType
+  academicYearFrom     String?
+  academicYearTo       String?
+  effectiveDate        DateTime                  @db.Date
+  beforeSnapshot       Json?
+  afterSnapshot        Json?
+  exceptionSummary     String?
+  workflowId           String?
+  workflowRunId        String?
+  idempotencyKey       String
+  approvedByMembershipId String?                 @db.Uuid
+  approvedAt           DateTime?                 @db.Timestamptz(3)
+  appliedAt            DateTime?                 @db.Timestamptz(3)
+  rolledBackAt         DateTime?                 @db.Timestamptz(3)
+  failureReason        String?
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
+
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentProfile  StudentProfile        @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  enrollment      StudentEnrollment?    @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  progressionRule GradeProgressionRule? @relation(fields: [progressionRuleId], references: [id], onDelete: SetNull)
+  fromGrade       GradeLevel?            @relation("ProgressionEventFromGrade", fields: [fromGradeLevelId], references: [id], onDelete: SetNull)
+  toGrade         GradeLevel?            @relation("ProgressionEventToGrade", fields: [toGradeLevelId], references: [id], onDelete: SetNull)
+  approvedBy      WorkspaceMembership?   @relation("ProgressionApprover", fields: [approvedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, status, effectiveDate])
+  @@index([studentProfileId, effectiveDate])
+  @@map("student_progression_events")
+}
+
+model Pipeline {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @db.Uuid
+  type        PipelineType
+  name        String
+  description String?
+  isDefault   Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stages    PipelineStage[]
+  opportunities Opportunity[]
+
+  @@unique([workspaceId, name])
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @db.Uuid
+  pipelineId         String   @db.Uuid
+  name               String
+  code               String
+  sortOrder          Int
+  defaultProbability Int      @default(0)
+  isClosedWon        Boolean  @default(false)
+  isClosedLost       Boolean  @default(false)
+  staleAfterDays     Int?
+  requiredFields     Json?
+  automationConfig   Json?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace     Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline      Pipeline                   @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+  stageHistoriesTo   OpportunityStageHistory[] @relation("OpportunityStageTo")
+  stageHistoriesFrom OpportunityStageHistory[] @relation("OpportunityStageFrom")
+
+  @@unique([pipelineId, code])
+  @@unique([pipelineId, sortOrder])
+  @@index([workspaceId, pipelineId])
+  @@map("pipeline_stages")
+}
+
+model Lead {
+  id                  String       @id @default(uuid()) @db.Uuid
+  workspaceId         String       @db.Uuid
+  ownerMembershipId   String?      @db.Uuid
+  teamId              String?      @db.Uuid
+  type                LeadType
+  status              LeadStatus   @default(NEW)
+  quality             LeadQuality  @default(UNKNOWN)
+  title               String
+  organizationId      String?      @db.Uuid
+  personId            String?      @db.Uuid
+  householdId         String?      @db.Uuid
+  studentProfileId    String?      @db.Uuid
+  sourceChannel       String?
+  sourceCampaign      String?
+  sourceReference     String?
+  productInterest     String?
+  score               Int?
+  scoreConfidence     Int?
+  scoreExplanation    Json?
+  firstReceivedAt     DateTime     @default(now()) @db.Timestamptz(3)
+  qualifiedAt         DateTime?    @db.Timestamptz(3)
+  convertedAt         DateTime?    @db.Timestamptz(3)
+  closedAt            DateTime?    @db.Timestamptz(3)
+  lastContactAt       DateTime?    @db.Timestamptz(3)
+  nextActionAt        DateTime?    @db.Timestamptz(3)
+  nextActionSummary   String?
+  disqualificationReason String?
+  notes               String?
+  customFields        Json?
+  visibility          VisibilityScope @default(OWNER_TEAM)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime?    @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          WorkspaceMembership? @relation("LeadOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team           Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  person         Person?              @relation(fields: [personId], references: [id], onDelete: SetNull)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+
+  histories     LeadStatusHistory[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  tasks         Task[]
+  documents     Document[]
+  tags          LeadTag[]
+
+  @@index([workspaceId, status, ownerMembershipId])
+  @@index([organizationId])
+  @@index([householdId])
+  @@index([studentProfileId])
+  @@index([nextActionAt])
+  @@map("leads")
+}
+
+model LeadStatusHistory {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @db.Uuid
+  leadId      String     @db.Uuid
+  fromStatus  LeadStatus?
+  toStatus    LeadStatus
+  reason      String?
+  changedByMembershipId String? @db.Uuid
+  changedAt   DateTime   @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  changedBy WorkspaceMembership? @relation("LeadStatusChanger", fields: [changedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, leadId, changedAt])
+  @@map("lead_status_history")
+}
+
+model Opportunity {
+  id                  String            @id @default(uuid()) @db.Uuid
+  workspaceId         String            @db.Uuid
+  ownerMembershipId   String?           @db.Uuid
+  teamId              String?           @db.Uuid
+  pipelineId          String            @db.Uuid
+  stageId             String            @db.Uuid
+  leadId              String?           @db.Uuid
+  type                OpportunityType
+  status              OpportunityStatus @default(OPEN)
+  title               String
+  organizationId      String?           @db.Uuid
+  householdId         String?           @db.Uuid
+  studentProfileId    String?           @db.Uuid
+  amount              Decimal?          @db.Decimal(18, 2)
+  currency            String            @default("CNY") @db.VarChar(3)
+  probability         Int               @default(0)
+  expectedCloseDate   DateTime?         @db.Date
+  actualCloseDate     DateTime?         @db.Date
+  needSummary         String?
+  competitionSummary  String?
+  obstacleSummary     String?
+  nextActionSummary   String?
+  nextActionAt        DateTime?         @db.Timestamptz(3)
+  lostReason          String?
+  source              String?
+  customFields        Json?
+  visibility          VisibilityScope   @default(OWNER_TEAM)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime?         @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          WorkspaceMembership? @relation("OpportunityOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  team           Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  pipeline       Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage          PipelineStage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+
+  stageHistories OpportunityStageHistory[]
+  contactRoles   OpportunityContactRole[]
+  products       OpportunityProduct[]
+  contracts      Contract[]
+  activities     Activity[]
+  tasks          Task[]
+  documents      Document[]
+  tags           OpportunityTag[]
+
+  @@index([workspaceId, pipelineId, stageId, status])
+  @@index([ownerMembershipId, expectedCloseDate])
+  @@index([organizationId])
+  @@index([householdId])
+  @@index([studentProfileId])
+  @@index([nextActionAt])
+  @@map("opportunities")
+}
+
+model OpportunityStageHistory {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workspaceId           String   @db.Uuid
+  opportunityId         String   @db.Uuid
+  fromStageId           String?  @db.Uuid
+  toStageId             String   @db.Uuid
+  changedByMembershipId String?  @db.Uuid
+  reason                String?
+  snapshot              Json?
+  changedAt             DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity Opportunity          @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStage   PipelineStage?       @relation("OpportunityStageFrom", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStage     PipelineStage        @relation("OpportunityStageTo", fields: [toStageId], references: [id], onDelete: Restrict)
+  changedBy   WorkspaceMembership? @relation("OpportunityStageChanger", fields: [changedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, opportunityId, changedAt])
+  @@index([toStageId])
+  @@map("opportunity_stage_history")
+}
+
+model OpportunityContactRole {
+  id            String                     @id @default(uuid()) @db.Uuid
+  workspaceId   String                     @db.Uuid
+  opportunityId String                     @db.Uuid
+  personId      String                     @db.Uuid
+  role          OpportunityContactRoleType
+  influence     InfluenceLevel             @default(UNKNOWN)
+  sentiment     RelationshipSentiment      @default(UNKNOWN)
+  isPrimary     Boolean                    @default(false)
+  notes         String?
+  createdAt     DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                   @updatedAt @db.Timestamptz(3)
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, personId, role])
+  @@index([workspaceId, personId])
+  @@map("opportunity_contact_roles")
+}
+
+model Product {
+  id               String        @id @default(uuid()) @db.Uuid
+  workspaceId      String        @db.Uuid
+  code             String
+  name             String
+  status           ProductStatus @default(DRAFT)
+  category         String?
+  description      String?
+  applicableTo     PipelineType?
+  defaultPrice     Decimal?      @db.Decimal(18, 2)
+  currency         String?       @db.VarChar(3)
+  defaultDurationDays Int?
+  metadata         Json?
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+  archivedAt       DateTime?     @db.Timestamptz(3)
+
+  workspace    Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunities OpportunityProduct[]
+  contracts     Contract[]
+
+  @@unique([workspaceId, code])
+  @@unique([workspaceId, name])
+  @@map("products")
+}
+
+model OpportunityProduct {
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @db.Uuid
+  opportunityId String   @db.Uuid
+  productId     String   @db.Uuid
+  quantity      Decimal  @default(1) @db.Decimal(12, 3)
+  unitPrice     Decimal? @db.Decimal(18, 2)
+  discount      Decimal? @db.Decimal(8, 4)
+  totalAmount   Decimal? @db.Decimal(18, 2)
+  notes         String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([opportunityId, productId])
+  @@map("opportunity_products")
+}
+
+model Contract {
+  id               String         @id @default(uuid()) @db.Uuid
+  workspaceId      String         @db.Uuid
+  opportunityId    String?        @db.Uuid
+  organizationId   String?        @db.Uuid
+  householdId      String?        @db.Uuid
+  studentProfileId String?        @db.Uuid
+  productId        String?        @db.Uuid
+  contractNumber   String
+  title            String
+  status           ContractStatus @default(DRAFT)
+  amount           Decimal?       @db.Decimal(18, 2)
+  currency         String         @default("CNY") @db.VarChar(3)
+  signedAt         DateTime?      @db.Date
+  startDate        DateTime?      @db.Date
+  endDate          DateTime?      @db.Date
+  renewalDate      DateTime?      @db.Date
+  termsSummary     String?
+  metadata         Json?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime?      @db.Timestamptz(3)
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity?    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  household      Household?      @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile? @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  payments  Payment[]
+  documents Document[]
+
+  @@unique([workspaceId, contractNumber])
+  @@index([workspaceId, status, renewalDate])
+  @@map("contracts")
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  workspaceId    String        @db.Uuid
+  contractId     String        @db.Uuid
+  sequenceNumber Int           @default(1)
+  status         PaymentStatus @default(PLANNED)
+  amount         Decimal       @db.Decimal(18, 2)
+  currency       String        @default("CNY") @db.VarChar(3)
+  dueDate        DateTime?     @db.Date
+  paidAt         DateTime?     @db.Timestamptz(3)
+  paidAmount     Decimal?      @db.Decimal(18, 2)
+  paymentMethod  String?
+  reference      String?
+  notes          String?
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contract  Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, sequenceNumber])
+  @@index([workspaceId, status, dueDate])
+  @@map("payments")
+}
+
+model Activity {
+  id                  String            @id @default(uuid()) @db.Uuid
+  workspaceId         String            @db.Uuid
+  ownerMembershipId   String?           @db.Uuid
+  type                ActivityType
+  direction           ActivityDirection @default(OUTBOUND)
+  subject             String
+  summary             String?
+  body                String?
+  occurredAt          DateTime          @default(now()) @db.Timestamptz(3)
+  durationMinutes     Int?
+  organizationId      String?           @db.Uuid
+  personId            String?           @db.Uuid
+  householdId         String?           @db.Uuid
+  studentProfileId    String?           @db.Uuid
+  leadId              String?           @db.Uuid
+  opportunityId       String?           @db.Uuid
+  outcome             String?
+  requiresNextAction  Boolean           @default(true)
+  nextActionWaivedReason String?
+  source              String?
+  externalMessageId   String?
+  visibility          VisibilityScope   @default(OWNER_TEAM)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  deletedAt           DateTime?         @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner          WorkspaceMembership? @relation("ActivityOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  person         Person?              @relation(fields: [personId], references: [id], onDelete: SetNull)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity?         @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  participants ActivityParticipant[]
+  documents    Document[]
+  tasks        Task[]
+
+  @@index([workspaceId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([personId, occurredAt])
+  @@index([householdId, occurredAt])
+  @@index([studentProfileId, occurredAt])
+  @@index([opportunityId, occurredAt])
+  @@map("activities")
+}
+
+model ActivityParticipant {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  activityId  String   @db.Uuid
+  personId    String   @db.Uuid
+  role        String?
+  isExternal  Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  activity  Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, personId])
+  @@map("activity_participants")
+}
+
+model Task {
+  id                   String      @id @default(uuid()) @db.Uuid
+  workspaceId          String      @db.Uuid
+  assigneeMembershipId String?     @db.Uuid
+  createdByMembershipId String?    @db.Uuid
+  teamId               String?     @db.Uuid
+  title                String
+  description          String?
+  status               TaskStatus  @default(TODO)
+  priority             Priority    @default(MEDIUM)
+  dueAt                DateTime?   @db.Timestamptz(3)
+  startAt              DateTime?   @db.Timestamptz(3)
+  completedAt          DateTime?   @db.Timestamptz(3)
+  reminderAt           DateTime?   @db.Timestamptz(3)
+  recurrenceRule       String?
+  automationSource     String?
+  automationRunId      String?
+  organizationId       String?     @db.Uuid
+  personId             String?     @db.Uuid
+  householdId          String?     @db.Uuid
+  studentProfileId     String?     @db.Uuid
+  leadId               String?     @db.Uuid
+  opportunityId        String?     @db.Uuid
+  activityId           String?     @db.Uuid
+  completionOutcome    String?
+  visibility           VisibilityScope @default(OWNER_TEAM)
+  createdAt            DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime    @updatedAt @db.Timestamptz(3)
+  deletedAt            DateTime?   @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee       WorkspaceMembership? @relation("TaskAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
+  createdBy      WorkspaceMembership? @relation("TaskCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  team           Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  person         Person?              @relation(fields: [personId], references: [id], onDelete: SetNull)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity?         @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  activity       Activity?            @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  collaborators TaskCollaborator[]
+
+  @@index([workspaceId, assigneeMembershipId, status, dueAt])
+  @@index([teamId, status])
+  @@index([organizationId])
+  @@index([studentProfileId])
+  @@map("tasks")
+}
+
+model TaskCollaborator {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @db.Uuid
+  taskId       String   @db.Uuid
+  membershipId String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task       Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership WorkspaceMembership  @relation("TaskCollaboratorMembership", fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, membershipId])
+  @@index([workspaceId, membershipId])
+  @@map("task_collaborators")
+}
+
+model Document {
+  id                    String       @id @default(uuid()) @db.Uuid
+  workspaceId           String       @db.Uuid
+  createdByMembershipId String?      @db.Uuid
+  type                  DocumentType @default(GENERAL)
+  fileName              String
+  mimeType              String
+  sizeBytes             BigInt
+  storageProvider       String
+  storageKey            String
+  checksumSha256        String?
+  version               Int          @default(1)
+  isSensitive           Boolean      @default(false)
+  organizationId        String?      @db.Uuid
+  personId              String?      @db.Uuid
+  householdId           String?      @db.Uuid
+  studentProfileId      String?      @db.Uuid
+  leadId                String?      @db.Uuid
+  opportunityId         String?      @db.Uuid
+  contractId            String?      @db.Uuid
+  activityId            String?      @db.Uuid
+  metadata              Json?
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?    @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      WorkspaceMembership? @relation("DocumentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  person         Person?              @relation(fields: [personId], references: [id], onDelete: SetNull)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity?         @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  contract       Contract?            @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  activity       Activity?            @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, storageKey])
+  @@index([workspaceId, type, createdAt])
+  @@map("documents")
+}
+
+model Tag {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  description String?
+  colorToken  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizations    OrganizationTag[]
+  people           PersonTag[]
+  households       HouseholdTag[]
+  students         StudentTag[]
+  leads            LeadTag[]
+  opportunities    OpportunityTag[]
+
+  @@unique([workspaceId, name])
+  @@map("tags")
+}
+
+model OrganizationTag {
+  organizationId String @db.Uuid
+  tagId          String @db.Uuid
+  workspaceId    String @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tag          Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("organization_tags")
+}
+
+model PersonTag {
+  personId    String @db.Uuid
+  tagId       String @db.Uuid
+  workspaceId String @db.Uuid
+
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([personId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("person_tags")
+}
+
+model HouseholdTag {
+  householdId String @db.Uuid
+  tagId       String @db.Uuid
+  workspaceId String @db.Uuid
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([householdId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("household_tags")
+}
+
+model StudentTag {
+  studentProfileId String @db.Uuid
+  tagId            String @db.Uuid
+  workspaceId      String @db.Uuid
+
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  tag            Tag            @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([studentProfileId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("student_tags")
+}
+
+model LeadTag {
+  leadId      String @db.Uuid
+  tagId       String @db.Uuid
+  workspaceId String @db.Uuid
+
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("lead_tags")
+}
+
+model OpportunityTag {
+  opportunityId String @db.Uuid
+  tagId         String @db.Uuid
+  workspaceId   String @db.Uuid
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, tagId])
+  @@index([workspaceId, tagId])
+  @@map("opportunity_tags")
+}
+
+model ImportJob {
+  id                    String          @id @default(uuid()) @db.Uuid
+  workspaceId           String          @db.Uuid
+  createdByMembershipId String          @db.Uuid
+  objectType            ImportObjectType
+  status                ImportJobStatus @default(UPLOADED)
+  name                  String
+  totalRows             Int             @default(0)
+  processedRows         Int             @default(0)
+  createdCount          Int             @default(0)
+  updatedCount          Int             @default(0)
+  mergedCount           Int             @default(0)
+  skippedCount          Int             @default(0)
+  errorCount            Int             @default(0)
+  mappingVersion        Int             @default(1)
+  options               Json?
+  startedAt             DateTime?       @db.Timestamptz(3)
+  completedAt           DateTime?       @db.Timestamptz(3)
+  rollbackAvailableUntil DateTime?      @db.Timestamptz(3)
+  failureReason         String?
+  workflowId            String?
+  createdAt             DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime        @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy WorkspaceMembership @relation("ImportCreator", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+
+  sourceFiles ImportSourceFile[]
+  mappings    ImportMapping[]
+  issues      ImportRowIssue[]
+  results     ImportEntityResult[]
+  rollbacks   ImportRollback[]
+
+  @@index([workspaceId, status, createdAt])
+  @@map("import_jobs")
+}
+
+model ImportSourceFile {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  importJobId String   @db.Uuid
+  fileName    String
+  mimeType    String
+  sizeBytes   BigInt
+  storageKey  String
+  checksumSha256 String?
+  sheetNames  String[] @default([])
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, importJobId])
+  @@map("import_source_files")
+}
+
+model ImportMapping {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @db.Uuid
+  importJobId    String   @db.Uuid
+  sourceColumn   String
+  targetField    String
+  transformConfig Json?
+  isRequired     Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@unique([importJobId, sourceColumn, targetField])
+  @@map("import_mappings")
+}
+
+model ImportRowIssue {
+  id          String              @id @default(uuid()) @db.Uuid
+  workspaceId String              @db.Uuid
+  importJobId String              @db.Uuid
+  rowNumber   Int
+  columnName  String?
+  severity    ImportIssueSeverity
+  code        String
+  message     String
+  rawValue    String?
+  suggestedFix String?
+  resolvedAt  DateTime?           @db.Timestamptz(3)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, importJobId, severity])
+  @@index([importJobId, rowNumber])
+  @@map("import_row_issues")
+}
+
+model ImportEntityResult {
+  id          String          @id @default(uuid()) @db.Uuid
+  workspaceId String          @db.Uuid
+  importJobId String          @db.Uuid
+  rowNumber   Int
+  action      ImportRowAction
+  entityType  EntityType
+  entityId    String?         @db.Uuid
+  previousSnapshot Json?
+  newSnapshot      Json?
+  duplicateCandidates Json?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, importJobId, action])
+  @@index([entityType, entityId])
+  @@map("import_entity_results")
+}
+
+model ImportRollback {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workspaceId           String   @db.Uuid
+  importJobId           String   @db.Uuid
+  requestedByMembershipId String @db.Uuid
+  status                String
+  workflowId            String?
+  startedAt             DateTime? @db.Timestamptz(3)
+  completedAt           DateTime? @db.Timestamptz(3)
+  failureReason         String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importJob   ImportJob           @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+  requestedBy WorkspaceMembership @relation("ImportRollbackRequester", fields: [requestedByMembershipId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, importJobId])
+  @@map("import_rollbacks")
+}
+
+model ReportTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  code        String
+  name        String
+  description String?
+  entityType  EntityType
+  version     Int      @default(1)
+  templateConfig Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reportJobs ReportJob[]
+
+  @@unique([workspaceId, code, version])
+  @@map("report_templates")
+}
+
+model ReportJob {
+  id                    String          @id @default(uuid()) @db.Uuid
+  workspaceId           String          @db.Uuid
+  reportTemplateId      String?         @db.Uuid
+  createdByMembershipId String          @db.Uuid
+  requestedByMembershipId String?       @db.Uuid
+  status                ReportJobStatus @default(QUEUED)
+  format                ReportFormat
+  title                 String
+  entityType            EntityType
+  entityId              String?         @db.Uuid
+  filterSnapshot        Json?
+  metricSnapshot        Json?
+  narrativeDraft        String?
+  storageKey            String?
+  expiresAt             DateTime?       @db.Timestamptz(3)
+  downloadCount         Int             @default(0)
+  workflowId            String?
+  failureReason         String?
+  startedAt             DateTime?       @db.Timestamptz(3)
+  completedAt           DateTime?       @db.Timestamptz(3)
+  createdAt             DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime        @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reportTemplate ReportTemplate?      @relation(fields: [reportTemplateId], references: [id], onDelete: SetNull)
+  createdBy      WorkspaceMembership  @relation("ReportCreator", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+  requestedBy    WorkspaceMembership? @relation("ReportRequester", fields: [requestedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([entityType, entityId])
+  @@map("report_jobs")
+}
+
+model AiProvider {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @db.Uuid
+  code        String
+  name        String
+  status      AiProviderStatus @default(ACTIVE)
+  baseUrl     String?
+  secretRef   String?
+  settings    Json?
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  models    AiModel[]
+
+  @@unique([workspaceId, code])
+  @@map("ai_providers")
+}
+
+model AiModel {
+  id                  String   @id @default(uuid()) @db.Uuid
+  workspaceId         String   @db.Uuid
+  providerId          String   @db.Uuid
+  modelId              String
+  displayName          String
+  purposeAllowlist     AiRunPurpose[] @default([])
+  inputCostPerMillion  Decimal? @db.Decimal(18, 8)
+  outputCostPerMillion Decimal? @db.Decimal(18, 8)
+  settings             Json?
+  isDefault            Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider  AiProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  runs      AiRun[]
+
+  @@unique([workspaceId, providerId, modelId])
+  @@map("ai_models")
+}
+
+model AiPromptTemplate {
+  id               String       @id @default(uuid()) @db.Uuid
+  workspaceId      String       @db.Uuid
+  code             String
+  purpose          AiRunPurpose
+  version          Int          @default(1)
+  systemPrompt     String?
+  userPromptTemplate String
+  outputSchema     Json?
+  reviewPolicy     Json?
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      AiRun[]
+
+  @@unique([workspaceId, code, version])
+  @@map("ai_prompt_templates")
+}
+
+model AiRun {
+  id               String      @id @default(uuid()) @db.Uuid
+  workspaceId      String      @db.Uuid
+  modelId           String      @db.Uuid
+  promptTemplateId  String?     @db.Uuid
+  purpose           AiRunPurpose
+  status            AiRunStatus @default(QUEUED)
+  entityType        EntityType?
+  entityId          String?     @db.Uuid
+  inputSnapshot     Json?
+  outputJson        Json?
+  outputText        String?
+  confidence        Int?
+  requiresReview    Boolean     @default(false)
+  reviewedAt        DateTime?   @db.Timestamptz(3)
+  reviewedByMembershipId String? @db.Uuid
+  inputTokens       Int?
+  outputTokens      Int?
+  cost              Decimal?    @db.Decimal(18, 8)
+  currency          String?     @db.VarChar(3)
+  latencyMs         Int?
+  providerRequestId String?
+  errorCode         String?
+  errorMessage      String?
+  startedAt         DateTime?   @db.Timestamptz(3)
+  completedAt       DateTime?   @db.Timestamptz(3)
+  createdAt         DateTime    @default(now()) @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  model          AiModel              @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  promptTemplate AiPromptTemplate?    @relation(fields: [promptTemplateId], references: [id], onDelete: SetNull)
+  reviewedBy     WorkspaceMembership? @relation("AiRunReviewer", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+
+  evidence AiEvidence[]
+
+  @@index([workspaceId, purpose, status, createdAt])
+  @@index([entityType, entityId])
+  @@map("ai_runs")
+}
+
+model AiEvidence {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  aiRunId     String   @db.Uuid
+  sourceType  String
+  sourceId    String?
+  sourceField String?
+  excerpt     String?
+  sourceUrl   String?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  aiRun     AiRun     @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, aiRunId])
+  @@map("ai_evidence")
+}
+
+model SavedView {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @db.Uuid
+  membershipId String?  @db.Uuid
+  entityType   EntityType
+  name         String
+  filterConfig Json
+  columnConfig Json?
+  sortConfig   Json?
+  isShared     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  membership WorkspaceMembership? @relation("SavedViewOwner", fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, entityType, membershipId])
+  @@map("saved_views")
+}
+
+model CustomFieldDefinition {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  entityType  EntityType
+  code        String
+  name        String
+  dataType    String
+  config      Json?
+  isRequired  Boolean  @default(false)
+  isSensitive Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  values    CustomFieldValue[]
+
+  @@unique([workspaceId, entityType, code])
+  @@map("custom_field_definitions")
+}
+
+model CustomFieldValue {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @db.Uuid
+  definitionId     String   @db.Uuid
+  entityType       EntityType
+  entityId         String   @db.Uuid
+  value            Json
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, entityId])
+  @@index([workspaceId, entityType, entityId])
+  @@map("custom_field_values")
+}
+
+model EntityMerge {
+  id                    String     @id @default(uuid()) @db.Uuid
+  workspaceId           String     @db.Uuid
+  entityType            EntityType
+  primaryEntityId       String     @db.Uuid
+  mergedEntityIds       String[]   @db.Uuid
+  fieldDecisions        Json
+  beforeSnapshots       Json
+  afterSnapshot         Json
+  createdByMembershipId String     @db.Uuid
+  createdAt             DateTime   @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy WorkspaceMembership @relation("MergeCreator", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, entityType, primaryEntityId])
+  @@map("entity_merges")
+}
+
+model DataQualityIssue {
+  id                   String            @id @default(uuid()) @db.Uuid
+  workspaceId          String            @db.Uuid
+  entityType           EntityType
+  entityId             String            @db.Uuid
+  ruleCode             String
+  severity             ImportIssueSeverity
+  status               DataQualityStatus @default(OPEN)
+  title                String
+  description          String?
+  suggestedAction      String?
+  assigneeMembershipId String?           @db.Uuid
+  dueAt                DateTime?          @db.Timestamptz(3)
+  detectedAt           DateTime           @default(now()) @db.Timestamptz(3)
+  resolvedAt           DateTime?          @db.Timestamptz(3)
+  organizationId       String?            @db.Uuid
+  householdId          String?            @db.Uuid
+  studentProfileId     String?            @db.Uuid
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee       WorkspaceMembership? @relation("QualityIssueAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  household      Household?           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile?      @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, entityType, entityId, ruleCode, status])
+  @@index([workspaceId, status, severity])
+  @@index([assigneeMembershipId, status])
+  @@map("data_quality_issues")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  workspaceId    String      @db.Uuid
+  actorUserId    String?     @db.Uuid
+  actorMembershipId String?  @db.Uuid
+  action         AuditAction
+  entityType     EntityType
+  entityId       String?     @db.Uuid
+  requestId      String?
+  sessionId      String?
+  ipAddress      String?
+  userAgent      String?
+  reason         String?
+  beforeData     Json?
+  afterData      Json?
+  metadata       Json?
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorUser       User?                @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorMembership WorkspaceMembership? @relation("AuditMembershipActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, entityType, entityId, createdAt])
+  @@index([workspaceId, actorUserId, createdAt])
+  @@index([workspaceId, action, createdAt])
+  @@map("audit_logs")
+}

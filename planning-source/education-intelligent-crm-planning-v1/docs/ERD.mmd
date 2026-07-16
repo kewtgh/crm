@@ -1,0 +1,39 @@
+flowchart TD
+  W[Workspace] --> WM[Workspace Membership]
+  W --> O[Organization]
+  O --> OU[Organization Unit]
+  P[Person] --> PCM[Contact Methods]
+  P --> SA[Staff Assignment]
+  SA --> O
+  SA --> OU
+  P --> SP[Student Profile]
+  P --> PP[Parent Profile]
+  H[Household] --> HM[Household Member]
+  HM --> P
+  SP --> SGR[Student Guardian Relationship]
+  SGR --> P
+  SP --> E[Student Enrollment]
+  E --> O
+  E --> C[Curriculum]
+  E --> G[Grade Level]
+  SP --> AS[Academic Snapshot]
+  AS --> SR[Subject Records]
+  SP --> SI[Student Intent]
+  SI --> TP[Target Preferences]
+  SP --> PE[Progression Event]
+  O --> L[Lead]
+  H --> L
+  SP --> L
+  L --> OP[Opportunity]
+  O --> OP
+  H --> OP
+  SP --> OP
+  OP --> PS[Pipeline Stage]
+  OP --> OCR[Opportunity Contact Roles]
+  OCR --> P
+  OP --> A[Activity]
+  O --> A
+  H --> A
+  SP --> A
+  OP --> T[Task]
+  SP --> T

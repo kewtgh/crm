@@ -1,0 +1,10 @@
+import type { Metadata } from "next";
+import { AuthForm, AuthLayout } from "@/components/auth-form";
+import { redirectAuthenticatedUser } from "@/lib/auth";
+
+export const metadata: Metadata = { title: "登录 · Lumina CRM" };
+
+export default async function LoginPage() {
+  await redirectAuthenticatedUser();
+  return <AuthLayout mode="login"><AuthForm mode="login" demoMode={process.env.CRM_DEMO_MODE === "true"} /></AuthLayout>;
+}
