@@ -5,5 +5,5 @@ import { localizedPageMetadata } from "@/lib/page-metadata";
 export const generateMetadata = () => localizedPageMetadata("meta.resetPassword");
 
 export default function ResetPasswordPage() {
-  return <AuthLayout mode="login"><NewPasswordForm /></AuthLayout>;
+  return <AuthLayout><NewPasswordForm /></AuthLayout>;
 }

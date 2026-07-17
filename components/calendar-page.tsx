@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BellRing,
   CalendarDays,
@@ -30,26 +30,6 @@ type CalendarEvent = {
 };
 
 const weekDays = { "zh-CN":["周一","周二","周三","周四","周五","周六","周日"], en:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] };
-const relatedRecords = [
-  { value:"tes", zh:"台北欧洲学校", en:"Taipei European School", detailZh:"学校", detailEn:"School" },
-  { value:"theo", zh:"吴天乐 / Theo Wu", en:"吴天乐 / Theo Wu", detailZh:"学生 · A2", detailEn:"Student · A2" },
-  { value:"zhao", zh:"赵氏家庭", en:"Zhao Household", detailZh:"家庭 · 待验证", detailEn:"Household · Pending verification" },
-  { value:"wellington", zh:"上海惠灵顿", en:"Wellington College Shanghai", detailZh:"学校 · 续约机会", detailEn:"School · Renewal opportunity" },
-  { value:"rachel", zh:"王若晴 / Rachel Wang", en:"王若晴 / Rachel Wang", detailZh:"联系人 · 升学指导主任", detailEn:"Contact · Admissions director" },
-];
-
-const initialEvents: CalendarEvent[] = [
-  { id: "e1", date: "2026-07-16", time: "10:30", title: "台北欧洲学校续约回访", titleEn:"Taipei European School renewal follow-up", related: "台北欧洲学校", type: "followup", channel: "Teams", reminder: "提前 30 分钟" },
-  { id: "e2", date: "2026-07-16", time: "15:00", title: "Theo UCAS 材料确认", titleEn:"Confirm Theo's UCAS materials", related: "吴天乐 / Theo Wu", type: "deadline", channel: "办公室", reminder: "提前 2 小时" },
-  { id: "e3", date: "2026-07-18", time: "09:30", title: "赵氏家庭首次咨询", titleEn:"First consultation with Zhao Household", related: "赵氏家庭", type: "consultation", channel: "Zoom", reminder: "提前 1 天" },
-  { id: "e4", date: "2026-07-21", time: "14:00", title: "上海惠灵顿合作方案评审", titleEn:"Wellington partnership proposal review", related: "上海惠灵顿", type: "meeting", channel: "会议室 A", reminder: "提前 1 天" },
-  { id: "e5", date: "2026-07-27", time: "11:00", title: "Q3 销售目标中期检查", titleEn:"Q3 sales target midpoint review", related: "销售团队", type: "meeting", channel: "Teams", reminder: "提前 2 小时" },
-  { id: "e6", date: "2026-08-03", time: "16:30", title: "曼谷国际学校意向跟进", titleEn:"Bangkok International School lead follow-up", related: "曼谷国际学校", type: "followup", channel: "电话", reminder: "提前 30 分钟" },
-  { id: "e7", date: "2026-08-15", time: "09:00", title: "学生升年级批次生效", titleEn:"Student progression batch takes effect", related: "148 名候选学生", type: "deadline", channel: "系统任务", reminder: "提前 3 天" },
-  { id: "e8", date: "2026-07-23", time: "11:30", title: "苏州新加坡学校续约风险复核", titleEn:"Suzhou Singapore School renewal risk review", related: "苏州新加坡学校", type: "followup", channel: "Teams", reminder: "提前 1 天" },
-  { id: "e9", date: "2026-08-03", time: "10:00", title: "台北欧洲学校合同到期", titleEn:"Taipei European School contract expiry", related: "台北欧洲学校", type: "deadline", channel: "合同节点", reminder: "提前 3 天" },
-];
-
 const pad = (value: number) => String(value).padStart(2, "0");
 const dateKey = (year: number, month: number, day: number) => `${year}-${pad(month + 1)}-${pad(day)}`;
 const monthTitle = (month: Date, locale: "zh-CN"|"en") => new Intl.DateTimeFormat(locale,{year:"numeric",month:"long"}).format(month);
@@ -66,14 +46,17 @@ function monthCells(month: Date) {
   ];
 }
 
-export function CalendarPage({ initialCalendarEvents = initialEvents, persistent = false }: { initialCalendarEvents?: CalendarEvent[]; persistent?: boolean }) {
+export function CalendarPage({ initialCalendarEvents = [], persistent = false }: { initialCalendarEvents?: CalendarEvent[]; persistent?: boolean }) {
   const { locale, t } = useI18n();
-  const relatedOptions = relatedRecords.map(item=>({value:item.value,label:locale==="zh-CN"?item.zh:item.en,detail:locale==="zh-CN"?item.detailZh:item.detailEn}));
-  const [month, setMonth] = useState(() => new Date(2026, 6, 1));
+  const now = new Date();
+  const todayKey = dateKey(now.getFullYear(),now.getMonth(),now.getDate());
+  const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
   const [events, setEvents] = useState(initialCalendarEvents);
-  const [selectedDate, setSelectedDate] = useState("2026-07-16");
+  const [selectedDate, setSelectedDate] = useState(todayKey);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [related, setRelated] = useState("");
+  const [relatedOptions, setRelatedOptions] = useState<Array<{value:string;label:string;detail:string}>>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
@@ -81,9 +64,13 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
   const upcoming = useMemo(
-    () => events.filter((event) => event.date >= "2026-07-16" && !dismissed.includes(event.id)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)).slice(0, 5),
-    [dismissed, events],
+    () => events.filter((event) => event.date >= todayKey && !dismissed.includes(event.id)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)).slice(0, 5),
+    [dismissed, events, todayKey],
   );
+
+  useEffect(()=>{if(!persistent)return;const from=new Date(month.getFullYear(),month.getMonth(),1);const to=new Date(month.getFullYear(),month.getMonth()+2,1);const controller=new AbortController();fetch(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(async(response)=>{const result=await response.json() as {items?:CalendarEvent[]};if(!response.ok||!result.items)throw new Error();setEvents(result.items);}).catch((error)=>{if(!(error instanceof DOMException&&error.name==="AbortError"))setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
+
+  const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);try{const response=await fetch(`/api/search/related?q=${encodeURIComponent(query)}`);const result=await response.json() as {items?:Array<{value:string;labelZh:string;labelEn:string;type:string}>};if(!response.ok||!result.items)throw new Error();setRelatedOptions(result.items.map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));}catch{setFormError(t("calendar.relatedLoadFailed"));}finally{setRelatedLoading(false);}},[locale,persistent,t]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -107,7 +94,8 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
     const reminderValues: Record<string, number> = { [t("calendar.reminder.start")]: 0, [t("calendar.reminder.30m")]: 30, [t("calendar.reminder.2h")]: 120, [t("calendar.reminder.day")]: 1440, [t("calendar.reminder.3d")]: 4320 };
     let id = `local-${Date.now()}`;
     if (persistent) {
-      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, reminder: reminderValues[String(form.get("reminder"))] ?? 1440 }) });
+      const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
+      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440 }) });
       const result = await response.json() as { item?: { id?: string } };
       if (!response.ok || !result.item?.id) { setFormError(t("calendar.saveFailed")); return; }
       id = result.item.id;
@@ -134,7 +122,7 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("calendar.eyebrow")}</p><h1>{t("calendar.title")}</h1><p>{t("calendar.description")}</p></div>
-      <div className="page-actions"><button className="secondary-button" type="button" onClick={() => setMonth(new Date(2026, 6, 1))}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
+      <div className="page-actions"><button className="secondary-button" type="button" onClick={() => {setMonth(new Date(now.getFullYear(),now.getMonth(),1));setSelectedDate(todayKey);}}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
     </section>
     <section className="calendar-layout">
       <div className="surface calendar-surface">
@@ -144,15 +132,15 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
           <span className="calendar-legend"><i className="meeting" />{t("calendar.meeting")} <i className="consultation" />{t("calendar.consultation")} <i className="followup" />{t("calendar.followup")} <i className="deadline" />{t("calendar.deadline")}</span>
         </div>
         <div className="double-calendar">
-          <MonthView month={month} events={events} selectedDate={selectedDate} onSelect={openSchedule} />
-          <MonthView month={nextMonth} events={events} selectedDate={selectedDate} onSelect={openSchedule} />
+          <MonthView month={month} events={events} selectedDate={selectedDate} today={todayKey} onSelect={openSchedule} />
+          <MonthView month={nextMonth} events={events} selectedDate={selectedDate} today={todayKey} onSelect={openSchedule} />
         </div>
       </div>
       <aside className="surface reminder-panel">
         <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.reminders")}</p><h2>{t("calendar.reminders")}</h2></div><span className="count-pill">{upcoming.length}</span></div>
         {upcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
-          <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small></div>
+          <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{item.reminder.startsWith("calendar.")?t(item.reminder):eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small></div>
           <button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button>
         </article>)}
         {!upcoming.length && <div className="empty-state"><span>{t("calendar.empty")}</span><p>{t("calendar.emptyHelp")}</p></div>}
@@ -167,7 +155,7 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
           <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.type")}</span><select name="type" defaultValue="meeting"><option value="meeting">{t("calendar.meeting")}</option><option value="consultation">{t("calendar.consultation")}</option><option value="followup">{t("calendar.followup")}</option><option value="deadline">{t("calendar.deadline")}</option></select></label><label className="field"><span>{t("calendar.channel")}</span><span className="input-icon"><Video size={16} /><input name="channel" defaultValue="Teams" /></span></label></div>
-          <SearchableSelect label={t("calendar.related")} options={relatedOptions} value={related} onChange={setRelated} placeholder={t("calendar.relatedPlaceholder")} />
+          <SearchableSelect label={t("calendar.related")} options={relatedOptions} value={related} onChange={setRelated} onSearch={searchRelated} loading={relatedLoading} placeholder={t("calendar.relatedPlaceholder")} />
           <label className="field"><span>{t("calendar.remindAt")}</span><select name="reminder" defaultValue={t("calendar.reminder.day")}><option>{t("calendar.reminder.start")}</option><option>{t("calendar.reminder.30m")}</option><option>{t("calendar.reminder.2h")}</option><option>{t("calendar.reminder.day")}</option><option>{t("calendar.reminder.3d")}</option></select></label>
           <div className="appointment-hints"><span><Users size={16} />{t("calendar.inviteHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
           {formError && <InlineMessage type="error">{formError}</InlineMessage>}
@@ -179,7 +167,7 @@ export function CalendarPage({ initialCalendarEvents = initialEvents, persistent
   </div>;
 }
 
-function MonthView({ month, events, selectedDate, onSelect }: { month: Date; events: CalendarEvent[]; selectedDate: string; onSelect: (date: string) => void }) {
+function MonthView({ month, events, selectedDate, today, onSelect }: { month: Date; events: CalendarEvent[]; selectedDate: string; today:string; onSelect: (date: string) => void }) {
   const { locale, t } = useI18n();
   return <section className="month-view" aria-label={monthTitle(month,locale)}>
     <h3>{monthTitle(month,locale)}</h3>
@@ -187,7 +175,7 @@ function MonthView({ month, events, selectedDate, onSelect }: { month: Date; eve
     <div className="calendar-grid">{monthCells(month).map((cell, index) => {
       if (!cell) return <span className="calendar-blank" key={`blank-${index}`} />;
       const dayEvents = events.filter((event) => event.date === cell.key);
-      return <button type="button" className={`calendar-day ${cell.key === "2026-07-16" ? "today" : ""} ${cell.key === selectedDate ? "selected" : ""}`} key={cell.key} onClick={() => onSelect(cell.key)} aria-label={t("calendar.eventsCount",{date:cell.key,count:dayEvents.length})}>
+      return <button type="button" className={`calendar-day ${cell.key === today ? "today" : ""} ${cell.key === selectedDate ? "selected" : ""}`} key={cell.key} onClick={() => onSelect(cell.key)} aria-label={t("calendar.eventsCount",{date:cell.key,count:dayEvents.length})}>
         <span>{cell.day}</span>
         <div>{dayEvents.slice(0, 2).map((item) => <i className={item.type} key={item.id}>{item.time} {locale==="en"&&item.titleEn?item.titleEn:item.title}</i>)}{dayEvents.length > 2 && <small>{t("calendar.more",{count:dayEvents.length-2})}</small>}</div>
       </button>;

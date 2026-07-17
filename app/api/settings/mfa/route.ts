@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authCookieNames, isMfaRequiredRole, requireUser } from "@/lib/auth";
 import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
+import { mutationIsTrusted } from "@/lib/request-security";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("enroll") }),
@@ -19,9 +20,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_MFA_REQUEST" }, { status: 400 });
-  await requireUser(); const token = await getAccessToken();
+  const user = await requireUser(); const token = await getAccessToken();
   try {
     if (parsed.data.action === "enroll") {
       const factor = await supabaseJson("/auth/v1/factors", { method: "POST", body: JSON.stringify({ factor_type: "totp", friendly_name: "Lumina CRM" }) }, token);
@@ -32,9 +34,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ challenge });
     }
     if (parsed.data.action === "verify") {
-      await supabaseJson(`/auth/v1/factors/${parsed.data.factorId}/verify`, { method: "POST", body: JSON.stringify({ challenge_id: parsed.data.challengeId, code: parsed.data.code }) }, token);
-      return NextResponse.json({ ok: true });
+      const session = await supabaseJson<{ access_token?: string; refresh_token?: string; expires_in?: number }>(`/auth/v1/factors/${parsed.data.factorId}/verify`, { method: "POST", body: JSON.stringify({ challenge_id: parsed.data.challengeId, code: parsed.data.code }) }, token);
+      const response = NextResponse.json({ ok: true, next: "/dashboard" });
+      const cookieBase = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
+      if (session.access_token) response.cookies.set(authCookieNames.access, session.access_token, { ...cookieBase, maxAge: Number(session.expires_in ?? 3600) });
+      if (session.refresh_token) response.cookies.set(authCookieNames.refresh, session.refresh_token, cookieBase);
+      return response;
     }
+    if (isMfaRequiredRole(user.role)) return NextResponse.json({ code: "MFA_REQUIRED_FOR_ROLE" }, { status: 409 });
     await supabaseRequest(`/auth/v1/factors/${parsed.data.factorId}`, { method: "DELETE" }, token);
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ code: "MFA_OPERATION_FAILED" }, { status: 400 }); }

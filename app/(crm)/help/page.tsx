@@ -1,1 +1,1 @@
-import { HelpPage } from "@/components/operations-pages"; export default function Page(){ return <HelpPage />; }
+import { HelpPage } from "@/components/help-page"; export default function Page(){ return <HelpPage/>; }

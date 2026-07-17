@@ -3,7 +3,7 @@ import { PasswordResetRequestForm } from "@/components/password-reset-forms";
 
 export default function ForgotPasswordPage() {
   return (
-    <AuthLayout mode="login">
+    <AuthLayout>
       <PasswordResetRequestForm />
     </AuthLayout>
   );

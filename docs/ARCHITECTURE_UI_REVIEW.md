@@ -1,62 +1,29 @@
-# 架构、UI/UX 与指令中断审计
+# Architecture and UI/UX review — v0.7.0
 
-版本：0.5.0
+The final architecture remains a focused Vinext/Next application with Supabase Auth, Postgres/RLS, Storage, RPC state transitions, and small background workers. A microservice rewrite is neither required nor justified.
 
-审计日期：2026-07-17
+## Architecture decisions
 
-## 本轮结论
+- Authentication source of truth: Supabase Auth; application metadata is validated against active workspace membership. There is no self-registration surface.
+- Account lifecycle: administrator-created random temporary password, synchronous delivery confirmation, forced first-login replacement, then role-based MFA onboarding.
+- Login protection: Turnstile is verified server-side before the password exchange; tokens are not trusted or reused by the application.
+- Privileged sessions: super administrators and administrators require TOTP/AAL2. Page routing, administrator APIs and database role helpers independently reject AAL1 access.
+- Authorization source of truth: database RLS and controlled RPCs, not hidden buttons.
+- Identity: immutable UUID, distinct username, and bilingual person names.
+- Workflow: approval rows bind to workspace/object/version and execute idempotent business transitions.
+- Reporting: database aggregation; currencies remain separate unless a sourced FX model is introduced.
+- Delivery: reminders, email, and exports use claimable background queues; approved files stay private and expire.
+- Failure policy: no silent fixture fallback and no fake success.
 
-本轮重新逐项检查了此前被多次追加指令打断的计划，并完成了最重要的架构纵切：workspace/RLS/审计、学校/联系人/任务的服务端分页与查重、审批、业绩分配、合同、产品、日程、提醒、消费聚合，以及账户设置和认证安全服务。修改保持在现有 Vinext/Next + Supabase 架构内，没有为了“现代化”改成复杂微服务。
+## UI/UX decisions
 
-端到端真实登录态测试发现并修复了两个静态检查未发现的问题：合同搜索跨关联表过滤会返回 500；账户偏好更新时审计触发器无法识别以 `user_id` 为主键的实体。修复后相关接口均返回 200。
+- One navigation/design system for search, pagination, selects, forms, feedback, color, icons, cards, and responsive layout.
+- Current locale controls all UI/business labels. Human names are the single bilingual-display exception.
+- Errors remain inside the affected form or list surface.
+- Turnstile, first-password and MFA errors remain adjacent to their own controls; failed Turnstile verification refreshes the widget.
+- Long tables use server pagination; long selectors use search; mobile layouts become cards rather than oversized desktop tables.
+- Account settings cover profile, identity, language/timezone, notifications, password, MFA, privacy, and session revocation.
 
-## 指令完整性复核
+## Remaining release check
 
-| 项目 | v0.5.0 结果 | 仍需注意 |
-| --- | --- | --- |
-| UI/UX、主/子菜单、统一组件 | 已保留现代响应式设计，搜索、分页、状态、提示、图标和布局继续复用 | 旧 fixture 模块仍需随真实数据做压力与键盘测试 |
-| 登录/注册、就地错误、Turnstile | 已实现；错误不进入 URL，Turnstile 失败自动 reset | 正式域名必须使用正式密钥再验收 |
-| 双语与姓名例外 | locale 目录覆盖现有界面；普通文案按当前语言显示，人员姓名中英文同时显示 | 新增后端通知模板必须继续使用字段键 |
-| 身份模型 | username、内部 UUID、双语姓名完全分离；角色/状态不可由用户修改 | 角色变更只能由可信管理员服务完成 |
-| 工作区与数据隔离 | workspace、membership、RLS、审计已落库 | 每个尚未持久化的旧领域迁移时仍要补同等策略 |
-| 长列表、长下拉、查重 | 核心学校/联系人/任务与合同为服务端分页；长下拉可搜索；创建前服务端再次查重 | 学生、家庭、线索等旧 fixture 页尚未切换数据库 |
-| 设置与安全 | 资料、头像、偏好、邮箱、密码、会话撤销、TOTP MFA 均接真实服务 | Supabase 不提供伪造的设备地理列表；恢复码需另行设计安全存储 |
-| 双月日历与提醒 | 日程创建/完成持久化；预约提醒自动生成；数据库定时处理站内提醒 | 邮件 outbox 仍需独立发送器 |
-| 合同与续约 | 合同服务端搜索/分页；90/60/30/14/7 天提醒幂等生成 | 合同编辑/签署文件本体与电子签平台仍未实现 |
-| 产品 | 五个默认产品、定制产品、价格版本与停用已持久化 | 新价格的正式审批策略仍可按组织配置 |
-| 消费报告 | 月/季/年均来自 confirmed payments 聚合 | 财务对账与退款口径仍需业务方确认 |
-| 审批 | 合同签订、导出、业绩汇总、业绩分配均写入数据库；审批人不可审批本人请求 | 本地只有一个超级管理员时只能测试提交，审批需第二管理员账号 |
-| 业绩分配 | 目标版本、经理、专员、销售支持、上限与防重复均落库 | 实际业绩确认仍需财务核验流程 |
-| 四级关系目标与推进建议 | 四级目标及每阶段 4 条关系建议、4 个关单阶段各 4 条建议已保留 | “家长里短”仅表示自然日常沟通，不记录不必要隐私 |
-| 其他项目污染 | 全仓搜索未发现其他项目品牌、岗位、路由或数据残留 | 父母注册、学生与家庭是本项目既有教育 CRM 范围，并非外部项目角色回流 |
-| 自动关机 | 已按用户后续指令取消 | 不执行任何关机动作 |
-
-## 当前架构
-
-```text
-Browser
-  -> Vinext/Next BFF（Cookie 会话、Zod 校验、权限、错误映射）
-      -> Supabase Auth（身份、密码、会话、TOTP MFA）
-      -> PostgreSQL + RLS（workspace、CRM、审批、业绩、合同、支付、审计）
-      -> Supabase Storage（私有头像）
-      -> pg_cron / isolated runner（提醒）
-      -> notification_outbox（待外部邮件发送器消费）
-```
-
-## 本轮验证证据
-
-- `npm run typecheck`、`npm run lint`、生产构建和 11 项渲染契约测试通过。
-- `npm audit` 与 `npm audit --omit=dev` 均为 0 个已知漏洞。
-- 本地迁移 001–010（包含本次新增迁移）顺序应用成功；CRM 与其他项目容器保持分离。
-- 真实 Auth Cookie 下验证：学校分页、查重、CSV、设置读取/保存、产品创建/停用、审批创建、合同列表与搜索、月/季/年消费、日程创建/完成、业绩目标保存/提交均成功。
-- 本轮浏览器控制运行时未提供可控制实例，因此没有把 Chromium 1228 视觉回归伪装成已执行；正式发布前仍须按部署清单补做指定浏览器的桌面与 375px 验收。
-
-## 仍应作为上线阻断项
-
-1. 将学生、家庭、线索、商机、导入/合并、数据质量与管理员用户管理从 fixture 迁移到同样的 workspace/RLS/BFF 模式。
-2. 接入真正的邮件 outbox 消费者、失败重试/死信与送达监控。
-3. 完成合同文件生成、对象存储、审批后导出、电子签与回写；当前审批记录不等于合同文件已经签署。
-4. 用第二个管理员账号验收 maker/checker，通过各销售层级执行完整权限矩阵 UAT。
-5. 在正式域名用 Chromium 1228 验收 Turnstile、移动端无横向溢出、键盘焦点和屏幕阅读器标签。
-
-这些边界会在界面和部署指引中如实说明，不用虚假成功提示掩盖尚未接入的外部服务。
+The source, database, build, and authenticated HTTP checks pass. Visual and interaction acceptance still requires an environment that exposes `ms-playwright/chromium-1228`; verify 1440px, 1024px, and 375px widths, keyboard focus order, Escape/focus restoration, and absence of document-level horizontal overflow.

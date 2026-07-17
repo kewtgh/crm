@@ -8,4 +8,7 @@ export type AppUser = {
   displayNameZh: string;
   role: AppRole;
   initials: string;
+  mustChangePassword: boolean;
+  mfaEnabled: boolean;
+  aal: "aal1" | "aal2";
 };

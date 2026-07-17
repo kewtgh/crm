@@ -1,1 +1,1 @@
-import { ReportsPage } from "@/components/operations-pages"; export default function Page(){ return <ReportsPage />; }
+import { ReportsHubPage } from "@/components/feature-status-page"; export default function Page(){ return <ReportsHubPage/>; }

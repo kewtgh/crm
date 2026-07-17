@@ -1,1 +1,1 @@
-import { ProgressionPage } from "@/components/operations-pages"; export default function Page(){ return <ProgressionPage />; }
+import { FeatureUnavailablePage } from "@/components/feature-status-page"; export default function Page(){ return <FeatureUnavailablePage featureKey="ops.progression"/>; }

@@ -6,21 +6,38 @@ import type { AppUser } from "./user";
 export type { AppRole } from "./roles";
 export type { AppUser } from "./user";
 
-const demoUser: AppUser = {
-  id: "demo-admin",
-  username: "olivia.admin",
-  email: "admin@lumina-edu.com",
-  displayName: "Olivia Chen",
-  displayNameZh: "陈雅雯",
-  role: "SUPER_ADMIN",
-  initials: "OC",
-};
-
 export const authCookieNames = {
   access: "crm_access_token",
   refresh: "crm_refresh_token",
-  demo: "crm_demo_session",
 } as const;
+
+export class AuthSecurityError extends Error {
+  constructor(public code: string, public status = 403) { super(code); }
+}
+
+export function decodeJwtPayload(token: string) {
+  try {
+    const encoded = token.split(".")[1];
+    if (!encoded) return {} as Record<string, unknown>;
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
+    return JSON.parse(atob(normalized)) as Record<string, unknown>;
+  } catch { return {} as Record<string, unknown>; }
+}
+
+export async function requireAal2() {
+  const token = (await cookies()).get(authCookieNames.access)?.value;
+  if (!token || decodeJwtPayload(token).aal !== "aal2") throw new AuthSecurityError("MFA_REQUIRED");
+}
+
+export function isMfaRequiredRole(role: AppRole) {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+export function nextAuthenticatedPath(user: AppUser) {
+  if (user.mustChangePassword) return "/change-password";
+  if (isMfaRequiredRole(user.role) && user.aal !== "aal2") return user.mfaEnabled ? "/mfa-challenge" : "/mfa-setup";
+  return "/dashboard";
+}
 
 export function userFromSupabase(payload: Record<string, unknown>): AppUser | null {
   const metadata = (payload.user_metadata ?? {}) as Record<string, unknown>;
@@ -46,16 +63,41 @@ export function userFromSupabase(payload: Record<string, unknown>): AppUser | nu
       .join("")
       .slice(0, 2)
       .toUpperCase(),
+    mustChangePassword: false,
+    mfaEnabled: Array.isArray(payload.factors) && payload.factors.some((factor) => (factor as { status?: string }).status === "verified"),
+    aal: "aal1",
   };
+}
+
+export async function hydrateStaffUser(baseUser: AppUser, accessToken: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) return null;
+  const headers = { apikey: anonKey, authorization: `Bearer ${accessToken}` };
+  const [profileResponse, membershipResponse] = await Promise.all([
+    fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }),
+    fetch(`${supabaseUrl}/rest/v1/workspace_memberships?select=role,status,must_change_password&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }),
+  ]);
+  if (!membershipResponse.ok) return null;
+  const memberships = (await membershipResponse.json()) as { role?: AppRole; status?: string; must_change_password?: boolean }[];
+  const membership = memberships[0];
+  if (!membership || membership.status !== "ACTIVE" || membership.role !== baseUser.role) return null;
+  baseUser.mustChangePassword = Boolean(membership.must_change_password);
+  baseUser.aal = decodeJwtPayload(accessToken).aal === "aal2" ? "aal2" : "aal1";
+  if (profileResponse.ok) {
+    const profiles = (await profileResponse.json()) as { username?: string; display_name_zh?: string; display_name_en?: string }[];
+    if (profiles[0]?.username) baseUser.username = profiles[0].username;
+    if (profiles[0]?.display_name_zh) baseUser.displayNameZh = profiles[0].display_name_zh;
+    if (profiles[0]?.display_name_en) {
+      baseUser.displayName = profiles[0].display_name_en;
+      baseUser.initials = profiles[0].display_name_en.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+    }
+  }
+  return baseUser;
 }
 
 export async function getCurrentUser(): Promise<AppUser | null> {
   const cookieStore = await cookies();
-  const demoSession = cookieStore.get(authCookieNames.demo)?.value;
-  if (process.env.CRM_DEMO_MODE === "true" && demoSession === "demo-admin") {
-    return demoUser;
-  }
-
   const accessToken = cookieStore.get(authCookieNames.access)?.value;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -72,19 +114,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     if (!response.ok) return null;
     const baseUser = userFromSupabase((await response.json()) as Record<string, unknown>);
     if (!baseUser) return null;
-    const profileResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, {
-      headers: { apikey: anonKey, authorization: `Bearer ${accessToken}` }, cache: "no-store",
-    });
-    if (profileResponse.ok) {
-      const profiles = (await profileResponse.json()) as { username?: string; display_name_zh?: string; display_name_en?: string }[];
-      if (profiles[0]?.username) baseUser.username = profiles[0].username;
-      if (profiles[0]?.display_name_zh) baseUser.displayNameZh = profiles[0].display_name_zh;
-      if (profiles[0]?.display_name_en) {
-        baseUser.displayName = profiles[0].display_name_en;
-        baseUser.initials = profiles[0].display_name_en.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-      }
-    }
-    return baseUser;
+    return hydrateStaffUser(baseUser, accessToken);
   } catch {
     return null;
   }
@@ -110,7 +140,7 @@ export async function requireRole(...roles: AppRole[]) {
 
 export async function redirectAuthenticatedUser() {
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect(nextAuthenticatedPath(user));
   const cookieStore = await cookies();
   if (cookieStore.has(authCookieNames.refresh)) {
     redirect("/api/auth/refresh?returnTo=/dashboard");

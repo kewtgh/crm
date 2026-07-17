@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { passwordResetRequestSchema } from "@/lib/validation";
+import { mutationIsTrusted } from "@/lib/request-security";
 
 export async function POST(request: Request) {
+  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = passwordResetRequestSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json(
       { code: parsed.error.issues[0]?.message ?? "INVALID_EMAIL", field: "email" },
       { status: 400 },
     );
-  }
-
-  if (process.env.CRM_DEMO_MODE === "true") {
-    return NextResponse.json({ ok: true, code: "RESET_SENT" });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

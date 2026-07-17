@@ -57,6 +57,14 @@ await request("/rest/v1/user_profiles?on_conflict=user_id", {
   body: JSON.stringify({ user_id: synchronizedUser.id, username: metadata.username, display_name_zh: metadata.chinese_name, display_name_en: metadata.english_name }),
 });
 
+if (!existing || process.env.ADMIN_ROTATE_PASSWORD === "true") {
+  await request(`/rest/v1/workspace_memberships?user_id=eq.${synchronizedUser.id}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ must_change_password: true }),
+  });
+}
+
 await mkdir("work", { recursive: true });
 await writeFile(
   "work/local-admin-credentials.txt",

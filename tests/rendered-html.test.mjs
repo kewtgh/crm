@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("replaces the disposable starter with Lumina CRM", async () => {
@@ -16,17 +16,20 @@ test("replaces the disposable starter with Lumina CRM", async () => {
 });
 
 test("keeps authentication failures local to their forms", async () => {
-  const [authForm, loginRoute, registerRoute] = await Promise.all([
+  const [authForm, loginRoute] = await Promise.all([
     readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/auth/register/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(authForm, /role="alert"/);
-  assert.match(authForm, /crm:reset-turnstile/);
+  assert.match(authForm, /fieldErrors/);
+  assert.match(authForm, /auth\.staffOnly/);
+  assert.doesNotMatch(authForm, /register/i);
+  assert.match(authForm, /TurnstileWidget/);
+  assert.match(loginRoute, /verifyTurnstileToken/);
   assert.match(loginRoute, /INVALID_CREDENTIALS/);
-  assert.match(registerRoute, /TURNSTILE_FAILED/);
   assert.doesNotMatch(loginRoute, /searchParams|URLSearchParams/);
-  assert.doesNotMatch(registerRoute, /searchParams|URLSearchParams/);
+  await assert.rejects(access(new URL("../app/(auth)/register/page.tsx", import.meta.url)));
+  await assert.rejects(access(new URL("../app/api/auth/register/route.ts", import.meta.url)));
 });
 
 test("keeps authentication and user context safe across hydration and client bundles", async () => {
@@ -39,9 +42,9 @@ test("keeps authentication and user context safe across hydration and client bun
     readFile(new URL("../components/locale-switcher.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/(auth)/login/page.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(authForm, /method="post" action=\{`\/api\/auth\/\$\{mode\}`\}/);
-  assert.match(authForm, /\{isLogin && demoMode && \(\s*<div className="demo-note">/s);
-  assert.match(authForm, /\{isLogin && \(\s*<div className="login-extras">/s);
+  assert.match(authForm, /method="post" action="\/api\/auth\/login"/);
+  assert.doesNotMatch(authForm, /demoMode|Demo123|CRM_DEMO_MODE/);
+  assert.match(authForm, /<div className="login-extras">/);
   for (const source of [shell, settings, governance]) assert.doesNotMatch(source, /from "@\/lib\/auth"/);
   assert.match(context, /AppUserProvider/);
   assert.match(switcher, /router\.refresh\(\)/);
@@ -63,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.5\.0"/);
+  assert.match(packageJson, /"version": "0\.7\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -79,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.5\.0"/);
+  assert.match(packageJson, /"version": "0\.7\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -118,7 +121,7 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
 });
 
 test("routes visible eyebrow labels through the locale catalog", async () => {
-  const files = ["admin-pages.tsx", "calendar-page.tsx", "dashboard-page.tsx", "module-page.tsx", "operations-pages.tsx", "password-reset-forms.tsx", "pipeline-page.tsx", "sales-performance-page.tsx", "settings-page.tsx"];
+  const files = ["admin-pages.tsx", "calendar-page.tsx", "dashboard-page.tsx", "feature-status-page.tsx", "help-page.tsx", "module-page.tsx", "password-reset-forms.tsx", "pipeline-page.tsx", "sales-performance-page.tsx", "settings-page.tsx"];
   for (const file of files) {
     const source = await readFile(new URL(`../components/${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /className="eyebrow">[^<{]+/);
@@ -145,19 +148,19 @@ test("adds tiered approvals and non-duplicating manager performance allocation",
 });
 
 test("separates immutable user IDs, usernames, and bilingual names", async () => {
-  const [userModel, registration, usernameRoute, migration, settings] = await Promise.all([
+  const [userModel, bootstrap, identityMigration, boundaryMigration, settings] = await Promise.all([
     readFile(new URL("../lib/user.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/auth/register/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/auth/check-username/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/bootstrap-admin.mjs", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/202607160001_user_identity.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170008_staff_only_identity.sql", import.meta.url), "utf8"),
     readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(userModel, /id: string/);
   assert.match(userModel, /username: string/);
   assert.match(userModel, /displayNameZh/);
-  assert.match(registration, /username_available/);
-  assert.match(usernameRoute, /USERNAME_CHECK_UNAVAILABLE/);
-  assert.match(migration, /username citext not null unique/);
+  assert.match(bootstrap, /username/);
+  assert.match(identityMigration, /username citext not null unique/);
+  assert.match(boundaryMigration, /revoke all.*username_available.*anon/is);
   assert.match(settings, /settings\.internalId/);
 });
 
@@ -173,7 +176,8 @@ test("includes contracts, custom products, consumption reporting, and exact rela
   ]);
   assert.match(contracts, /contracts\.loading/);
   assert.match(coreMigration, /array\[90,60,30,14,7\]/);
-  for (const name of ["夏令营", "升学", "竞赛", "夏校", "预科"]) assert.match(products, new RegExp(name));
+  for (const name of ["夏令营", "升学", "竞赛", "夏校", "预科"]) assert.match(coreMigration, new RegExp(name));
+  assert.match(products, /products\.managePrice/);
   assert.match(consumption, /month/);
   assert.match(consumption, /quarter/);
   assert.match(consumption, /year/);
@@ -183,4 +187,72 @@ test("includes contracts, custom products, consumption reporting, and exact rela
   assert.match(playbook, /初步了解/);
   assert.match(playbook, /付款执行/);
   assert.match(playbook, /不得使用虚假折扣/);
+});
+
+test("has no demo authentication bypass or public customer registration", async () => {
+  const [auth, login, reset, env, crmData, shell, translator] = await Promise.all([
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/password-reset/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../lib/crm-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/index.ts", import.meta.url), "utf8"),
+  ]);
+  for (const source of [auth, login, reset, env]) assert.doesNotMatch(source, /CRM_DEMO_MODE|Demo123|demo-admin/);
+  assert.doesNotMatch(crmData, /guardian|监护人|crmUsers|acceptance data/i);
+  assert.doesNotMatch(shell, /Taipei European School|台北欧洲学校|Wu Household|吴氏家庭/);
+  assert.doesNotMatch(translator, /dictionaries\["zh-CN"\]\[key\]/);
+  await assert.rejects(access(new URL("../app/(auth)/register/page.tsx", import.meta.url)));
+  await assert.rejects(access(new URL("../app/api/auth/register/route.ts", import.meta.url)));
+});
+
+test("completes approved export generation and secure delivery", async () => {
+  const [worker, migration, repository, page, packageJson] = await Promise.all([
+    readFile(new URL("../scripts/process-generated-jobs.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170015_secure_exports.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/generated-jobs-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/exports-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(worker, /CONTRACT_EXPORT/);
+  assert.match(worker, /performanceExport/);
+  assert.match(worker, /crm-exports/);
+  assert.match(worker, /\^\[=\+@-\]/);
+  assert.match(migration, /values\('crm-exports','crm-exports',false/);
+  assert.match(repository, /signedURL/);
+  assert.match(page, /Pagination/);
+  assert.match(packageJson, /exports:process/);
+});
+
+test("enforces administrator-created accounts, temporary-password replacement, Turnstile, and privileged MFA", async () => {
+  const [staffRepository, staffRoute, loginRoute, turnstile, auth, mfaRoute, crmLayout, firstLoginMigration, mfaMigration, env] = await Promise.all([
+    readFile(new URL("../lib/admin-users-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/users/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/turnstile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/mfa/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/(crm)/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170017_first_login_security.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170020_privileged_mfa_gate.sql", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+  ]);
+  assert.match(staffRepository, /generateTemporaryPassword/);
+  assert.match(staffRepository, /staff-account-created/);
+  assert.match(staffRepository, /email_confirm: true/);
+  assert.doesNotMatch(staffRepository, /auth\/v1\/invite/);
+  assert.match(staffRepository, /actor\.role === "ADMIN" && input\.role === "ADMIN"/);
+  assert.match(staffRoute, /requireAal2/);
+  assert.match(loginRoute, /verifyTurnstileToken/);
+  assert.match(turnstile, /siteverify/);
+  assert.match(turnstile, /idempotency_key/);
+  assert.match(auth, /nextAuthenticatedPath/);
+  assert.match(mfaRoute, /session\.access_token/);
+  assert.match(crmLayout, /mfa-challenge/);
+  assert.match(firstLoginMigration, /must_change_password/);
+  assert.match(firstLoginMigration, /complete_initial_password_change/);
+  assert.match(mfaMigration, /auth\.jwt\(\)->>'aal'/);
+  assert.match(env, /NEXT_PUBLIC_TURNSTILE_SITE_KEY/);
+  assert.match(env, /TURNSTILE_SECRET_KEY/);
 });
