@@ -1,1 +1,1 @@
-import { AiWorkbenchPage } from "@/components/operations-pages"; export default function Page(){ return <AiWorkbenchPage />; }
+import { FeatureUnavailablePage } from "@/components/feature-status-page"; export default function Page(){ return <FeatureUnavailablePage featureKey="ops.ai"/>; }

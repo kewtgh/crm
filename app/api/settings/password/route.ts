@@ -3,10 +3,12 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { authCookieNames } from "@/lib/auth";
 import { getAccessToken, supabaseJson } from "@/lib/supabase-server";
+import { mutationIsTrusted } from "@/lib/request-security";
 
 const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(128) });
 
 export async function POST(request: Request) {
+  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_PASSWORD" }, { status: 400 });
   const user = await requireUser();

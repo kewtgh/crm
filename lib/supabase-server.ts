@@ -38,6 +38,33 @@ export async function supabaseJson<T>(path: string, init: RequestInit = {}, toke
   return response.json() as Promise<T>;
 }
 
+export async function supabaseAdminRequest(path: string, init: RequestInit = {}) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) throw new SupabaseRequestError(503, "ADMIN_SERVICE_NOT_CONFIGURED", "The Supabase administration service is not configured");
+  const response = await fetch(`${url}${path}`, {
+    ...init,
+    headers: {
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...init.headers,
+    },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({})) as { code?: string; error_code?: string; message?: string; msg?: string };
+    throw new SupabaseRequestError(response.status, detail.code ?? detail.error_code ?? "SUPABASE_ADMIN_FAILED", detail.message ?? detail.msg ?? "Supabase administration request failed");
+  }
+  return response;
+}
+
+export async function supabaseAdminJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await supabaseAdminRequest(path, init);
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
 export function jsonBody(value: unknown): RequestInit {
   return { method: "POST", body: JSON.stringify(value), headers: { Prefer: "return=representation" } };
 }

@@ -2,18 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   BookOpenCheck,
   Bot,
   Building2,
-  CalendarCheck2,
   CalendarRange,
   ChevronDown,
   ChevronRight,
-  CircleGauge,
-  ClipboardCheck,
   DatabaseZap,
   FileBarChart,
   GraduationCap,
@@ -38,6 +35,7 @@ import { APP_VERSION } from "@/lib/version";
 import { AppUserProvider } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
+import type { NotificationRecord } from "@/lib/notifications-repository";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
 
@@ -46,9 +44,9 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
     { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
     { labelKey: "nav.schedule", icon: CalendarRange, children: [
       { labelKey: "nav.calendar", href: "/calendar" },
-      { labelKey: "nav.tasks", href: "/tasks", badge: "7" },
+    { labelKey: "nav.tasks", href: "/tasks" },
     ]},
-    { labelKey: "nav.messages", href: "/messages", icon: MessageSquareText, badge: "3" },
+    { labelKey: "nav.messages", href: "/messages", icon: MessageSquareText },
   ]},
   { titleKey: "nav.relationships", items: [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
@@ -58,30 +56,30 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   ]},
   { titleKey: "nav.operations", items: [
     { labelKey: "nav.sales", icon: Target, children: [
-      { labelKey: "nav.leads", href: "/leads", badge: "12" },
+      { labelKey: "nav.leads", href: "/leads" },
       { labelKey: "nav.opportunities", href: "/opportunities" },
       { labelKey: "nav.performance", href: "/sales/performance" },
       { labelKey: "nav.allocation", href: "/sales/allocation" },
-      { labelKey: "nav.contracts", href: "/contracts", badge: "4" },
+      { labelKey: "nav.contracts", href: "/contracts" },
       { labelKey: "nav.products", href: "/products" },
     ]},
-    { labelKey: "nav.progression", href: "/progression", icon: BookOpenCheck, badge: "4" },
+    { labelKey: "nav.progression", href: "/progression", icon: BookOpenCheck },
     { labelKey: "nav.data", icon: DatabaseZap, children: [
       { labelKey: "nav.imports", href: "/imports" },
-      { labelKey: "nav.duplicates", href: "/duplicates", badge: "9" },
+      { labelKey: "nav.duplicates", href: "/duplicates" },
       { labelKey: "nav.quality", href: "/data-quality" },
     ]},
     { labelKey: "nav.reports", icon: FileBarChart, children: [
       { labelKey: "nav.reportCenter", href: "/reports" },
       { labelKey: "nav.consumption", href: "/analytics/consumption" },
+      { labelKey: "nav.exports", href: "/reports/exports" },
     ]},
     { labelKey: "nav.ai", href: "/ai", icon: Bot },
   ]},
   { titleKey: "nav.admin", items: [
     { labelKey: "nav.admin", icon: ShieldCheck, children: [
       { labelKey: "nav.dashboard", href: "/admin" },
-      { labelKey: "nav.approvals", href: "/admin/approvals", badge: "7" },
-      { labelKey: "nav.guardians", href: "/admin/guardians", badge: "6" },
+      { labelKey: "nav.approvals", href: "/admin/approvals" },
       { labelKey: "nav.users", href: "/admin/users" },
       { labelKey: "nav.security", href: "/admin/security" },
     ]},
@@ -97,6 +95,7 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ title: string; detail: string; href: string }>>([]);
   const visibleNavigation = useMemo(() => {
     const canAllocate = ADMIN_ROLES.includes(user.role) || user.role === "SALES_DIRECTOR" || user.role === "SALES_MANAGER";
     return navigation.map((group) => ({
@@ -107,27 +106,24 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
     })).filter((group) => group.items.length > 0);
   }, [user.role]);
   const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
-  const searchResults = useMemo(() => {
-    if (globalSearch.trim().length < 2) return [];
-    const terms = locale === "zh-CN" ? [
-      { title: "台北欧洲学校", detail: "学校", href: "/schools" },
-      { title: "林俊佑 / Jay Lin", detail: "学生 · IB 一年级", href: "/students" },
-      { title: "吴氏家庭", detail: "家庭 · 深圳", href: "/households" },
-      { title: "UCAS 推荐信终稿", detail: "任务 · 今天到期", href: "/tasks" },
-      { title: "双月日历与预约", detail: "日程 · 预约提醒", href: "/calendar" },
-      { title: "Q3 销售目标", detail: "业绩 · 目标与预测", href: "/sales/performance" },
-      { title: "客户合同与续约", detail: "合同 · 30/60/90 天提醒", href: "/contracts" },
-    ] : [
-      { title: "Taipei European School", detail: "School", href: "/schools" },
-      { title: "林俊佑 / Jay Lin", detail: "Student · IB Year 1", href: "/students" },
-      { title: "Wu Household", detail: "Household · Shenzhen", href: "/households" },
-      { title: "Final UCAS reference", detail: "Task · Due today", href: "/tasks" },
-      { title: "Two-month calendar", detail: "Schedule · Appointment alerts", href: "/calendar" },
-      { title: "Q3 sales target", detail: "Performance · Target and forecast", href: "/sales/performance" },
-      { title: "Customer contracts", detail: "Contracts · 30/60/90-day alerts", href: "/contracts" },
-    ];
-    return terms.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(globalSearch.toLowerCase()));
-  }, [globalSearch, locale]);
+  useEffect(() => {
+    const query = globalSearch.trim();
+    if (query.length < 2) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        const result = await response.json() as { items?: Array<{ labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" }> };
+        if (!response.ok || !result.items) return;
+        setSearchResults(result.items.map((item) => ({
+          title: item.type === "CONTACT" ? item.labelZh : locale === "zh-CN" ? item.labelZh : item.labelEn,
+          detail: t(item.type === "CONTACT" ? "nav.searchContact" : "nav.searchOrganization"),
+          href: item.type === "CONTACT" ? "/people" : "/schools",
+        })));
+      } catch { /* A transient search failure leaves the result list empty. */ }
+    }, 200);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [globalSearch, locale, t]);
   const closeMobile = () => setMobileOpen(false);
 
   return (
@@ -138,7 +134,7 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
         <div className="sidebar-header">
           <Link href="/dashboard" className="brand-lockup inverse" onClick={closeMobile}>
             <span className="brand-mark"><GraduationCap size={22} /></span>
-            <span className="brand-words"><b>Lumina</b><small>Education CRM</small></span>
+            <span className="brand-words"><b>{t("brand.short")}</b><small>{t("brand.product")}</small></span>
           </Link>
           <button className="mobile-close" type="button" onClick={closeMobile} aria-label={t("nav.close")}><X size={20} /></button>
         </div>
@@ -161,8 +157,8 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
           <div className="topbar-left">
             <button className="mobile-menu" type="button" onClick={() => setMobileOpen(true)} aria-label={t("nav.open")}><Menu size={21} /></button>
             <div className="global-search-wrap">
-              <label className="global-search"><Search size={18} /><input value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>⌘ K</kbd></label>
-              {globalSearch && <div className="global-results">
+              <label className="global-search"><Search size={18} /><input value={globalSearch} onChange={(event) => { const value=event.target.value; setGlobalSearch(value); if(value.trim().length<2)setSearchResults([]); }} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>⌘ K</kbd></label>
+              {globalSearch.trim().length >= 2 && <div className="global-results">
                 {searchResults.length ? searchResults.map((item) => <Link key={item.title} href={item.href} onClick={() => setGlobalSearch("")}><Search size={15} /><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15} /></Link>) : <p>{t("nav.noResults")}</p>}
               </div>}
             </div>
@@ -171,8 +167,8 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
             <LocaleSwitcher compact />
             <Link className="top-icon" href="/help" aria-label={t("nav.help")}><HelpCircle size={19} /></Link>
             <div className="popover-anchor">
-              <button className="top-icon" type="button" onClick={() => setNotificationsOpen((value) => !value)} aria-label={t("nav.notifications")}><Bell size={19} /><i /></button>
-              {notificationsOpen && <NotificationPopover user={user} close={() => setNotificationsOpen(false)} />}
+              <button className="top-icon" type="button" onClick={() => setNotificationsOpen((value) => !value)} aria-label={t("nav.notifications")}><Bell size={19} /></button>
+              {notificationsOpen && <NotificationPopover close={() => setNotificationsOpen(false)} />}
             </div>
             <div className="topbar-divider" />
             <div className="popover-anchor">
@@ -199,12 +195,15 @@ function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: Na
   return <Link className={`nav-link ${active ? "active" : ""}`} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
 }
 
-function NotificationPopover({ user, close }: { user: AppUser; close: () => void }) {
-  const { t } = useI18n();
-  return <div className="top-popover notifications"><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: 3 })}</small></span><button type="button">{t("nav.markAllRead")}</button></div>
-    <Link href="/tasks" onClick={close}><span className="notification-icon red"><CalendarCheck2 size={17} /></span><span><b>{t("nav.notification.tasks")}</b><small>{t("nav.notification.tasksDetail")}</small><time>{t("nav.notification.fiveMinutes")}</time></span></Link>
-    {ADMIN_ROLES.includes(user.role) && <Link href="/admin/approvals" onClick={close}><span className="notification-icon purple"><ClipboardCheck size={17} /></span><span><b>{t("nav.notification.approval")}</b><small>{t("nav.notification.approvalDetail")}</small><time>{t("nav.notification.28Minutes")}</time></span></Link>}
-    <Link href="/data-quality" onClick={close}><span className="notification-icon amber"><CircleGauge size={17} /></span><span><b>{t("nav.notification.quality")}</b><small>{t("nav.notification.qualityDetail")}</small><time>{t("nav.notification.oneHour")}</time></span></Link>
+function NotificationPopover({ close }: { close: () => void }) {
+  const { locale,t } = useI18n();const [items,setItems]=useState<NotificationRecord[]>([]);const [total,setTotal]=useState(0);const [error,setError]=useState("");
+  useEffect(()=>{let active=true;fetch("/api/notifications").then(async(response)=>{const result=await response.json() as {items?:NotificationRecord[];total?:number};if(!response.ok||!result.items)throw new Error();if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(()=>active&&setError(t("nav.notification.loadFailed")));return()=>{active=false};},[t]);
+  const markAll=async()=>{const response=await fetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});if(response.ok){setItems([]);setTotal(0);}else setError(t("nav.notification.markFailed"));};
+  const href=(item:NotificationRecord)=>item.sourceType==="CONTRACT"?"/contracts":item.sourceType==="APPOINTMENT"?"/calendar":item.sourceType==="EXPORT"?"/reports/exports":"/tasks";
+  const notificationTime=(date:string)=>new Intl.DateTimeFormat(locale==="zh-CN"?"zh-CN":"en",{dateStyle:"medium",timeStyle:"short"}).format(new Date(date));
+  return <div className="top-popover notifications"><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: total })}</small></span><button type="button" disabled={!items.length} onClick={markAll}>{t("nav.markAllRead")}</button></div>
+    {error&&<p className="popover-error" role="alert">{error}</p>}{items.map((item)=><Link href={href(item)} onClick={close} key={item.id}><span className="notification-icon purple"><Bell size={17}/></span><span><b>{t(item.titleKey,item.values)}</b><small>{t(item.bodyKey,item.values)}</small><time>{notificationTime(item.createdAt)}</time></span></Link>)}
+    {!items.length&&!error&&<p className="popover-empty">{t("nav.notification.empty")}</p>}
     <Link className="popover-footer" href="/messages" onClick={close}>{t("nav.notification.viewAll")} <ChevronRight size={15} /></Link>
   </div>;
 }

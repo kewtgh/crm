@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { DataRow, ModuleConfig } from "@/lib/crm-data";
 import type { PersistentResource } from "@/lib/crm-repository";
@@ -11,15 +12,16 @@ type SortKey = "primary" | "secondary" | "status" | "meta" | "extra" | "complete
 
 export function DataTable({ config, resource, initialTotal, refreshKey = 0 }: { config: ModuleConfig; resource?: PersistentResource; initialTotal?: number; refreshKey?: number }) {
   const { t } = useI18n();
+  const router=useRouter();const pathname=usePathname();const searchParams=useSearchParams();
   const prefix = `modules.${config.key}`;
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState(()=>searchParams.get("q")??"");
+  const [page, setPage] = useState(()=>Math.max(1,Number(searchParams.get("page")??1)));
   const [selected, setSelected] = useState<string[]>([]);
   const [rows, setRows] = useState(config.rows);
   const [total, setTotal] = useState(initialTotal ?? config.rows.length);
-  const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState<SortKey>("primary");
-  const [direction, setDirection] = useState<"asc" | "desc">("asc");
+  const [status, setStatus] = useState(()=>searchParams.get("status")??"all");
+  const [sort, setSort] = useState<SortKey>(()=>["primary","secondary","status","meta","extra","completeness"].includes(searchParams.get("sort")??"")?searchParams.get("sort") as SortKey:"primary");
+  const [direction, setDirection] = useState<"asc" | "desc">(()=>searchParams.get("direction")==="desc"?"desc":"asc");
   const [loading, setLoading] = useState(false);
   const pageSize = 5;
 
@@ -38,6 +40,8 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0 }: { 
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [direction, page, query, refreshKey, resource, sort, status]);
 
+  useEffect(()=>{if(!resource)return;const params=new URLSearchParams(searchParams.toString());if(query)params.set("q",query);else params.delete("q");if(page>1)params.set("page",String(page));else params.delete("page");if(status!=="all")params.set("status",status);else params.delete("status");if(sort!=="primary")params.set("sort",sort);else params.delete("sort");if(direction!=="asc")params.set("direction",direction);else params.delete("direction");const next=params.toString();if(next!==searchParams.toString())router.replace(next?`${pathname}?${next}`:pathname,{scroll:false});},[direction,page,pathname,query,resource,router,searchParams,sort,status]);
+
   const localRows = useMemo(() => {
     if (resource) return rows;
     const search = query.trim().toLowerCase();
@@ -48,7 +52,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0 }: { 
   const totalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize));
   const safePage = Math.min(page, totalPages);
   const visible = resource ? rows : localRows.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const statusOptions = useMemo(() => Array.from(new Set(config.rows.map((row) => row.status))), [config.rows]);
+  const statusOptions = useMemo(() => resource==="schools"?["HEALTHY","ATTENTION","DEVELOPING","RISK","UNVERIFIED"]:resource==="people"?["ACTIVE","FOLLOW_UP","VERIFIED","PROTECTED","UNVERIFIED"]:resource==="tasks"?["TODO","IN_PROGRESS","WAITING_APPROVAL","DONE","OVERDUE"]:Array.from(new Set(config.rows.map(row=>row.status))), [config.rows,resource]);
   const cycleStatus = () => { const values = ["all", ...statusOptions]; setStatus(values[(values.indexOf(status) + 1) % values.length]); setPage(1); };
   const changeSort = (key: SortKey) => { if (sort === key) setDirection((value) => value === "asc" ? "desc" : "asc"); else { setSort(key); setDirection("asc"); } setPage(1); };
   const setSearch = (value: string) => { setQuery(value); setPage(1); };
@@ -71,6 +75,6 @@ function SortHead({ field, active, direction, onSort, children }: { field: SortK
 }
 
 function DataTableRow({ row, checked, onToggle }: { row: DataRow; checked: boolean; onToggle: () => void }) {
-  const { t } = useI18n(); const [english, ...rest] = row.secondary.split(" · ");
-  return <tr><td className="check-cell"><input type="checkbox" checked={checked} onChange={onToggle} aria-label={t("common.selectRecord",{name:row.primary})} /></td><td><div className="record-link static"><span className="record-avatar">{row.primary.slice(0,1)}</span><span><b>{row.primary}</b><small>{english}</small></span></div></td><td><span className="table-main">{rest.join(" · ")}</span><small className="table-sub">{t("common.owner")} {row.owner}</small></td><td><StatusBadge tone={row.statusTone}>{t(row.statusKey ?? row.status)}</StatusBadge></td><td>{row.meta}</td><td>{row.extra}</td><td><ProgressBar value={row.completeness} label={`${Math.round(row.completeness)}%`} /></td></tr>;
+  const { locale,t } = useI18n();const primary=row.bilingualName?`${row.primary} / ${row.primaryEn??""}`:locale==="en"&&row.primaryEn?row.primaryEn:row.primary;const secondary=locale==="en"&&row.secondaryEn?row.secondaryEn:row.secondary;
+  return <tr><td className="check-cell"><input type="checkbox" checked={checked} onChange={onToggle} aria-label={t("common.selectRecord",{name:primary})} /></td><td><div className="record-link static"><span className="record-avatar">{primary.slice(0,1)}</span><span><b>{primary}</b></span></div></td><td><span className="table-main">{secondary}</span><small className="table-sub">{t("common.owner")} {row.owner}</small></td><td><StatusBadge tone={row.statusTone}>{t(row.statusKey ?? row.status)}</StatusBadge></td><td>{row.meta}</td><td>{row.extra}</td><td><ProgressBar value={row.completeness} label={`${Math.round(row.completeness)}%`} /></td></tr>;
 }

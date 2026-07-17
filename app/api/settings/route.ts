@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { SupabaseRequestError, getAccessToken, supabaseJson } from "@/lib/supabase-server";
 import { loadUserSettings, updateAccount, updateNotifications, updateProfile } from "@/lib/settings-repository";
+import { mutationIsTrusted } from "@/lib/request-security";
 
 const profileSchema = z.object({ section: z.literal("profile"), displayNameZh: z.string().trim().min(1).max(80), displayNameEn: z.string().trim().min(1).max(80), honorific: z.string().trim().max(20), bio: z.string().trim().max(500) });
 const accountSchema = z.object({ section: z.literal("account"), email: z.email(), locale: z.enum(["zh-CN", "en"]), timezone: z.string().min(1).max(60), dateFormat: z.enum(["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy"]) });
@@ -21,6 +22,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
   try {

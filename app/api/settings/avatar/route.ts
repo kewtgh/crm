@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
 import { loadUserSettings } from "@/lib/settings-repository";
+import { mutationIsTrusted } from "@/lib/request-security";
 
 const allowed = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -15,6 +16,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const user = await requireUser(); const form = await request.formData(); const file = form.get("avatar");
   if (!(file instanceof File) || !allowed.has(file.type) || file.size > 5 * 1024 * 1024) return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";

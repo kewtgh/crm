@@ -21,13 +21,13 @@ port = 56324
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/reset-password", "http://localhost:3002/reset-password"]
-enable_signup = true
+site_url = "http://localhost:3200"
+additional_redirect_urls = ["http://localhost:3200/reset-password"]
+enable_signup = false
 minimum_password_length = 10
 
 [auth.email]
-enable_signup = true
+enable_signup = false
 enable_confirmations = true
 
 [auth.mfa]

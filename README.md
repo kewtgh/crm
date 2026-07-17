@@ -1,59 +1,42 @@
 # Lumina Education CRM
 
-Current baseline: **v0.5.0**
+Current release: **v0.7.0**
 
-Lumina is an internationalized relationship CRM baseline for international education teams. Chinese and English UI copy use matched locale catalogs; personal names are the explicit exception and display Chinese and English together.
+Lumina is a bilingual relationship and sales CRM for an education-product operating company. Only company staff accounts can sign in: super administrator, administrator, sales director, sales manager, sales specialist, and sales support. Customers, contacts, parents, and students are business records—not CRM accounts.
 
-v0.5.0 adds the persisted CRM foundation: workspace-aware RLS and auditing, server-side pagination and duplicate checks for the core vertical slice, persisted products/contracts/calendar/settings, scheduled reminders, transaction-backed consumption analytics, approval workflows, and manager performance allocation.
+The release includes administrator-created staff accounts, Turnstile-protected sign-in, generated temporary passwords with forced first-login replacement, mandatory TOTP/AAL2 for administrators, workspace RLS, real dashboards and notifications, searchable paginated CRM lists, duplicate checking, two-level administration, sales hierarchy and allocation, approval state machines, opportunities, four relationship targets, staged relationship/closing guidance, products and versioned prices, contracts and renewals, two-month calendar/reminders, consumption/performance analytics, complete personal settings, and approved private CSV delivery.
 
-The original product plan is preserved under `planning-source/education-intelligent-crm-planning-v1/`. It describes a multi-phase production program; this repository implements the runnable MVP vertical slice and the production authentication boundary.
+## Local development
 
-## Local preview
-
-Requirements: Node.js 22.13 or newer.
+Requirements: Node.js 22.13+ and Docker Desktop.
 
 ```bash
 npm install
-npm run dev
-```
-
-Start the repository's isolated `lumina-crm` Supabase project, then configure and initialize its Auth environment:
-
-```bash
 npx supabase start
 npm run env:configure-local
 npm run auth:bootstrap-admin
+npm run dev
 ```
 
-The local stack uses ports 56321–56324 and must not reuse another application's Supabase containers or database.
+The CRM development server uses fixed port **3200** to avoid colliding with unrelated local projects; the isolated local Supabase project uses ports 56321–56324. Anonymous Auth signup is disabled; staff accounts are created only by an administrator, and administrator accounts only by a super administrator. Local configuration uses Cloudflare's official Turnstile test keys. The bootstrap command creates the actual Supabase Auth super administrator, marks the bootstrap password for first-login replacement, removes `ADMIN_PASSWORD` from `.env.local`, and writes the one-time local credential only to the Git-ignored `work/local-admin-credentials.txt`.
 
-The generated administrator password is removed from `.env.local` after initialization and stored only in the Git-ignored `work/local-admin-credentials.txt` file. Change it after the first interactive sign-in.
-
-Alternatively, copy `.env.example` to `.env.local` and set `CRM_DEMO_MODE=true` only for UI-only local acceptance. The demo account is:
-
-- Email: `admin@lumina-edu.com`
-- Password: `Demo123!`
-
-Never enable demo mode or Cloudflare testing keys in a deployed environment.
-
-## Supabase authentication
-
-The deployed app expects one Supabase project and uses that project as the authentication source of truth. Environment variables are configuration only; they do not create an Auth user.
-
-1. Set the Supabase URL, anon key and one-shot service role key.
-2. Provide a temporary `ADMIN_EMAIL` and strong `ADMIN_PASSWORD`.
-3. Run `npm run auth:bootstrap-admin` against the same Supabase project used by the deployment.
-4. Confirm the user exists in Supabase Auth.
-5. Remove `ADMIN_PASSWORD` from local files, CI variables and hosted secrets immediately.
-
-Existing administrator passwords are not rotated unless `ADMIN_ROTATE_PASSWORD=true` is explicitly set.
-
-## Quality checks
+## Background workers
 
 ```bash
-npx tsc --noEmit
-npm run lint
-npm test
+npm run reminders:process
+npm run outbox:process
+npm run exports:process
 ```
 
-See [`docs/ARCHITECTURE_UI_REVIEW.md`](docs/ARCHITECTURE_UI_REVIEW.md) for the latest architecture/UI review, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the deployment runbook, and [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md) for the implementation boundary.
+Schedule these commands in production. Approved exports are generated as CSV files in a private bucket and expire after 24 hours.
+
+## Quality gates
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npx supabase test db --local supabase/tests/authorization_structure.sql
+```
+
+See [deployment](docs/DEPLOYMENT.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), [audit](docs/AUDIT_2026-07-17.md), and [remediation plan](docs/REMEDIATION_PLAN.md).

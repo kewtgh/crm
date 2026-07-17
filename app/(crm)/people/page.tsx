@@ -1,2 +1,11 @@
-import { ModulePage } from "@/components/module-page"; import { moduleConfigs } from "@/lib/crm-data"; import { listCrmRows } from "@/lib/crm-repository";
-export default async function Page(){ const data=await listCrmRows("people",{pageSize:5}).catch(()=>({items:moduleConfigs.people.rows.slice(0,5),total:moduleConfigs.people.rows.length,page:1,pageSize:5})); return <ModulePage config={{...moduleConfigs.people,rows:data.items}} resource="people" initialTotal={data.total}/>; }
+import { DataLoadError } from "@/components/data-state";
+import { ModulePage } from "@/components/module-page";
+import { moduleConfigs } from "@/lib/crm-data";
+import { listCrmRows } from "@/lib/crm-repository";
+
+export default async function Page() {
+  const data = await listCrmRows("people", { pageSize: 5 }).catch(() => null);
+  return data
+    ? <ModulePage config={{ ...moduleConfigs.people, rows: data.items }} resource="people" initialTotal={data.total} />
+    : <DataLoadError />;
+}

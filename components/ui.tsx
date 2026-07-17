@@ -17,9 +17,10 @@ export function StatusBadge({ tone = "gray", children }: { tone?: string; childr
 }
 
 export function ProgressBar({ value, label }: { value: number; label?: string }) {
+  const normalized=Math.min(100,Math.max(0,value));
   return (
-    <span className="progress-with-label">
-      <span className="progress-track"><span style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></span>
+    <span className="progress-with-label" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(normalized)} aria-label={label??`${Math.round(normalized)}%`}>
+      <span className="progress-track" aria-hidden="true"><span style={{ width: `${normalized}%` }} /></span>
       {label ?? `${value}%`}
     </span>
   );
@@ -38,9 +39,7 @@ export function SearchField({ value, onChange, placeholder, compact = false }: {
 
 export function Pagination({ page, totalPages, total, pageSize, onPage }: { page: number; totalPages: number; total: number; pageSize: number; onPage: (page: number) => void }) {
   const { t } = useI18n();
-  const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter(
-    (value) => value === 1 || value === totalPages || Math.abs(value - page) <= 1,
-  );
+  const pages = [...new Set([1,page-1,page,page+1,totalPages].filter(value=>value>=1&&value<=totalPages))].sort((a,b)=>a-b);
   return (
     <nav className="pagination" aria-label={t("common.pagination")}>
       <span>{t("common.paginationSummary",{total,pageSize})}</span>
@@ -60,7 +59,7 @@ export function Pagination({ page, totalPages, total, pageSize, onPage }: { page
 
 export type SelectOption = { value: string; label: string; detail?: string };
 
-export function SearchableSelect({ label, options, value, onChange, placeholder }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string }) {
+export function SearchableSelect({ label, options, value, onChange, placeholder, onSearch, loading = false }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string; onSearch?: (query: string) => void; loading?: boolean }) {
   const { t } = useI18n();
   const resolvedPlaceholder = placeholder ?? t("common.select");
   const [open, setOpen] = useState(false);
@@ -88,6 +87,11 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
     if (!open) return;
     window.requestAnimationFrame(() => ref.current?.querySelector<HTMLInputElement>(".search-field input")?.focus());
   }, [open]);
+  useEffect(() => {
+    if (!open || !onSearch) return;
+    const timer = window.setTimeout(() => onSearch(search), 250);
+    return () => window.clearTimeout(timer);
+  }, [onSearch, open, search]);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && open) {
       event.preventDefault();
@@ -111,7 +115,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
   return (
     <div className="select-field" ref={ref} onKeyDown={handleKeyDown}>
       <span className="select-label">{label}</span>
-      <button ref={triggerRef} type="button" className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
+      <button ref={triggerRef} type="button" role="combobox" aria-label={label} aria-autocomplete="list" aria-activedescendant={open&&filtered[activeIndex]?`${listboxId}-${activeIndex}`:undefined} className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
         <span className={selected ? "" : "placeholder"}>{selected?.label ?? resolvedPlaceholder}</span><ChevronDown size={17} />
       </button>
       {open && (
@@ -119,12 +123,13 @@ export function SearchableSelect({ label, options, value, onChange, placeholder 
           <SearchField value={search} onChange={(nextSearch) => { setSearch(nextSearch); setActiveIndex(0); }} placeholder={t("common.typeToSearch")} compact />
           <div className="select-options" id={listboxId} role="listbox" aria-label={label}>
             {filtered.map((option, index) => (
-              <button key={option.value} type="button" className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option.value)} role="option" aria-selected={option.value === value}>
+              <button id={`${listboxId}-${index}`} key={option.value} type="button" className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option.value)} role="option" aria-selected={option.value === value}>
                 <span><b>{option.label}</b>{option.detail && <small>{option.detail}</small>}</span>
                 {option.value === value ? <Check size={16} /> : null}
               </button>
             ))}
-            {!filtered.length && <p className="select-empty">{t("common.noOptions")}</p>}
+            {loading && <p className="select-empty" role="status">{t("common.loading")}</p>}
+            {!loading && !filtered.length && <p className="select-empty">{t("common.noOptions")}</p>}
           </div>
         </div>
       )}
@@ -138,5 +143,6 @@ export function InlineMessage({ type, children }: { type: "error" | "success" | 
 
 export function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => { const timer = window.setTimeout(onClose, 3200); return () => window.clearTimeout(timer); }, [onClose]);
-  return <div className="toast" role="status"><span className="toast-check"><Check size={15} /></span><span>{message}</span><button type="button" onClick={onClose}><X size={15} /></button></div>;
+  const { t } = useI18n();
+  return <div className="toast" role="status"><span className="toast-check"><Check size={15} /></span><span>{message}</span><button type="button" aria-label={t("common.close")} onClick={onClose}><X size={15} /></button></div>;
 }

@@ -29,8 +29,10 @@ $adminPassword = "L!9$randomPart"
 
 $lines = @(
   '# Generated for the isolated Lumina CRM Supabase stack. Ignored by Git.',
-  'CRM_DEMO_MODE=false',
   'NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:56321',
+  'APP_URL=http://localhost:3200',
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA',
+  'TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA',
   "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anonKey",
   "SUPABASE_SERVICE_ROLE_KEY=$serviceKey",
   'ADMIN_EMAIL=admin@lumina.local',
@@ -38,11 +40,8 @@ $lines = @(
   "ADMIN_CHINESE_NAME=$([char]0x7CFB)$([char]0x7EDF)$([char]0x7BA1)$([char]0x7406)$([char]0x5458)",
   'ADMIN_ENGLISH_NAME=Lumina Administrator',
   'ADMIN_USERNAME=lumina.admin',
-  'ADMIN_ROTATE_PASSWORD=true',
-  '# Official Cloudflare testing keys. Never deploy these as production secrets.',
-  'NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA',
-  'TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA'
+  'ADMIN_ROTATE_PASSWORD=true'
 )
 
 [System.IO.File]::WriteAllLines((Join-Path $PWD '.env.local'), $lines, [System.Text.UTF8Encoding]::new($false))
-Write-Output "Configured the isolated $projectId Supabase and Turnstile development environment without exposing secret values."
+Write-Output "Configured the isolated $projectId Supabase development environment without exposing secret values."
