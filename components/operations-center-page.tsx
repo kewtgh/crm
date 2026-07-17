@@ -13,13 +13,14 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { InlineMessage, StatusBadge, Toast } from "./ui";
+import { InlineMessage, Pagination, StatusBadge, Toast } from "./ui";
 import { useI18n } from "./i18n-provider";
 import type {
   BusinessInsights,
   IntegrationConnection,
   NextBestAction,
   OperationalSnapshot,
+  PagedResult,
   ReleaseReadiness,
   RetryableJob,
 } from "@/lib/operations-repository";
@@ -44,18 +45,24 @@ export function OperationsCenterPage({
   initialReadiness,
 }: {
   initialSnapshot: OperationalSnapshot | null;
-  initialRetryableJobs: RetryableJob[];
+  initialRetryableJobs: PagedResult<RetryableJob>;
   initialIntegrations: IntegrationConnection[];
-  initialNextActions: NextBestAction[];
+  initialNextActions: PagedResult<NextBestAction>;
   initialInsights: BusinessInsights | null;
   initialReadiness:ReleaseReadiness|null;
 }) {
   const { locale, t } = useI18n();
   const { formatDate: formatPreferredDate } = useUserPreferences();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [retryableJobs, setRetryableJobs] = useState(initialRetryableJobs);
+  const [retryableJobs, setRetryableJobs] = useState(initialRetryableJobs.items);
+  const [retryTotal, setRetryTotal] = useState(initialRetryableJobs.total);
+  const [retryPage, setRetryPage] = useState(initialRetryableJobs.page);
+  const [retryPageSize, setRetryPageSize] = useState(initialRetryableJobs.pageSize);
   const [integrations, setIntegrations] = useState(initialIntegrations);
-  const [nextActions, setNextActions] = useState(initialNextActions);
+  const [nextActions, setNextActions] = useState(initialNextActions.items);
+  const [actionTotal, setActionTotal] = useState(initialNextActions.total);
+  const [actionPage, setActionPage] = useState(initialNextActions.page);
+  const [actionPageSize, setActionPageSize] = useState(initialNextActions.pageSize);
   const [insights, setInsights] = useState(initialInsights);
   const [readiness,setReadiness]=useState(initialReadiness);
   const [integrationPending, setIntegrationPending] = useState("");
@@ -75,19 +82,67 @@ export function OperationsCenterPage({
   const [rejectReason, setRejectReason] = useState("");
   const [permission, setPermission] = useState<PermissionExplanation | null>(null);
 
+  const applyOperationsResult = (result: {
+    snapshot: OperationalSnapshot;
+    retryableJobs: PagedResult<RetryableJob>;
+    insights: BusinessInsights;
+    readiness: ReleaseReadiness;
+  }) => {
+    setSnapshot(result.snapshot);
+    setRetryableJobs(result.retryableJobs.items);
+    setRetryTotal(result.retryableJobs.total);
+    setRetryPage(result.retryableJobs.page);
+    setRetryPageSize(result.retryableJobs.pageSize);
+    setInsights(result.insights);
+    setReadiness(result.readiness);
+  };
+
+  const loadRetryablePage = async (nextPage: number, nextPageSize: number) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await apiFetch<{
+        snapshot: OperationalSnapshot;
+        retryableJobs: PagedResult<RetryableJob>;
+        insights: BusinessInsights;
+        readiness: ReleaseReadiness;
+      }>(`/api/operations?page=${nextPage}&pageSize=${nextPageSize}`);
+      applyOperationsResult(result);
+    } catch {
+      setError(t("operations.loadFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadNextActionsPage = async (nextPage: number, nextPageSize: number) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await apiFetch<PagedResult<NextBestAction>>(
+        `/api/next-actions?page=${nextPage}&pageSize=${nextPageSize}`,
+      );
+      setNextActions(result.items);
+      setActionTotal(result.total);
+      setActionPage(result.page);
+      setActionPageSize(result.pageSize);
+    } catch {
+      setError(t("operations.loadFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const refresh = async () => {
     setLoading(true);
     setError("");
     try {
       const [operationsResult, integrationsResult, actionsResult] = await Promise.all([
-        apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: RetryableJob[]; insights: BusinessInsights;readiness:ReleaseReadiness }>("/api/operations"),
+        apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: PagedResult<RetryableJob>; insights: BusinessInsights;readiness:ReleaseReadiness }>(`/api/operations?page=${retryPage}&pageSize=${retryPageSize}`),
         apiFetch<{ items: IntegrationConnection[] }>("/api/integrations"),
-        apiFetch<{ items: NextBestAction[] }>("/api/next-actions"),
+        apiFetch<PagedResult<NextBestAction>>(`/api/next-actions?page=${actionPage}&pageSize=${actionPageSize}`),
       ]);
-      setSnapshot(operationsResult.snapshot);
-      setRetryableJobs(operationsResult.retryableJobs);
-      setInsights(operationsResult.insights);
-      setReadiness(operationsResult.readiness);
+      applyOperationsResult(operationsResult);
       setIntegrations(integrationsResult.items);
       setIntegrationDrafts(Object.fromEntries(integrationsResult.items.map((item) => [item.provider, {
         status: item.status,
@@ -95,6 +150,9 @@ export function OperationsCenterPage({
         accountLabel: item.externalAccountLabel,
       }])));
       setNextActions(actionsResult.items);
+      setActionTotal(actionsResult.total);
+      setActionPage(actionsResult.page);
+      setActionPageSize(actionsResult.pageSize);
     } catch {
       setError(t("operations.loadFailed"));
     } finally {
@@ -113,22 +171,23 @@ export function OperationsCenterPage({
       setError(t("operations.loadFailed"));
       return;
     }
-    setRetryableJobs((current) => current.filter((item) => item.id !== job.id));
     setToast(t("operations.retrySuccess"));
-    void refresh();
+    const nextTotal = Math.max(0, retryTotal - 1);
+    const nextPage = Math.min(retryPage, Math.max(1, Math.ceil(nextTotal / retryPageSize)));
+    await loadRetryablePage(nextPage, retryPageSize);
   };
 
   const generate = async () => {
     setLoading(true);
     try {
-      const result = await apiFetch<{ items: NextBestAction[] }>("/api/next-actions", {
+      await apiFetch("/api/next-actions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ operation: "generate", organizationId: null }),
       });
-      setNextActions(result.items);
+      setActionPage(1);
+      await loadNextActionsPage(1, actionPageSize);
       setToast(t("operations.generated"));
-      void refresh();
     } catch {
       setError(t("operations.loadFailed"));
     } finally {
@@ -152,7 +211,9 @@ export function OperationsCenterPage({
       setError(t("operations.loadFailed"));
       return;
     }
-    setNextActions((current) => current.filter((action) => action.id !== item.id));
+    const nextTotal = Math.max(0, actionTotal - 1);
+    const nextPage = Math.min(actionPage, Math.max(1, Math.ceil(nextTotal / actionPageSize)));
+    await loadNextActionsPage(nextPage, actionPageSize);
     setRejecting("");
     setRejectReason("");
   };
@@ -273,6 +334,14 @@ export function OperationsCenterPage({
           <button className="secondary-button" type="button" onClick={() => void retry(job)}><RotateCcw size={15}/>{t("operations.retry")}</button>
         </article>)}
         {!retryableJobs.length && <div className="empty-state"><span>{t("operations.noRetryable")}</span></div>}</div>
+        <Pagination
+          page={retryPage}
+          totalPages={Math.max(1, Math.ceil(retryTotal / retryPageSize))}
+          total={retryTotal}
+          pageSize={retryPageSize}
+          onPage={(value) => void loadRetryablePage(value, retryPageSize)}
+          onPageSize={(value) => void loadRetryablePage(1, value)}
+        />
       </section>
     </div>
 
@@ -306,6 +375,14 @@ export function OperationsCenterPage({
         {rejecting === item.id ? <div className="reject-row"><input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder={t("operations.rejectReason")} maxLength={500}/><button type="button" disabled={!rejectReason.trim()} onClick={() => void decide(item, "REJECTED")}><Check size={15}/></button><button type="button" onClick={() => setRejecting("")}><X size={15}/></button></div> : <div className="next-action-buttons"><button className="primary-button" type="button" onClick={() => void decide(item, "ACCEPTED")}><Check size={15}/>{t("operations.accept")}</button><button className="secondary-button" type="button" onClick={() => setRejecting(item.id)}><X size={15}/>{t("operations.reject")}</button></div>}
       </article>)}
       {!nextActions.length && <div className="empty-state"><span>{t("operations.noActions")}</span></div>}</div>
+      <Pagination
+        page={actionPage}
+        totalPages={Math.max(1, Math.ceil(actionTotal / actionPageSize))}
+        total={actionTotal}
+        pageSize={actionPageSize}
+        onPage={(value) => void loadNextActionsPage(value, actionPageSize)}
+        onPageSize={(value) => void loadNextActionsPage(1, value)}
+      />
     </section>
 
     <section className="surface operations-section permission-explainer">

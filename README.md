@@ -64,4 +64,4 @@ npx supabase db lint --local --level warning
 npx supabase test db --local
 ```
 
-See the [post-release audit](docs/AUDIT_2026-07-18_POST_RELEASE.md), [v1.1 remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_V1.1.0.md), [final re-audit](docs/FINAL_REAUDIT_2026-07-18_V1.1.0.md), [v1.1 release record](docs/RELEASE_V1.1.0.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), and [deployment guide](docs/DEPLOYMENT.md).
+See the [post-release audit](docs/AUDIT_2026-07-18_POST_RELEASE.md), [v1.1 remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_V1.1.0.md), [pagination audit and implementation plan](docs/PAGINATION_AUDIT_AND_PLAN_2026-07-18.md), [final re-audit](docs/FINAL_REAUDIT_2026-07-18_V1.1.0.md), [v1.1 release record](docs/RELEASE_V1.1.0.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), and [deployment guide](docs/DEPLOYMENT.md).

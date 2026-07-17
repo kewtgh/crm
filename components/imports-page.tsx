@@ -11,8 +11,6 @@ import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
 
 const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
-const rowPageSize = 50;
-
 function parseCsv(text: string) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("EMPTY");
@@ -64,6 +62,7 @@ export function ImportsPage({
   const [batches, setBatches] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
+  const [pageSize,setPageSize]=useState(10);
   const [resource, setResource] = useState<"CONTACTS" | "ORGANIZATIONS">("CONTACTS");
   const [fileName, setFileName] = useState("");
   const [fileText, setFileText] = useState("");
@@ -73,6 +72,7 @@ export function ImportsPage({
   const [selected, setSelected] = useState("");
   const [rows, setRows] = useState<ImportRowRecord[]>([]);
   const [rowPage, setRowPage] = useState(1);
+  const [rowPageSize,setRowPageSize]=useState(50);
   const [rowTotal, setRowTotal] = useState(0);
   const [dryRun, setDryRun] = useState<{
     create: number; update: number; merge: number; skip: number;
@@ -96,13 +96,13 @@ export function ImportsPage({
 
   const current = batches.find((item) => item.id === selected);
   const visibleDuplicateRows = useMemo(() => rows.filter((item) => item.status === "DUPLICATE"), [rows]);
-  const pages = Math.max(1, Math.ceil(total / 10));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
   const rowPages = Math.max(1, Math.ceil(rowTotal / rowPageSize));
   const headerOptions = [{ value: "", label: t("imports.ignore") }, ...headers.map((header) => ({ value: header, label: header }))];
 
   const loadBatches = async (nextPage = page) => {
     try {
-      const result = await apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}`);
+      const result = await apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}&pageSize=${pageSize}`);
       setBatches(result.items);
       setTotal(result.total ?? 0);
     } catch {
@@ -110,11 +110,11 @@ export function ImportsPage({
     }
   };
 
-  const open = async (id: string, nextRowPage = 1) => {
+  const open = async (id: string, nextRowPage = 1, nextRowPageSize = rowPageSize) => {
     setSelected(id);
     try {
       const [result, dryRunResult] = await Promise.all([
-        apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}`),
+        apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}&rowPageSize=${nextRowPageSize}`),
         apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`),
       ]);
       setRows(result.items);
@@ -340,7 +340,7 @@ export function ImportsPage({
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}
-        <Pagination page={page} totalPages={pages} total={total} pageSize={10} onPage={(next) => { setPage(next); void loadBatches(next); }} />
+        <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); void loadBatches(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);void apiFetch<{items:ImportBatchRecord[];total?:number}>(`/api/imports?page=1&pageSize=${value}`).then((result)=>{setBatches(result.items);setTotal(result.total??0);}).catch(()=>setError(t("imports.loadFailed")));}} />
       </div>
 
       <div className="surface import-rows">
@@ -357,7 +357,7 @@ export function ImportsPage({
           <StatusBadge tone={row.status === "APPLIED" ? "green" : row.status === "INVALID" || row.status === "FAILED" ? "red" : row.status === "DUPLICATE" ? "amber" : "blue"}>{t(`imports.rowStatus.${row.status.toLowerCase()}`)}</StatusBadge>
           {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {row.reasons.join(", ")}</small>{["CREATE", "UPDATE", "MERGE", "SKIP"].map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
         </article>)}
-        {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} />}
+        {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} onPageSize={(value)=>{setRowPageSize(value);void open(selected,1,value);}} />}
         {current && !rows.length && <div className="empty-state"><span>{t("imports.noRows")}</span></div>}
         {current && <div className="import-actions">
           {["READY", "PROCESSING", "PARTIAL_FAILED"].includes(current.status) && !visibleDuplicateRows.length && <button className="primary-button" disabled={pending} onClick={() => void process()}><Play size={16} />{t("imports.execute")}</button>}

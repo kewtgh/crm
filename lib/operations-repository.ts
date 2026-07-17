@@ -1,4 +1,4 @@
-import { supabaseAdminJson, supabaseJson } from "./supabase-server";
+import { supabaseAdminJson, supabaseJson, supabaseRequest } from "./supabase-server";
 import { inspectCoreRuntimeEnvironment } from "./runtime-environment";
 
 export type QueueMetric = {
@@ -78,6 +78,12 @@ export type NextBestAction = {
   validUntil: string;
   draftTaskId: string | null;
 };
+export type PagedResult<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
 export type ProductBundle = {
   id: string;
   code: string;
@@ -155,10 +161,10 @@ export async function retryOperationalJob(jobType: string, jobId: string) {
   });
 }
 
-export async function listRetryableJobs(): Promise<RetryableJob[]> {
-  return supabaseJson<RetryableJob[]>("/rest/v1/rpc/operational_retryable_jobs", {
+export async function listRetryableJobs(page = 1, pageSize = 10): Promise<PagedResult<RetryableJob>> {
+  return supabaseJson<PagedResult<RetryableJob>>("/rest/v1/rpc/operational_retryable_jobs_page", {
     method: "POST",
-    body: "{}",
+    body: JSON.stringify({ page_number: page, page_size: pageSize }),
   });
 }
 
@@ -185,12 +191,19 @@ export async function generateNextBestActions(organizationId?: string | null) {
   });
 }
 
-export async function listNextBestActions(organizationId?: string | null): Promise<NextBestAction[]> {
+export async function listNextBestActions(
+  organizationId?: string | null,
+  page = 1,
+  pageSize = 10,
+): Promise<PagedResult<NextBestAction>> {
   const organizationFilter = organizationId ? `&organization_id=eq.${encodeURIComponent(organizationId)}` : "";
-  const rows = await supabaseJson<Array<Record<string, unknown>>>(
-    `/rest/v1/next_best_actions?select=id,organization_id,rule_key,rule_version,priority,title_zh,title_en,rationale_zh,rationale_en,evidence,confidence,status,valid_until,draft_task_id,organizations(name_zh,name_en)&status=eq.SUGGESTED${organizationFilter}&order=priority.desc,valid_until.asc&limit=100`,
+  const start = (page - 1) * pageSize;
+  const response = await supabaseRequest(
+    `/rest/v1/next_best_actions?select=id,organization_id,rule_key,rule_version,priority,title_zh,title_en,rationale_zh,rationale_en,evidence,confidence,status,valid_until,draft_task_id,organizations(name_zh,name_en)&status=eq.SUGGESTED${organizationFilter}&order=priority.desc,valid_until.asc,id.asc`,
+    { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } },
   );
-  return rows.map((row) => {
+  const rows = await response.json() as Array<Record<string, unknown>>;
+  const items = rows.map((row) => {
     const organization = row.organizations as Record<string, unknown> | null;
     return {
       id: String(row.id),
@@ -211,6 +224,8 @@ export async function listNextBestActions(organizationId?: string | null): Promi
       draftTaskId: row.draft_task_id ? String(row.draft_task_id) : null,
     };
   });
+  const total = Number((response.headers.get("content-range") ?? `*/${items.length}`).split("/")[1] ?? items.length);
+  return { items, total, page, pageSize };
 }
 
 export async function decideNextBestAction(id: string, decision: "ACCEPTED" | "REJECTED", reason = "") {

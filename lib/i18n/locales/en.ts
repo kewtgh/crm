@@ -67,7 +67,7 @@ export const en: Messages = {
   "products.loadFailed": "The product catalog could not be loaded. Try again shortly.", "products.saveFailed": "Product settings were not saved. Check the form, permissions, or a duplicate product code.",
   "approval.loadFailed": "The approval queue could not be loaded. Try again shortly.",
   "allocation.loadFailed": "The performance allocation plan could not be loaded. Try again shortly.",
-  "common.paginationSummary":"{total} records · {pageSize} per page","common.select":"Select…","common.typeToSearch":"Type to search…","common.noOptions":"No matching options",
+  "common.paginationSummary":"{total} records · {pageSize} per page","common.pageSize":"Rows per page","common.select":"Select…","common.typeToSearch":"Type to search…","common.noOptions":"No matching options",
   "nav.main": "Main navigation",
   "nav.open": "Open navigation",
   "nav.close": "Close navigation",

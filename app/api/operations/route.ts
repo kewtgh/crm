@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, apiRoute, parseUuid, requireApiAal2, requireApiRole } from "@/lib/api";
+import { ApiError, apiRoute, parsePagination, parseUuid, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { repairStaffIdentity } from "@/lib/admin-users-repository";
 import {
@@ -16,12 +16,14 @@ const retrySchema = z.object({
   jobId: z.uuid(),
 });
 
-async function get() {
+async function get(request: Request) {
   await requireApiRole("SUPER_ADMIN", "ADMIN");
   await requireApiAal2();
+  const { page, pageSize } = parsePagination(new URL(request.url).searchParams, 10);
+  if (![10, 20, 50].includes(pageSize)) throw new ApiError("INVALID_PAGINATION", 400);
   const [snapshot, retryableJobs, insights,readiness] = await Promise.all([
     loadOperationalSnapshot(),
-    listRetryableJobs(),
+    listRetryableJobs(page, pageSize),
     loadBusinessInsights(),
     loadReleaseReadiness(),
   ]);

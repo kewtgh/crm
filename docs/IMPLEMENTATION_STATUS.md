@@ -8,7 +8,7 @@ The repository-scoped v1.1.0 audit and remediation plan is complete. No actionab
 
 - Opportunity creation and every stage transition now share the same server-owned contract and a guided, accessible workflow.
 - Finance lists use independent pagination and exact risk aggregates; query failures are explicit.
-- Schools, people, and tasks have resource-specific fields, client/server validation, duplicate invalidation, exact metrics, and 10/25/50 pagination.
+- Schools, people, and tasks have resource-specific fields, client/server validation, duplicate invalidation, exact metrics, and shared 10/20/50 pagination.
 - User timezone and date-format preferences drive the main client workflows and dashboard reporting boundary.
 - Internal component requests use the resilient API client except the intentional authentication bootstrap flows.
 - Drawers and mobile navigation have keyboard focus management, Escape handling, focus restoration, and background scroll locking.

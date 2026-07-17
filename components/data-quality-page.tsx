@@ -13,6 +13,7 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
+  const [pageSize,setPageSize]=useState(10);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
@@ -21,9 +22,9 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
   const [action, setAction] = useState<{ id: string; dismiss: boolean } | null>(null);
   const [resolution, setResolution] = useState("");
 
-  const load = async (nextPage = page) => {
+  const load = async (nextPage = page, nextPageSize = pageSize) => {
     try {
-      const result = await apiFetch<{ items: QualityIssue[]; total: number }>(`/api/data-quality?page=${nextPage}&q=${encodeURIComponent(query)}`);
+      const result = await apiFetch<{ items: QualityIssue[]; total: number }>(`/api/data-quality?page=${nextPage}&pageSize=${nextPageSize}&q=${encodeURIComponent(query)}`);
       setError("");
       setItems(result.items);
       setTotal(result.total);
@@ -77,7 +78,7 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
     setAction({ id, dismiss });
   };
 
-  const pages = Math.max(1, Math.ceil(total / 15));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
   return <div className="page-stack quality-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("quality.eyebrow")}</p><h1>{t("quality.title")}</h1><p>{t("quality.description")}</p></div>
@@ -99,7 +100,7 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
         </form>}
       </article>)}
       {!items.length && <div className="empty-state"><span>{t("quality.empty")}</span></div>}
-      <Pagination page={page} totalPages={pages} total={total} pageSize={15} onPage={(next) => { setPage(next); setAction(null); void load(next); }} />
+      <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); setAction(null); void load(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);setAction(null);void load(1,value);}} />
     </section>
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;

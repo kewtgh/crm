@@ -15,7 +15,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/components/ui";
+import { AccessibleDrawer, InlineMessage, Pagination, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
@@ -63,15 +63,20 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [relatedOptions, setRelatedOptions] = useState<Array<{value:string;label:string;detail:string}>>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  const [upcomingPage,setUpcomingPage]=useState(1);
+  const [upcomingPageSize,setUpcomingPageSize]=useState(10);
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
   const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
   const upcoming = useMemo(
-    () => events.filter((event) => event.date >= todayKey && !dismissed.includes(event.id)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)).slice(0, 5),
+    () => events.filter((event) => event.date >= todayKey && !dismissed.includes(event.id)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)),
     [dismissed, events, todayKey],
   );
+  const upcomingPages=Math.max(1,Math.ceil(upcoming.length/upcomingPageSize));
+  const safeUpcomingPage=Math.min(upcomingPage,upcomingPages);
+  const visibleUpcoming=upcoming.slice((safeUpcomingPage-1)*upcomingPageSize,safeUpcomingPage*upcomingPageSize);
 
   useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(()=>{if(!controller.signal.aborted)setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
 
@@ -135,13 +140,14 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
       </div>
       <aside className="surface reminder-panel">
         <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.reminders")}</p><h2>{t("calendar.reminders")}</h2></div><span className="count-pill">{upcoming.length}</span></div>
-        {upcoming.map((item) => <article className="reminder-item" key={item.id}>
+        {visibleUpcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
           <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{item.reminder.startsWith("calendar.")?t(item.reminder):eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small><small>{t("calendar.deliveryStatus")}: {t(`calendar.delivery.${(item.deliveryStatus??"NONE").toLowerCase()}`)}</small></div>
           <span className="reminder-actions"><button type="button" aria-label={t("calendar.reschedule")} onClick={()=>setReschedule({id:item.id,date:item.date,time:item.time})}><Pencil size={15}/></button><button type="button" aria-label={t("calendar.cancelEvent")} onClick={()=>void updateEvent(item.id,"CANCEL")}><X size={15}/></button><button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button></span>
           {reschedule?.id===item.id&&<form className="reschedule-form" onSubmit={event=>{event.preventDefault();void updateEvent(item.id,"UPDATE",reschedule.date,reschedule.time);}}><input type="date" value={reschedule.date} onChange={event=>setReschedule({...reschedule,date:event.target.value})} required/><input type="time" value={reschedule.time} onChange={event=>setReschedule({...reschedule,time:event.target.value})} required/><button className="primary-button">{t("calendar.queueUpdate")}</button></form>}
         </article>)}
         {!upcoming.length && <div className="empty-state"><span>{t("calendar.empty")}</span><p>{t("calendar.emptyHelp")}</p></div>}
+        <Pagination page={safeUpcomingPage} totalPages={upcomingPages} total={upcoming.length} pageSize={upcomingPageSize} onPage={setUpcomingPage} onPageSize={(value)=>{setUpcomingPageSize(value);setUpcomingPage(1);}}/>
       </aside>
     </section>
 

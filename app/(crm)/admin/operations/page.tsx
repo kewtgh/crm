@@ -19,9 +19,9 @@ export default async function Page() {
   ]);
   return <OperationsCenterPage
     initialSnapshot={snapshotResult.status === "fulfilled" ? snapshotResult.value : null}
-    initialRetryableJobs={jobsResult.status === "fulfilled" ? jobsResult.value : []}
+    initialRetryableJobs={jobsResult.status === "fulfilled" ? jobsResult.value : {items:[],total:0,page:1,pageSize:10}}
     initialIntegrations={integrationsResult.status === "fulfilled" ? integrationsResult.value : []}
-    initialNextActions={actionsResult.status === "fulfilled" ? actionsResult.value : []}
+    initialNextActions={actionsResult.status === "fulfilled" ? actionsResult.value : {items:[],total:0,page:1,pageSize:10}}
     initialInsights={insightsResult.status === "fulfilled" ? insightsResult.value : null}
     initialReadiness={readinessResult.status === "fulfilled" ? readinessResult.value : null}
   />;
