@@ -3,7 +3,7 @@ import { z } from "zod";
 import { checkCrmDuplicate, createCrmRecord, listCrmRows, type PersistentResource } from "@/lib/crm-repository";
 import { SupabaseRequestError } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { requireUser } from "@/lib/auth";
+import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
 const recordSchema = z.object({
@@ -25,26 +25,27 @@ function failure(error: unknown) {
   return NextResponse.json({ code: "CRM_OPERATION_FAILED" }, { status: 500 });
 }
 
-export async function GET(request: Request, context: { params: Promise<{ resource: string }> }) {
-  await requireUser();
+async function get(request: Request, context: { params: Promise<{ resource: string }> }) {
+  await requireApiUser();
   const resource = resolveResource((await context.params).resource);
   if (!resource) return NextResponse.json({ code: "UNKNOWN_RESOURCE" }, { status: 404 });
   const url = new URL(request.url);
   try {
-    const result = await listCrmRows(resource, { query: url.searchParams.get("q") ?? "", page: Number(url.searchParams.get("page") ?? 1), pageSize: Number(url.searchParams.get("pageSize") ?? 20), status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "desc" });
+    const {page,pageSize}=parsePagination(url.searchParams,20);
+    const result = await listCrmRows(resource, { query: url.searchParams.get("q") ?? "", page, pageSize, status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "desc" });
     if (url.searchParams.get("format") === "csv") return NextResponse.json({code:"EXPORT_APPROVAL_REQUIRED"},{status:403});
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) { return failure(error); }
 }
 
-export async function POST(request: Request, context: { params: Promise<{ resource: string }> }) {
+async function post(request: Request, context: { params: Promise<{ resource: string }> }) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const resource = resolveResource((await context.params).resource);
   if (!resource) return NextResponse.json({ code: "UNKNOWN_RESOURCE" }, { status: 404 });
   const parsed = recordSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
+  const user=await requireApiUser();
   try {
-    const user=await requireUser();
     const duplicates = await checkCrmDuplicate(resource, parsed.data);
     if (parsed.data.operation === "check") return NextResponse.json({ duplicates });
     if (duplicates.length) return NextResponse.json({ code: "DUPLICATE_FOUND", duplicates }, { status: 409 });
@@ -52,3 +53,5 @@ export async function POST(request: Request, context: { params: Promise<{ resour
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) { return failure(error); }
 }
+export const GET=apiRoute(get,"CRM_LOAD_FAILED");
+export const POST=apiRoute(post,"CRM_OPERATION_FAILED");

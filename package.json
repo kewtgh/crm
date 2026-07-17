@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -17,7 +17,12 @@
     "outbox:process": "node --env-file=.env.local scripts/process-notification-outbox.mjs",
     "calendar-deliveries:process": "node --env-file=.env.local scripts/process-calendar-deliveries.mjs",
     "smoke:phase2": "node --env-file=.env.local scripts/smoke-phase2.mjs",
+    "smoke:http-v09": "node --env-file=.env.local scripts/smoke-http-v09.mjs",
+    "smoke:http-v10": "node --env-file=.env.local scripts/smoke-http-v10.mjs",
+    "smoke:v09": "node --env-file=.env.local scripts/smoke-v09.mjs",
     "exports:process": "node --env-file=.env.local scripts/process-generated-jobs.mjs",
+    "webhooks:process": "node --env-file=.env.local scripts/process-webhook-inbox.mjs",
+    "integrations:process": "node --env-file=.env.local scripts/process-integration-sync.mjs",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {

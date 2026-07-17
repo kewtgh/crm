@@ -11,4 +11,6 @@ export type AppUser = {
   mustChangePassword: boolean;
   mfaEnabled: boolean;
   aal: "aal1" | "aal2";
+  emailVerified: boolean;
+  accountStatus: "ACTIVE";
 };

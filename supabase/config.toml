@@ -27,7 +27,9 @@ enable_signup = false
 minimum_password_length = 10
 
 [auth.email]
-enable_signup = false
+# Email/password remains an enabled staff sign-in provider. Public account
+# creation is still blocked by the global auth.enable_signup=false boundary.
+enable_signup = true
 enable_confirmations = true
 
 [auth.mfa]

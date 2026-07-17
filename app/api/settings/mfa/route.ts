@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authCookieNames, isMfaRequiredRole, requireUser } from "@/lib/auth";
+import { authCookieNames, isMfaRequiredRole } from "@/lib/auth";
+import { apiRoute, requireApiUser } from "@/lib/api";
 import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
 
@@ -11,19 +12,19 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unenroll"), factorId: z.string().uuid() }),
 ]);
 
-export async function GET() {
+async function get() {
+  await requireApiUser();
   try {
-    await requireUser();
     const user = await supabaseJson<{ factors?: Array<{ id: string; factor_type: string; status: string; friendly_name?: string; created_at?: string }> }>("/auth/v1/user", {}, await getAccessToken());
     return NextResponse.json({ factors: user.factors ?? [] });
   } catch { return NextResponse.json({ code: "MFA_LOAD_FAILED" }, { status: 500 }); }
 }
 
-export async function POST(request: Request) {
+async function post(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_MFA_REQUEST" }, { status: 400 });
-  const user = await requireUser(); const token = await getAccessToken();
+  const user = await requireApiUser(); const token = await getAccessToken();
   try {
     if (parsed.data.action === "enroll") {
       const factor = await supabaseJson("/auth/v1/factors", { method: "POST", body: JSON.stringify({ factor_type: "totp", friendly_name: "Lumina CRM" }) }, token);
@@ -46,3 +47,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ code: "MFA_OPERATION_FAILED" }, { status: 400 }); }
 }
+export const GET=apiRoute(get,"MFA_LOAD_FAILED");
+export const POST=apiRoute(post,"MFA_OPERATION_FAILED");

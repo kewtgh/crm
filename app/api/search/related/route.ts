@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { apiRoute, requireApiUser } from "@/lib/api";
 import { searchRelatedRecords } from "@/lib/related-search-repository";
 import { SupabaseRequestError } from "@/lib/supabase-server";
 
-export async function GET(request: Request) {
+async function get(request: Request) {
+  await requireApiUser();
   try {
-    await requireUser();
     const query = new URL(request.url).searchParams.get("q") ?? "";
     return NextResponse.json({ items: await searchRelatedRecords(query) });
   } catch (error) {
@@ -13,3 +13,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ code:"RELATED_SEARCH_FAILED" }, { status:500 });
   }
 }
+export const GET=apiRoute(get,"RELATED_SEARCH_FAILED");

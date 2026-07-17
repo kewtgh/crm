@@ -1,10 +1,13 @@
+import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+
 const required=["NEXT_PUBLIC_SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY"];
 const missing=required.filter(key=>!process.env[key]);
 if(missing.length)throw new Error(`Missing export-worker variables: ${missing.join(", ")}`);
 const base=process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/,"");
 const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
 const headers={apikey:key,authorization:`Bearer ${key}`,"content-type":"application/json"};
-const workspaceDefault="00000000-0000-4000-8000-000000000001";
+const heartbeat=createWorkerHeartbeat(base,key,"GENERATED_JOBS");
+const workerId=process.env.WORKER_ID??`generated-jobs:${process.pid}:${crypto.randomUUID()}`;
 
 async function request(path,options={}){const response=await fetch(`${base}${path}`,{...options,headers:{...headers,...options.headers}});const body=await response.json().catch(()=>null);if(!response.ok)throw new Error(`${path} failed (${response.status}: ${body?.code??body?.message??"unknown"})`);return body;}
 const csvCell=value=>{const text=String(value??"");const safe=typeof value==="string"&&/^[=+@-]/.test(text)?`'${text}`:text;return`"${safe.replaceAll('"','""')}"`;};
@@ -18,7 +21,7 @@ async function contractExport(job){
 }
 function periodRange(objectId){const match=/^(\d{4}-\d{2}-\d{2})_(month|quarter|year)_/.exec(objectId);if(!match)throw new Error("Invalid performance period");const start=new Date(`${match[1]}T00:00:00Z`);const end=new Date(start);if(match[2]==="month")end.setUTCMonth(end.getUTCMonth()+1);if(match[2]==="quarter")end.setUTCMonth(end.getUTCMonth()+3);if(match[2]==="year")end.setUTCFullYear(end.getUTCFullYear()+1);return{start:match[1],end:end.toISOString().slice(0,10)};}
 async function performanceExport(job){
-  const range=periodRange(String(job.parameters?.objectId??""));const ws=job.workspace_id??workspaceDefault;
+  const range=periodRange(String(job.parameters?.objectId??""));const ws=job.workspace_id;if(!ws)throw new Error("Export job workspace is missing");
   const [members,targets,payments]=await Promise.all([
     request(`/rest/v1/sales_team_members?select=id,name_zh,name_en,role,team&workspace_id=eq.${ws}&active=eq.true&order=name_en`),
     request(`/rest/v1/performance_targets?select=id,target_amount,currency&workspace_id=eq.${ws}&period_start=lte.${range.end}&period_end=gte.${range.start}`),
@@ -41,11 +44,19 @@ async function marketingContactsExport(job){
 async function setJob(id,status,extra={}){return request(`/rest/v1/generated_jobs?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString(),...extra})});}
 async function expireArtifacts(){const expired=await request(`/rest/v1/generated_jobs?select=id,artifact_path&status=eq.READY&expires_at=lt.${encodeURIComponent(new Date().toISOString())}&limit=50`);for(const job of expired){if(job.artifact_path)await fetch(`${base}/storage/v1/object/crm-exports/${job.artifact_path}`,{method:"DELETE",headers}).catch(()=>undefined);await setJob(job.id,"EXPIRED");}}
 
-await expireArtifacts();
-const jobs=await request(`/rest/v1/generated_jobs?select=id,workspace_id,job_type,parameters,created_by&status=eq.QUEUED&order=created_at&limit=${Number(process.env.EXPORT_BATCH_SIZE??10)}`);
-let ready=0;
-for(const job of jobs){
-  const claimed=await request(`/rest/v1/generated_jobs?id=eq.${job.id}&status=eq.QUEUED`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status:"PROCESSING",updated_at:new Date().toISOString()})});if(!claimed.length)continue;
-  try{const content=job.job_type==="CONTRACT_EXPORT"?await contractExport(job):job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job):await performanceExport(job);const path=`${job.workspace_id}/${job.id}.csv`;const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":"text/csv","x-upsert":"false"},body:content});if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);const expiresAt=new Date(Date.now()+86400000).toISOString();await setJob(job.id,"READY",{artifact_path:path,expires_at:expiresAt,error_message:null});await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type},source_type:"EXPORT",source_id:job.id})});ready+=1;}catch(error){await setJob(job.id,"FAILED",{artifact_path:null,expires_at:null,error_message:String(error instanceof Error?error.message:"Unknown export error").slice(0,500)});}
+try{
+  await expireArtifacts();
+  const jobs=await request("/rest/v1/rpc/claim_generated_jobs_leased",{
+    method:"POST",
+    body:JSON.stringify({batch_size:Number(process.env.EXPORT_BATCH_SIZE??10),worker_id:workerId,lease_seconds:900}),
+  });
+  let ready=0;
+  for(const job of jobs){
+    try{const content=job.job_type==="CONTRACT_EXPORT"?await contractExport(job):job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job):await performanceExport(job);const path=`${job.workspace_id}/${job.id}.csv`;const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":"text/csv","x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);const expiresAt=new Date(Date.now()+86400000).toISOString();await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type},source_type:"EXPORT",source_id:job.id})});ready+=1;}catch(error){await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure:String(error instanceof Error?error.message:"Unknown export error").slice(0,500)})});}
+  }
+  await heartbeat.success({claimed:jobs.length,ready});
+  process.stdout.write(`Processed ${jobs.length} export jobs; ${ready} ready.\n`);
+}catch(error){
+  await heartbeat.failure(error).catch(()=>undefined);
+  throw error;
 }
-process.stdout.write(`Processed ${jobs.length} export jobs; ${ready} ready.\n`);

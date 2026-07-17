@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createStaffUser, listStaffUsers } from "@/lib/admin-users-repository";
-import { AuthSecurityError, requireAal2, requireRole } from "@/lib/auth";
+import { apiRoute, parsePagination, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { APP_ROLES } from "@/lib/roles";
 import { SupabaseRequestError } from "@/lib/supabase-server";
@@ -17,29 +17,29 @@ const createSchema = z.object({
 });
 
 function failure(error: unknown) {
-  if (error instanceof AuthSecurityError) return NextResponse.json({ code: error.code }, { status: error.status });
   if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
   return NextResponse.json({ code: "STAFF_USERS_FAILED" }, { status: 500 });
 }
 
-export async function GET(request: Request) {
+async function get(request: Request) {
+  await requireApiRole("SUPER_ADMIN", "ADMIN");
+  await requireApiAal2();
   try {
-    await requireRole("SUPER_ADMIN", "ADMIN");
-    await requireAal2();
     const url = new URL(request.url);
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const pageSize = Math.max(1, Math.min(100, Number(url.searchParams.get("pageSize") ?? 20)));
+    const {page,pageSize}=parsePagination(url.searchParams,20);
     return NextResponse.json(await listStaffUsers({ query: url.searchParams.get("query") ?? "", page, pageSize }));
   } catch (error) { return failure(error); }
 }
 
-export async function POST(request: Request) {
+async function post(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
+  const actor = await requireApiRole("SUPER_ADMIN", "ADMIN");
+  await requireApiAal2();
   try {
-    const actor = await requireRole("SUPER_ADMIN", "ADMIN");
-    await requireAal2();
     return NextResponse.json({ item: await createStaffUser(parsed.data, actor) }, { status: 201 });
   } catch (error) { return failure(error); }
 }
+export const GET=apiRoute(get,"STAFF_USERS_FAILED");
+export const POST=apiRoute(post,"STAFF_USER_CREATE_FAILED");

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { apiRoute, requireApiUser } from "@/lib/api";
 import { SupabaseRequestError, getAccessToken, supabaseJson } from "@/lib/supabase-server";
 import { loadUserSettings, updateAccount, updateNotifications, updateProfile } from "@/lib/settings-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
@@ -16,17 +16,18 @@ function failure(error: unknown) {
   return NextResponse.json({ code: "SETTINGS_FAILED" }, { status: 500 });
 }
 
-export async function GET() {
-  try { const user = await requireUser(); return NextResponse.json({ settings: await loadUserSettings(user), email: user.email }); }
+async function get() {
+  const user=await requireApiUser();
+  try { return NextResponse.json({ settings: await loadUserSettings(user), email: user.email }); }
   catch (error) { return failure(error); }
 }
 
-export async function PATCH(request: Request) {
+async function patch(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
+  const user = await requireApiUser();
   try {
-    const user = await requireUser();
     if (parsed.data.section === "profile") await updateProfile(user.id, parsed.data);
     if (parsed.data.section === "account") {
       await updateAccount(user.id, parsed.data);
@@ -38,3 +39,5 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) { return failure(error); }
 }
+export const GET=apiRoute(get,"SETTINGS_LOAD_FAILED");
+export const PATCH=apiRoute(patch,"SETTINGS_FAILED");

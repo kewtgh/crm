@@ -66,6 +66,8 @@ export function userFromSupabase(payload: Record<string, unknown>): AppUser | nu
     mustChangePassword: false,
     mfaEnabled: Array.isArray(payload.factors) && payload.factors.some((factor) => (factor as { status?: string }).status === "verified"),
     aal: "aal1",
+    emailVerified: Boolean(payload.email_confirmed_at),
+    accountStatus: "ACTIVE",
   };
 }
 
