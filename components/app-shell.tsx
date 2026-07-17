@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
-  BookOpenCheck,
-  Bot,
   Building2,
   CalendarRange,
   ChevronDown,
@@ -14,7 +12,6 @@ import {
   DatabaseZap,
   FileBarChart,
   GraduationCap,
-  HeartHandshake,
   HelpCircle,
   LayoutDashboard,
   LogOut,
@@ -51,19 +48,16 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   { titleKey: "nav.relationships", items: [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
     { labelKey: "nav.people", href: "/people", icon: Users },
-    { labelKey: "nav.students", href: "/students", icon: GraduationCap },
-    { labelKey: "nav.households", href: "/households", icon: HeartHandshake },
   ]},
   { titleKey: "nav.operations", items: [
     { labelKey: "nav.sales", icon: Target, children: [
-      { labelKey: "nav.leads", href: "/leads" },
       { labelKey: "nav.opportunities", href: "/opportunities" },
       { labelKey: "nav.performance", href: "/sales/performance" },
       { labelKey: "nav.allocation", href: "/sales/allocation" },
       { labelKey: "nav.contracts", href: "/contracts" },
       { labelKey: "nav.products", href: "/products" },
+      { labelKey: "nav.finance", href: "/finance" },
     ]},
-    { labelKey: "nav.progression", href: "/progression", icon: BookOpenCheck },
     { labelKey: "nav.data", icon: DatabaseZap, children: [
       { labelKey: "nav.imports", href: "/imports" },
       { labelKey: "nav.duplicates", href: "/duplicates" },
@@ -74,7 +68,6 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
       { labelKey: "nav.consumption", href: "/analytics/consumption" },
       { labelKey: "nav.exports", href: "/reports/exports" },
     ]},
-    { labelKey: "nav.ai", href: "/ai", icon: Bot },
   ]},
   { titleKey: "nav.admin", items: [
     { labelKey: "nav.admin", icon: ShieldCheck, children: [
@@ -113,12 +106,12 @@ export function AppShell({ user, children }: { user: AppUser; children: React.Re
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-        const result = await response.json() as { items?: Array<{ labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" }> };
+        const result = await response.json() as { items?: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" }> };
         if (!response.ok || !result.items) return;
         setSearchResults(result.items.map((item) => ({
           title: item.type === "CONTACT" ? item.labelZh : locale === "zh-CN" ? item.labelZh : item.labelEn,
           detail: t(item.type === "CONTACT" ? "nav.searchContact" : "nav.searchOrganization"),
-          href: item.type === "CONTACT" ? "/people" : "/schools",
+          href: item.type === "CONTACT" ? `/people/${item.value.split(":")[1]??""}` : `/schools/${item.value.split(":")[1]??""}`,
         })));
       } catch { /* A transient search failure leaves the result list empty. */ }
     }, 200);

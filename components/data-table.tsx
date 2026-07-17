@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import Link from "next/link";
 import type { DataRow, ModuleConfig } from "@/lib/crm-data";
 import type { PersistentResource } from "@/lib/crm-repository";
 import { Pagination, ProgressBar, SearchField, StatusBadge } from "@/components/ui";
@@ -76,5 +77,6 @@ function SortHead({ field, active, direction, onSort, children }: { field: SortK
 
 function DataTableRow({ row, checked, onToggle }: { row: DataRow; checked: boolean; onToggle: () => void }) {
   const { locale,t } = useI18n();const primary=row.bilingualName?`${row.primary} / ${row.primaryEn??""}`:locale==="en"&&row.primaryEn?row.primaryEn:row.primary;const secondary=locale==="en"&&row.secondaryEn?row.secondaryEn:row.secondary;
-  return <tr><td className="check-cell"><input type="checkbox" checked={checked} onChange={onToggle} aria-label={t("common.selectRecord",{name:primary})} /></td><td><div className="record-link static"><span className="record-avatar">{primary.slice(0,1)}</span><span><b>{primary}</b></span></div></td><td><span className="table-main">{secondary}</span><small className="table-sub">{t("common.owner")} {row.owner}</small></td><td><StatusBadge tone={row.statusTone}>{t(row.statusKey ?? row.status)}</StatusBadge></td><td>{row.meta}</td><td>{row.extra}</td><td><ProgressBar value={row.completeness} label={`${Math.round(row.completeness)}%`} /></td></tr>;
+  const identity=<><span className="record-avatar">{primary.slice(0,1)}</span><span><b>{primary}</b></span></>;
+  return <tr><td className="check-cell"><input type="checkbox" checked={checked} onChange={onToggle} aria-label={t("common.selectRecord",{name:primary})} /></td><td>{row.href?<Link className="record-link" href={row.href}>{identity}</Link>:<div className="record-link static">{identity}</div>}</td><td><span className="table-main">{secondary}</span><small className="table-sub">{t("common.owner")} {row.owner}</small></td><td><StatusBadge tone={row.statusTone}>{t(row.statusKey ?? row.status)}</StatusBadge></td><td>{row.meta}</td><td>{row.extra}</td><td><ProgressBar value={row.completeness} label={`${Math.round(row.completeness)}%`} /></td></tr>;
 }

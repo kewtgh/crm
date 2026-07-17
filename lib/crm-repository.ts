@@ -29,11 +29,11 @@ function isoDate(value: unknown) { return value ? new Intl.DateTimeFormat("zh-CN
 function toRow(resource: PersistentResource, record: Record<string, unknown>,owner="—"): DataRow {
   const status = String(record.status ?? "UNVERIFIED");
   if (resource === "schools") return {
-    id: String(record.id), primary: String(record.name_zh),primaryEn:String(record.name_en), secondary: `${record.city} · ${record.curriculum}`,secondaryEn:`${record.city} · ${record.curriculum}`,
+    id: String(record.id),href:`/schools/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en), secondary: `${record.city} · ${record.curriculum}`,secondaryEn:`${record.city} · ${record.curriculum}`,
     owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: `${record.key_contact_coverage}%`, extra: isoDate(record.last_contact_at), completeness: Number(record.completeness),
   };
   if (resource === "people") return {
-    id: String(record.id), primary: String(record.name_zh),primaryEn:String(record.name_en),bilingualName:true, secondary: String(record.title || record.contact_type),
+    id: String(record.id),href:`/people/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en),bilingualName:true, secondary: String(record.title || record.contact_type),
     owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: String(record.email ?? record.phone ?? "—"), extra: isoDate(record.last_interaction_at), completeness: Number(record.completeness),
   };
   return {

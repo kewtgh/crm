@@ -1,4 +1,4 @@
-# Architecture and UI/UX review — v0.7.0
+# Architecture and UI/UX review — v0.8.0
 
 The final architecture remains a focused Vinext/Next application with Supabase Auth, Postgres/RLS, Storage, RPC state transitions, and small background workers. A microservice rewrite is neither required nor justified.
 
@@ -13,6 +13,11 @@ The final architecture remains a focused Vinext/Next application with Supabase A
 - Workflow: approval rows bind to workspace/object/version and execute idempotent business transitions.
 - Reporting: database aggregation; currencies remain separate unless a sourced FX model is introduced.
 - Delivery: reminders, email, and exports use claimable background queues; approved files stay private and expire.
+- Customer 360: a paginated SQL projection joins authorized source records. It does not introduce an eventually consistent customer shadow model.
+- Consent: channel/purpose eligibility is a server-side policy. Approval and export creation do not make an ineligible contact eligible; the worker queries the current consent state again.
+- Finance: quotes and quote versions are separate; payments, refunds, receivables, and reconciliation differences remain distinct ledger-like records instead of overwriting history.
+- Data operations: import batches are content/idempotency keyed, rows retain preflight and execution results, and rollback refuses to overwrite later edits.
+- Calendar delivery: appointment state and external delivery state are separate. UI labels reflect QUEUED/SENDING/DELIVERED/FAILED rather than inferring delivery from appointment creation.
 - Failure policy: no silent fixture fallback and no fake success.
 
 ## UI/UX decisions
@@ -23,7 +28,8 @@ The final architecture remains a focused Vinext/Next application with Supabase A
 - Turnstile, first-password and MFA errors remain adjacent to their own controls; failed Turnstile verification refreshes the widget.
 - Long tables use server pagination; long selectors use search; mobile layouts become cards rather than oversized desktop tables.
 - Account settings cover profile, identity, language/timezone, notifications, password, MFA, privacy, and session revocation.
+- Organization and contact list rows lead to focused detail pages. Customer 360, consent management, finance, import, quality, and marketing export reuse the established cards, inline messages, search, pagination, and responsive layout tokens.
 
 ## Remaining release check
 
-The source, database, build, and authenticated HTTP checks pass. Visual and interaction acceptance still requires an environment that exposes `ms-playwright/chromium-1228`; verify 1440px, 1024px, and 375px widths, keyboard focus order, Escape/focus restoration, and absence of document-level horizontal overflow.
+The source, database, build, pgTAP, and authenticated phase-two business checks pass. The smoke run also found and fixed two database defects through forward migrations: ambiguous quote-version selection and NULL import-row arrays. Visual and interaction acceptance still requires an environment that exposes `ms-playwright/chromium-1228`; verify 1440px, 1024px, and 375px widths, keyboard focus order, Escape/focus restoration, calendar status/error placement, and absence of document-level horizontal overflow.

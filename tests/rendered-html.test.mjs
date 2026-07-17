@@ -66,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.7\.0"/);
+  assert.match(packageJson, /"version": "0\.8\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.7\.0"/);
+  assert.match(packageJson, /"version": "0\.8\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -110,6 +110,7 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
     ["analysis-pages.ts", "zhAnalysisPages", "enAnalysisPages"],
     ["governance-pages.ts", "zhGovernancePages", "enGovernancePages"],
     ["ui-eyebrows.ts", "zhUiEyebrows", "enUiEyebrows"],
+    ["phase2-pages.ts", "zhPhase2", "enPhase2"],
   ].map(async ([file, zhExport, enExport]) => ({ source: await readFile(new URL(`../lib/i18n/locales/${file}`, import.meta.url), "utf8"), zhExport, enExport })));
   const block = (source, name) => { const start = source.indexOf(`export const ${name}`); const next = source.indexOf("export const ", start + 13); return source.slice(start, next === -1 ? source.length : next); };
   const keys = (source) => [...source.matchAll(/"([a-z][^"]+)"\s*:/g)].map((match) => match[1]).sort();
@@ -118,6 +119,48 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
     assert.deepEqual(keys(zhBlock), keys(enBlock));
     assert.doesNotMatch(enBlock, /Object\.fromEntries|\[key,\s*key\]/);
   }
+});
+
+test("implements customer 360, consent, financial state, import quality, and real calendar delivery", async () => {
+  const [migration, consentMigration, quoteFix, importFix, timeline, consent, finance, imports, quality, calendar, calendarWorker, exportWorker, shell] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607170021_phase2_operational_closures.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170022_consent_enforced_marketing_exports.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170023_fix_quote_version_ambiguity.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170024_normalize_import_row_arrays.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/customer-360-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/contact-consent-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/finance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/imports-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/data-quality-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/calendar-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/process-calendar-deliveries.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/process-generated-jobs.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(migration, /customer_timeline/);
+  assert.match(migration, /contact_channel_allowed/);
+  assert.match(migration, /refund_exceeds_payment/);
+  assert.match(migration, /import_rollback_conflict/);
+  assert.match(migration, /claim_calendar_deliveries/);
+  assert.match(consentMigration, /MARKETING_CONTACT_EXPORT/);
+  assert.match(consentMigration, /marketing_export_rows/);
+  assert.match(quoteFix, /selected_version/);
+  assert.match(importFix, /normalize_import_row_arrays/);
+  assert.match(timeline, /Pagination/);
+  assert.match(consent, /doNotContact/);
+  assert.doesNotMatch(consent, /window\.prompt/);
+  assert.match(finance, /saveReceivables/);
+  assert.match(finance, /searchQuotes/);
+  assert.match(imports, /chosen_action/);
+  assert.match(imports, /rowPage/);
+  assert.match(quality, /run/);
+  assert.doesNotMatch(quality, /window\.prompt/);
+  assert.match(calendar, /attendeeConsent/);
+  assert.match(calendarWorker, /idempotencyKey/);
+  assert.match(exportWorker, /marketingContactsExport/);
+  assert.match(shell, /nav\.finance/);
+  for (const hidden of ["nav.students", "nav.households", "nav.progression", "nav.ai", "nav.leads"]) assert.doesNotMatch(shell, new RegExp(hidden));
+  for (const removed of ["students", "households", "progression", "ai", "leads"]) await assert.rejects(access(new URL(`../app/(crm)/${removed}/page.tsx`, import.meta.url)));
 });
 
 test("routes visible eyebrow labels through the locale catalog", async () => {

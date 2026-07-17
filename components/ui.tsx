@@ -137,7 +137,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
   );
 }
 
-export function InlineMessage({ type, children }: { type: "error" | "success" | "warning"; children: React.ReactNode }) {
+export function InlineMessage({ type, children }: { type: "error" | "success" | "warning" | "info"; children: React.ReactNode }) {
   return <div className={`inline-message ${type}`} role={type === "error" ? "alert" : "status"}>{type === "error" || type === "warning" ? <CircleAlert size={17} /> : <Check size={17} />}<span>{children}</span></div>;
 }
 
