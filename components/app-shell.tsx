@@ -34,6 +34,10 @@ import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
 import type { NotificationRecord } from "@/lib/notifications-repository";
 import type { RelationshipHealth } from "@/lib/workspace-metrics";
+import type { UserSettings } from "@/lib/settings-repository";
+import { UserPreferencesProvider } from "./user-preferences-context";
+import { useUserPreferences } from "./user-preferences-context";
+import { apiFetch } from "@/lib/api-client";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
 
@@ -84,7 +88,7 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   ]},
 ];
 
-export function AppShell({ user, relationshipHealth, children }: { user: AppUser; relationshipHealth: RelationshipHealth; children: React.ReactNode }) {
+export function AppShell({ user, relationshipHealth, preferences, children }: { user: AppUser; relationshipHealth: RelationshipHealth; preferences:Pick<UserSettings,"timezone"|"dateFormat">; children: React.ReactNode }) {
   const { locale, t } = useI18n();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -97,6 +101,8 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
   const [searchError, setSearchError] = useState("");
   const [activeResult, setActiveResult] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileMenuRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -118,10 +124,8 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
       setSearchLoading(true);
       setSearchError("");
       try {
-        const response = await fetch(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-        const result = await response.json() as { items?: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" }> };
-        if (!response.ok || !result.items) throw new Error();
-        setSearchResults(result.items.map((item) => ({
+        const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        setSearchResults(result.items.filter(item=>item.type!=="USER").map((item) => ({
           title: item.type === "CONTACT" ? item.labelZh : locale === "zh-CN" ? item.labelZh : item.labelEn,
           detail: t(item.type === "CONTACT" ? "nav.searchContact" : "nav.searchOrganization"),
           href: item.type === "CONTACT" ? `/people/${item.value.split(":")[1]??""}` : `/schools/${item.value.split(":")[1]??""}`,
@@ -154,6 +158,7 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
         searchInputRef.current?.focus();
       }
       if (event.key === "Escape") {
+        setMobileOpen(false);
         setProfileOpen(false);
         setNotificationsOpen(false);
         setGlobalSearch("");
@@ -176,6 +181,24 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
       window.removeEventListener("pointerdown", onPointerDown);
     };
   }, []);
+  useEffect(()=>{
+    if(!mobileOpen)return;
+    const previousOverflow=document.body.style.overflow;
+    const trigger=mobileMenuRef.current;
+    document.body.style.overflow="hidden";
+    window.requestAnimationFrame(()=>sidebarRef.current?.querySelector<HTMLElement>("button:not([disabled]),a[href]")?.focus());
+    const trap=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){event.preventDefault();setMobileOpen(false);return;}
+      if(event.key!=="Tab"||!sidebarRef.current)return;
+      const focusable=Array.from(sidebarRef.current.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])"));
+      if(!focusable.length)return;
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    };
+    document.addEventListener("keydown",trap);
+    return()=>{document.body.style.overflow=previousOverflow;document.removeEventListener("keydown",trap);trigger?.focus();};
+  },[mobileOpen]);
   const searchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -196,9 +219,10 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
 
   return (
     <AppUserProvider user={user}>
+    <UserPreferencesProvider initialPreferences={preferences}>
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
       {mobileOpen && <button className="mobile-overlay" onClick={closeMobile} aria-label={t("nav.close")} />}
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")}>
+      <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")}>
         <div className="sidebar-header">
           <Link href="/dashboard" className="brand-lockup inverse" onClick={closeMobile}>
             <span className="brand-mark"><GraduationCap size={22} /></span>
@@ -223,7 +247,7 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
       <div className="app-column">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="mobile-menu" type="button" onClick={() => setMobileOpen(true)} aria-label={t("nav.open")}><Menu size={21} /></button>
+            <button ref={mobileMenuRef} className="mobile-menu" type="button" onClick={() => setMobileOpen(true)} aria-label={t("nav.open")} aria-expanded={mobileOpen} aria-controls="main-navigation"><Menu size={21} /></button>
             <div className="global-search-wrap" ref={searchWrapRef}>
               <label className="global-search"><Search size={18} /><input ref={searchInputRef} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length >= 2} aria-controls="global-search-results" aria-activedescendant={activeResult >= 0 ? `global-result-${activeResult}` : undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={(event) => changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>Ctrl/⌘ K</kbd></label>
               {globalSearch.trim().length >= 2 && <div className="global-results" id="global-search-results" role="listbox" aria-label={t("nav.globalSearch")}>
@@ -248,6 +272,7 @@ export function AppShell({ user, relationshipHealth, children }: { user: AppUser
         <main className="app-content">{children}</main>
       </div>
     </div>
+    </UserPreferencesProvider>
     </AppUserProvider>
   );
 }
@@ -264,11 +289,11 @@ function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: Na
 }
 
 function NotificationPopover({ close }: { close: () => void }) {
-  const { locale,t } = useI18n();const [items,setItems]=useState<NotificationRecord[]>([]);const [total,setTotal]=useState(0);const [error,setError]=useState("");
-  useEffect(()=>{let active=true;fetch("/api/notifications").then(async(response)=>{const result=await response.json() as {items?:NotificationRecord[];total?:number};if(!response.ok||!result.items)throw new Error();if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(()=>active&&setError(t("nav.notification.loadFailed")));return()=>{active=false};},[t]);
-  const markAll=async()=>{const response=await fetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});if(response.ok){setItems([]);setTotal(0);}else setError(t("nav.notification.markFailed"));};
+  const {t} = useI18n();const {formatDate}=useUserPreferences();const [items,setItems]=useState<NotificationRecord[]>([]);const [total,setTotal]=useState(0);const [error,setError]=useState("");
+  useEffect(()=>{let active=true;void apiFetch<{items:NotificationRecord[];total:number}>("/api/notifications").then(result=>{if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(()=>active&&setError(t("nav.notification.loadFailed")));return()=>{active=false};},[t]);
+  const markAll=async()=>{try{await apiFetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});setItems([]);setTotal(0);}catch{setError(t("nav.notification.markFailed"));}};
   const href=(item:NotificationRecord)=>item.sourceType==="CONTRACT"?"/contracts":item.sourceType==="APPOINTMENT"?"/calendar":item.sourceType==="EXPORT"?"/reports/exports":"/tasks";
-  const notificationTime=(date:string)=>new Intl.DateTimeFormat(locale==="zh-CN"?"zh-CN":"en",{dateStyle:"medium",timeStyle:"short"}).format(new Date(date));
+  const notificationTime=(date:string)=>formatDate(date,{includeTime:true});
   return <div className="top-popover notifications" role="dialog" aria-label={t("nav.notifications")}><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: total })}</small></span><button type="button" disabled={!items.length} onClick={markAll}>{t("nav.markAllRead")}</button></div>
     {error&&<p className="popover-error" role="alert">{error}</p>}{items.map((item)=><Link href={href(item)} onClick={close} key={item.id}><span className="notification-icon purple"><Bell size={17}/></span><span><b>{t(item.titleKey,item.values)}</b><small>{t(item.bodyKey,item.values)}</small><time>{notificationTime(item.createdAt)}</time></span></Link>)}
     {!items.length&&!error&&<p className="popover-empty">{t("nav.notification.empty")}</p>}
@@ -280,9 +305,9 @@ function ProfilePopover({ user, close }: { user: AppUser; close: () => void }) {
   const { t } = useI18n();
   const roleLabel = t(roleMessageKey[user.role]);
   return <div className="top-popover profile-popover" role="menu"><div className="profile-card"><span>{user.initials}</span><div><b>{user.displayNameZh} / {user.displayName}</b><small>@{user.username} · {user.email}</small><em>{roleLabel} · {t(user.emailVerified ? "nav.emailVerified" : "nav.emailUnverified")}</em></div></div>
-    <Link href="/settings/profile" onClick={close}><Settings size={17} />{t("nav.profileSettings")}</Link>
-    <Link href={ADMIN_ROLES.includes(user.role) ? "/admin/security" : "/settings/security"} onClick={close}><ShieldCheck size={17} />{t("nav.security")} <span className={user.mfaEnabled ? "mini-good" : "mini-warning"}>{t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</span></Link>
-    <Link href="/help" onClick={close}><HelpCircle size={17} />{t("nav.support")}</Link>
-    <form action="/api/auth/logout" method="post"><button type="submit"><LogOut size={17} />{t("nav.signOut")}</button></form>
+    <Link role="menuitem" href="/settings/profile" onClick={close}><Settings size={17} />{t("nav.profileSettings")}</Link>
+    <Link role="menuitem" href={ADMIN_ROLES.includes(user.role) ? "/admin/security" : "/settings/security"} onClick={close}><ShieldCheck size={17} />{t("nav.security")} <span className={user.mfaEnabled ? "mini-good" : "mini-warning"}>{t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</span></Link>
+    <Link role="menuitem" href="/help" onClick={close}><HelpCircle size={17} />{t("nav.support")}</Link>
+    <form action="/api/auth/logout" method="post"><button role="menuitem" type="submit"><LogOut size={17} />{t("nav.signOut")}</button></form>
   </div>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BellRing,
   CalendarDays,
@@ -15,8 +15,10 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { InlineMessage, SearchableSelect, Toast } from "@/components/ui";
+import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
+import { apiFetch } from "@/lib/api-client";
+import { useUserPreferences } from "@/components/user-preferences-context";
 
 type CalendarEvent = {
   id: string;
@@ -50,9 +52,10 @@ function monthCells(month: Date) {
 
 export function CalendarPage({ initialCalendarEvents = [], persistent = false }: { initialCalendarEvents?: CalendarEvent[]; persistent?: boolean }) {
   const { locale, t } = useI18n();
-  const now = new Date();
-  const todayKey = dateKey(now.getFullYear(),now.getMonth(),now.getDate());
-  const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
+  const {todayKey:preferredTodayKey}=useUserPreferences();
+  const todayKey=preferredTodayKey();
+  const [todayYear,todayMonth]=todayKey.split("-").map(Number);
+  const [month, setMonth] = useState(() => new Date(todayYear, todayMonth-1, 1));
   const [events, setEvents] = useState(initialCalendarEvents);
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -63,7 +66,6 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
   const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
   const upcoming = useMemo(
@@ -71,17 +73,9 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     [dismissed, events, todayKey],
   );
 
-  useEffect(()=>{if(!persistent)return;const from=new Date(month.getFullYear(),month.getMonth(),1);const to=new Date(month.getFullYear(),month.getMonth()+2,1);const controller=new AbortController();fetch(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(async(response)=>{const result=await response.json() as {items?:CalendarEvent[]};if(!response.ok||!result.items)throw new Error();setEvents(result.items);}).catch((error)=>{if(!(error instanceof DOMException&&error.name==="AbortError"))setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
+  useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(()=>{if(!controller.signal.aborted)setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
 
-  const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);try{const response=await fetch(`/api/search/related?q=${encodeURIComponent(query)}`);const result=await response.json() as {items?:Array<{value:string;labelZh:string;labelEn:string;type:string}>};if(!response.ok||!result.items)throw new Error();setRelatedOptions(result.items.map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));}catch{setFormError(t("calendar.relatedLoadFailed"));}finally{setRelatedLoading(false);}},[locale,persistent,t]);
-
-  useEffect(() => {
-    if (!drawerOpen) return;
-    closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawerOpen(false); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [drawerOpen]);
+  const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);try{const result=await apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(query)}`);setRelatedOptions(result.items.filter(item=>item.type!=="USER").map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));}catch{setFormError(t("calendar.relatedLoadFailed"));}finally{setRelatedLoading(false);}},[locale,persistent,t]);
 
   const openSchedule = (date = selectedDate) => {
     setSelectedDate(date);
@@ -99,10 +93,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     if (persistent) {
       const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
       const attendeeEmails=String(form.get("attendees")??"").split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);const consentConfirmed=form.get("attendeeConsent")==="on";
-      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });
-      const result = await response.json() as { item?: { id?: string } };
-      if (!response.ok || !result.item?.id) { setFormError(t("calendar.saveFailed")); return; }
-      id = result.item.id;
+      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch{setFormError(t("calendar.saveFailed"));return;}
     }
     setEvents((current) => [...current, {
       id,
@@ -120,15 +111,15 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   };
 
   const completeEvent = async (id: string) => {
-    if (persistent) { const response = await fetch(`/api/calendar/${id}`, { method: "PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"COMPLETE"}) }); if (!response.ok) { setToast(t("calendar.completeFailed")); return; } }
+    if (persistent) { try{await apiFetch(`/api/calendar/${id}`, { method: "PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"COMPLETE"}) });}catch{setToast(t("calendar.completeFailed")); return;} }
     setDismissed((current) => [...current, id]);
   };
-  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");const response=await fetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});if(!response.ok){setFormError(t("calendar.deliveryUpdateFailed"));return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
+  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");try{await apiFetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});}catch{setFormError(t("calendar.deliveryUpdateFailed"));return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
 
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("calendar.eyebrow")}</p><h1>{t("calendar.title")}</h1><p>{t("calendar.description")}</p></div>
-      <div className="page-actions"><button className="secondary-button" type="button" onClick={() => {setMonth(new Date(now.getFullYear(),now.getMonth(),1));setSelectedDate(todayKey);}}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
+      <div className="page-actions"><button className="secondary-button" type="button" onClick={() => {setMonth(new Date(todayYear,todayMonth-1,1));setSelectedDate(todayKey);}}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
     </section>
     <section className="calendar-layout">
       <div className="surface calendar-surface">
@@ -154,10 +145,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
       </aside>
     </section>
 
-    {drawerOpen && <>
-      <button className="drawer-overlay" type="button" aria-label={t("calendar.closeForm")} onClick={() => setDrawerOpen(false)} />
-      <aside className="record-drawer" role="dialog" aria-modal="true" aria-label={t("calendar.new")}>
-        <div className="drawer-heading"><div><p className="eyebrow">{t("eyebrow.newAppointment")}</p><h2>{t("calendar.new")}</h2><p>{t("calendar.formHelp")}</p></div><button ref={closeButtonRef} className="icon-button" type="button" aria-label={t("common.close")} onClick={() => setDrawerOpen(false)}><X size={20} /></button></div>
+    {drawerOpen && <AccessibleDrawer title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => setDrawerOpen(false)}>
         <form onSubmit={submitSchedule}>
           <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>
@@ -170,8 +158,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
           {formError && <InlineMessage type="error">{formError}</InlineMessage>}
           <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit"><CalendarDays size={17} />{t("calendar.save")}</button></div>
         </form>
-      </aside>
-    </>}
+    </AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;
 }

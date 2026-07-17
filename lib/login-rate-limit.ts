@@ -1,4 +1,5 @@
 import { supabaseAdminJson } from "./supabase-server";
+import { requireLoginThrottleSecret } from "./runtime-environment";
 
 type Attempt = { count: number; resetAt: number };
 export type LoginThrottleIdentity = {
@@ -12,7 +13,7 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 8;
 
 async function protectedHash(value: string) {
-  const secret = process.env.LOGIN_THROTTLE_HASH_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = requireLoginThrottleSecret();
   const encoded = new TextEncoder().encode(value);
   if (!secret) {
     const digest = await crypto.subtle.digest("SHA-256", encoded);

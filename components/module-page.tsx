@@ -1,24 +1,259 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Download, Plus, ScanSearch, SlidersHorizontal, X } from "lucide-react";
+import { useCallback, useState } from "react";
+import { CheckCircle2, Download, Plus, ScanSearch, SlidersHorizontal } from "lucide-react";
 import type { ModuleConfig } from "@/lib/crm-data";
-import type { PersistentResource } from "@/lib/crm-repository";
+import type { CrmMetrics, PersistentResource } from "@/lib/crm-repository";
 import { DataTable } from "@/components/data-table";
-import { InlineMessage, Toast } from "@/components/ui";
+import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
+import { ApiClientError, apiFetch } from "@/lib/api-client";
+import { useUserPreferences } from "@/components/user-preferences-context";
 
-export function ModulePage({ config, resource, initialTotal }: { config: ModuleConfig; resource?: PersistentResource; initialTotal?: number }) {
-  const { locale,t } = useI18n(); const prefix=`modules.${config.key}`;
-  const [drawer,setDrawer]=useState(false); const [duplicateChecked,setDuplicateChecked]=useState(false); const [duplicates,setDuplicates]=useState<{nameZh:string;nameEn:string;reason:string}[]>([]); const [checking,setChecking]=useState(false); const [error,setError]=useState(""); const [toast,setToast]=useState(""); const [refreshKey,setRefreshKey]=useState(0);
-  const close=()=>{setDrawer(false);setDuplicateChecked(false);setDuplicates([]);setError("");};
-  const payload=(form:HTMLFormElement)=>{const data=new FormData(form);const contact=String(data.get("contact")??"").trim();return {nameZh:String(data.get("nameZh")??""),nameEn:String(data.get("nameEn")??""),contact,email:contact.includes("@")?contact:"",phone:contact&&!contact.includes("@")?contact:""};};
-  const check=async(form:HTMLFormElement)=>{if(!resource)return;setChecking(true);setError("");const response=await fetch(`/api/crm/${resource}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...payload(form),operation:"check"})});const result=await response.json() as {duplicates?:typeof duplicates;code?:string};setChecking(false);if(!response.ok){setError(t("records.error.check"));return;}setDuplicates(result.duplicates??[]);setDuplicateChecked(true);};
-  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();if(!resource||!duplicateChecked)return;setError("");const response=await fetch(`/api/crm/${resource}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...payload(event.currentTarget),operation:"create"})});const result=await response.json() as {code?:string};if(!response.ok){setError(t(result.code==="DUPLICATE_FOUND"?"records.error.duplicate":"records.error.save"));return;}close();setRefreshKey((value)=>value+1);setToast(t("records.created"));};
-  return <div className="page-stack module-page"><section className="page-heading-row"><div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div><div className="page-actions"><button className="secondary-button" type="button" disabled title={t("records.exportApprovalRequired")}><Download size={16}/>{t("modules.export")}</button><button className="primary-button" type="button" onClick={()=>setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button></div></section>
-    <section className="quick-summary"><span><b>{initialTotal??config.rows.length}</b><small>{t("modules.allRecords")}</small></span><span><b>{config.rows.filter((row)=>row.statusTone==="red"||row.statusTone==="amber").length}</b><small>{t("modules.needsAttention")}</small></span><span><b>{config.rows.length?Math.round(config.rows.reduce((sum,row)=>sum+row.completeness,0)/config.rows.length):0}%</b><small>{t("modules.averageCompleteness")}</small></span><button type="button" disabled title={t("records.savedViewsUnavailable")}><SlidersHorizontal size={16}/>{t("modules.savedViews")}</button></section>
-    <DataTable config={config} resource={resource} initialTotal={initialTotal} refreshKey={refreshKey}/>
-    {drawer&&<><button className="drawer-overlay" type="button" aria-label={t("common.close")} onClick={close}/><aside className="record-drawer" role="dialog" aria-modal="true" aria-label={t("modules.createRecord",{record:t(`${prefix}.singular`)})}><div className="drawer-heading"><div><p className="eyebrow">{t("eyebrow.createRecord")}</p><h2>{t("modules.createRecord",{record:t(`${prefix}.singular`)})}</h2><p>{t("modules.createHelp")}</p></div><button className="icon-button" type="button" aria-label={t("common.close")} onClick={close}><X size={20}/></button></div><form onSubmit={submit}><div className="form-grid two-column"><label className="field"><span>{t("products.nameZh")} <b>*</b></span><input name="nameZh" required/></label><label className="field"><span>{t("products.nameEn")} <b>*</b></span><input name="nameEn" required/></label></div><label className="field"><span>{t("modules.contact")}</span><input name="contact" placeholder={t("modules.duplicatePlaceholder")}/></label>
-      <div className="duplicate-check"><div><span><ScanSearch size={18}/></span><div><b>{t("modules.duplicateTitle")}</b><p>{t("modules.duplicateHelp")}</p></div></div>{duplicateChecked?<InlineMessage type={duplicates.length?"warning":"success"}>{duplicates.length?t("records.duplicateCount",{count:duplicates.length}):t("modules.duplicateClear")}</InlineMessage>:<button className="secondary-button" type="button" disabled={checking} onClick={(event)=>check(event.currentTarget.form!)}><ScanSearch size={16}/>{checking?t("records.checking"):t("modules.checkNow")}</button>}</div>
-      {duplicates.length>0&&<div className="duplicate-results">{duplicates.map((item)=><p key={`${item.nameZh}-${item.nameEn}`}><b>{resource==="people"?`${item.nameZh} / ${item.nameEn}`:locale==="zh-CN"?item.nameZh:item.nameEn}</b><small>{item.reason}</small></p>)}</div>}{!duplicateChecked&&<InlineMessage type="warning">{t("modules.checkRequired")}</InlineMessage>}{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" onClick={close}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={!duplicateChecked||duplicates.length>0}><CheckCircle2 size={17}/>{t("modules.createRecord",{record:t(`${prefix}.singular`)})}</button></div></form></aside></>}{toast&&<Toast message={toast} onClose={()=>setToast("")}/>}</div>;
+type Duplicate = { nameZh: string; nameEn: string; reason: string };
+type RelatedResult = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" };
+
+export function ModulePage({
+  config,
+  resource,
+  initialTotal,
+  initialMetrics,
+}: {
+  config: ModuleConfig;
+  resource?: PersistentResource;
+  initialTotal?: number;
+  initialMetrics?: CrmMetrics;
+}) {
+  const { locale, t } = useI18n();
+  const { localDateTimeToIso } = useUserPreferences();
+  const prefix = `modules.${config.key}`;
+  const [drawer, setDrawer] = useState(false);
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [duplicateChecked, setDuplicateChecked] = useState(false);
+  const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [metrics, setMetrics] = useState<CrmMetrics>(initialMetrics ?? {
+    total: initialTotal ?? config.rows.length,
+    needsAttention: 0,
+    averageCompleteness: 0,
+  });
+  const [organization, setOrganization] = useState("");
+  const [related, setRelated] = useState("");
+  const [relatedLabel, setRelatedLabel] = useState("");
+  const [owner, setOwner] = useState("");
+  const [organizationOptions, setOrganizationOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
+  const [relatedOptions, setRelatedOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
+  const [ownerOptions, setOwnerOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
+
+  const invalidateDuplicateCheck = () => {
+    if (duplicateChecked || duplicates.length) {
+      setDuplicateChecked(false);
+      setDuplicates([]);
+    }
+  };
+  const close = () => {
+    setDrawer(false);
+    setDuplicateChecked(false);
+    setDuplicates([]);
+    setError("");
+    setOrganization("");
+    setRelated("");
+    setRelatedLabel("");
+    setOwner("");
+  };
+  const payload = (form: HTMLFormElement) => {
+    const data = new FormData(form);
+    const common = {
+      nameZh: String(data.get("nameZh") ?? "").trim(),
+      nameEn: String(data.get("nameEn") ?? "").trim(),
+      email: String(data.get("email") ?? "").trim(),
+      phone: String(data.get("phone") ?? "").trim(),
+      contact: String(data.get("contact") ?? "").trim(),
+    };
+    if (resource === "schools") return {
+      ...common,
+      city: String(data.get("city") ?? "").trim(),
+      curriculum: String(data.get("curriculum") ?? "").trim(),
+    };
+    if (resource === "people") return {
+      ...common,
+      title: String(data.get("title") ?? "").trim(),
+      organizationId: organization,
+    };
+    if (resource === "tasks") {
+      const [relatedType = "", relatedId = ""] = related.split(":");
+      const localDueAt = String(data.get("dueAt") ?? "");
+      return {
+        ...common,
+        contact: relatedLabel,
+        dueAt: localDueAt ? localDateTimeToIso(localDueAt) : "",
+        priority: String(data.get("priority") ?? "NORMAL"),
+        relatedType,
+        relatedId,
+        ownerId: owner || undefined,
+      };
+    }
+    return common;
+  };
+  const describeError = useCallback((caught: unknown, fallbackKey: string) => {
+    const requestId = caught instanceof ApiClientError ? caught.requestId : undefined;
+    return `${t(fallbackKey)}${requestId ? ` · ${t("common.requestId")}: ${requestId}` : ""}`;
+  }, [t]);
+  const validateSpecializedFields = (values: ReturnType<typeof payload>) => {
+    if (resource === "people" && !organization) return t("modules.organizationRequired");
+    if (resource === "people" && !values.email && !values.phone) return t("modules.contactMethodRequired");
+    if (resource === "tasks" && !related) return t("modules.relatedRequired");
+    return "";
+  };
+  const searchRelated = useCallback(async (
+    query: string,
+    target: "organization" | "related" | "owner",
+  ) => {
+    try {
+      const result = await apiFetch<{ items: RelatedResult[] }>(`/api/search/related?q=${encodeURIComponent(query)}`);
+      const toOption = (item: RelatedResult) => ({
+        value: target === "related" ? item.value : item.value.split(":")[1],
+        label: locale === "zh-CN" ? item.labelZh : item.labelEn,
+        detail: item.type,
+      });
+      if (target === "organization") setOrganizationOptions(result.items.filter((item) => item.type === "ORGANIZATION").map(toOption));
+      if (target === "related") setRelatedOptions(result.items.filter((item) => item.type !== "USER").map(toOption));
+      if (target === "owner") setOwnerOptions(result.items.filter((item) => item.type === "USER").map(toOption));
+    } catch (caught) {
+      setError(describeError(caught, "modules.relatedSearchFailed"));
+    }
+  }, [describeError, locale]);
+  const check = async (form: HTMLFormElement) => {
+    if (!resource) return;
+    const values = payload(form);
+    const validationError = validateSpecializedFields(values);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setChecking(true);
+    setError("");
+    try {
+      const result = await apiFetch<{ duplicates: Duplicate[] }>(`/api/crm/${resource}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...values, operation: "check" }),
+      });
+      setDuplicates(result.duplicates);
+      setDuplicateChecked(true);
+    } catch (caught) {
+      setError(describeError(caught, "records.error.check"));
+    } finally {
+      setChecking(false);
+    }
+  };
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!resource || !duplicateChecked) return;
+    const values = payload(event.currentTarget);
+    const validationError = validateSpecializedFields(values);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await apiFetch(`/api/crm/${resource}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...values, operation: "create" }),
+      });
+      close();
+      setRefreshKey((value) => value + 1);
+      setToast(t("records.created"));
+    } catch (caught) {
+      const key = caught instanceof ApiClientError && caught.code === "DUPLICATE_FOUND"
+        ? "records.error.duplicate"
+        : "records.error.save";
+      setError(describeError(caught, key));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <div className="page-stack module-page">
+    <section className="page-heading-row">
+      <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div>
+      <div className="page-actions">
+        <button className="secondary-button" type="button" disabled title={t("records.exportApprovalRequired")}><Download size={16}/>{t("modules.export")}</button>
+        <button className="primary-button" type="button" onClick={() => setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button>
+      </div>
+    </section>
+    <section className="quick-summary">
+      <span><b>{metrics.total}</b><small>{t("modules.allRecords")}</small></span>
+      <span><b>{metrics.needsAttention}</b><small>{t("modules.needsAttention")}</small></span>
+      <span><b>{metrics.averageCompleteness}%</b><small>{t("modules.averageCompleteness")}</small></span>
+      <button type="button" onClick={() => setSavedViewsOpen(true)}><SlidersHorizontal size={16}/>{t("modules.savedViews")}</button>
+    </section>
+    <DataTable
+      config={config}
+      resource={resource}
+      initialTotal={initialTotal}
+      refreshKey={refreshKey}
+      onMetrics={setMetrics}
+      savedViewsOpen={savedViewsOpen}
+      onCloseSavedViews={() => setSavedViewsOpen(false)}
+    />
+    {drawer && <AccessibleDrawer
+      title={t("modules.createRecord", { record: t(`${prefix}.singular`) })}
+      eyebrow={t("eyebrow.createRecord")}
+      description={t("modules.createHelp")}
+      onClose={close}
+    >
+      <form onSubmit={submit} onChange={invalidateDuplicateCheck}>
+        <div className="form-grid two-column">
+          <label className="field"><span>{t("products.nameZh")} *</span><input name="nameZh" required maxLength={120}/></label>
+          <label className="field"><span>{t("products.nameEn")} *</span><input name="nameEn" required maxLength={160}/></label>
+        </div>
+        {resource === "schools" && <>
+          <div className="form-grid two-column">
+            <label className="field"><span>{t("modules.city")} *</span><input name="city" required maxLength={80}/></label>
+            <label className="field"><span>{t("modules.curriculum")} *</span><input name="curriculum" required maxLength={120}/></label>
+          </div>
+          <label className="field"><span>{t("modules.contact")}</span><input name="contact" maxLength={200}/></label>
+        </>}
+        {resource === "people" && <>
+          <SearchableSelect label={`${t("modules.organization")} *`} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
+          <label className="field"><span>{t("modules.title")} *</span><input name="title" required maxLength={120}/></label>
+          <div className="form-grid two-column">
+            <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
+            <label className="field"><span>{t("modules.phone")}</span><input name="phone" maxLength={40}/></label>
+          </div>
+          <InlineMessage type="info">{t("modules.contactMethodRequired")}</InlineMessage>
+        </>}
+        {resource === "tasks" && <>
+          <SearchableSelect label={`${t("modules.relatedRecord")} *`} options={relatedOptions} value={related} onChange={(value) => { setRelated(value); setRelatedLabel(relatedOptions.find((item) => item.value === value)?.label ?? ""); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "related")}/>
+          <SearchableSelect label={t("modules.owner")} options={ownerOptions} value={owner} onChange={(value) => { setOwner(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "owner")}/>
+          <div className="form-grid two-column">
+            <label className="field"><span>{t("modules.dueAt")} *</span><input name="dueAt" type="datetime-local" required/></label>
+            <label className="field"><span>{t("modules.priority")} *</span><select name="priority" defaultValue="NORMAL"><option value="LOW">{t("modules.priority.low")}</option><option value="NORMAL">{t("modules.priority.normal")}</option><option value="HIGH">{t("modules.priority.high")}</option><option value="URGENT">{t("modules.priority.urgent")}</option></select></label>
+          </div>
+        </>}
+        <div className="duplicate-check">
+          <div><span><ScanSearch size={18}/></span><div><b>{t("modules.duplicateTitle")}</b><p>{t("modules.duplicateHelp")}</p></div></div>
+          {duplicateChecked
+            ? <InlineMessage type={duplicates.length ? "warning" : "success"}>{duplicates.length ? t("records.duplicateCount", { count: duplicates.length }) : t("modules.duplicateClear")}</InlineMessage>
+            : <button className="secondary-button" type="button" disabled={checking} onClick={(event) => check(event.currentTarget.form!)}><ScanSearch size={16}/>{checking ? t("records.checking") : t("modules.checkNow")}</button>}
+        </div>
+        {duplicates.length > 0 && <div className="duplicate-results">{duplicates.map((item) => <p key={`${item.nameZh}-${item.nameEn}`}><b>{resource === "people" ? `${item.nameZh} / ${item.nameEn}` : locale === "zh-CN" ? item.nameZh : item.nameEn}</b><small>{item.reason}</small></p>)}</div>}
+        {!duplicateChecked && <InlineMessage type="warning">{t("modules.checkRequired")}</InlineMessage>}
+        {error && <InlineMessage type="error">{error}</InlineMessage>}
+        <div className="drawer-actions">
+          <button className="secondary-button" type="button" onClick={close}>{t("common.cancel")}</button>
+          <button className="primary-button" type="submit" disabled={!duplicateChecked || duplicates.length > 0 || saving}><CheckCircle2 size={17}/>{saving ? t("common.saving") : t("modules.createRecord", { record: t(`${prefix}.singular`) })}</button>
+        </div>
+      </form>
+    </AccessibleDrawer>}
+    {toast && <Toast message={toast} onClose={() => setToast("")}/>}
+  </div>;
 }

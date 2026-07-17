@@ -1,37 +1,50 @@
-# Implementation status — v1.0.0
+# Implementation status — v1.1.0
 
 Status date: 2026-07-18
 
-## Completed in source
+## Repository outcome
 
-- Closed the membership-reactivation, cross-workspace retry, CSRF/AAL2, and identity-compensation gaps.
-- Added GoTrue two-step provisioning compatibility without allowing metadata changes to mutate or reactivate an existing membership.
-- Added canonical, time-bounded webhook signatures and atomic event ingestion with explicit duplicate acknowledgement.
-- Added leased/fenced processing, crash recovery, backoff, dead letters, audited replay, SLA metrics, and heartbeats for six worker classes.
-- Added consent-safe duplicate merges, automated renewal windows and health, immutable bundle versions, locked quote/contract/payment exchange context, provider-confirmed integrations, and leased sync jobs.
-- Added Next Best Action generation/evaluation analytics and retention, renewal, forecast, queue-SLA, and adoption insights.
-- Retired legacy quote writers that could create versions without the v1 currency/product boundary.
-- Standardized new feature pages on the timeout-aware API client and shared keyboard-accessible drawer.
-- Updated package, runtime, health response, documentation, and release metadata to `1.0.0`.
+The repository-scoped v1.1.0 audit and remediation plan is complete. No actionable P0, P1, or P2 finding remains in source.
+
+- Opportunity creation and every stage transition now share the same server-owned contract and a guided, accessible workflow.
+- Finance lists use independent pagination and exact risk aggregates; query failures are explicit.
+- Schools, people, and tasks have resource-specific fields, client/server validation, duplicate invalidation, exact metrics, and 10/25/50 pagination.
+- User timezone and date-format preferences drive the main client workflows and dashboard reporting boundary.
+- Internal component requests use the resilient API client except the intentional authentication bootstrap flows.
+- Drawers and mobile navigation have keyboard focus management, Escape handling, focus restoration, and background scroll locking.
+- CSS custom properties have executable coverage; personal saved views and direct data-quality remediation links are available.
+- Payment-overdue automation and the release-readiness console are integrated into the existing operations model.
+- Runtime configuration is schema-validated and production login throttling fails closed without an independent secret.
+- Local environment generation is merge-safe, and all smoke suites restore their isolated state.
 
 ## Final verification
 
-- Production build and `npm test`: pass; 17/17 Node tests.
-- pgTAP: pass; 132/132 behavior and authorization assertions.
-- PostgreSQL schema lint: pass; 0 warnings.
-- Dependency audit: pass; 0 known vulnerabilities.
-- Local HTTP baseline and v1 webhook-security smoke: pass.
-- Authenticated v0.9 compatibility and phase-two business smoke: pass.
-- Database reset applies all migrations through `202607180036`.
+| Gate | Result |
+| --- | --- |
+| TypeScript | Pass |
+| ESLint | Pass |
+| Production build | Pass |
+| Node tests | 20/20 pass |
+| pgTAP | 132/132 pass |
+| PostgreSQL schema lint | 0 errors |
+| Dependency audit | 0 vulnerabilities |
+| Base HTTP smoke | Pass |
+| Webhook HTTP security smoke | Pass |
+| Phase-two business smoke | Pass |
+| v0.9 compatibility smoke | Pass |
+| v1.1 remediation smoke | Pass |
+| Liveness | 200, version 1.1.0 |
+| Readiness | Expected local 503: six workers are intentionally not scheduled |
+
+The final database reset applied migrations through `202607180037`; all business and HTTP smoke suites passed after the reset.
 
 ## External production gates
 
-The repository implementation is complete. Production remains intentionally undeployed until all external conditions are true:
+Repository completion does not manufacture external production state. Production remains fail-closed until:
 
-1. Production Supabase, Turnstile, SMTP, provider callback/sync endpoints, secrets, backup, and alerting are configured.
-2. All six workers are scheduled and report fresh successful heartbeats.
+1. Real Supabase, Turnstile, SMTP, integration, Webhook, callback, backup, and alerting configuration is stored in the hosting environment.
+2. All six production workers are scheduled and report fresh successful heartbeats.
 3. Production `GET /api/health?mode=ready` returns 200.
-4. A real browser instance completes 1440/1024/375px, keyboard/focus, overflow, bilingual, and accessibility acceptance.
-5. The exact tested source is committed and pushed before a Sites version is saved.
+4. An available real browser completes 1440/1024/375px, bilingual, overflow, keyboard/focus, and assistive-technology acceptance.
 
-Sites was inspected on 2026-07-18: the existing owner-restricted project is active, but it has zero production environment entries, zero saved versions, no live URL, and no custom domain. The browser connector returned no available browser instance after retry. Both gates therefore remain fail-closed; no degraded production deployment was created.
+The existing Sites project is owner-only. Its production environment has no entries, no custom domain, and therefore must not receive a known-degraded live deployment. Saving the exact source version is safe; deployment remains intentionally gated by the conditions above.

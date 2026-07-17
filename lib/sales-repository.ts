@@ -39,7 +39,7 @@ export type OpportunityRecord={id:string;organizationId:string;organizationZh:st
 type OpportunityRow={id:string;organization_id:string;title_zh:string;title_en:string;stage:OpportunityRecord["stage"];amount:number|string;currency:string;probability:number;expected_close_date:string|null;next_action_zh:string;next_action_en:string;owner_id:string;last_activity_at:string|null;organizations:{name_zh:string;name_en:string}|null};
 
 export async function listOpportunities(input:{page?:number;pageSize?:number;query?:string;stage?:string;team?:string}={}){
-  const page=Math.max(1,input.page??1);const pageSize=Math.min(100,Math.max(1,input.pageSize??50));const params=new URLSearchParams({select:"id,organization_id,title_zh,title_en,stage,amount,currency,probability,expected_close_date,next_action_zh,next_action_en,owner_id,last_activity_at,organizations(name_zh,name_en)",order:"updated_at.desc"});
+  const page=Math.max(1,input.page??1);const pageSize=Math.min(100,Math.max(1,input.pageSize??50));const params=new URLSearchParams({select:"id,organization_id,title_zh,title_en,stage,amount,currency,probability,expected_close_date,next_action_zh,next_action_en,owner_id,last_activity_at,organizations:organizations!opportunities_workspace_organization_fk(name_zh,name_en)",order:"updated_at.desc"});
   if(input.stage&&input.stage!=="all")params.set("stage",`eq.${input.stage}`);
   const query=input.query?.replace(/[*,()]/g," ").trim().slice(0,100);if(query)params.set("or",`(title_zh.ilike.*${query}*,title_en.ilike.*${query}*)`);
   const response=await supabaseRequest(`/rest/v1/opportunities?${params}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});const rows=await response.json() as OpportunityRow[];

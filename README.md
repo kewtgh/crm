@@ -1,10 +1,10 @@
 # Lumina Education CRM
 
-Current release: **v1.0.0**
+Current release: **v1.1.0**
 
 Lumina is a bilingual, staff-only relationship and sales CRM for an education-product operating company. Customers, contacts, parents, and students are business records—not CRM accounts.
 
-v1.0.0 closes the original and supplemental audits and adds:
+v1.1.0 closes the post-release audit and adds:
 
 - database-final authorization for approvals, refunds, quotes, exports, imports, data quality, appointments, and staff identity changes;
 - durable hashed login throttling, transactional identity preparation/compensation, uniform API errors, and liveness/readiness health checks;
@@ -13,6 +13,9 @@ v1.0.0 closes the original and supplemental audits and adds:
 - provider-confirmed integrations, signed replay-resistant and atomically idempotent webhooks, versioned product bundles, locked exchange-rate snapshots, and measurable Next Best Actions;
 - retention, renewal, forecast-accuracy, queue-SLA, and recommendation-adoption business insights;
 - truthful relationship/security status, keyboard-accessible global search, robust settings/table error states, and responsive field labels.
+- guided opportunity transitions, exact CRM/finance metrics, independent finance pagination, and a finance risk center;
+- resource-specific CRM forms, saved personal views, direct data-quality remediation links, and timezone-aware reporting;
+- production runtime readiness validation plus payment-overdue Next Best Actions.
 
 External providers remain explicitly **not connected** until real production credentials and schedulers are supplied. The application never presents a simulated connection, delivery, worker heartbeat, AI result, or security state as real.
 
@@ -56,8 +59,9 @@ npm run smoke:http-v09
 npm run smoke:http-v10
 npm run smoke:phase2
 npm run smoke:v09
+npm run smoke:v11
 npx supabase db lint --local --level warning
 npx supabase test db --local
 ```
 
-See the [supplemental audit](docs/AUDIT_2026-07-18_V091.md), [complete remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_V0.9.1.md), [v1.0 release record](docs/RELEASE_V1.0.0.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), and [deployment guide](docs/DEPLOYMENT.md).
+See the [post-release audit](docs/AUDIT_2026-07-18_POST_RELEASE.md), [v1.1 remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_V1.1.0.md), [final re-audit](docs/FINAL_REAUDIT_2026-07-18_V1.1.0.md), [v1.1 release record](docs/RELEASE_V1.1.0.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), and [deployment guide](docs/DEPLOYMENT.md).

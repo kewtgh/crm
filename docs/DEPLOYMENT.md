@@ -1,4 +1,4 @@
-# Lumina Education CRM v1.0.0 部署指引
+# Lumina Education CRM v1.1.0 部署指引
 
 ## 1. 前置条件
 
@@ -10,7 +10,7 @@
 
 先备份数据库并在暂存项目演练迁移和向前修复。不要复用其他项目的 Supabase、用户、密钥或回调地址。
 
-本地 CRM 固定使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。验收时同时确认启动地址和 `/api/health` 的 `version=1.0.0`。
+本地 CRM 固定使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。验收时同时确认启动地址和 `/api/health` 的 `version=1.1.0`。
 
 ## 2. 环境变量
 
@@ -53,7 +53,7 @@ npx supabase db lint --linked --level warning
 npx supabase test db --linked
 ```
 
-当前迁移序列为 `202607160001` 至 `202607180036`。`031`–`036` 关闭租户/身份、租约与可观测性、业务闭环、v1 报价边界、Webhook 原子幂等、Auth 两步建档兼容和旧报价写接口退役；不得遗漏或重排。
+当前迁移序列为 `202607160001` 至 `202607180037`。`031`–`036` 关闭租户/身份、租约与可观测性、业务闭环、v1 报价边界、Webhook 原子幂等、Auth 两步建档兼容和旧报价写接口退役；`037` 增加精确 CRM 指标、时区感知仪表盘、付款逾期自动化及 Worker 心跳权限。不得遗漏或重排。
 
 ## 4. 初始管理员
 
@@ -76,9 +76,12 @@ npm run smoke:http-v09
 npm run smoke:http-v10
 npm run smoke:phase2
 npm run smoke:v09
+npm run smoke:v11
+npx supabase db lint --local --level warning
+npx supabase test db --local
 ```
 
-四项 smoke 会写入并自动清理隔离测试数据；只能对专用暂存 workspace 执行。`npm test` 包含 production build。
+五项 smoke 会写入并自动清理隔离测试数据；只能对专用暂存 workspace 执行。`npm test` 包含 production build。
 
 ## 6. Worker 与外部集成
 

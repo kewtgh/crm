@@ -8,6 +8,7 @@ import { InlineMessage, Pagination, SearchableSelect, StatusBadge, Toast } from 
 import { useAppUser } from "./app-user-context";
 import { ADMIN_ROLES } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
+import { useUserPreferences } from "@/components/user-preferences-context";
 
 const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
 const rowPageSize = 50;
@@ -58,6 +59,7 @@ export function ImportsPage({
   duplicatesOnly?: boolean;
 }) {
   const { t } = useI18n();
+  const { formatDate } = useUserPreferences();
   const user = useAppUser();
   const [batches, setBatches] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -334,7 +336,7 @@ export function ImportsPage({
       <div className="surface batch-list">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.historyEyebrow")}</p><h2>{t("imports.batches")}</h2></div><FileSpreadsheet size={21} /></div>
         {batches.map((item) => <button className={item.id === selected ? "batch-card selected" : "batch-card"} type="button" key={item.id} onClick={() => void open(item.id)}>
-          <span><b>{item.filename}</b><small>{item.resourceType} · {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</small></span>
+          <span><b>{item.filename}</b><small>{item.resourceType} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}

@@ -467,8 +467,8 @@ select lives_ok(
 select is(
   (select count(*)::integer from public.next_action_evaluations
     where organization_id='91000000-0000-4000-8000-000000000001'),
-  3,
-  'each organization records applicable or not-applicable results for three rules'
+  4,
+  'each organization records applicable or not-applicable results for four rules'
 );
 
 reset role;
