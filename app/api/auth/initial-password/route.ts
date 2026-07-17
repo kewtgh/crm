@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, nextAuthenticatedPath } from "@/lib/auth";
+import { nextAuthenticatedPath } from "@/lib/auth";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { getAccessToken, supabaseJson, supabaseRequest, SupabaseRequestError } from "@/lib/supabase-server";
 import { initialPasswordSchema } from "@/lib/validation";
+import { ApiError, apiRoute, requireApiUser } from "@/lib/api";
 
-export async function POST(request: Request) {
-  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
+async function post(request: Request) {
+  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
   const parsed = initialPasswordSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ code: parsed.error.issues[0]?.message ?? "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
+    throw new ApiError(parsed.error.issues[0]?.message ?? "INVALID_INPUT", 400, "INVALID_INPUT", {
+      field: String(parsed.error.issues[0]?.path[0] ?? "form"),
+    });
   }
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
+  const user = await requireApiUser();
   if (!user.mustChangePassword) return NextResponse.json({ ok: true, next: nextAuthenticatedPath(user) });
   try {
     const token = await getAccessToken();
@@ -23,3 +25,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ code: error instanceof SupabaseRequestError ? error.code : "PASSWORD_UPDATE_FAILED" }, { status: 400 });
   }
 }
+
+export const POST = apiRoute(post, "PASSWORD_UPDATE_FAILED");

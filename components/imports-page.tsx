@@ -5,6 +5,9 @@ import { FileSpreadsheet, Play, RotateCcw, SearchCheck, Upload } from "lucide-re
 import type { ImportBatchRecord, ImportRowRecord } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, Pagination, SearchableSelect, StatusBadge, Toast } from "./ui";
+import { useAppUser } from "./app-user-context";
+import { ADMIN_ROLES } from "@/lib/roles";
+import { apiFetch } from "@/lib/api-client";
 
 const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
 const rowPageSize = 50;
@@ -55,6 +58,7 @@ export function ImportsPage({
   duplicatesOnly?: boolean;
 }) {
   const { t } = useI18n();
+  const user = useAppUser();
   const [batches, setBatches] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
@@ -68,9 +72,25 @@ export function ImportsPage({
   const [rows, setRows] = useState<ImportRowRecord[]>([]);
   const [rowPage, setRowPage] = useState(1);
   const [rowTotal, setRowTotal] = useState(0);
+  const [dryRun, setDryRun] = useState<{
+    create: number; update: number; merge: number; skip: number;
+    invalid: number; unresolved: number; canExecute: boolean;
+  } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [mergeResource, setMergeResource] = useState<"CONTACTS" | "ORGANIZATIONS">("CONTACTS");
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [mergeSource, setMergeSource] = useState("");
+  const [mergePreview, setMergePreview] = useState<{
+    target: Record<string, unknown>;
+    source: Record<string, unknown>;
+    impact: Record<string, unknown>;
+    recommendedMaster: string;
+    editableFields: string[];
+  } | null>(null);
+  const [fieldChoices, setFieldChoices] = useState<Record<string, "TARGET" | "SOURCE">>({});
+  const [mergeConfirmed, setMergeConfirmed] = useState(false);
 
   const current = batches.find((item) => item.id === selected);
   const visibleDuplicateRows = useMemo(() => rows.filter((item) => item.status === "DUPLICATE"), [rows]);
@@ -79,22 +99,29 @@ export function ImportsPage({
   const headerOptions = [{ value: "", label: t("imports.ignore") }, ...headers.map((header) => ({ value: header, label: header }))];
 
   const loadBatches = async (nextPage = page) => {
-    const response = await fetch(`/api/imports?page=${nextPage}`);
-    const result = await response.json() as { items?: ImportBatchRecord[]; total?: number };
-    if (response.ok && result.items) {
+    try {
+      const result = await apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}`);
       setBatches(result.items);
       setTotal(result.total ?? 0);
+    } catch {
+      setError(t("imports.loadFailed"));
     }
   };
 
   const open = async (id: string, nextRowPage = 1) => {
     setSelected(id);
-    const response = await fetch(`/api/imports?batch=${id}&rowPage=${nextRowPage}`);
-    const result = await response.json() as { items?: ImportRowRecord[]; total?: number };
-    if (response.ok && result.items) {
+    try {
+      const [result, dryRunResult] = await Promise.all([
+        apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}`),
+        apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`),
+      ]);
       setRows(result.items);
       setRowTotal(result.total ?? 0);
       setRowPage(nextRowPage);
+      setDryRun(dryRunResult.summary);
+    } catch {
+      setError(t("imports.loadFailed"));
+      setDryRun(null);
     }
   };
 
@@ -127,31 +154,32 @@ export function ImportsPage({
     setError("");
     const hash = await hashText(fileText);
     const normalized = rawRows.map((row) => Object.fromEntries(targetFields.map((field) => [field, mapping[field] ? row[mapping[field]] ?? "" : ""])));
-    const response = await fetch("/api/imports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operation: "create", resource, filename: fileName, content_hash: hash, request_key: `${resource}:${hash}`, mapping, rows: normalized }),
-    });
-    const result = await response.json() as { item?: ImportBatchRecord };
-    setPending(false);
-    if (!response.ok || !result.item) {
+    try {
+      const result = await apiFetch<{ item: ImportBatchRecord }>("/api/imports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "create", resource, filename: fileName, content_hash: hash, request_key: `${resource}:${hash}`, mapping, rows: normalized }),
+      });
+      setPage(1);
+      await loadBatches(1);
+      await open(result.item.id);
+      setToast(t("imports.validated"));
+    } catch {
       setError(t("imports.createFailed"));
-      return;
+    } finally {
+      setPending(false);
     }
-    setPage(1);
-    await loadBatches(1);
-    await open(result.item.id);
-    setToast(t("imports.validated"));
   };
 
   const decide = async (row: ImportRowRecord, chosenAction: string) => {
     setError("");
-    const response = await fetch("/api/imports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operation: "decide", target_row: row.id, chosen_action: chosenAction }),
-    });
-    if (!response.ok) {
+    try {
+      await apiFetch("/api/imports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "decide", target_row: row.id, chosen_action: chosenAction }),
+      });
+    } catch {
       setError(t("imports.decisionFailed"));
       return;
     }
@@ -163,20 +191,35 @@ export function ImportsPage({
     if (!selected) return;
     setPending(true);
     setError("");
+    let preflightResult: { summary: NonNullable<typeof dryRun> };
+    try {
+      preflightResult = await apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${selected}/dry-run`);
+    } catch {
+      setError(t("imports.dryRunBlocked"));
+      setPending(false);
+      return;
+    }
+    if (!preflightResult.summary.canExecute) {
+      setDryRun(preflightResult.summary);
+      setError(t("imports.dryRunBlocked"));
+      setPending(false);
+      return;
+    }
+    setDryRun(preflightResult.summary);
     let status = "PROCESSING";
     for (let index = 0; index < 12 && status === "PROCESSING"; index += 1) {
-      const response = await fetch("/api/imports", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "process", target_batch: selected, batch_size: 50 }),
-      });
-      const result = await response.json() as { item?: ImportBatchRecord };
-      if (!response.ok || !result.item) {
+      try {
+        const result = await apiFetch<{ item: ImportBatchRecord }>("/api/imports", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ operation: "process", target_batch: selected, batch_size: 50 }),
+        });
+        status = result.item.status;
+      } catch {
         setError(t("imports.executeFailed"));
         setPending(false);
         return;
       }
-      status = result.item.status;
     }
     setPending(false);
     await loadBatches();
@@ -188,19 +231,63 @@ export function ImportsPage({
     if (!selected) return;
     setPending(true);
     setError("");
-    const response = await fetch("/api/imports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operation: "rollback", target_batch: selected }),
-    });
-    setPending(false);
-    if (!response.ok) {
+    try {
+      await apiFetch("/api/imports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "rollback", target_batch: selected }),
+      });
+    } catch {
+      setPending(false);
       setError(t("imports.rollbackConflict"));
       return;
     }
+    setPending(false);
     await loadBatches();
     await open(selected, rowPage);
     setToast(t("imports.rolledBack"));
+  };
+
+  const previewMerge = async (targetId = mergeTarget, sourceId = mergeSource) => {
+    setError("");
+    setMergePreview(null);
+    try {
+      const result = await apiFetch<{ preview: NonNullable<typeof mergePreview> }>("/api/duplicates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "preview", resource: mergeResource, targetId, sourceId }),
+      });
+      setFieldChoices(Object.fromEntries(result.preview.editableFields.map((field) => [field, "TARGET"])));
+      setMergeConfirmed(false);
+      setMergePreview(result.preview);
+    } catch {
+      setError(t("duplicates.previewFailed"));
+    }
+  };
+
+  const mergeRecords = async () => {
+    if (!mergePreview || !mergeConfirmed) return;
+    try {
+      await apiFetch("/api/duplicates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "merge",
+          resource: mergeResource,
+          targetId: mergeTarget,
+          sourceId: mergeSource,
+          fieldChoices,
+          confirmed: true,
+        }),
+      });
+    } catch {
+      setError(t("duplicates.previewFailed"));
+      return;
+    }
+    setMergePreview(null);
+    setMergeTarget("");
+    setMergeSource("");
+    setToast(t("duplicates.mergeSuccess"));
   };
 
   return <div className="page-stack imports-page">
@@ -211,6 +298,21 @@ export function ImportsPage({
         <p>{t(duplicatesOnly ? "duplicates.description" : "imports.description")}</p>
       </div>
     </section>
+
+    {duplicatesOnly && (ADMIN_ROLES.includes(user.role) || user.role === "SALES_DIRECTOR" || user.role === "SALES_MANAGER") && <section className="surface duplicate-merge-panel">
+      <div className="surface-heading"><div><p className="eyebrow">CONTROLLED MERGE</p><h2>{t("duplicates.mergePreview")}</h2><p>{t("duplicates.mergeHelp")}</p></div><SearchCheck size={21}/></div>
+      <div className="form-grid three-column"><label className="field"><span>{t("imports.resource")}</span><select value={mergeResource} onChange={(event) => { setMergeResource(event.target.value as typeof mergeResource); setMergePreview(null); }}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label><label className="field"><span>{t("duplicates.targetId")}</span><input value={mergeTarget} onChange={(event) => setMergeTarget(event.target.value)} pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("duplicates.sourceId")}</span><input value={mergeSource} onChange={(event) => setMergeSource(event.target.value)} pattern="[0-9a-fA-F-]{36}" required/></label></div>
+      <button className="secondary-button" type="button" disabled={!mergeTarget || !mergeSource || mergeTarget === mergeSource} onClick={() => void previewMerge()}><SearchCheck size={16}/>{t("duplicates.preview")}</button>
+      {mergePreview && <div className="merge-preview">
+        <InlineMessage type={mergePreview.recommendedMaster === mergeTarget ? "success" : "warning"}>{t("duplicates.recommendedMaster", { id: mergePreview.recommendedMaster })}{mergePreview.recommendedMaster !== mergeTarget && <button className="inline-action" type="button" onClick={() => { const oldTarget = mergeTarget; const oldSource = mergeSource; setMergeTarget(oldSource); setMergeSource(oldTarget); void previewMerge(oldSource, oldTarget); }}>{t("duplicates.useRecommended")}</button>}</InlineMessage>
+        <InlineMessage type="info">{t("duplicates.editableFieldsOnly")}</InlineMessage>
+        <div className="merge-fields"><div className="merge-fields-head"><b>{t("duplicates.targetId")}</b><b>{t("duplicates.sourceId")}</b><b>{t("duplicates.confirmMerge")}</b></div>{mergePreview.editableFields.map((key) => <div className="merge-field" key={key}><span><small>{key}</small><b>{String(mergePreview.target[key] ?? "—")}</b></span><span><small>{key}</small><b>{String(mergePreview.source[key] ?? "—")}</b></span><select aria-label={key} value={fieldChoices[key] ?? "TARGET"} onChange={(event) => setFieldChoices((current) => ({ ...current, [key]: event.target.value as "TARGET" | "SOURCE" }))}><option value="TARGET">TARGET</option><option value="SOURCE">SOURCE</option></select></div>)}</div>
+        <InlineMessage type="warning">{Object.entries(mergePreview.impact).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}</InlineMessage>
+        <label className="check-row"><input type="checkbox" checked={mergeConfirmed} onChange={(event) => setMergeConfirmed(event.target.checked)}/><span>{t("duplicates.mergeHelp")}</span></label>
+        <button className="danger-button" type="button" disabled={!mergeConfirmed} onClick={() => void mergeRecords()}>{t("duplicates.confirmMerge")}</button>
+      </div>}
+      {error && <InlineMessage type="error">{error}</InlineMessage>}
+    </section>}
 
     {!duplicatesOnly && <section className="surface import-create">
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
@@ -241,6 +343,7 @@ export function ImportsPage({
 
       <div className="surface import-rows">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.rowsEyebrow")}</p><h2>{current ? current.filename : t("imports.selectBatch")}</h2></div>{current && <StatusBadge tone="blue">{t(`imports.status.${current.status.toLowerCase()}`)}</StatusBadge>}</div>
+        {current && dryRun && <div className={`import-dry-run ${dryRun.canExecute ? "ready" : "blocked"}`}><SearchCheck size={20}/><div><b>{t("imports.dryRun")}</b><small>{t("imports.dryRunHelp", { create: dryRun.create, update: dryRun.update, merge: dryRun.merge, skip: dryRun.skip, invalid: dryRun.invalid, unresolved: dryRun.unresolved })}</small></div><StatusBadge tone={dryRun.canExecute ? "green" : "amber"}>{t(dryRun.canExecute ? "imports.dryRunReady" : "imports.dryRunBlocked")}</StatusBadge></div>}
         {rows.map((row) => <article className="import-row" key={row.id}>
           <span>#{row.rowNumber}</span>
           <div>

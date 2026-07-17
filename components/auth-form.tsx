@@ -185,7 +185,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="trust-points">
             <span><ShieldCheck size={18} /> {t("auth.trust.permissions")}</span>
             <span><Languages size={18} /> {t("auth.trust.bilingualData")}</span>
-            <span><Sparkles size={18} /> {t("auth.trust.ai")}</span>
+            <span><Sparkles size={18} /> {t("auth.trust.rules")}</span>
           </div>
         </div>
         <div className="brand-orbit" aria-hidden="true"><span /><span /><span /></div>

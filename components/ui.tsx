@@ -146,3 +146,89 @@ export function Toast({ message, onClose }: { message: string; onClose: () => vo
   const { t } = useI18n();
   return <div className="toast" role="status"><span className="toast-check"><Check size={15} /></span><span>{message}</span><button type="button" aria-label={t("common.close")} onClick={onClose}><X size={15} /></button></div>;
 }
+
+export function AccessibleDrawer({
+  title,
+  eyebrow,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const { t } = useI18n();
+  const titleId = useId();
+  const descriptionId = useId();
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
+      const preferred = drawerRef.current?.querySelector<HTMLElement>(
+        "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
+      );
+      (preferred ?? closeRef.current)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+        "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      )).filter((element) => !element.hasAttribute("hidden"));
+      if (!focusable.length) {
+        event.preventDefault();
+        closeRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus.current?.focus();
+    };
+  }, []);
+  return <>
+    <button className="drawer-overlay" type="button" aria-label={t("common.close")} onClick={onClose}/>
+    <aside
+      ref={drawerRef}
+      className="record-drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
+    >
+      <div className="drawer-heading">
+        <div>
+          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+          <h2 id={titleId}>{title}</h2>
+          {description && <p id={descriptionId}>{description}</p>}
+        </div>
+        <button ref={closeRef} className="icon-button" type="button" aria-label={t("common.close")} onClick={onClose}><X size={20}/></button>
+      </div>
+      {children}
+    </aside>
+  </>;
+}

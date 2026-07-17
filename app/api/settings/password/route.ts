@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { apiRoute, requireApiUser } from "@/lib/api";
 import { authCookieNames } from "@/lib/auth";
 import { getAccessToken, supabaseJson } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
 
 const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(128) });
 
-export async function POST(request: Request) {
+async function post(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_PASSWORD" }, { status: 400 });
-  const user = await requireUser();
+  const user = await requireApiUser();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return NextResponse.json({ code: "AUTH_NOT_CONFIGURED" }, { status: 503 });
   const verification = await fetch(`${url}/auth/v1/token?grant_type=password`, { method: "POST", headers: { apikey: key, "content-type": "application/json" }, body: JSON.stringify({ email: user.email, password: parsed.data.currentPassword }), cache: "no-store" });
@@ -23,3 +23,4 @@ export async function POST(request: Request) {
     return response;
   } catch { return NextResponse.json({ code: "PASSWORD_UPDATE_FAILED" }, { status: 500 }); }
 }
+export const POST=apiRoute(post,"PASSWORD_UPDATE_FAILED");

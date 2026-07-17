@@ -77,6 +77,14 @@ function generateTemporaryPassword() {
   return generated.join("");
 }
 
+function configuredWorkspaceId() {
+  const workspaceId = process.env.CRM_WORKSPACE_ID;
+  if (!workspaceId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId)) {
+    throw new SupabaseRequestError(503, "WORKSPACE_NOT_CONFIGURED", "CRM workspace is not configured");
+  }
+  return workspaceId;
+}
+
 async function deliverTemporaryCredentials(input: CreateStaffInput, username: string, temporaryPassword: string) {
   const endpoint = process.env.EMAIL_DELIVERY_WEBHOOK_URL;
   if (!endpoint) throw new SupabaseRequestError(503, "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", "Account email delivery is not configured");
@@ -110,6 +118,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   if (actor.role === "ADMIN" && input.role === "ADMIN") throw new SupabaseRequestError(403, "ROLE_ASSIGNMENT_FORBIDDEN", "Only a super administrator can create an administrator");
   if (!process.env.EMAIL_DELIVERY_WEBHOOK_URL) throw new SupabaseRequestError(503, "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", "Account email delivery is not configured");
   const username = input.username.trim().toLowerCase();
+  const workspaceId = configuredWorkspaceId();
   const matches = await supabaseAdminJson<Array<{ user_id: string }>>(`/rest/v1/user_profiles?select=user_id&username=eq.${encodeURIComponent(username)}&limit=1`);
   if (matches.length) throw new SupabaseRequestError(409, "USERNAME_TAKEN", "The username is already in use");
 
@@ -121,7 +130,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       password: temporaryPassword,
       email_confirm: true,
       user_metadata: { username, chinese_name: input.displayNameZh, english_name: input.displayNameEn, team: input.team },
-      app_metadata: { role: input.role, account_status: "ACTIVE" },
+      app_metadata: { role: input.role, account_status: "ACTIVE", workspace_id: workspaceId },
     }),
   });
   const userId = created.id ?? created.user?.id;
@@ -133,7 +142,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
         body: JSON.stringify({
-          workspace_id: "00000000-0000-4000-8000-000000000001",
+          workspace_id: workspaceId,
           auth_user_id: userId,
           name_zh: input.displayNameZh,
           name_en: input.displayNameEn,
@@ -148,7 +157,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
-        workspace_id: "00000000-0000-4000-8000-000000000001",
+        workspace_id: workspaceId,
         actor_id: actor.id,
         entity_type: "staff_user",
         entity_id: userId,
@@ -162,11 +171,52 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
     await supabaseAdminRequest("/rest/v1/audit_events", {
       method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ workspace_id: "00000000-0000-4000-8000-000000000001", actor_id: actor.id, entity_type: "staff_user", entity_id: userId, action: "CREATE_ROLLED_BACK", after_data: { username, role: input.role } }),
+      body: JSON.stringify({ workspace_id: workspaceId, actor_id: actor.id, entity_type: "staff_user", entity_id: userId, action: "CREATE_ROLLED_BACK", after_data: { username, role: input.role } }),
     }).catch(() => undefined);
     throw error;
   }
   return { id: userId };
+}
+
+export async function repairStaffIdentity(repairId: string) {
+  const jobs = await supabaseAdminJson<Array<{
+    id: string;
+    target_user_id: string;
+    target_role: AppRole;
+    target_status: "ACTIVE" | "SUSPENDED";
+    status: string;
+  }>>(`/rest/v1/staff_identity_repair_jobs?select=id,target_user_id,target_role,target_status,status&id=eq.${repairId}&status=in.(PENDING,FAILED,DEAD)&limit=1`);
+  const job = jobs[0];
+  if (!job) throw new SupabaseRequestError(404, "IDENTITY_REPAIR_NOT_FOUND", "Identity repair job was not found");
+  await supabaseAdminRequest(`/rest/v1/staff_identity_repair_jobs?id=eq.${job.id}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status: "PROCESSING", updated_at: new Date().toISOString() }),
+  });
+  try {
+    await supabaseAdminRequest(`/auth/v1/admin/users/${job.target_user_id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        app_metadata: {
+          role: job.target_role,
+          account_status: job.target_status,
+          workspace_id: configuredWorkspaceId(),
+        },
+        ban_duration: job.target_status === "SUSPENDED" ? "876000h" : "none",
+      }),
+    });
+    await supabaseAdminJson("/rest/v1/rpc/complete_identity_repair", {
+      method: "POST",
+      body: JSON.stringify({ repair_id: job.id, successful: true, failure: null }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "IDENTITY_REPAIR_FAILED";
+    await supabaseAdminJson("/rest/v1/rpc/complete_identity_repair", {
+      method: "POST",
+      body: JSON.stringify({ repair_id: job.id, successful: false, failure: message }),
+    }).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function updateStaffUser(target: StaffUserRecord, input: { status?: "ACTIVE" | "SUSPENDED"; role?: Exclude<AppRole, "SUPER_ADMIN"> }, actor: AppUser) {
@@ -177,18 +227,55 @@ export async function updateStaffUser(target: StaffUserRecord, input: { status?:
   if (target.role === "SUPER_ADMIN") throw new SupabaseRequestError(403, "SUPER_ADMIN_PROTECTED", "The bootstrap super administrator is protected");
   const nextRole = input.role ?? target.role;
   const nextStatus = input.status ?? target.status;
-  await supabaseAdminRequest(`/auth/v1/admin/users/${target.id}`, {
-    method: "PUT",
-    body: JSON.stringify({ app_metadata: { role: nextRole, account_status: nextStatus } }),
+  const change = await supabaseAdminJson<{ id: string }>("/rest/v1/rpc/prepare_staff_identity_change", {
+    method: "POST",
+    body: JSON.stringify({
+      target_user: target.id,
+      new_role: nextRole,
+      new_status: nextStatus,
+      actor_user: actor.id,
+    }),
   });
-  await supabaseAdminRequest(`/rest/v1/workspace_memberships?user_id=eq.${target.id}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ role: nextRole, status: nextStatus }),
-  });
-  await supabaseAdminRequest(`/rest/v1/sales_team_members?auth_user_id=eq.${target.id}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ role: nextRole.startsWith("SALES_") ? nextRole : target.role, active: nextStatus === "ACTIVE" }),
-  });
+  try {
+    await supabaseAdminRequest(`/auth/v1/admin/users/${target.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        app_metadata: { role: nextRole, account_status: nextStatus, workspace_id: configuredWorkspaceId() },
+        ban_duration: nextStatus === "SUSPENDED" ? "876000h" : "none",
+      }),
+    });
+    await supabaseAdminJson("/rest/v1/rpc/complete_staff_identity_change", {
+      method: "POST",
+      body: JSON.stringify({ change_id: change.id }),
+    });
+  } catch (error) {
+    let rollbackFailure = error instanceof Error ? error.message : "IDENTITY_SYNC_FAILED";
+    try {
+      await supabaseAdminRequest(`/auth/v1/admin/users/${target.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          app_metadata: { role: target.role, account_status: target.status, workspace_id: configuredWorkspaceId() },
+          ban_duration: target.status === "SUSPENDED" ? "876000h" : "none",
+        }),
+      });
+    } catch (compensationError) {
+      rollbackFailure = `AUTH_COMPENSATION_FAILED: ${compensationError instanceof Error ? compensationError.message : "UNKNOWN"}`;
+    }
+    let databaseRollbackFailed = false;
+    try {
+      await supabaseAdminJson("/rest/v1/rpc/rollback_staff_identity_change", {
+        method: "POST",
+        body: JSON.stringify({
+          change_id: change.id,
+          failure: rollbackFailure,
+        }),
+      });
+    } catch {
+      databaseRollbackFailed = true;
+    }
+    if (rollbackFailure.startsWith("AUTH_COMPENSATION_FAILED") || databaseRollbackFailed) {
+      throw new SupabaseRequestError(502, "IDENTITY_COMPENSATION_REQUIRED", rollbackFailure);
+    }
+    throw error;
+  }
 }

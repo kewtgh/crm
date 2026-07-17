@@ -27,7 +27,7 @@ type PreferenceRow = {
 
 const defaultNotifications: NotificationPreferences = {
   tasks: { email: true, inApp: true }, relationship: { email: true, inApp: true },
-  sales: { email: false, inApp: true }, security: { email: true, inApp: true }, ai: { email: false, inApp: true },
+  sales: { email: false, inApp: true }, security: { email: true, inApp: true },
 };
 
 export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
@@ -49,7 +49,10 @@ export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
     dateFormat: preference?.date_format ?? "yyyy-MM-dd",
     quietHoursStart: preference?.quiet_hours_start ?? null,
     quietHoursEnd: preference?.quiet_hours_end ?? null,
-    notifications: preference?.notifications ?? defaultNotifications,
+    notifications: {
+      ...defaultNotifications,
+      ...Object.fromEntries(Object.entries(preference?.notifications ?? {}).filter(([key]) => key !== "ai")),
+    },
   };
 }
 

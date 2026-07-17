@@ -1,36 +1,37 @@
 import { NextResponse } from "next/server";
 import { authCookieNames, hydrateStaffUser, nextAuthenticatedPath, userFromSupabase } from "@/lib/auth";
 import { loginSchema } from "@/lib/validation";
-import { checkLoginRateLimit, clearLoginFailures, loginRateLimitKey, recordLoginFailure } from "@/lib/login-rate-limit";
+import { checkLoginRateLimit, clearLoginFailures, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { ApiError, apiRoute } from "@/lib/api";
 
-export async function POST(request: Request) {
-  if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
+async function post(request: Request) {
+  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
   const parsed = loginSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json(
-      { code: parsed.error.issues[0]?.message ?? "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") },
-      { status: 400 },
-    );
+    throw new ApiError(parsed.error.issues[0]?.message ?? "INVALID_INPUT", 400, "INVALID_INPUT", {
+      field: String(parsed.error.issues[0]?.path[0] ?? "form"),
+    });
   }
 
   const { email, password, remember, turnstileToken } = parsed.data;
-  const rateKey = loginRateLimitKey(request, email);
-  const limit = checkLoginRateLimit(rateKey);
-  if (!limit.allowed) return NextResponse.json({ code: "TOO_MANY_ATTEMPTS" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
+  const throttleIdentity = await loginThrottleIdentity(request, email);
+  const limit = await checkLoginRateLimit(throttleIdentity);
+  if (!limit.allowed) {
+    throw new ApiError("TOO_MANY_ATTEMPTS", 429, "TOO_MANY_ATTEMPTS", undefined, {
+      "Retry-After": String(limit.retryAfter),
+    });
+  }
   const turnstile = await verifyTurnstileToken(turnstileToken, request);
   if (!turnstile.ok) {
-    recordLoginFailure(rateKey);
-    return NextResponse.json({ code: turnstile.code, field: "turnstile" }, { status: turnstile.code === "TURNSTILE_NOT_CONFIGURED" ? 503 : 400 });
+    await recordLoginFailure(throttleIdentity);
+    throw new ApiError(turnstile.code, turnstile.code === "TURNSTILE_NOT_CONFIGURED" ? 503 : 400, turnstile.code, { field: "turnstile" });
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) {
-    return NextResponse.json(
-      { code: "AUTH_NOT_CONFIGURED" },
-      { status: 503 },
-    );
+    throw new ApiError("AUTH_NOT_CONFIGURED", 503);
   }
 
   const upstream = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
@@ -40,25 +41,19 @@ export async function POST(request: Request) {
   });
   const result = (await upstream.json()) as Record<string, unknown>;
   if (!upstream.ok) {
-    recordLoginFailure(rateKey);
-    return NextResponse.json(
-      { code: "INVALID_CREDENTIALS" },
-      { status: 401 },
-    );
+    await recordLoginFailure(throttleIdentity);
+    throw new ApiError("INVALID_CREDENTIALS", 401);
   }
 
   const baseUser = userFromSupabase((result.user ?? {}) as Record<string, unknown>);
   const authorizedUser = baseUser ? await hydrateStaffUser(baseUser, String(result.access_token)) : null;
   if (!authorizedUser) {
-    recordLoginFailure(rateKey);
-    return NextResponse.json(
-      { code: "STAFF_ACCESS_DENIED" },
-      { status: 403 },
-    );
+    await recordLoginFailure(throttleIdentity);
+    throw new ApiError("STAFF_ACCESS_DENIED", 403);
   }
 
   const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-  clearLoginFailures(rateKey);
+  await clearLoginFailures(throttleIdentity);
   const cookieBase = {
     httpOnly: true,
     sameSite: "lax" as const,
@@ -74,3 +69,5 @@ export async function POST(request: Request) {
   } : cookieBase);
   return response;
 }
+
+export const POST = apiRoute(post, "LOGIN_FAILED");

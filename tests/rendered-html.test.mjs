@@ -66,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "0\.8\.0"/);
+  assert.match(packageJson, /"version": "1\.0\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "0\.8\.0"/);
+  assert.match(packageJson, /"version": "1\.0\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -111,6 +111,7 @@ test("keeps every split locale catalog aligned and avoids key-shaped English fal
     ["governance-pages.ts", "zhGovernancePages", "enGovernancePages"],
     ["ui-eyebrows.ts", "zhUiEyebrows", "enUiEyebrows"],
     ["phase2-pages.ts", "zhPhase2", "enPhase2"],
+    ["operations-v09.ts", "zhOperationsV09", "enOperationsV09"],
   ].map(async ([file, zhExport, enExport]) => ({ source: await readFile(new URL(`../lib/i18n/locales/${file}`, import.meta.url), "utf8"), zhExport, enExport })));
   const block = (source, name) => { const start = source.indexOf(`export const ${name}`); const next = source.indexOf("export const ", start + 13); return source.slice(start, next === -1 ? source.length : next); };
   const keys = (source) => [...source.matchAll(/"([a-z][^"]+)"\s*:/g)].map((match) => match[1]).sort();
@@ -224,7 +225,7 @@ test("includes contracts, custom products, consumption reporting, and exact rela
   assert.match(consumption, /month/);
   assert.match(consumption, /quarter/);
   assert.match(consumption, /year/);
-  for (const goal of ["拿到客户联系方式", "和客户吃过一餐饭", "可以和客户聊家长里短", "随时可以让客户帮忙在学校做宣传"]) assert.match(zh, new RegExp(goal));
+  for (const goal of ["拿到客户联系方式", "和客户吃过一餐饭", "建立可信的业务语境", "随时可以让客户帮忙在学校做宣传"]) assert.match(zh, new RegExp(goal));
   assert.match(sales, /relationshipPlaybook/);
   assert.match(sales, /closingPlaybook/);
   assert.match(playbook, /初步了解/);
@@ -286,7 +287,7 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.match(staffRepository, /email_confirm: true/);
   assert.doesNotMatch(staffRepository, /auth\/v1\/invite/);
   assert.match(staffRepository, /actor\.role === "ADMIN" && input\.role === "ADMIN"/);
-  assert.match(staffRoute, /requireAal2/);
+  assert.match(staffRoute, /requireApiAal2/);
   assert.match(loginRoute, /verifyTurnstileToken/);
   assert.match(turnstile, /siteverify/);
   assert.match(turnstile, /idempotency_key/);
@@ -298,4 +299,137 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.match(mfaMigration, /auth\.jwt\(\)->>'aal'/);
   assert.match(env, /NEXT_PUBLIC_TURNSTILE_SITE_KEY/);
   assert.match(env, /TURNSTILE_SECRET_KEY/);
+});
+
+test("closes the v0.9.0 audit findings and exposes real operational product foundations", async () => {
+  const [
+    api,
+    apiClient,
+    boundary,
+    operationsMigration,
+    identityMigration,
+    importGuardMigration,
+    shell,
+    settings,
+    table,
+    operations,
+    customer360,
+    imports,
+    products,
+    worker,
+    proxy,
+    audit,
+    plan,
+  ] = await Promise.all([
+    readFile(new URL("../lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/api-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170025_security_boundary_hardening.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170026_operational_product_foundations.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170027_identity_rate_limit_and_readiness.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607170029_import_execution_workspace_guards.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/data-table.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations-center-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/customer-360-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/imports-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/products-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/worker-heartbeat.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../proxy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-17_FINAL.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_V0.9.0.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(api, /requireApiUser/);
+  assert.match(api, /response\.status >= 300 && response\.status < 400/);
+  assert.match(apiClient, /SESSION_REFRESH_REQUIRED/);
+  assert.match(boundary, /drop function if exists public\.refund_payment/);
+  assert.match(boundary, /revoke insert on public\.approval_requests,public\.approval_actions/);
+  assert.match(boundary, /quote_product_invalid/);
+  assert.match(operationsMigration, /workspace_relationship_health/);
+  assert.match(operationsMigration, /explain_record_access/);
+  assert.match(operationsMigration, /record_customer_activity/);
+  assert.match(operationsMigration, /contract_renewal_playbooks/);
+  assert.match(operationsMigration, /change_opportunity_stage/);
+  assert.match(operationsMigration, /duplicate_merge_preview/);
+  assert.match(operationsMigration, /import_dry_run/);
+  assert.match(operationsMigration, /worker_heartbeats/);
+  assert.match(operationsMigration, /webhook_inbox/);
+  assert.match(operationsMigration, /create_product_bundle/);
+  assert.match(operationsMigration, /next_best_actions/);
+  assert.match(identityMigration, /apply_login_throttle/);
+  assert.match(identityMigration, /pg_advisory_xact_lock/);
+  assert.match(identityMigration, /staff_identity_changes/);
+  assert.match(identityMigration, /service_readiness_snapshot/);
+  assert.match(importGuardMigration, /workspace_id=batch\.workspace_id/);
+  assert.match(shell, /metaKey \|\| event\.ctrlKey/);
+  assert.match(shell, /role="combobox"/);
+  assert.doesNotMatch(shell, /87%|3\.2%/);
+  assert.match(settings, /loadState === "error"/);
+  assert.match(settings, /emailIsVerified/);
+  assert.match(table, /data-label/);
+  assert.match(table, /common\.retry/);
+  assert.match(operations, /operations\.permission/);
+  assert.match(operations, /operations\.nextActions/);
+  assert.match(customer360, /customer360\.recordActivity/);
+  assert.match(imports, /imports\.dryRun/);
+  assert.match(imports, /duplicates\.mergePreview/);
+  assert.match(products, /catalog\.bundles/);
+  assert.match(products, /catalog\.exchangeRates/);
+  assert.match(worker, /record_worker_heartbeat/);
+  assert.match(proxy, /strict-dynamic/);
+  assert.doesNotMatch(proxy, /script-src[^"\n]*unsafe-inline/);
+  assert.match(audit, /P0：发布阻断/);
+  assert.match(plan, /第七阶段：测试、发布与运维/);
+});
+
+test("closes the v1.0 release audit with executable security and business boundaries", async () => {
+  const [
+    securityMigration,
+    productMigration,
+    releaseMigration,
+    webhookRoute,
+    apiClient,
+    operations,
+    imports,
+    finance,
+    ui,
+    env,
+    audit,
+    plan,
+  ] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607180031_security_reliability_closure.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607180032_product_and_insight_closure.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607180033_v100_release_boundary.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/integrations/webhooks/[provider]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/api-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations-center-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/imports-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/finance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-18_V091.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_V0.9.1.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(securityMigration, /queue_failed_identity_repair/);
+  assert.match(securityMigration, /claim_webhook_events_leased/);
+  assert.match(securityMigration, /duplicate_field_choice_invalid/);
+  assert.match(productMigration, /renewal_playbook_context/);
+  assert.match(productMigration, /business_improvement_snapshot/);
+  assert.match(productMigration, /next_action_evaluations/);
+  assert.match(releaseMigration, /create_quote_v100/);
+  assert.match(releaseMigration, /quote_product_or_bundle_required/);
+  assert.match(releaseMigration, /confirm_integration_connection/);
+  assert.match(webhookRoute, /canonicalEnvelope/);
+  assert.match(webhookRoute, /WEBHOOK_REPLAY_WINDOW_EXCEEDED/);
+  assert.match(apiClient, /AbortSignal\.any/);
+  assert.match(apiClient, /REQUEST_TIMEOUT/);
+  for (const page of [operations, imports, finance]) assert.match(page, /apiFetch/);
+  assert.match(operations, /operations\.businessInsights/);
+  assert.match(imports, /editableFields/);
+  assert.match(finance, /productOrBundleRequired/);
+  assert.match(ui, /aria-modal="true"/);
+  assert.match(ui, /event\.key === "Escape"/);
+  assert.match(env, /INTEGRATION_SYNC_PROCESSOR_URL/);
+  assert.match(audit, /P0：发布阻断/);
+  assert.match(plan, /全量自动化、浏览器和 Sites 发布门禁/);
 });

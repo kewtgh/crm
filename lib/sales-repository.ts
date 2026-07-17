@@ -52,8 +52,18 @@ export async function createOpportunity(input:{organizationId:string;productId?:
   const rows=await supabaseJson<OpportunityRow[]>("/rest/v1/opportunities",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({organization_id:input.organizationId,product_id:input.productId??null,title_zh:input.titleZh,title_en:input.titleEn,stage:input.stage,amount:input.amount,currency:input.currency,probability:input.probability,expected_close_date:input.expectedCloseDate??null,next_action_zh:input.nextActionZh,next_action_en:input.nextActionEn})});return rows[0];
 }
 
-export async function updateOpportunity(id:string,input:{stage?:OpportunityRecord["stage"];probability?:number;expectedCloseDate?:string|null;nextActionZh?:string;nextActionEn?:string}){
-  const body:Record<string,unknown>={};if(input.stage!==undefined)body.stage=input.stage;if(input.probability!==undefined)body.probability=input.probability;if(input.expectedCloseDate!==undefined)body.expected_close_date=input.expectedCloseDate;if(input.nextActionZh!==undefined)body.next_action_zh=input.nextActionZh;if(input.nextActionEn!==undefined)body.next_action_en=input.nextActionEn;
-  if(input.stage==="WON"||input.stage==="LOST")body.closed_at=new Date().toISOString();
-  return supabaseJson<OpportunityRow[]>(`/rest/v1/opportunities?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(body)});
+export async function updateOpportunity(id:string,input:{stage:OpportunityRecord["stage"];probability:number;expectedCloseDate?:string|null;nextActionZh:string;nextActionEn:string;reason?:string;evidence?:string}){
+  return supabaseJson<OpportunityRow>("/rest/v1/rpc/change_opportunity_stage",{
+    method:"POST",
+    body:JSON.stringify({
+      target_opportunity:id,
+      next_stage:input.stage,
+      next_probability:input.probability,
+      next_expected_close:input.expectedCloseDate??null,
+      next_action_zh:input.nextActionZh,
+      next_action_en:input.nextActionEn,
+      stage_reason:input.reason??"",
+      stage_evidence:input.evidence??"",
+    }),
+  });
 }
