@@ -67,7 +67,7 @@ export const zhCN: Messages = {
   "products.loadFailed": "无法加载产品目录，请稍后重试。", "products.saveFailed": "产品设置未保存，请检查表单、权限或重复的产品代码。",
   "approval.loadFailed": "无法加载审批队列，请稍后重试。",
   "allocation.loadFailed": "无法加载业绩分配方案，请稍后重试。",
-  "common.paginationSummary":"共 {total} 条 · 每页 {pageSize} 条","common.select":"请选择…","common.typeToSearch":"输入关键词搜索…","common.noOptions":"没有匹配选项",
+  "common.paginationSummary":"共 {total} 条 · 每页 {pageSize} 条","common.pageSize":"每页显示","common.select":"请选择…","common.typeToSearch":"输入关键词搜索…","common.noOptions":"没有匹配选项",
   "nav.main": "主导航",
   "nav.open": "打开导航",
   "nav.close": "关闭导航",

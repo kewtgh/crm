@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, apiRoute, parseUuid, requireApiUser } from "@/lib/api";
+import { ApiError, apiRoute, parsePagination, parseUuid, requireApiUser } from "@/lib/api";
 import { decideNextBestAction, generateNextBestActions, listNextBestActions } from "@/lib/operations-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 
@@ -16,9 +16,12 @@ const mutationSchema = z.discriminatedUnion("operation", [
 
 async function get(request: Request) {
   await requireApiUser();
-  const rawOrganization = new URL(request.url).searchParams.get("organizationId");
+  const url = new URL(request.url);
+  const rawOrganization = url.searchParams.get("organizationId");
   const organizationId = rawOrganization ? parseUuid(rawOrganization, "organizationId") : null;
-  return NextResponse.json({ items: await listNextBestActions(organizationId) });
+  const { page, pageSize } = parsePagination(url.searchParams, 10);
+  if (![10, 20, 50].includes(pageSize)) throw new ApiError("INVALID_PAGINATION", 400);
+  return NextResponse.json(await listNextBestActions(organizationId, page, pageSize));
 }
 
 async function post(request: Request) {
@@ -28,7 +31,7 @@ async function post(request: Request) {
   if (!parsed.success) throw new ApiError("INVALID_NEXT_ACTION_OPERATION", 400);
   if (parsed.data.operation === "generate") {
     const generated = await generateNextBestActions(parsed.data.organizationId);
-    return NextResponse.json({ generated, items: await listNextBestActions(parsed.data.organizationId) });
+    return NextResponse.json({ generated, ...await listNextBestActions(parsed.data.organizationId, 1, 10) });
   }
   if (parsed.data.decision === "REJECTED" && !parsed.data.reason) {
     throw new ApiError("NEXT_ACTION_REJECTION_REASON_REQUIRED", 400);

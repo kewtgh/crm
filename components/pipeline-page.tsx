@@ -55,6 +55,7 @@ export function PipelinePage({
   const [total, setTotal] = useState(initialTotal);
   const [funnel, setFunnel] = useState(initialFunnel);
   const [page, setPage] = useState(1);
+  const [pageSize,setPageSize]=useState(20);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +69,6 @@ export function PipelinePage({
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [product, setProduct] = useState("");
   const [productOptions, setProductOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const pageSize = 24;
 
   const funnelMap = useMemo(() => new Map(funnel.map((item) => [item.stage, item])), [funnel]);
   const currency = items[0]?.currency ?? "CNY";
@@ -95,15 +95,15 @@ export function PipelinePage({
     return `${t(fallbackKey)}${caught.requestId ? ` · ${t("common.requestId")}: ${caught.requestId}` : ""}`;
   }, [t]);
 
-  const load = useCallback(async (nextPage: number, nextQuery: string) => {
+  const load = useCallback(async (nextPage: number, nextQuery: string, nextPageSize = pageSize) => {
     if (!persistent) return;
     setLoading(true);
     setError("");
     try {
       const result = await apiFetch<OpportunityPage>(
-        `/api/opportunities?page=${nextPage}&pageSize=${pageSize}&query=${encodeURIComponent(nextQuery)}`,
+        `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}`,
       );
-      const nextPages = Math.max(1, Math.ceil(result.total / pageSize));
+      const nextPages = Math.max(1, Math.ceil(result.total / nextPageSize));
       if (nextPage > nextPages) {
         setPage(nextPages);
         return;
@@ -116,7 +116,7 @@ export function PipelinePage({
     } finally {
       setLoading(false);
     }
-  }, [describeError, persistent]);
+  }, [describeError, pageSize, persistent]);
 
   useEffect(() => {
     if (page === 1 && !query) return;
@@ -317,7 +317,7 @@ export function PipelinePage({
         </section>
       </div>
       : <EmptyState messageKey="pipeline.empty"/>}
-    <Pagination page={Math.min(page, pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage}/>
+    <Pagination page={Math.min(page, pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);void load(1,query,value);}}/>
     <p className="kanban-note">{t("pipeline.note")}</p>
 
     {createOpen && <AccessibleDrawer

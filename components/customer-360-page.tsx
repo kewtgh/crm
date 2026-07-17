@@ -34,17 +34,18 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
   const { localDateTimeInput, localDateTimeToIso } = useUserPreferences();
   const [data, setData] = useState(initial);
   const [type, setType] = useState("all");
+  const [pageSize,setPageSize]=useState(initial.timeline.pageSize);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activityOpen, setActivityOpen] = useState(false);
   const [activitySaving, setActivitySaving] = useState(false);
   const [toast, setToast] = useState("");
 
-  const load = async (page: number, nextType = type) => {
+  const load = async (page: number, nextType = type, nextPageSize = pageSize) => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page) });
+      const params = new URLSearchParams({ page: String(page), pageSize:String(nextPageSize) });
       if (nextType !== "all") params.set("types", nextType);
       const result = await apiFetch<Organization360>(`/api/customer-360/${initial.id}?${params}`);
       if (!result.timeline) throw new Error();
@@ -106,7 +107,7 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
       {error && <InlineMessage type="error">{error}</InlineMessage>}
       <div className="timeline-list">{data.timeline.items.map((item, index) => <TimelineItem item={item} locale={locale} t={t} key={`${item.type}-${item.entityId}-${index}`}/>)}</div>
       {!data.timeline.items.length && !loading && <div className="empty-state"><span>{t("customer360.empty")}</span></div>}
-      <Pagination page={data.timeline.page} totalPages={pages} total={data.timeline.total} pageSize={data.timeline.pageSize} onPage={(page) => void load(page)}/>
+      <Pagination page={data.timeline.page} totalPages={pages} total={data.timeline.total} pageSize={data.timeline.pageSize} onPage={(page) => void load(page)} onPageSize={(value)=>{setPageSize(value);void load(1,type,value);}}/>
     </section>
     {activityOpen && <AccessibleDrawer title={t("customer360.recordActivity")} eyebrow="CUSTOMER 360" description={t("customer360.activityHelp")} onClose={() => setActivityOpen(false)}><form onSubmit={saveActivity}><div className="form-grid two-column"><label className="field"><span>{t("customer360.activityKind")}</span><select name="activityKind">{activityKinds.map((kind) => <option key={kind}>{kind.replaceAll("_", " ")}</option>)}</select></label><label className="field"><span>{t("customer360.occurredAt")}</span><input name="occurredAt" type="datetime-local" max={localDateTimeInput()} defaultValue={localDateTimeInput()} required/></label></div><label className="field"><span>{t("customer360.summaryZh")}</span><textarea name="summaryZh" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.summaryEn")}</span><textarea name="summaryEn" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepZh")}</span><textarea name="nextStepZh" rows={2} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepEn")}</span><textarea name="nextStepEn" rows={2} minLength={2} maxLength={1000} required/></label>{error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setActivityOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={activitySaving} type="submit">{activitySaving ? t("common.saving") : t("common.save")}</button></div></form></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}

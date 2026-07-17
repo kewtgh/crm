@@ -21,15 +21,14 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
   const [total, setTotal] = useState(initialTotal);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize,setPageSize]=useState(10);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
-  const pageSize = 10;
 
   useEffect(() => {
-    if (page === 1 && query === "" && reloadKey === 0) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoading(true); setLoadError("");
@@ -42,7 +41,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
       } finally { setLoading(false); }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [page, query, reloadKey, t]);
+  }, [page, pageSize, query, reloadKey, t]);
 
   const updateStatus = async (item: StaffUserRecord) => {
     const status = item.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
@@ -62,7 +61,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
       <div className="staff-user-head"><span>{t("admin.users.identity")}</span><span>{t("admin.users.account")}</span><span>{t("settings.role")}</span><span>{t("common.mfa")}</span><span>{t("admin.lastLogin")}</span><span>{t("common.actions")}</span></div>
       <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status === "ACTIVE" ? "common.active" : "common.inactive")}</small></span><button className="icon-button" type="button" disabled={protectedAccount || item.id === currentUser.id} aria-label={t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })} title={protectedAccount ? t("admin.superAdminProtected") : undefined} onClick={() => updateStatus(item)}><MoreHorizontal size={18}/></button></article>; })}</div>
       {!items.length && !loading && <div className="empty-state"><span>{t("admin.users.empty")}</span></div>}
-      <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage}/>
+      <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);}}/>
     </section>
     <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={() => { setInviteOpen(false); setPage(1); setQuery(""); setReloadKey((value) => value + 1); setToast(t("admin.users.created")); }} />
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}

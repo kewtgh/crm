@@ -476,7 +476,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(modulePage, /organizationId/);
   assert.match(modulePage, /dueAt/);
   assert.match(dataTable, /lumina-saved-views/);
-  assert.match(dataTable, /\[10,25,50\]/);
+  assert.match(dataTable, /onPageSize/);
   assert.match(preferences, /localDateTimeToUtc/);
   assert.match(remediation, /crm_resource_metrics/);
   assert.match(remediation, /PAYMENT_OVERDUE/);
@@ -491,6 +491,40 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
   assert.match(version, /1\.1\.0/);
+});
+
+test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
+  const [
+    ui,
+    operationsRepository,
+    paginationMigration,
+    paginationAudit,
+  ] = await Promise.all([
+    readFile(new URL("../components/ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/operations-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607180038_unified_pagination.sql", import.meta.url), "utf8"),
+    readFile(new URL("../docs/PAGINATION_AUDIT_AND_PLAN_2026-07-18.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(ui, /PAGE_SIZE_OPTIONS = \[10, 20, 50\] as const/);
+  assert.match(ui, /common\.pageSize/);
+  assert.match(paginationMigration, /operational_retryable_jobs_page/);
+  assert.match(paginationMigration, /page_size not in \(10,20,50\)/);
+  assert.match(operationsRepository, /Prefer: "count=exact"/);
+  assert.doesNotMatch(operationsRepository, /next_best_actions\?[^\n]*limit=100/);
+  assert.match(paginationAudit, /10 \/ 20 \/ 50/);
+
+  const componentDirectory = new URL("../components/", import.meta.url);
+  const files = (await readdir(componentDirectory)).filter((name) => name.endsWith(".tsx"));
+  let usageCount = 0;
+  for (const file of files) {
+    const source = await readFile(new URL(file, componentDirectory), "utf8");
+    const usages = [...source.matchAll(/<Pagination\b[\s\S]*?\/>/g)];
+    usageCount += usages.length;
+    for (const [usage] of usages) {
+      assert.match(usage, /\bonPageSize=/, `${file} has a Pagination without a page-size handler`);
+    }
+  }
+  assert.ok(usageCount >= 25, `expected broad pagination coverage, found ${usageCount}`);
 });
 
 test("keeps component API calls on the shared resilient client except authentication bootstrap", async () => {

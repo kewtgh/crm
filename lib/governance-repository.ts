@@ -13,7 +13,7 @@ function approvalFilters(options:{query?:string;type?:string;status?:string}){co
 async function approvalCount(filter:string){const response=await supabaseRequest(`/rest/v1/approval_requests?select=id${filter}`,{headers:{Prefer:"count=exact",Range:"0-0"}});return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);}
 
 export async function listApprovals(options:{query?:string;type?:string;status?:string;page?:number;pageSize?:number}={}): Promise<ApprovalPage> {
-  const page=Math.max(1,Number(options.page??1));const pageSize=Math.max(1,Math.min(50,Number(options.pageSize??8)));const start=(page-1)*pageSize;const params=approvalFilters(options);params.set("select","id,request_number,request_type,business_object_type,business_object_id,requester_id,required_role,status,reason,execution_status,created_at");params.set("order","created_at.desc");
+  const page=Math.max(1,Number(options.page??1));const pageSize=Math.max(1,Math.min(50,Number(options.pageSize??10)));const start=(page-1)*pageSize;const params=approvalFilters(options);params.set("select","id,request_number,request_type,business_object_type,business_object_id,requester_id,required_role,status,reason,execution_status,created_at");params.set("order","created_at.desc");
   const response=await supabaseRequest(`/rest/v1/approval_requests?${params}`,{headers:{Prefer:"count=exact",Range:`${start}-${start+pageSize-1}`}});const requests=await response.json() as Record<string,unknown>[];const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??requests.length);
   const requesterIds=[...new Set(requests.map(item=>String(item.requester_id)).filter(Boolean))];
   const [profiles,pending,approved,rejected,highPrivilegePending] = await Promise.all([
