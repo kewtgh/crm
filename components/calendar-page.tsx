@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock3,
   MapPin,
+  Pencil,
   Plus,
   Users,
   Video,
@@ -27,6 +28,7 @@ type CalendarEvent = {
   type: "meeting" | "consultation" | "followup" | "deadline";
   channel: string;
   reminder: string;
+  deliveryStatus?: string;
 };
 
 const weekDays = { "zh-CN":["周一","周二","周三","周四","周五","周六","周日"], en:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] };
@@ -60,6 +62,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
+  const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
@@ -95,7 +98,8 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     let id = `local-${Date.now()}`;
     if (persistent) {
       const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
-      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440 }) });
+      const attendeeEmails=String(form.get("attendees")??"").split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);const consentConfirmed=form.get("attendeeConsent")==="on";
+      const response = await fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });
       const result = await response.json() as { item?: { id?: string } };
       if (!response.ok || !result.item?.id) { setFormError(t("calendar.saveFailed")); return; }
       id = result.item.id;
@@ -109,15 +113,17 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
       type: String(form.get("type")) as CalendarEvent["type"],
       channel: String(form.get("channel")),
       reminder: String(form.get("reminder")),
+      deliveryStatus:String(form.get("attendees")??"").trim()?"QUEUED":"NONE",
     }]);
     setDrawerOpen(false);
     setToast(t("calendar.saved"));
   };
 
   const completeEvent = async (id: string) => {
-    if (persistent) { const response = await fetch(`/api/calendar/${id}`, { method: "PATCH" }); if (!response.ok) { setToast(t("calendar.completeFailed")); return; } }
+    if (persistent) { const response = await fetch(`/api/calendar/${id}`, { method: "PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"COMPLETE"}) }); if (!response.ok) { setToast(t("calendar.completeFailed")); return; } }
     setDismissed((current) => [...current, id]);
   };
+  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");const response=await fetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});if(!response.ok){setFormError(t("calendar.deliveryUpdateFailed"));return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
 
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
@@ -140,8 +146,9 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
         <div className="surface-heading"><div><p className="eyebrow">{t("eyebrow.reminders")}</p><h2>{t("calendar.reminders")}</h2></div><span className="count-pill">{upcoming.length}</span></div>
         {upcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
-          <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{item.reminder.startsWith("calendar.")?t(item.reminder):eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small></div>
-          <button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button>
+          <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{item.reminder.startsWith("calendar.")?t(item.reminder):eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small><small>{t("calendar.deliveryStatus")}: {t(`calendar.delivery.${(item.deliveryStatus??"NONE").toLowerCase()}`)}</small></div>
+          <span className="reminder-actions"><button type="button" aria-label={t("calendar.reschedule")} onClick={()=>setReschedule({id:item.id,date:item.date,time:item.time})}><Pencil size={15}/></button><button type="button" aria-label={t("calendar.cancelEvent")} onClick={()=>void updateEvent(item.id,"CANCEL")}><X size={15}/></button><button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button></span>
+          {reschedule?.id===item.id&&<form className="reschedule-form" onSubmit={event=>{event.preventDefault();void updateEvent(item.id,"UPDATE",reschedule.date,reschedule.time);}}><input type="date" value={reschedule.date} onChange={event=>setReschedule({...reschedule,date:event.target.value})} required/><input type="time" value={reschedule.time} onChange={event=>setReschedule({...reschedule,time:event.target.value})} required/><button className="primary-button">{t("calendar.queueUpdate")}</button></form>}
         </article>)}
         {!upcoming.length && <div className="empty-state"><span>{t("calendar.empty")}</span><p>{t("calendar.emptyHelp")}</p></div>}
       </aside>
@@ -156,8 +163,10 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.type")}</span><select name="type" defaultValue="meeting"><option value="meeting">{t("calendar.meeting")}</option><option value="consultation">{t("calendar.consultation")}</option><option value="followup">{t("calendar.followup")}</option><option value="deadline">{t("calendar.deadline")}</option></select></label><label className="field"><span>{t("calendar.channel")}</span><span className="input-icon"><Video size={16} /><input name="channel" defaultValue="Teams" /></span></label></div>
           <SearchableSelect label={t("calendar.related")} options={relatedOptions} value={related} onChange={setRelated} onSearch={searchRelated} loading={relatedLoading} placeholder={t("calendar.relatedPlaceholder")} />
+          <label className="field"><span>{t("calendar.attendees")}</span><textarea name="attendees" rows={3} placeholder={t("calendar.attendeesPlaceholder")}/></label>
+          <label className="check-row"><input name="attendeeConsent" type="checkbox"/><span>{t("calendar.attendeeConsent")}</span></label>
           <label className="field"><span>{t("calendar.remindAt")}</span><select name="reminder" defaultValue={t("calendar.reminder.day")}><option>{t("calendar.reminder.start")}</option><option>{t("calendar.reminder.30m")}</option><option>{t("calendar.reminder.2h")}</option><option>{t("calendar.reminder.day")}</option><option>{t("calendar.reminder.3d")}</option></select></label>
-          <div className="appointment-hints"><span><Users size={16} />{t("calendar.inviteHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
+          <div className="appointment-hints"><span><Users size={16} />{t("calendar.deliveryHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
           {formError && <InlineMessage type="error">{formError}</InlineMessage>}
           <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit"><CalendarDays size={17} />{t("calendar.save")}</button></div>
         </form>

@@ -1,10 +1,10 @@
 # Lumina Education CRM
 
-Current release: **v0.7.0**
+Current release: **v0.8.0**
 
 Lumina is a bilingual relationship and sales CRM for an education-product operating company. Only company staff accounts can sign in: super administrator, administrator, sales director, sales manager, sales specialist, and sales support. Customers, contacts, parents, and students are business records—not CRM accounts.
 
-The release includes administrator-created staff accounts, Turnstile-protected sign-in, generated temporary passwords with forced first-login replacement, mandatory TOTP/AAL2 for administrators, workspace RLS, real dashboards and notifications, searchable paginated CRM lists, duplicate checking, two-level administration, sales hierarchy and allocation, approval state machines, opportunities, four relationship targets, staged relationship/closing guidance, products and versioned prices, contracts and renewals, two-month calendar/reminders, consumption/performance analytics, complete personal settings, and approved private CSV delivery.
+The release includes administrator-created staff accounts, Turnstile-protected sign-in, generated temporary passwords with forced first-login replacement, mandatory TOTP/AAL2 for administrators, workspace RLS, real dashboards and notifications, searchable paginated CRM lists, two-level administration, sales hierarchy and allocation, approval state machines, customer 360 timelines, channel-and-purpose consent, versioned quotes and discounts, receivable schedules, partial payments, refunds and reconciliation, CSV import/preflight/human duplicate decisions/rollback, data-quality rules, externally delivered calendar invitations, products and prices, contracts and renewals, consumption/performance analytics, complete personal settings, and approved private CSV delivery.
 
 ## Local development
 
@@ -25,6 +25,7 @@ The CRM development server uses fixed port **3200** to avoid colliding with unre
 ```bash
 npm run reminders:process
 npm run outbox:process
+npm run calendar-deliveries:process
 npm run exports:process
 ```
 
@@ -39,4 +40,4 @@ npm test
 npx supabase test db --local supabase/tests/authorization_structure.sql
 ```
 
-See [deployment](docs/DEPLOYMENT.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), [audit](docs/AUDIT_2026-07-17.md), and [remediation plan](docs/REMEDIATION_PLAN.md).
+See [deployment](docs/DEPLOYMENT.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), [phase-two audit](docs/AUDIT_2026-07-17_PHASE2.md), and [v0.8.0 plan](docs/DEVELOPMENT_PLAN_V0.8.0.md).

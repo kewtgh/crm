@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -15,6 +15,8 @@
     "auth:bootstrap-admin": "node --env-file=.env.local scripts/bootstrap-admin.mjs",
     "reminders:process": "node --env-file=.env.local scripts/process-reminders.mjs",
     "outbox:process": "node --env-file=.env.local scripts/process-notification-outbox.mjs",
+    "calendar-deliveries:process": "node --env-file=.env.local scripts/process-calendar-deliveries.mjs",
+    "smoke:phase2": "node --env-file=.env.local scripts/smoke-phase2.mjs",
     "exports:process": "node --env-file=.env.local scripts/process-generated-jobs.mjs",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },

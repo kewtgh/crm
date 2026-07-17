@@ -1,4 +1,4 @@
-# Lumina Education CRM v0.7.0 部署指引
+# Lumina Education CRM v0.8.0 部署指引
 
 ## 1. 前置条件
 
@@ -6,11 +6,11 @@
 - 独立的 Supabase 项目（Auth、Postgres、Storage）。
 - HTTPS 正式域名。
 - 私密的服务器/worker 密钥管理。
-- 邮件发送 webhook，以及可调度三个 worker 的平台。
+- 邮件发送 webhook，以及可调度四个 worker 的平台。
 
 先备份数据库并在暂存项目演练迁移和回滚。不要把另一个项目的 Supabase、用户或密钥复用到 CRM。
 
-本地 CRM 固定使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；不要复用其他项目的 3000 端口或回调地址。验收时必须以 CRM 启动日志打印的地址和 `/api/health` 返回的 `version=0.7.0` 双重确认目标项目。
+本地 CRM 固定使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；不要复用其他项目的 3000 端口或回调地址。验收时必须以 CRM 启动日志打印的地址和 `/api/health` 返回的 `version=0.8.0` 双重确认目标项目。
 
 ## 2. 环境变量
 
@@ -25,6 +25,7 @@ SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
 EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.com/crm-delivery
 EMAIL_DELIVERY_WEBHOOK_TOKEN=server-only-token
 OUTBOX_BATCH_SIZE=20
+CALENDAR_DELIVERY_BATCH_SIZE=20
 EXPORT_BATCH_SIZE=10
 ```
 
@@ -45,7 +46,7 @@ ADMIN_ROTATE_PASSWORD=false
 
 1. Auth → Sign Up：关闭公开/匿名 signup；CRM 不提供自助注册、邀请注册或家长注册。
 2. Auth → URL Configuration：设置正式 `APP_URL` 和 `/reset-password` 回调。
-3. 配置正式 SMTP 和邮件 webhook 的 `staff-account-created` 模板。模板接收中英文姓名、账户名、临时密码、登录地址和 MFA 要求；邮件服务不得记录临时密码正文。
+3. 配置正式 SMTP 和邮件 webhook 的 `staff-account-created`、`calendar-invite`、`calendar-update`、`calendar-cancel` 模板。账号模板接收中英文姓名、账户名、临时密码、登录地址和 MFA 要求；日历模板接收事件版本、收件人、起止时间和关联信息。邮件服务不得记录临时密码正文。
 4. 为正式域名创建 Turnstile widget，配置 site key、server secret 和精确 hostname；服务端 Siteverify 是必需步骤。测试密钥不得用于生产。
 5. 超级管理员和管理员必须使用 TOTP MFA。邮箱确认可作为通知/恢复渠道，但不能替代 AAL2 第二因素。
 6. 确认 Storage 的 `crm-avatars`、`crm-exports` 均为 private。
@@ -55,7 +56,7 @@ ADMIN_ROTATE_PASSWORD=false
 npx supabase db push --linked
 ```
 
-迁移顺序由文件名保证，当前为 `202607160001` 至 `202607170020`。先在暂存项目运行：
+迁移顺序由文件名保证，当前为 `202607160001` 至 `202607170024`。其中 `023`、`024` 是业务冒烟后保留的向前修复，不能从部署序列中省略。先在暂存项目运行：
 
 ```bash
 npx supabase test db --linked supabase/tests/authorization_structure.sql
@@ -76,21 +77,23 @@ npm ci
 npm run typecheck
 npm run lint
 npm test
+npm run smoke:phase2
 ```
 
 本仓库使用 `vinext build` 并生成 `dist/`。若使用 OpenAI Sites，应在获得明确发布授权后创建/复用私有项目，将返回的 `project_id` 写入 `.openai/hosting.json`，保存上述运行时变量，并部署已经通过测试的同一提交。本次未创建或发布远程 Sites 项目。
 
 ## 6. Worker 调度
 
-建议每分钟运行提醒、每分钟运行通知 outbox、每 1–5 分钟运行导出任务：
+建议每分钟运行提醒、每分钟运行通知 outbox、每分钟运行日历送达、每 1–5 分钟运行导出任务：
 
 ```bash
 npm run reminders:process
 npm run outbox:process
+npm run calendar-deliveries:process
 npm run exports:process
 ```
 
-执行器必须单实例或依赖当前 claim 条件防重。对退出码、连续失败、`generated_jobs.status=FAILED`、outbox 失败和提醒重试设置告警。导出文件位于私有桶，签名链接 60 秒有效，文件 24 小时后由 export worker 清理。
+执行器必须单实例或依赖当前 claim 条件防重。对退出码、连续失败、`generated_jobs.status=FAILED`、`calendar_deliveries.status=FAILED`、outbox 失败和提醒重试设置告警。日历 worker 仅在 webhook 返回成功后标记 `DELIVERED`；失败使用指数退避，最多尝试 5 次。导出文件位于私有桶，签名链接 60 秒有效，文件 24 小时后由 export worker 清理。
 
 ## 7. 健康、备份与监控
 
@@ -109,6 +112,11 @@ npm run exports:process
 - 超级管理员和管理员的 AAL1 会话被引导到 MFA，直接读取管理员 API 返回 403 或被 RLS 拒绝。
 - 两个不同管理员完成 maker/checker，申请人不能自审。
 - 合同签署、业绩分配和导出审批产生正确且唯一的副作用。
+- 客户 360 只返回当前用户有权访问的组织关联事件，并在服务端分页。
+- 撤回、过期或全局勿扰的联系人不会进入营销导出；审批后、生成文件前仍重新检查当前同意状态。
+- 报价折扣审批、报价转合同、应收、部分付款、退款凭证与对账差异可追溯，且不能超额付款或退款。
+- 相同导入幂等键不会重复建档；逐行错误不阻断有效行；回滚遇到批次后的修改会拒绝覆盖。
+- 日历创建、变更、取消分别入队，页面只有在提供商确认后才显示已送达，失败可重试。
 - 运行 `exports:process` 后文件可下载，60 秒签名和 24 小时过期有效。
 - 中文/英文切换覆盖全站；除人员姓名外不同时显示双语业务字段。
 - 使用 `ms-playwright/chromium-1228` 验证桌面、平板、375px、键盘焦点、表单就地错误、双月日历和无横向溢出。

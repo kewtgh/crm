@@ -4,6 +4,7 @@ import { zhWorkspacePages } from "./workspace-pages";
 import { zhAnalysisPages } from "./analysis-pages";
 import { zhGovernancePages } from "./governance-pages";
 import { zhUiEyebrows } from "./ui-eyebrows";
+import { zhPhase2 } from "./phase2-pages";
 
 export const zhCN: Messages = {
   ...zhSalesPlaybook,
@@ -11,6 +12,7 @@ export const zhCN: Messages = {
   ...zhAnalysisPages,
   ...zhGovernancePages,
   ...zhUiEyebrows,
+  ...zhPhase2,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.english": "English",
@@ -371,9 +373,6 @@ export const zhCN: Messages = {
   "modules.duplicateTitle":"保存前检查可能重复项","modules.duplicateHelp":"比较标准化姓名、邮箱、电话和关联机构，不会因同名自动合并。","modules.duplicateClear":"查重完成：未发现高置信重复项，可安全创建。","modules.checkNow":"立即查重","modules.checkRequired":"请先完成查重。系统会显示命中规则，由你决定创建或合并。","modules.selected":"已选择 {count} 项","modules.assignOwner":"分配负责人","modules.addTag":"添加标签",
   "modules.schools.eyebrow":"关系网络","modules.schools.title":"学校与机构","modules.schools.description":"查看学校组织、关键人覆盖和关系健康度。","modules.schools.singular":"学校","modules.schools.add":"新建学校","modules.schools.search":"搜索学校中文名、英文名、城市…","modules.schools.column.primary":"学校","modules.schools.column.secondary":"城市 · 课程","modules.schools.column.meta":"关键人覆盖","modules.schools.column.extra":"最近联系",
   "modules.people.eyebrow":"统一人员档案","modules.people.title":"人员与联系人","modules.people.description":"同一人只保留一份档案，身份与任职按时间记录。","modules.people.singular":"联系人","modules.people.add":"新建联系人","modules.people.search":"搜索中文名、英文名、邮箱、手机…","modules.people.column.primary":"姓名","modules.people.column.secondary":"当前身份","modules.people.column.meta":"联系方式","modules.people.column.extra":"最近互动",
-  "modules.students.eyebrow":"学生旅程","modules.students.title":"学生档案","modules.students.description":"课程、年级、目标与家庭关系保持连续历史。","modules.students.singular":"学生","modules.students.add":"新建学生","modules.students.search":"搜索学生中英文姓名、学校、年级…","modules.students.column.primary":"学生","modules.students.column.secondary":"学校 · 课程","modules.students.column.meta":"申请目标","modules.students.column.extra":"关键节点",
-  "modules.households.eyebrow":"家庭背景","modules.households.title":"家庭与监护关系","modules.households.description":"以家庭为长期主体，明确监护、付款与决策角色。","modules.households.singular":"家庭","modules.households.add":"新建家庭","modules.households.search":"搜索家庭、学生或监护人…","modules.households.column.primary":"家庭","modules.households.column.secondary":"学生","modules.households.column.meta":"主要联系人","modules.households.column.extra":"最近沟通",
-  "modules.leads.eyebrow":"线索筛选流程","modules.leads.title":"线索管理","modules.leads.description":"线索转化前先查重、预览并明确下一步。","modules.leads.singular":"线索","modules.leads.add":"新建线索","modules.leads.search":"搜索线索、学校、家庭、来源…","modules.leads.column.primary":"线索","modules.leads.column.secondary":"来源 · 类型","modules.leads.column.meta":"产品意向","modules.leads.column.extra":"下一步",
   "modules.tasks.eyebrow":"工作管理","modules.tasks.title":"任务列表","modules.tasks.description":"让每次有效沟通都落到清晰、可追踪的下一步。","modules.tasks.singular":"任务","modules.tasks.add":"新建任务","modules.tasks.search":"搜索任务、客户或负责人…","modules.tasks.column.primary":"任务","modules.tasks.column.secondary":"关联对象","modules.tasks.column.meta":"负责人","modules.tasks.column.extra":"截止时间",
   "pipeline.title":"商机 Pipeline","pipeline.description":"阶段规则、关键角色与下一步都在同一看板中。","pipeline.schoolSales":"学校销售","pipeline.new":"新建商机","pipeline.total":"Pipeline 总额","pipeline.weighted":"加权预计","pipeline.monthExpected":"本月预计成交","pipeline.active":"活跃商机","pipeline.stage.needs":"需求确认","pipeline.stage.proposal":"方案沟通","pipeline.stage.quote":"报价","pipeline.stage.approval":"合同审批","pipeline.opened":"已打开「{title}」详情","pipeline.nextArranged":"下一步已安排","pipeline.add":"添加商机","pipeline.note":"阶段变更会先校验金额、产品、关键角色和下一步；失败时卡片保持原位置并显示原因。",
   "pipeline.paymentStage":"付款阶段金额","pipeline.search":"搜索商机标题","pipeline.loadFailed":"商机数据加载失败，请稍后重试。","pipeline.productsLoadFailed":"产品列表加载失败；请重试后再创建商机。","pipeline.organization":"客户组织","pipeline.organizationRequired":"请选择客户组织。","pipeline.createFailed":"商机创建失败；请检查{field}。","pipeline.created":"商机已创建。","pipeline.stageFailed":"阶段更新失败，卡片已恢复原状态。","pipeline.stageUpdated":"商机阶段已更新。","pipeline.changeStage":"更改“{title}”的阶段","pipeline.nextNeeded":"需要安排下一步","pipeline.empty":"当前没有商机","pipeline.createHelp":"同时录入中英文标题、金额、预计日期和下一步，便于国际团队协作。","pipeline.expectedClose":"预计关单日期","pipeline.amount":"预计金额","pipeline.currency":"币种代码","pipeline.nextActionZh":"下一步（中文）","pipeline.nextActionEn":"下一步（英文）","pipeline.form":"表单内容",

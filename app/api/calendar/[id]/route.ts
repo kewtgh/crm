@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { completeAppointment } from "@/lib/calendar-repository";
+import { changeAppointmentDelivery,completeAppointment } from "@/lib/calendar-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) { if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403}); await requireUser(); const { id } = await context.params; try { await completeAppointment(id); return NextResponse.json({ ok: true }); } catch { return NextResponse.json({ code: "CALENDAR_COMPLETE_FAILED" }, { status: 500 }); } }
+import { loadUserSettings } from "@/lib/settings-repository";
+import { z } from "zod";
+const schema=z.union([z.object({action:z.literal("COMPLETE")}),z.object({action:z.literal("CANCEL")}),z.object({action:z.literal("UPDATE"),date:z.string().date(),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)})]);
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) { if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403}); const user=await requireUser(); const { id } = await context.params;const body=await request.json().catch(()=>({action:"COMPLETE"}));const parsed=schema.safeParse(body);if(!parsed.success)return NextResponse.json({code:"INVALID_CALENDAR_ACTION"},{status:400}); try {if(parsed.data.action==="COMPLETE")await completeAppointment(id);else{const settings=await loadUserSettings(user);await changeAppointmentDelivery(id,parsed.data.action,parsed.data.action==="UPDATE"?parsed.data.date:undefined,parsed.data.action==="UPDATE"?parsed.data.time:undefined,settings.timezone);} return NextResponse.json({ ok: true }); } catch { return NextResponse.json({ code: "CALENDAR_UPDATE_FAILED" }, { status: 500 }); } }

@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(27);
 
 select ok(
   (select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.workspace_memberships'::regclass and contype='c' and pg_get_constraintdef(oid) like '%SUPER_ADMIN%' limit 1)
@@ -20,6 +20,18 @@ select ok(has_function_privilege('authenticated','public.complete_initial_passwo
 select ok(has_table_privilege('service_role','public.workspace_memberships','SELECT,UPDATE'),'staff administration service has narrow membership privileges');
 select ok(pg_get_functiondef('public.current_crm_role()'::regprocedure) like '%aal2%','privileged CRM role helper requires AAL2');
 select ok(pg_get_functiondef('public.is_workspace_member(uuid)'::regprocedure) like '%aal2%','workspace membership helper rejects privileged AAL1 sessions');
+select has_table('public','contact_consents','contact consent records are persisted');
+select has_table('public','quotes','quote headers are persisted');
+select has_table('public','quote_versions','quote versions are immutable records');
+select has_table('public','receivable_schedules','contract receivable schedules are persisted');
+select has_table('public','refunds','refunds are independent payment events');
+select has_table('public','reconciliation_items','reconciliation differences are first-class records');
+select has_table('public','import_batches','import batches are durable and idempotent');
+select has_table('public','import_rows','import rows preserve validation and rollback evidence');
+select has_table('public','data_quality_issues','data quality rules produce durable issues');
+select has_table('public','calendar_deliveries','calendar delivery attempts are persisted');
+select ok(not has_function_privilege('anon','public.marketing_export_rows(uuid,text)','EXECUTE'),'anonymous callers cannot bypass consent-gated marketing export');
+select ok(has_function_privilege('authenticated','public.customer_timeline(uuid,integer,integer,text[])','EXECUTE'),'authenticated staff can load a permission-scoped customer timeline');
 
 select * from finish();
 rollback;

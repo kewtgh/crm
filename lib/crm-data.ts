@@ -2,6 +2,7 @@ export type StatusTone = "green" | "amber" | "red" | "blue" | "gray" | "purple";
 
 export type DataRow = {
   id: string;
+  href?: string;
   primary: string;
   primaryEn?: string;
   bilingualName?: boolean;

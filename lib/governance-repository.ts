@@ -1,11 +1,11 @@
 import { supabaseJson, supabaseRequest } from "./supabase-server";
 
 export type ApprovalRecord = {
-  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"; object: string; requester: string; submitted: string; level: "admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
+  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"; object: string; requester: string; submitted: string; level: "admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
 };
 
-const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation" };
-const databaseApprovalTypes:Record<ApprovalRecord["type"],string>={contractSign:"CONTRACT_SIGN",contractExport:"CONTRACT_EXPORT",performanceSummary:"PERFORMANCE_SUMMARY",performanceAllocation:"PERFORMANCE_ALLOCATION"};
+const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation",QUOTE_DISCOUNT:"quoteDiscount",REFUND:"refund",MARKETING_CONTACT_EXPORT:"marketingContactExport" };
+const databaseApprovalTypes:Record<ApprovalRecord["type"],string>={contractSign:"CONTRACT_SIGN",contractExport:"CONTRACT_EXPORT",performanceSummary:"PERFORMANCE_SUMMARY",performanceAllocation:"PERFORMANCE_ALLOCATION",quoteDiscount:"QUOTE_DISCOUNT",refund:"REFUND",marketingContactExport:"MARKETING_CONTACT_EXPORT"};
 export type ApprovalSummary={pending:number;approved:number;rejected:number;highPrivilegePending:number};
 export type ApprovalPage={items:ApprovalRecord[];total:number;page:number;pageSize:number;summary:ApprovalSummary};
 
