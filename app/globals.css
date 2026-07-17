@@ -25,6 +25,13 @@
   --shadow-sm: 0 1px 2px rgba(22, 48, 42, .04), 0 3px 12px rgba(22, 48, 42, .035);
   --shadow-md: 0 12px 34px rgba(22, 48, 42, .10);
   --radius: 14px;
+  /* Compatibility aliases kept explicit so component styles never resolve to an invalid value. */
+  --text: var(--ink);
+  --teal: var(--green);
+  --surface-soft: #f7faf8;
+  --border: var(--line);
+  --mint-soft: var(--green-soft);
+  --soft: #f6f8f7;
 }
 
 * { box-sizing: border-box; }
@@ -374,6 +381,24 @@ body { overflow-x:hidden; }
 .sales-playbook-card .surface-heading p { max-width:760px; }
 .sales-playbook-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
 .sales-playbook-grid article { display:flex; gap:13px; padding:17px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(145deg,var(--surface),var(--soft)); }
+
+/* v1.1 workflow and saved-view additions */
+.transition-summary { margin:0 0 18px; padding:14px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.transition-summary > span { display:grid; gap:5px; }.transition-summary small { color:var(--muted); font-size:11px; }
+.page-size-select { min-height:34px; padding:0 8px; display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--muted); font-size:11px; }
+.page-size-select select { border:0; background:transparent; font-weight:700; }
+.saved-view-form { margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+.saved-view-list { margin-bottom:18px; display:grid; gap:8px; }
+.saved-view-list article { display:grid; grid-template-columns:minmax(0,1fr) 38px; gap:8px; align-items:center; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.saved-view-main { padding:11px 13px; border:0; background:transparent; display:grid; gap:3px; text-align:left; }
+.saved-view-main small { color:var(--muted); }
+.finance-risk-center span:first-child b { color:var(--red); }
+.finance-subheading { margin:18px 0 4px; padding-top:15px; border-top:1px solid var(--line); }
+
+@media (max-width: 620px) {
+  .transition-summary { grid-template-columns:1fr; }
+  .page-size-select > span { display:none; }
+}
 .sales-playbook-grid article>span { flex:0 0 36px; width:36px; height:36px; display:grid; place-items:center; border-radius:11px; background:var(--blue-soft); color:var(--blue); }
 .sales-playbook-grid article>span.green,.sales-playbook-grid article>span.stage-2 { background:var(--green-soft); color:var(--green); }
 .sales-playbook-grid article>span.purple,.sales-playbook-grid article>span.stage-3 { background:var(--purple-soft); color:var(--purple); }

@@ -6,6 +6,7 @@ import { Ban, CheckCircle2, History, MailCheck, ShieldCheck } from "lucide-react
 import type { ContactPrivacy } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, StatusBadge, Toast } from "./ui";
+import { apiFetch } from "@/lib/api-client";
 
 export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   const { t } = useI18n();
@@ -18,8 +19,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   const [toast, setToast] = useState("");
 
   const reload = async () => {
-    const response = await fetch(`/api/contacts/${initial.id}/consents`);
-    if (response.ok) setData(await response.json() as ContactPrivacy);
+    try{setData(await apiFetch<ContactPrivacy>(`/api/contacts/${initial.id}/consents`));}catch{setConsentError(t("consent.saveFailed"));}
   };
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -28,12 +28,12 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     setConsentError("");
     const form = new FormData(event.currentTarget);
     const body = { operation: "consent", channel: form.get("channel"), purpose: form.get("purpose"), status: form.get("status"), source: form.get("source"), evidence: form.get("evidence"), retentionUntil: form.get("retentionUntil") || null, quietStart: form.get("quietStart") || null, quietEnd: form.get("quietEnd") || null };
-    const response = await fetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    setPending(false);
-    if (!response.ok) {
+    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });}catch{
+      setPending(false);
       setConsentError(t("consent.saveFailed"));
       return;
     }
+    setPending(false);
     await reload();
     setToast(t("consent.saved"));
     event.currentTarget.reset();
@@ -43,12 +43,12 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     if (enabled && !dncReason.trim()) return;
     setPending(true);
     setDncError("");
-    const response = await fetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "doNotContact", enabled, reason: enabled ? dncReason.trim() : "" }) });
-    setPending(false);
-    if (!response.ok) {
+    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "doNotContact", enabled, reason: enabled ? dncReason.trim() : "" }) });}catch{
+      setPending(false);
       setDncError(t("consent.saveFailed"));
       return;
     }
+    setPending(false);
     setDncOpen(false);
     setDncReason("");
     await reload();

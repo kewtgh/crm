@@ -8,11 +8,14 @@ import { roleMessageKey } from "@/lib/roles";
 import { useAppUser } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
+import { ApiClientError, apiFetch } from "@/lib/api-client";
+import { useUserPreferences } from "@/components/user-preferences-context";
 
 const assignableRoles: Exclude<AppRole, "SUPER_ADMIN">[] = ["ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"];
 
 export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: StaffUserRecord[]; initialTotal: number }) {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
+  const { formatDate } = useUserPreferences();
   const currentUser = useAppUser();
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -31,12 +34,11 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     const timer = window.setTimeout(async () => {
       setLoading(true); setLoadError("");
       try {
-        const response = await fetch(`/api/admin/users?page=${page}&pageSize=${pageSize}&query=${encodeURIComponent(query)}`, { signal: controller.signal });
-        const result = await response.json() as { items?: StaffUserRecord[]; total?: number };
-        if (!response.ok || !result.items) throw new Error();
+        const result = await apiFetch<{ items?: StaffUserRecord[]; total?: number }>(`/api/admin/users?page=${page}&pageSize=${pageSize}&query=${encodeURIComponent(query)}`, { signal: controller.signal });
+        if (!result.items) throw new Error();
         setItems(result.items); setTotal(result.total ?? 0);
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) setLoadError(t("admin.users.loadFailed"));
+        if (!(error instanceof ApiClientError && error.code === "REQUEST_ABORTED")) setLoadError(t("admin.users.loadFailed"));
       } finally { setLoading(false); }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -44,8 +46,9 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
 
   const updateStatus = async (item: StaffUserRecord) => {
     const status = item.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    const response = await fetch(`/api/admin/users/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
-    if (!response.ok) { setLoadError(t("admin.users.updateFailed")); return; }
+    try {
+      await apiFetch(`/api/admin/users/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    } catch { setLoadError(t("admin.users.updateFailed")); return; }
     setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status } : entry));
     setToast(t(status === "ACTIVE" ? "admin.users.activated" : "admin.users.suspended", { name: `${item.displayNameZh} / ${item.displayNameEn}` }));
   };
@@ -57,7 +60,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     <section className="surface staff-directory"><div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("admin.users.search")} />{loading && <span role="status">{t("admin.users.loading")}</span>}</div>
       {loadError && <InlineMessage type="error">{loadError}</InlineMessage>}
       <div className="staff-user-head"><span>{t("admin.users.identity")}</span><span>{t("admin.users.account")}</span><span>{t("settings.role")}</span><span>{t("common.mfa")}</span><span>{t("admin.lastLogin")}</span><span>{t("common.actions")}</span></div>
-      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{item.lastSignInAt ? new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.lastSignInAt)) : t("admin.users.neverSignedIn")}</b><small>{t(item.status === "ACTIVE" ? "common.active" : "common.inactive")}</small></span><button className="icon-button" type="button" disabled={protectedAccount || item.id === currentUser.id} aria-label={t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })} title={protectedAccount ? t("admin.superAdminProtected") : undefined} onClick={() => updateStatus(item)}><MoreHorizontal size={18}/></button></article>; })}</div>
+      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status === "ACTIVE" ? "common.active" : "common.inactive")}</small></span><button className="icon-button" type="button" disabled={protectedAccount || item.id === currentUser.id} aria-label={t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })} title={protectedAccount ? t("admin.superAdminProtected") : undefined} onClick={() => updateStatus(item)}><MoreHorizontal size={18}/></button></article>; })}</div>
       {!items.length && !loading && <div className="empty-state"><span>{t("admin.users.empty")}</span></div>}
       <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage}/>
     </section>
@@ -84,16 +87,15 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
     try {
-      const response = await fetch("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const result = await response.json() as { code?: string; field?: string };
-      if (!response.ok) {
-        const errorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_FAILED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_FAILED", email_exists:"admin.users.error.EMAIL_TAKEN" };
-        const message = t(errorKeys[result.code ?? ""] ?? "admin.users.error.UNKNOWN");
-        if (result.field) setFieldError({ [result.field]: message }); else setError(message);
-        return;
-      }
+      await apiFetch("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       event.currentTarget.reset(); onCreated();
-    } catch { setError(t("admin.users.error.UNKNOWN")); }
+    } catch (cause) {
+      const errorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_FAILED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_FAILED", email_exists:"admin.users.error.EMAIL_TAKEN" };
+      const code = cause instanceof ApiClientError ? cause.code : "";
+      const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
+      const message = t(errorKeys[code] ?? "admin.users.error.UNKNOWN");
+      if (field) setFieldError({ [field]: message }); else setError(message);
+    }
     finally { setPending(false); }
   };
 

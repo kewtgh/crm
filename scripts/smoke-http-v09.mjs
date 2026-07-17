@@ -20,7 +20,7 @@ function assert(condition, message) {
 const live = await request("/api/health");
 assert(live.response.status === 200, `liveness returned ${live.response.status}`);
 assert(live.body?.status === "ok", "liveness did not report ok");
-assert(live.body?.version === "1.0.0", "liveness version is not 1.0.0");
+assert(live.body?.version === "1.1.0", "liveness version is not 1.1.0");
 assert(Boolean(live.response.headers.get("x-request-id")), "liveness omitted x-request-id");
 
 const ready = await request("/api/health?mode=ready");
@@ -54,5 +54,5 @@ const registration = await request("/register");
 assert(registration.response.status === 404, "removed public registration route is reachable");
 
 process.stdout.write(
-  "v1.0.0 base HTTP smoke passed: liveness, JSON auth errors, request IDs, nonce CSP, and removed registration.\n",
+  "v1.1.0 base HTTP smoke passed: liveness, JSON auth errors, request IDs, nonce CSP, and removed registration.\n",
 );

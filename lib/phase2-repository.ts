@@ -29,25 +29,137 @@ export type RefundRecord={id:string;number:string;paymentId:string;amount:number
 export type PaymentRecord={id:string;contractId:string;scheduleId:string|null;amount:number;refundedAmount:number;currency:string;status:string;reference:string;paidAt:string|null};
 export type ReconciliationRecord={id:string;contractId:string;paymentId:string|null;expected:number;actual:number;difference:number;status:string;reason:string;updatedAt:string};
 export type ContractFinanceRecord={id:string;number:string;currency:string;value:number;status:string;hasSchedule:boolean};
-export type FinanceOverview={quotes:QuoteRecord[];quoteTotal:number;contracts:ContractFinanceRecord[];receivables:ReceivableRecord[];payments:PaymentRecord[];refunds:RefundRecord[];reconciliations:ReconciliationRecord[];products:Array<{id:string;code:string;nameZh:string;nameEn:string}>;bundles:Array<{id:string;code:string;nameZh:string;nameEn:string;version:number}>;exchangeRates:Array<{id:string;base:string;quote:string;rate:number;source:string;effectiveAt:string}>};
+export type FinanceRiskSummary={
+  openReceivables:number;
+  overdueReceivables:number;
+  pendingRefunds:number;
+  reconciliationExceptions:number;
+};
+export type FinanceOverview={
+  quotes:QuoteRecord[];
+  quoteTotal:number;
+  contracts:ContractFinanceRecord[];
+  contractTotal:number;
+  receivables:ReceivableRecord[];
+  receivableTotal:number;
+  payments:PaymentRecord[];
+  paymentTotal:number;
+  refunds:RefundRecord[];
+  refundTotal:number;
+  reconciliations:ReconciliationRecord[];
+  reconciliationTotal:number;
+  pageSize:number;
+  risk:FinanceRiskSummary;
+  products:Array<{id:string;code:string;nameZh:string;nameEn:string}>;
+  bundles:Array<{id:string;code:string;nameZh:string;nameEn:string;version:number}>;
+  exchangeRates:Array<{id:string;base:string;quote:string;rate:number;source:string;effectiveAt:string}>;
+};
+type FinancePages={
+  quotePage?:number;
+  contractPage?:number;
+  receivablePage?:number;
+  paymentPage?:number;
+  refundPage?:number;
+  reconciliationPage?:number;
+};
+type ContractRow={id:string;contract_number:string;currency:string;contract_value:number;status:string};
+type ReceivableRow={id:string;contract_id:string;installment_number:number;due_date:string;amount:number;paid_amount:number;status:string};
+type PaymentRow={id:string;contract_id:string;receivable_schedule_id:string|null;amount:number;refunded_amount:number;currency:string;status:string;reference:string|null;paid_at:string|null};
+type RefundRow={id:string;refund_number:string;payment_id:string;amount:number;reason:string;status:string;receipt_reference:string|null;created_at:string};
+type ReconciliationRow={id:string;contract_id:string;payment_id:string|null;expected_amount:number;actual_amount:number;difference:number;status:string;reason:string;updated_at:string};
 
-export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}={}):Promise<FinanceOverview>{
-  const page=Math.max(1,options.page??1),pageSize=Math.min(50,Math.max(1,options.pageSize??10)),start=(page-1)*pageSize;const params=new URLSearchParams({select:"id,quote_number,organization_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});const query=(options.query??"").replace(/[*,()]/g," ").trim();if(query)params.set("quote_number",`ilike.*${query}*`);
-  const response=await supabaseRequest(`/rest/v1/quotes?${params}`,{headers:{Prefer:"count=exact",Range:`${start}-${start+pageSize-1}`}});const quoteRows=await response.json() as QuoteRow[];const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??quoteRows.length);const quoteIds=quoteRows.map(item=>item.id);const organizationIds=[...new Set(quoteRows.map(item=>item.organization_id))];
-  const [versions,organizations,contractRows,receivableRows,paymentRows,refundRows,reconciliationRows,productRows,bundleRows,rateRows]=await Promise.all([
+async function fetchFinancePage<T>(path:string,page:number,pageSize:number){
+  const response=await supabaseRequest(path,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});
+  const items=await response.json() as T[];
+  return{items,total:Number((response.headers.get("content-range")??`*/${items.length}`).split("/")[1]??items.length)};
+}
+
+async function countFinanceRows(path:string){
+  const response=await supabaseRequest(path,{headers:{Prefer:"count=exact",Range:"0-0"}});
+  await response.json();
+  return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);
+}
+
+export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages={}):Promise<FinanceOverview>{
+  const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
+  const page=(value:number|undefined)=>Math.max(1,value??1);
+  const quotePage=page(options.quotePage??options.page);
+  const quoteParams=new URLSearchParams({select:"id,quote_number,organization_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
+  const query=(options.query??"").replace(/[*,()]/g," ").trim();
+  if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
+  const [
+    quoteResult,
+    contractResult,
+    receivableResult,
+    paymentResult,
+    refundResult,
+    reconciliationResult,
+    openReceivables,
+    overdueReceivables,
+    pendingRefunds,
+    reconciliationExceptions,
+    productRows,
+    bundleRows,
+    rateRows,
+  ]=await Promise.all([
+    fetchFinancePage<QuoteRow>(`/rest/v1/quotes?${quoteParams}`,quotePage,pageSize),
+    fetchFinancePage<ContractRow>("/rest/v1/contracts?select=id,contract_number,currency,contract_value,status&order=updated_at.desc",page(options.contractPage),pageSize),
+    fetchFinancePage<ReceivableRow>("/rest/v1/receivable_schedules?select=id,contract_id,installment_number,due_date,amount,paid_amount,status&order=due_date.asc",page(options.receivablePage),pageSize),
+    fetchFinancePage<PaymentRow>("/rest/v1/payments?select=id,contract_id,receivable_schedule_id,amount,refunded_amount,currency,status,reference,paid_at&status=in.(CONFIRMED,REFUNDED)&order=paid_at.desc",page(options.paymentPage),pageSize),
+    fetchFinancePage<RefundRow>("/rest/v1/refunds?select=id,refund_number,payment_id,amount,reason,status,receipt_reference,created_at&order=created_at.desc",page(options.refundPage),pageSize),
+    fetchFinancePage<ReconciliationRow>("/rest/v1/reconciliation_items?select=id,contract_id,payment_id,expected_amount,actual_amount,difference,status,reason,updated_at&order=updated_at.desc",page(options.reconciliationPage),pageSize),
+    countFinanceRows("/rest/v1/receivable_schedules?select=id&status=neq.PAID"),
+    countFinanceRows("/rest/v1/receivable_schedules?select=id&status=eq.OVERDUE"),
+    countFinanceRows("/rest/v1/refunds?select=id&status=eq.PENDING_APPROVAL"),
+    countFinanceRows("/rest/v1/reconciliation_items?select=id&status=not.in.(MATCHED,RESOLVED)"),
+    supabaseJson<Array<{id:string;code:string;name_zh:string;name_en:string}>>("/rest/v1/products?select=id,code,name_zh,name_en&active=eq.true&order=code"),
+    supabaseJson<Array<{id:string;code:string;name_zh:string;name_en:string;version:number}>>("/rest/v1/product_bundles?select=id,code,name_zh,name_en,version&active=eq.true&effective_to=is.null&order=code"),
+    supabaseJson<Array<{id:string;base_currency:string;quote_currency:string;rate:number;source:string;effective_at:string}>>("/rest/v1/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at&order=effective_at.desc&limit=100"),
+  ]);
+  const quoteRows=quoteResult.items;
+  const contractRows=contractResult.items;
+  const receivableRows=receivableResult.items;
+  const paymentRows=paymentResult.items;
+  const refundRows=refundResult.items;
+  const reconciliationRows=reconciliationResult.items;
+  const quoteIds=quoteRows.map(item=>item.id);
+  const organizationIds=[...new Set(quoteRows.map(item=>item.organization_id))];
+  const relatedContractIds=[...new Set([
+    ...contractRows.map(item=>item.id),
+    ...receivableRows.map(item=>item.contract_id),
+    ...paymentRows.map(item=>item.contract_id),
+    ...reconciliationRows.map(item=>item.contract_id),
+  ])];
+  const [versions,organizations,relatedContracts,scheduleRows]=await Promise.all([
     quoteIds.length?supabaseJson<QuoteVersionRow[]>(`/rest/v1/quote_versions?select=quote_id,version,subtotal,discount_amount,total_amount,terms_zh,terms_en,bundle_id,bundle_version,base_currency,base_total_amount&quote_id=in.(${quoteIds.join(",")})&order=version.desc`):Promise.resolve([]),
     organizationIds.length?supabaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/rest/v1/organizations?select=id,name_zh,name_en&id=in.(${organizationIds.join(",")})`):Promise.resolve([]),
-    supabaseJson<Array<{id:string;contract_number:string;currency:string;contract_value:number;status:string}>>(`/rest/v1/contracts?select=id,contract_number,currency,contract_value,status&order=updated_at.desc&limit=50`),
-    supabaseJson<Array<{id:string;contract_id:string;installment_number:number;due_date:string;amount:number;paid_amount:number;status:string}>>(`/rest/v1/receivable_schedules?select=id,contract_id,installment_number,due_date,amount,paid_amount,status&order=due_date.asc&limit=50`),
-    supabaseJson<Array<{id:string;contract_id:string;receivable_schedule_id:string|null;amount:number;refunded_amount:number;currency:string;status:string;reference:string|null;paid_at:string|null}>>(`/rest/v1/payments?select=id,contract_id,receivable_schedule_id,amount,refunded_amount,currency,status,reference,paid_at&status=in.(CONFIRMED,REFUNDED)&order=paid_at.desc&limit=50`),
-    supabaseJson<Array<{id:string;refund_number:string;payment_id:string;amount:number;reason:string;status:string;receipt_reference:string|null;created_at:string}>>(`/rest/v1/refunds?select=id,refund_number,payment_id,amount,reason,status,receipt_reference,created_at&order=created_at.desc&limit=30`),
-    supabaseJson<Array<{id:string;contract_id:string;payment_id:string|null;expected_amount:number;actual_amount:number;difference:number;status:string;reason:string;updated_at:string}>>(`/rest/v1/reconciliation_items?select=*&order=updated_at.desc&limit=30`).catch(()=>[]),
-    supabaseJson<Array<{id:string;code:string;name_zh:string;name_en:string}>>(`/rest/v1/products?select=id,code,name_zh,name_en&active=eq.true&order=code`),
-    supabaseJson<Array<{id:string;code:string;name_zh:string;name_en:string;version:number}>>(`/rest/v1/product_bundles?select=id,code,name_zh,name_en,version&active=eq.true&effective_to=is.null&order=code`),
-    supabaseJson<Array<{id:string;base_currency:string;quote_currency:string;rate:number;source:string;effective_at:string}>>(`/rest/v1/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at&order=effective_at.desc&limit=100`),
+    relatedContractIds.length?supabaseJson<ContractRow[]>(`/rest/v1/contracts?select=id,contract_number,currency,contract_value,status&id=in.(${relatedContractIds.join(",")})`):Promise.resolve([]),
+    contractRows.length?supabaseJson<Array<{contract_id:string}>>(`/rest/v1/receivable_schedules?select=contract_id&contract_id=in.(${contractRows.map(item=>item.id).join(",")})`):Promise.resolve([]),
   ]);
-  const versionMap=new Map<string,QuoteVersionRow>();versions.forEach(item=>{if(!versionMap.has(item.quote_id))versionMap.set(item.quote_id,item);});const orgMap=new Map(organizations.map(item=>[item.id,item]));const contractMap=new Map(contractRows.map(item=>[item.id,item]));const scheduled=new Set(receivableRows.map(item=>item.contract_id));
-  return{quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=orgMap.get(item.organization_id);return{id:item.id,number:item.quote_number,organizationId:item.organization_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),quoteTotal:total,contracts:contractRows.map(item=>({id:item.id,number:item.contract_number,currency:item.currency,value:Number(item.contract_value),status:item.status,hasSchedule:scheduled.has(item.id)})),receivables:receivableRows.map(item=>({id:item.id,contractId:item.contract_id,contractNumber:contractMap.get(item.contract_id)?.contract_number??item.contract_id.slice(0,8),installment:item.installment_number,dueDate:item.due_date,amount:Number(item.amount),paidAmount:Number(item.paid_amount),status:item.status,currency:contractMap.get(item.contract_id)?.currency??""})),payments:paymentRows.map(item=>({id:item.id,contractId:item.contract_id,scheduleId:item.receivable_schedule_id,amount:Number(item.amount),refundedAmount:Number(item.refunded_amount),currency:item.currency,status:item.status,reference:item.reference??"",paidAt:item.paid_at})),refunds:refundRows.map(item=>({id:item.id,number:item.refund_number,paymentId:item.payment_id,amount:Number(item.amount),reason:item.reason,status:item.status,receipt:item.receipt_reference??"",createdAt:item.created_at})),reconciliations:reconciliationRows.map(item=>({id:item.id,contractId:item.contract_id,paymentId:item.payment_id,expected:Number(item.expected_amount),actual:Number(item.actual_amount),difference:Number(item.difference),status:item.status,reason:item.reason,updatedAt:item.updated_at})),products:productRows.map(item=>({id:item.id,code:item.code,nameZh:item.name_zh,nameEn:item.name_en})),bundles:bundleRows.map(item=>({id:item.id,code:item.code,nameZh:item.name_zh,nameEn:item.name_en,version:Number(item.version)})),exchangeRates:rateRows.map(item=>({id:item.id,base:item.base_currency,quote:item.quote_currency,rate:Number(item.rate),source:item.source,effectiveAt:item.effective_at}))};
+  const versionMap=new Map<string,QuoteVersionRow>();
+  versions.forEach(item=>{if(!versionMap.has(item.quote_id))versionMap.set(item.quote_id,item);});
+  const orgMap=new Map(organizations.map(item=>[item.id,item]));
+  const contractMap=new Map(relatedContracts.map(item=>[item.id,item]));
+  const scheduled=new Set(scheduleRows.map(item=>item.contract_id));
+  return{
+    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=orgMap.get(item.organization_id);return{id:item.id,number:item.quote_number,organizationId:item.organization_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
+    quoteTotal:quoteResult.total,
+    contracts:contractRows.map(item=>({id:item.id,number:item.contract_number,currency:item.currency,value:Number(item.contract_value),status:item.status,hasSchedule:scheduled.has(item.id)})),
+    contractTotal:contractResult.total,
+    receivables:receivableRows.map(item=>({id:item.id,contractId:item.contract_id,contractNumber:contractMap.get(item.contract_id)?.contract_number??item.contract_id.slice(0,8),installment:item.installment_number,dueDate:item.due_date,amount:Number(item.amount),paidAmount:Number(item.paid_amount),status:item.status,currency:contractMap.get(item.contract_id)?.currency??""})),
+    receivableTotal:receivableResult.total,
+    payments:paymentRows.map(item=>({id:item.id,contractId:item.contract_id,scheduleId:item.receivable_schedule_id,amount:Number(item.amount),refundedAmount:Number(item.refunded_amount),currency:item.currency,status:item.status,reference:item.reference??"",paidAt:item.paid_at})),
+    paymentTotal:paymentResult.total,
+    refunds:refundRows.map(item=>({id:item.id,number:item.refund_number,paymentId:item.payment_id,amount:Number(item.amount),reason:item.reason,status:item.status,receipt:item.receipt_reference??"",createdAt:item.created_at})),
+    refundTotal:refundResult.total,
+    reconciliations:reconciliationRows.map(item=>({id:item.id,contractId:item.contract_id,paymentId:item.payment_id,expected:Number(item.expected_amount),actual:Number(item.actual_amount),difference:Number(item.difference),status:item.status,reason:item.reason,updatedAt:item.updated_at})),
+    reconciliationTotal:reconciliationResult.total,
+    pageSize,
+    risk:{openReceivables,overdueReceivables,pendingRefunds,reconciliationExceptions},
+    products:productRows.map(item=>({id:item.id,code:item.code,nameZh:item.name_zh,nameEn:item.name_en})),
+    bundles:bundleRows.map(item=>({id:item.id,code:item.code,nameZh:item.name_zh,nameEn:item.name_en,version:Number(item.version)})),
+    exchangeRates:rateRows.map(item=>({id:item.id,base:item.base_currency,quote:item.quote_currency,rate:Number(item.rate),source:item.source,effectiveAt:item.effective_at})),
+  };
 }
 export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="createQuote"?"create_quote_v100":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,...body}=input;void _;return supabaseJson(`/rest/v1/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
 

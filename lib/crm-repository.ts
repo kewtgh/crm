@@ -2,7 +2,8 @@ import { supabaseRequest, supabaseJson } from "./supabase-server";
 import type { DataRow, StatusTone } from "./crm-data";
 
 export type PersistentResource = "schools" | "people" | "tasks";
-export type PagedRows = { items: DataRow[]; total: number; page: number; pageSize: number };
+export type CrmMetrics = { total: number; needsAttention: number; averageCompleteness: number };
+export type PagedRows = { items: DataRow[]; total: number; page: number; pageSize: number; metrics: CrmMetrics };
 
 const resourceConfig = {
   schools: { table: "organizations", search: ["name_zh", "name_en", "city", "curriculum"], sort: { primary: "name_zh", secondary: "city", status: "status", meta: "key_contact_coverage", extra: "last_contact_at", completeness: "completeness" } },
@@ -24,7 +25,7 @@ const statusKeys: Record<string, string> = {
 };
 
 function cleanSearch(value: string) { return value.replace(/[*,()]/g, " ").trim().slice(0, 100); }
-function isoDate(value: unknown) { return value ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date(String(value))) : "—"; }
+function isoDate(value: unknown) { return value ? String(value) : "—"; }
 
 function toRow(resource: PersistentResource, record: Record<string, unknown>,owner="—"): DataRow {
   const status = String(record.status ?? "UNVERIFIED");
@@ -53,11 +54,14 @@ export async function listCrmRows(resource: PersistentResource, options: { query
   if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
   const sortKey = options.sort && options.sort in config.sort ? options.sort as keyof typeof config.sort : "primary";
   params.set("order", `${config.sort[sortKey]}.${options.direction === "asc" ? "asc" : "desc"}`);
-  const response = await supabaseRequest(`/rest/v1/${config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } });
+  const [response,metrics] = await Promise.all([
+    supabaseRequest(`/rest/v1/${config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
+    supabaseJson<CrmMetrics>("/rest/v1/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
+  ]);
   const records = await response.json() as Record<string, unknown>[];
   const contentRange = response.headers.get("content-range") ?? "*/0";
   const ownerIds=[...new Set(records.map(record=>record.owner_id).filter(Boolean).map(String))];const owners=new Map<string,string>();if(ownerIds.length){const profiles=await supabaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/rest/v1/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ownerIds.join(",")})`);profiles.forEach(profile=>owners.set(profile.user_id,`${profile.display_name_zh} / ${profile.display_name_en}`));}
-  return { items: records.map((record) => toRow(resource, record,record.owner_id?owners.get(String(record.owner_id))??"—":"—")), total: Number(contentRange.split("/")[1] ?? records.length), page, pageSize };
+  return { items: records.map((record) => toRow(resource, record,record.owner_id?owners.get(String(record.owner_id))??"—":"—")), total: Number(contentRange.split("/")[1] ?? records.length), page, pageSize,metrics };
 }
 
 export async function checkCrmDuplicate(resource: PersistentResource, input: { email?: string; phone?: string; nameZh?: string; nameEn?: string }) {
@@ -65,9 +69,23 @@ export async function checkCrmDuplicate(resource: PersistentResource, input: { e
 }
 
 export async function createCrmRecord(resource: PersistentResource, input: Record<string, unknown>,ownerId:string) {
-  const body = resource === "schools" ? { name_zh: input.nameZh, name_en: input.nameEn, city: input.city ?? "", curriculum: input.curriculum ?? "", status: "UNVERIFIED", completeness: 50,owner_id:ownerId }
-    : resource === "people" ? { name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title ?? "", contact_type: "CONTACT", status: "UNVERIFIED", completeness: 50,owner_id:ownerId }
-      : { title_zh: input.nameZh, title_en: input.nameEn, related_label: input.contact ?? "", status: "TODO", priority: "NORMAL", due_at: input.dueAt || null,owner_id:ownerId };
+  if(resource==="people"&&input.organizationId){
+    const organizations=await supabaseJson<Array<{id:string}>>(`/rest/v1/organizations?select=id&id=eq.${input.organizationId}&limit=1`);
+    if(!organizations.length)throw new Error("RELATED_ORGANIZATION_NOT_FOUND");
+  }
+  if(resource==="tasks"&&input.relatedId){
+    const table=input.relatedType==="CONTACT"?"contacts":"organizations";
+    const related=await supabaseJson<Array<{id:string}>>(`/rest/v1/${table}?select=id&id=eq.${input.relatedId}&limit=1`);
+    if(!related.length)throw new Error("RELATED_RECORD_NOT_FOUND");
+  }
+  const requestedOwner=String(input.ownerId??ownerId);
+  if(requestedOwner!==ownerId){
+    const owners=await supabaseJson<Array<{user_id:string}>>(`/rest/v1/user_profiles?select=user_id&user_id=eq.${requestedOwner}&limit=1`);
+    if(!owners.length)throw new Error("OWNER_NOT_ASSIGNABLE");
+  }
+  const body = resource === "schools" ? { name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
+    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type: "CONTACT", status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
+      : { title_zh: input.nameZh, title_en: input.nameEn, related_type:input.relatedType,related_id:input.relatedId||null,related_label:input.contact ?? "", status: "TODO", priority: input.priority, due_at: input.dueAt,owner_id:requestedOwner };
   const table = resourceConfig[resource].table;
   const created = await supabaseJson<Record<string, unknown>[]>(`/rest/v1/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
   return toRow(resource, created[0]);

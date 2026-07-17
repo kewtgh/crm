@@ -7,6 +7,7 @@ import {
   listRetryableJobs,
   loadBusinessInsights,
   loadOperationalSnapshot,
+  loadReleaseReadiness,
   retryOperationalJob,
 } from "@/lib/operations-repository";
 
@@ -18,12 +19,13 @@ const retrySchema = z.object({
 async function get() {
   await requireApiRole("SUPER_ADMIN", "ADMIN");
   await requireApiAal2();
-  const [snapshot, retryableJobs, insights] = await Promise.all([
+  const [snapshot, retryableJobs, insights,readiness] = await Promise.all([
     loadOperationalSnapshot(),
     listRetryableJobs(),
     loadBusinessInsights(),
+    loadReleaseReadiness(),
   ]);
-  return NextResponse.json({ snapshot, retryableJobs, insights });
+  return NextResponse.json({ snapshot, retryableJobs, insights,readiness });
 }
 
 async function post(request: Request) {

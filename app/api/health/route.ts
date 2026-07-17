@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { APP_VERSION } from "@/lib/version";
 import { apiRoute } from "@/lib/api";
 import { supabaseAdminJson } from "@/lib/supabase-server";
+import { inspectCoreRuntimeEnvironment } from "@/lib/runtime-environment";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +26,15 @@ async function get(request: Request) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const workspaceId = process.env.CRM_WORKSPACE_ID;
-  if (!url || !key || !serviceKey || !workspaceId || !/^[0-9a-f-]{36}$/i.test(workspaceId)) {
+  const environment = inspectCoreRuntimeEnvironment();
+  if (!environment.valid || !url || !key || !serviceKey || !workspaceId) {
     return NextResponse.json({
       code: "SERVICE_NOT_CONFIGURED",
       status: "unavailable",
       version: APP_VERSION,
       checkedAt,
-      checks: { auth: false, database: false, workers: false, queues: false },
+      checks: { environment: false, auth: false, database: false, workers: false, queues: false },
+      configuration: { configured: environment.configured, expected: environment.expected },
     }, { status: 503 });
   }
 
@@ -60,6 +63,7 @@ async function get(request: Request) {
         version: APP_VERSION,
         checkedAt,
         checks: {
+          environment: true,
           auth: authHealth.ok,
           database: readiness.database === true,
           workers: Number(readiness.staleWorkers ?? 0) === 0,
@@ -81,7 +85,7 @@ async function get(request: Request) {
       status: "degraded",
       version: APP_VERSION,
       checkedAt,
-      checks: { auth: false, database: false, workers: false, queues: false },
+      checks: { environment: true, auth: false, database: false, workers: false, queues: false },
     }, { status: 503 });
   } finally {
     clearTimeout(timeout);

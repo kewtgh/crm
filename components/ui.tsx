@@ -172,6 +172,8 @@ export function AccessibleDrawer({
   }, [onClose]);
   useEffect(() => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
       const preferred = drawerRef.current?.querySelector<HTMLElement>(
         "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
@@ -207,6 +209,7 @@ export function AccessibleDrawer({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
       previousFocus.current?.focus();
     };
   }, []);

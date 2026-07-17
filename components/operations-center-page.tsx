@@ -20,9 +20,11 @@ import type {
   IntegrationConnection,
   NextBestAction,
   OperationalSnapshot,
+  ReleaseReadiness,
   RetryableJob,
 } from "@/lib/operations-repository";
 import { apiFetch } from "@/lib/api-client";
+import { useUserPreferences } from "@/components/user-preferences-context";
 
 type PermissionExplanation = {
   allowed?: boolean;
@@ -39,19 +41,23 @@ export function OperationsCenterPage({
   initialIntegrations,
   initialNextActions,
   initialInsights,
+  initialReadiness,
 }: {
   initialSnapshot: OperationalSnapshot | null;
   initialRetryableJobs: RetryableJob[];
   initialIntegrations: IntegrationConnection[];
   initialNextActions: NextBestAction[];
   initialInsights: BusinessInsights | null;
+  initialReadiness:ReleaseReadiness|null;
 }) {
   const { locale, t } = useI18n();
+  const { formatDate: formatPreferredDate } = useUserPreferences();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [retryableJobs, setRetryableJobs] = useState(initialRetryableJobs);
   const [integrations, setIntegrations] = useState(initialIntegrations);
   const [nextActions, setNextActions] = useState(initialNextActions);
   const [insights, setInsights] = useState(initialInsights);
+  const [readiness,setReadiness]=useState(initialReadiness);
   const [integrationPending, setIntegrationPending] = useState("");
   const [integrationDrafts, setIntegrationDrafts] = useState<Record<string, {
     status: IntegrationConnection["status"];
@@ -74,13 +80,14 @@ export function OperationsCenterPage({
     setError("");
     try {
       const [operationsResult, integrationsResult, actionsResult] = await Promise.all([
-        apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: RetryableJob[]; insights: BusinessInsights }>("/api/operations"),
+        apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: RetryableJob[]; insights: BusinessInsights;readiness:ReleaseReadiness }>("/api/operations"),
         apiFetch<{ items: IntegrationConnection[] }>("/api/integrations"),
         apiFetch<{ items: NextBestAction[] }>("/api/next-actions"),
       ]);
       setSnapshot(operationsResult.snapshot);
       setRetryableJobs(operationsResult.retryableJobs);
       setInsights(operationsResult.insights);
+      setReadiness(operationsResult.readiness);
       setIntegrations(integrationsResult.items);
       setIntegrationDrafts(Object.fromEntries(integrationsResult.items.map((item) => [item.provider, {
         status: item.status,
@@ -210,7 +217,7 @@ export function OperationsCenterPage({
   };
 
   const formatDate = (value: string | null) => value
-    ? new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
+    ? formatPreferredDate(value, { includeTime: true })
     : t("operations.neverRun");
 
   return <div className="page-stack operations-center">
@@ -219,6 +226,16 @@ export function OperationsCenterPage({
       <button className="secondary-button" type="button" disabled={loading} onClick={() => void refresh()}><RefreshCw className={loading ? "spin" : ""} size={17}/>{t("operations.refresh")}</button>
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}
+
+    <section className="surface operations-section release-readiness">
+      <div className="surface-heading"><div><p className="eyebrow">{t("operations.releaseEyebrow")}</p><h2>{t("operations.releaseReadiness")}</h2><p>{t("operations.releaseHelp")}</p></div><StatusBadge tone={readiness?.ready?"green":"red"}>{t(readiness?.ready?"operations.releaseReady":"operations.releaseBlocked")}</StatusBadge></div>
+      <div className="operations-insight-grid">
+        <InsightCard value={`${readiness?.environment.configured??0}/${readiness?.environment.expected??0}`} label={t("operations.environment")} detail={t(readiness?.environment.core?"operations.coreConfigured":"operations.coreMissing")}/>
+        <InsightCard value={String(readiness?.missingWorkers??6)} label={t("operations.missingWorkers")} detail={t((readiness?.staleWorkers??0)>0?"operations.workersUnhealthy":"operations.workersReady")}/>
+        <InsightCard value={String(readiness?.failedJobs??0)} label={t("operations.failedJobs")} detail={t((readiness?.stuckJobs??0)>0?"operations.jobsStuck":"operations.jobsReady")}/>
+        <InsightCard value={`${[readiness?.environment.delivery,readiness?.environment.webhooks,readiness?.environment.integrations].filter(Boolean).length}/3`} label={t("operations.externalServices")} detail={t("operations.externalServicesHelp")}/>
+      </div>
+    </section>
 
     <section className="operations-insight-grid" aria-label={t("operations.businessInsights")}>
       <InsightCard value={`${insights?.retention.rate ?? 0}%`} label={t("operations.retention")} detail={t("operations.retentionDetail", { retained: insights?.retention.retained ?? 0, eligible: insights?.retention.eligible ?? 0 })}/>

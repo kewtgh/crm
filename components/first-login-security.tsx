@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage } from "./ui";
+import { ApiClientError, apiFetch } from "@/lib/api-client";
 
 export function InitialPasswordChangeForm() {
   const { t } = useI18n();
@@ -17,15 +18,14 @@ export function InitialPasswordChangeForm() {
     event.preventDefault(); setPending(true); setError(""); setFieldError({});
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
-      const response = await fetch("/api/auth/initial-password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(values) });
-      const result = await response.json() as { code?: string; field?: string; next?: string };
-      if (!response.ok) {
-        const key = result.code === "PASSWORD_MISMATCH" ? "auth.firstLogin.mismatch" : result.code === "PASSWORD_TOO_SHORT" || result.code === "PASSWORD_COMPLEXITY" ? "auth.firstLogin.rule" : "auth.firstLogin.failed";
-        if (result.field) setFieldError({ [result.field]: t(key) }); else setError(t(key));
-        return;
-      }
+      const result = await apiFetch<{ next?: string }>("/api/auth/initial-password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(values) });
       router.push(result.next ?? "/dashboard"); router.refresh();
-    } catch { setError(t("auth.error.network")); }
+    } catch (cause) {
+      const code = cause instanceof ApiClientError ? cause.code : "";
+      const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
+      const key = code === "PASSWORD_MISMATCH" ? "auth.firstLogin.mismatch" : code === "PASSWORD_TOO_SHORT" || code === "PASSWORD_COMPLEXITY" ? "auth.firstLogin.rule" : code === "NETWORK_ERROR" ? "auth.error.network" : "auth.firstLogin.failed";
+      if (field) setFieldError({ [field]: t(key) }); else setError(t(key));
+    }
     finally { setPending(false); }
   }
   return <form className="auth-form" onSubmit={submit} noValidate>
@@ -58,20 +58,17 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
       setPending(true); setError("");
       try {
         if (mode === "setup") {
-          const response = await fetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
-          const result = await response.json() as { factor?: { id?: string; totp?: { qr_code?: string; secret?: string } } };
-          if (!response.ok || !result.factor?.id) throw new Error();
-          const challengeResponse = await fetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) });
-          const challenge = await challengeResponse.json() as { challenge?: { id?: string } };
-          if (!challengeResponse.ok || !challenge.challenge?.id) throw new Error();
+          const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string; secret?: string } } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
+          if (!result.factor?.id) throw new Error();
+          const challenge = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) });
+          if (!challenge.challenge?.id) throw new Error();
           if (!cancelled) setEnrollment({ factorId: result.factor.id, challengeId: challenge.challenge.id, qrCode: result.factor.totp?.qr_code ?? "", secret: result.factor.totp?.secret });
         } else {
-          const factorResponse = await fetch("/api/settings/mfa"); const factors = await factorResponse.json() as { factors?: Factor[] };
+          const factors = await apiFetch<{ factors?: Factor[] }>("/api/settings/mfa");
           const factor = factors.factors?.find((entry) => entry.factor_type === "totp" && entry.status === "verified");
-          if (!factorResponse.ok || !factor) throw new Error();
-          const response = await fetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: factor.id }) });
-          const result = await response.json() as { challenge?: { id?: string } };
-          if (!response.ok || !result.challenge?.id) throw new Error();
+          if (!factor) throw new Error();
+          const result = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: factor.id }) });
+          if (!result.challenge?.id) throw new Error();
           if (!cancelled) { setFactorId(factor.id); setChallengeId(result.challenge.id); }
         }
       } catch { if (!cancelled) setError(t("auth.mfa.prepareFailed")); }
@@ -85,11 +82,9 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
     const code = String(new FormData(event.currentTarget).get("code") ?? "").trim();
     const currentFactorId = enrollment?.factorId ?? factorId; const currentChallengeId = enrollment?.challengeId ?? challengeId;
     try {
-      const response = await fetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: currentFactorId, challengeId: currentChallengeId, code }) });
-      const result = await response.json() as { next?: string };
-      if (!response.ok) { setError(t("auth.mfa.invalidCode")); return; }
+      const result = await apiFetch<{ next?: string }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: currentFactorId, challengeId: currentChallengeId, code }) });
       router.push(result.next ?? "/dashboard"); router.refresh();
-    } catch { setError(t("auth.error.network")); }
+    } catch (cause) { setError(t(cause instanceof ApiClientError && cause.code === "NETWORK_ERROR" ? "auth.error.network" : "auth.mfa.invalidCode")); }
     finally { setPending(false); }
   }
 

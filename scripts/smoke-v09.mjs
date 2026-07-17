@@ -33,6 +33,7 @@ let opportunityId = "";
 let contractId = "";
 let webhookId = "";
 let draftTaskId = "";
+let previousWebhookHeartbeat = null;
 
 async function request(path, {
   method = "GET",
@@ -301,6 +302,11 @@ try {
   draftTaskId = decided.draft_task_id;
   if (!draftTaskId) throw new Error("Accepted next action did not create a task draft");
 
+  const existingHeartbeats = await request(
+    "/rest/v1/worker_heartbeats?select=*&worker_key=eq.WEBHOOK_INBOX",
+    { serviceRole: true },
+  );
+  previousWebhookHeartbeat = existingHeartbeats[0] ?? null;
   const heartbeat = await rpc("record_worker_heartbeat", {
     worker: "WEBHOOK_INBOX",
     successful: true,
@@ -343,6 +349,19 @@ try {
     "v0.9.0 business smoke passed: signup boundary, permissions, activity, stage guard, renewal, merge, bundle, rules, heartbeat, integrations, and webhook inbox.\n",
   );
 } finally {
+  if (previousWebhookHeartbeat) {
+    await request("/rest/v1/worker_heartbeats?on_conflict=worker_key", {
+      method: "POST",
+      serviceRole: true,
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: previousWebhookHeartbeat,
+    }).catch(() => undefined);
+  } else {
+    await request("/rest/v1/worker_heartbeats?worker_key=eq.WEBHOOK_INBOX", {
+      method: "DELETE",
+      serviceRole: true,
+    }).catch(() => undefined);
+  }
   if (webhookId) {
     await request(`/rest/v1/webhook_inbox?id=eq.${webhookId}`, {
       method: "DELETE",

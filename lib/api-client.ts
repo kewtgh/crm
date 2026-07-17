@@ -1,5 +1,6 @@
 export type ApiFailurePayload = {
   code?: string;
+  field?: string;
   error?: {
     code?: string;
     message?: string;
@@ -70,7 +71,7 @@ export async function apiFetch<T>(
       code,
       response.status,
       payload.error?.requestId ?? response.headers.get("x-request-id") ?? undefined,
-      payload.error?.details,
+      payload.error?.details ?? (payload.field ? { field: payload.field } : undefined),
     );
   }
 

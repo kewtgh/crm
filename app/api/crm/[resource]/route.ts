@@ -6,18 +6,32 @@ import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
-const recordSchema = z.object({
+const baseRecordSchema = z.object({
   operation: z.enum(["check", "create"]).default("create"),
   nameZh: z.string().trim().min(1).max(120),
   nameEn: z.string().trim().min(1).max(160),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().max(40).optional(),
   contact: z.string().trim().max(200).optional(),
-  city: z.string().trim().max(80).optional(),
-  curriculum: z.string().trim().max(120).optional(),
-  title: z.string().trim().max(120).optional(),
-  dueAt: z.string().datetime().optional().or(z.literal("")),
 });
+const resourceSchemas={
+  schools:baseRecordSchema.extend({
+    city:z.string().trim().min(1).max(80),
+    curriculum:z.string().trim().min(1).max(120),
+  }),
+  people:baseRecordSchema.extend({
+    title:z.string().trim().min(1).max(120),
+    organizationId:z.string().uuid(),
+  }).refine(value=>Boolean(value.email||value.phone),{path:["email"],message:"CONTACT_METHOD_REQUIRED"}),
+  tasks:baseRecordSchema.extend({
+    dueAt:z.string().datetime(),
+    priority:z.enum(["LOW","NORMAL","HIGH","URGENT"]),
+    ownerId:z.string().uuid().optional(),
+    relatedType:z.enum(["ORGANIZATION","CONTACT"]),
+    relatedId:z.string().uuid(),
+    contact:z.string().trim().min(1).max(200),
+  }),
+} satisfies Record<PersistentResource,z.ZodType>;
 
 function resolveResource(value: string) { return resources.has(value as PersistentResource) ? value as PersistentResource : null; }
 function failure(error: unknown) {
@@ -42,7 +56,7 @@ async function post(request: Request, context: { params: Promise<{ resource: str
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const resource = resolveResource((await context.params).resource);
   if (!resource) return NextResponse.json({ code: "UNKNOWN_RESOURCE" }, { status: 404 });
-  const parsed = recordSchema.safeParse(await request.json().catch(() => ({})));
+  const parsed = resourceSchemas[resource].safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
   const user=await requireApiUser();
   try {

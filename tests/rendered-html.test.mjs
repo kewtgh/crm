@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 test("replaces the disposable starter with Lumina CRM", async () => {
@@ -66,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "1\.0\.0"/);
+  assert.match(packageJson, /"version": "1\.1\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "1\.0\.0"/);
+  assert.match(packageJson, /"version": "1\.1\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -432,4 +432,83 @@ test("closes the v1.0 release audit with executable security and business bounda
   assert.match(env, /INTEGRATION_SYNC_PROCESSOR_URL/);
   assert.match(audit, /P0：发布阻断/);
   assert.match(plan, /全量自动化、浏览器和 Sites 发布门禁/);
+});
+
+test("closes the v1.1 post-release audit with exact metrics and guided workflows", async () => {
+  const [
+    opportunitySchema,
+    pipeline,
+    finance,
+    modulePage,
+    dataTable,
+    preferences,
+    remediation,
+    environment,
+    localSetup,
+    smoke,
+    operations,
+    audit,
+    plan,
+    version,
+  ] = await Promise.all([
+    readFile(new URL("../lib/opportunity-schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/pipeline-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/finance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/module-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/data-table.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/user-preferences-context.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607180037_v110_remediation.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/runtime-environment.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/configure-local-environment.ps1", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/smoke-v09.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations-center-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-18_POST_RELEASE.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_V1.1.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../lib/version.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(opportunitySchema, /WON_EVIDENCE_REQUIRED/);
+  assert.match(opportunitySchema, /LOST_REASON_REQUIRED/);
+  assert.match(pipeline, /transitionOpportunitySchema/);
+  assert.match(pipeline, /pipeline\.transition\.evidence/);
+  assert.match(finance, /finance-risk-center/);
+  assert.match(finance, /reconciliationExceptions/);
+  assert.match(modulePage, /curriculum/);
+  assert.match(modulePage, /organizationId/);
+  assert.match(modulePage, /dueAt/);
+  assert.match(dataTable, /lumina-saved-views/);
+  assert.match(dataTable, /\[10,25,50\]/);
+  assert.match(preferences, /localDateTimeToUtc/);
+  assert.match(remediation, /crm_resource_metrics/);
+  assert.match(remediation, /PAYMENT_OVERDUE/);
+  assert.match(remediation, /reporting_timezone/);
+  assert.match(environment, /coreRuntimeEnvironmentSchema/);
+  assert.match(environment, /LOGIN_THROTTLE_HASH_SECRET_NOT_CONFIGURED/);
+  assert.match(localSetup, /GetEnumerator/);
+  assert.match(localSetup, /Existing and unknown keys are preserved/);
+  assert.match(smoke, /previousWebhookHeartbeat/);
+  assert.match(smoke, /worker_heartbeats\?on_conflict=worker_key/);
+  assert.match(operations, /release-readiness/);
+  assert.match(audit, /P0/);
+  assert.match(plan, /最终反查/);
+  assert.match(version, /1\.1\.0/);
+});
+
+test("keeps component API calls on the shared resilient client except authentication bootstrap", async () => {
+  const componentDirectory = new URL("../components/", import.meta.url);
+  const files = (await readdir(componentDirectory)).filter((name) => name.endsWith(".tsx"));
+  const allowed = new Set(["auth-form.tsx", "password-reset-forms.tsx"]);
+  for (const file of files) {
+    if (allowed.has(file)) continue;
+    const source = await readFile(new URL(file, componentDirectory), "utf8");
+    assert.doesNotMatch(source, /\bfetch\s*\(/, `${file} bypasses apiFetch`);
+  }
+});
+
+test("defines every static CSS custom property or supplies a fallback", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const definitions = new Set([...css.matchAll(/--([A-Za-z0-9-]+)\s*:/g)].map((match) => match[1]));
+  const unresolved = [...css.matchAll(/var\(\s*--([A-Za-z0-9-]+)([^)]*)\)/g)]
+    .filter((match) => !definitions.has(match[1]) && !match[2].includes(","))
+    .map((match) => match[1]);
+  assert.deepEqual([...new Set(unresolved)], []);
 });
