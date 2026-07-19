@@ -31,4 +31,4 @@ Version 1.2.0 closes the comprehensive CRM, security, resilience, architecture, 
 | Empty database migration | Through `202607190039` |
 | Liveness version | 1.2.0 |
 
-The exact source is published as a private Sites deployment. Real browser and production-provider acceptance remain explicitly tracked external gates; hosted runtime values are not replaced with local test credentials and no simulated success is included in this release record.
+The exact source is committed locally and ready for a private Sites deployment after explicit authorization to push to the configured GitHub remote. Real browser and production-provider acceptance remain explicitly tracked external gates; hosted runtime values are not replaced with local test credentials and no simulated success is included in this release record.

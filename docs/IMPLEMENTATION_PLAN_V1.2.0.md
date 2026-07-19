@@ -8,7 +8,7 @@
 ## P0：发布与质量门禁
 
 - [x] REL-01 为所有队列 worker 提供统一启动/心跳/失败告警入口，readiness 明确列出积压和缺失 worker。
-- [!] REL-02 本地与托管字段清单已对齐，精确源码已保存并执行私有生产部署；托管运行时当前没有生产 Supabase/Turnstile/供应商值，必须由环境所有者配置后才能验收 readiness 200。
+- [~] REL-02 本地与托管字段清单已对齐，精确源码已完成本地提交；向既有 GitHub 远端推送和 Sites 私有生产部署正等待明确的外发授权。托管运行时当前没有生产 Supabase/Turnstile/供应商值，必须由环境所有者配置后才能验收 readiness 200。
 - [!] REL-03 真实 DOM/E2E 矩阵已形成验收清单；当前浏览器控制运行时被工作区外 Node 模块冲突阻断，详见 `BROWSER_QA_2026-07-19_V1.2.0.md`。
 - [!] REL-04 构建、typecheck、lint、Node、pgTAP、smoke 与 readiness 已组成并通过单一 release gate；真实浏览器项保留为显式外部门禁，不虚报通过。
 
@@ -86,8 +86,8 @@
 - [x] OPS-01 提供一条 worker 启动命令和一条 release gate 命令。
 - [x] OPS-02 文档明确本地 Supabase 默认密钥/Studio 只允许受信开发网络。
 - [x] OPS-03 外部邮件、日历、通知与 AI 凭据列为部署检查项。
-- [x] RELEASE-01 已完成第二轮遗漏复查，没有未解释的 `[ ]` 或 `[~]`。
-- [x] RELEASE-02 构建并推送完全一致的源码，保存 Sites 版本并执行私有部署。
+- [x] RELEASE-01 已完成第二轮遗漏复查，唯一 `[~]` 为需要明确外发授权的 RELEASE-02。
+- [~] RELEASE-02 构建和本地提交已完成；推送完全一致的源码、保存 Sites 版本及私有部署等待明确外发授权。
 
 ## 最终复审清单
 
