@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -9,7 +9,7 @@
     "dev": "vinext dev --port 3200",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test --test-isolation=none tests/rendered-html.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "auth:bootstrap-admin": "node --env-file=.env.local scripts/bootstrap-admin.mjs",
@@ -21,18 +21,26 @@
     "smoke:http-v10": "node --env-file=.env.local scripts/smoke-http-v10.mjs",
     "smoke:v09": "node --env-file=.env.local scripts/smoke-v09.mjs",
     "smoke:v11": "node --env-file=.env.local scripts/smoke-v11.mjs",
+    "smoke:exports": "node scripts/smoke-export-artifacts.mjs",
     "exports:process": "node --env-file=.env.local scripts/process-generated-jobs.mjs",
     "webhooks:process": "node --env-file=.env.local scripts/process-webhook-inbox.mjs",
     "integrations:process": "node --env-file=.env.local scripts/process-integration-sync.mjs",
     "workers:process": "node --env-file=.env.local scripts/process-worker-cycle.mjs",
+    "qa:assets": "node scripts/check-production-assets.mjs",
+    "qa:chromium-1228": "node scripts/browser-qa-chromium-1228.cjs",
     "release:gate": "node --env-file=.env.local scripts/release-gate.mjs",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {
+    "@fontsource/noto-sans-sc": "^5.2.8",
+    "@pdf-lib/fontkit": "^1.1.1",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "read-excel-file": "^9.3.2",
+    "write-excel-file": "^4.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -49,8 +57,9 @@
     "supabase": "^2.109.1",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vinext": "0.0.50",
+    "vinext": "^0.1.8",
     "vite": "8.1.5",
+    "vite-tsconfig-paths": "^6.1.1",
     "wrangler": "4.112.0"
   },
   "overrides": {

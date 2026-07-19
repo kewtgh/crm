@@ -8,6 +8,7 @@ import { useI18n } from "@/components/i18n-provider";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { AccessibleDrawer, InlineMessage, ProgressBar, StatusBadge, Toast } from "@/components/ui";
 import { apiFetch } from "@/lib/api-client";
+import { presentApiError } from "@/lib/api-error-presenter";
 
 export function TaskWorkspacePanel({initial}:{initial:TaskWorkspace}){
   const {locale,t}=useI18n();const {formatDate}=useUserPreferences();
@@ -21,8 +22,8 @@ export function TaskWorkspacePanel({initial}:{initial:TaskWorkspace}){
     sla:workspace.items.filter(item=>item.slaDueAt&&new Date(item.slaDueAt).getTime()<now).length,
   }),[now,workspace.items]);
   const reload=async()=>setWorkspace(await apiFetch<TaskWorkspace>("/api/tasks"));
-  const completeOne=async(id:string)=>{setPending(true);setError("");try{await apiFetch(`/api/tasks/${id}`,{method:"PATCH"});await reload();setSelected(current=>current.filter(value=>value!==id));setToast(t("dashboard.taskCompleted"));}catch{setError(t("dashboard.taskCompleteFailed"));}finally{setPending(false);}};
-  const bulk=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const reason=String(new FormData(event.currentTarget).get("reason")??"").trim();setPending(true);setError("");try{await apiFetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"bulkComplete",ids:selected,reason})});await reload();setSelected([]);setConfirmOpen(false);setToast(t("dashboard.taskCompleted"));}catch{setError(t("dashboard.taskCompleteFailed"));}finally{setPending(false);}};
+  const completeOne=async(id:string)=>{setPending(true);setError("");try{await apiFetch(`/api/tasks/${id}`,{method:"PATCH"});await reload();setSelected(current=>current.filter(value=>value!==id));setToast(t("dashboard.taskCompleted"));}catch(caught){setError(presentApiError(caught,t,"dashboard.taskCompleteFailed").message);}finally{setPending(false);}};
+  const bulk=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const reason=String(new FormData(event.currentTarget).get("reason")??"").trim();setPending(true);setError("");try{await apiFetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"bulkComplete",ids:selected,reason})});await reload();setSelected([]);setConfirmOpen(false);setToast(t("dashboard.taskCompleted"));}catch(caught){setError(presentApiError(caught,t,"dashboard.taskCompleteFailed").message);}finally{setPending(false);}};
   const toggle=(id:string)=>setSelected(current=>current.includes(id)?current.filter(value=>value!==id):[...current,id]);
   return <section className="task-workspace">
     <div className="quick-summary">

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { elevateQaSessionToAal2 } from "./lib/qa-auth.mjs";
 
 const required = [
   "APP_URL",
@@ -46,7 +47,13 @@ const authResponse = await fetch(`${supabase}/auth/v1/token?grant_type=password`
 const auth = await authResponse.json();
 if (!authResponse.ok || !auth.access_token) throw new Error("Local administrator authentication failed");
 
-const cookie = `crm_access_token=${auth.access_token}; crm_refresh_token=${auth.refresh_token}`;
+const elevatedAuth = await elevateQaSessionToAal2({
+  supabaseUrl: supabase,
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  accessToken: auth.access_token,
+  friendlyName: `v11-${suffix}`,
+});
+const cookie = `crm_access_token=${elevatedAuth.access_token}; crm_refresh_token=${elevatedAuth.refresh_token}`;
 const originHeaders = { cookie, origin: app, "content-type": "application/json" };
 
 async function appRequest(path, options = {}) {

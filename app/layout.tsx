@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { I18nProvider } from "@/components/i18n-provider";
-import { isLocale, translate } from "@/lib/i18n";
+import { dictionaries, isLocale, translate } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/page-metadata";
 import "./globals.css";
+import "./v200.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
@@ -34,6 +35,6 @@ export default async function RootLayout({
   const requestedLocale = cookieStore.get("lumina-locale")?.value;
   const locale = isLocale(requestedLocale) ? requestedLocale : "zh-CN";
   return <html lang={locale}>
-      <body><I18nProvider initialLocale={locale}>{children}</I18nProvider></body>
+      <body><I18nProvider initialLocale={locale} initialMessages={dictionaries[locale]}>{children}</I18nProvider></body>
     </html>;
 }

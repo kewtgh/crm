@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, requireApiUser } from "@/lib/api";
+import { aal2Capabilities, CAPABILITIES, hasCapability, rolesForCapability } from "@/lib/capabilities";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { supabaseJson } from "@/lib/supabase-server";
 
@@ -9,6 +10,20 @@ const schema = z.object({
   resourceId: z.uuid(),
   action: z.enum(["READ", "EDIT", "DELETE", "APPROVE", "RETRY"]).default("READ"),
 });
+const capabilitySchema = z.enum(CAPABILITIES);
+
+async function get(request: Request) {
+  const user = await requireApiUser();
+  const parsed = capabilitySchema.safeParse(new URL(request.url).searchParams.get("capability"));
+  if (!parsed.success) throw new ApiError("INVALID_CAPABILITY", 400);
+  return NextResponse.json({
+    capability: parsed.data,
+    allowed: hasCapability(user.role, parsed.data),
+    requiresMfa: aal2Capabilities.has(parsed.data),
+    eligibleRoles: rolesForCapability(parsed.data),
+    messageKey: hasCapability(user.role, parsed.data) ? "permission.allowed" : "permission.denied",
+  });
+}
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
@@ -27,3 +42,4 @@ async function post(request: Request) {
 }
 
 export const POST = apiRoute(post, "PERMISSION_EXPLANATION_FAILED");
+export const GET = apiRoute(get, "PERMISSION_EXPLANATION_FAILED");

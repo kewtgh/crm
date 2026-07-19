@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, apiRoute, requireApiAal2, requireApiRole, requireApiUser } from "@/lib/api";
+import { ApiError, apiRoute, requireApiCapability, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import {
   createProductBundle,
@@ -40,14 +40,13 @@ async function get() {
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
-  await requireApiRole("SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR");
-  await requireApiAal2();
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_CATALOG_OPERATION", 400);
   if (parsed.data.operation === "bundle") {
+    await requireApiCapability("catalog.manage");
     return NextResponse.json({ id: await createProductBundle(parsed.data) }, { status: 201 });
   }
-  await requireApiRole("SUPER_ADMIN", "ADMIN");
+  await requireApiCapability("exchangeRates.manage");
   if (parsed.data.base === parsed.data.quote) throw new ApiError("EXCHANGE_RATE_PAIR_INVALID", 400);
   return NextResponse.json({ item: await recordExchangeRate(parsed.data) }, { status: 201 });
 }

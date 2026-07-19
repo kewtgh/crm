@@ -1,28 +1,33 @@
 # Lumina Education CRM
 
-Current release: **v1.2.0**
+Current release: **v2.0.0**
 
-Lumina is a bilingual, staff-only relationship and sales CRM for an education-product operating company. Customers, contacts, parents, and students are business records—not CRM accounts.
+Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
+contacts, parents, students and household members are business records—not staff
+authentication accounts.
 
-v1.2.0 closes the comprehensive CRM, architecture, UI/UX, accessibility, security, and operations audit:
+v2.0.0 adds and closes:
 
-- editable and archivable schools, people, and tasks with optimistic concurrency and auditable history;
-- database-final task delegation, team capacity, SLA, bulk completion, reminders, and a “My Work” queue;
-- durable password-recovery throttling plus Turnstile and preserved `Retry-After`;
-- transactionally idempotent duplicate merge, import rollback, quote acceptance, and product activation;
-- approval-backed CRM exports with private, expiring generated files;
-- shared URL-aware pagination, request cancellation, last-request-wins remote search, and versioned personal/team views;
-- RFC 4180-style CSV parsing, searchable duplicate selectors, impact previews, and explicit data-quality verification;
-- federated permission-aware search across organizations, contacts, opportunities, tasks, contracts, quotes, and products;
-- consistent loading/error/404 boundaries, bilingual metadata, mobile layouts, focus management, keyboard menus, and skip navigation;
-- explainable human-confirmed recommendations and truthful optional-provider configuration;
-- one six-worker cycle command and one repeatable release gate.
+- students, households, guardians, academic timelines and previewed/idempotent progression batches;
+- school and household leads, qualification, separate default pipelines and transactional conversion;
+- CSV/XLSX imports up to 10,000 rows, templates, saved mappings, durable batches and row repair;
+- private CSV/XLSX/PDF generated reports, including education, sales and finance datasets;
+- data-subject access, export, correction, restriction and deletion requests with identity review,
+  dual review for sensitive execution, deadlines and audit;
+- evidence-backed, expiring rules-first suggestions with human accept/edit/reject decisions;
+- exact database aggregates and currency-separated finance metrics;
+- one capability matrix across navigation, actions, pages and APIs, with AAL2 for sensitive roles;
+- unified request-aware API errors, UUID validation and executable readiness remediation;
+- lazy locale dictionaries, maintainable v2/WCAG styles, mobile fixes and resilient Turnstile states;
+- exact server pagination for every growing v2 list.
 
-External providers remain explicitly **not connected** until real production credentials and schedulers are supplied. The application never presents a simulated connection, delivery, worker heartbeat, AI result, or security state as real.
+External providers remain explicitly **not connected** until real production credentials,
+data-processing approval and schedulers are supplied. The application never presents a
+simulated connection, delivery, worker heartbeat, AI result or security state as real.
 
 ## Local development
 
-Requirements: Node.js 22.13+ and Docker Desktop.
+Requirements: Node.js 22.13+ (Node 24 supported) and Docker Desktop.
 
 ```bash
 npm install
@@ -32,29 +37,45 @@ npm run auth:bootstrap-admin
 npm run dev
 ```
 
-The CRM uses `http://localhost:3200`; local Supabase uses ports 56321–56324. Public signup is disabled. The bootstrap command creates a real staff super administrator, forces first-login password replacement, removes `ADMIN_PASSWORD` from `.env.local`, and writes the one-time credential only to the Git-ignored work directory.
+The CRM uses `http://localhost:3200`; local Supabase uses ports 56321–56324. Public
+signup is disabled. The bootstrap command creates a real staff super administrator,
+forces first-login password replacement, removes `ADMIN_PASSWORD` from `.env.local`,
+and writes the one-time credential only to the Git-ignored work directory.
 
-## Operations
+## Operations and verification
 
-Run every queue once:
+Run all six queue processors once:
 
 ```bash
 npm run workers:process
 ```
 
-In production, schedule this command at the required business SLA. Each of the six workers records success or failure heartbeats; readiness remains degraded while a required worker is stale, a queue is blocked, or a required dependency is unavailable.
-
-Run the complete local release gate:
+Run the complete release gate:
 
 ```bash
 npm run release:gate
 ```
 
-It executes typecheck, lint, production build, 22 Node source contracts, schema lint, 177 pgTAP assertions, five business/HTTP smoke suites, and a production-server liveness check.
+The gate runs typecheck, lint, production build, 23 Node contracts, dependency audit,
+schema lint, 222 pgTAP assertions, business and HTTP smoke suites, static-asset/MIME
+validation, and real UI QA with the installed
+`ms-playwright/chromium-1228/chrome-win64/chrome.exe`.
+
+Browser evidence is saved in `work/browser-qa-chromium-1228/report.json`. The current
+matrix covers 23 public/authenticated page-and-viewport checks at 1440, 1024 and 375px,
+Chinese/English switching, manager AAL2, a support-role permission boundary, hydration,
+console/page/network errors, headings, labels, contrast, text size, overflow, mobile
+navigation and drawer focus restoration.
 
 ## Health
 
 - `GET /api/health`: process liveness and release version.
-- `GET /api/health?mode=ready`: Auth, database, queue SLA, environment, and all six worker heartbeats.
+- `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
+  integrations and all six worker heartbeats, with executable remediation details.
 
-See the [v1.2 audit](docs/AUDIT_2026-07-19_V1.2.0.md), [implementation plan](docs/IMPLEMENTATION_PLAN_V1.2.0.md), [final re-audit](docs/FINAL_REAUDIT_2026-07-19_V1.2.0.md), [browser QA record](docs/BROWSER_QA_2026-07-19_V1.2.0.md), [release record](docs/RELEASE_V1.2.0.md), [implementation status](docs/IMPLEMENTATION_STATUS.md), and [deployment guide](docs/DEPLOYMENT.md).
+Repository work is complete; a production rollout still requires real Sites runtime
+secrets, a backed-up production Supabase migration, scheduler heartbeats and readiness
+200. See the [v2 audit](docs/AUDIT_2026-07-19_CHROMIUM_1228.md),
+[executed remediation plan](docs/REMEDIATION_AND_EXPANSION_PLAN_V2.0.0.md),
+[implementation status](docs/IMPLEMENTATION_STATUS.md), and
+[deployment guide](docs/DEPLOYMENT.md).

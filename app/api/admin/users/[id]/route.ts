@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStaffUser, updateStaffUser } from "@/lib/admin-users-repository";
-import { apiRoute, requireApiAal2, requireApiRole } from "@/lib/api";
+import { apiRoute, parseUuid, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { APP_ROLES } from "@/lib/roles";
 import { SupabaseRequestError } from "@/lib/supabase-server";
@@ -18,7 +18,7 @@ async function patch(request: Request, context: { params: Promise<{ id: string }
   const actor = await requireApiRole("SUPER_ADMIN", "ADMIN");
   await requireApiAal2();
   try {
-    const target = await getStaffUser((await context.params).id);
+    const target = await getStaffUser(parseUuid((await context.params).id));
     await updateStaffUser(target, parsed.data, actor);
     return NextResponse.json({ ok: true });
   } catch (error) {

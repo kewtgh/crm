@@ -66,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "1\.2\.0"/);
+  assert.match(packageJson, /"version": "2\.0\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "1\.2\.0"/);
+  assert.match(packageJson, /"version": "2\.0\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -160,8 +160,8 @@ test("implements customer 360, consent, financial state, import quality, and rea
   assert.match(calendarWorker, /idempotencyKey/);
   assert.match(exportWorker, /marketingContactsExport/);
   assert.match(shell, /nav\.finance/);
-  for (const hidden of ["nav.students", "nav.households", "nav.progression", "nav.ai", "nav.leads"]) assert.doesNotMatch(shell, new RegExp(hidden));
-  for (const removed of ["students", "households", "progression", "ai", "leads"]) await assert.rejects(access(new URL(`../app/(crm)/${removed}/page.tsx`, import.meta.url)));
+  for (const visible of ["nav.students", "nav.households", "nav.progression", "nav.ai", "nav.leads"]) assert.match(shell, new RegExp(visible));
+  for (const added of ["students", "households", "progression", "ai", "leads", "privacy-requests"]) await access(new URL(`../app/(crm)/${added}/page.tsx`, import.meta.url));
 });
 
 test("routes visible eyebrow labels through the locale catalog", async () => {
@@ -490,7 +490,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /1\.2\.0/);
+  assert.match(version, /2\.0\.0/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -554,7 +554,41 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/1\.2\.0/);
+  assert.match(version,/2\.0\.0/);
+});
+
+test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
+  const [migration, capabilities, shell, workspaces, xlsx, imports, exportWorker, releaseGate, browserQa, health, packageJson] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607190040_v200_education_privacy_intelligence.sql",import.meta.url),"utf8"),
+    readFile(new URL("../lib/capabilities.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/app-shell.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../components/v200-workspaces.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../lib/xlsx.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/imports-page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/process-generated-jobs.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/release-gate.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/browser-qa-chromium-1228.cjs",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/health/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../package.json",import.meta.url),"utf8"),
+  ]);
+  for(const table of ["households","students","progression_batches","leads","privacy_requests","ai_suggestions","import_mapping_profiles"]) assert.match(migration,new RegExp(table));
+  assert.match(migration,/product_catalog_snapshot/);
+  assert.match(migration,/create_crm_export_approval\([\s\S]*export_format/);
+  for(const capability of ["education.manage","progression.manage","privacyRequests.manage","ai.review","workers.run"]) assert.match(capabilities,new RegExp(capability.replace(".","\\.")));
+  for(const route of ["/students","/households","/progression","/leads","/ai","/privacy-requests"]) assert.match(shell,new RegExp(route));
+  assert.match(workspaces,/presentApiError/);
+  assert.match(xlsx,/readSheet/);
+  assert.match(imports,/mappingProfiles/);
+  assert.match(imports,/10_000/);
+  assert.match(exportWorker,/writeXlsxFile/);
+  assert.match(exportWorker,/PDFDocument/);
+  assert.match(exportWorker,/@fontsource\/noto-sans-sc/);
+  assert.match(releaseGate,/qa:assets/);
+  assert.match(releaseGate,/qa:chromium-1228/);
+  assert.match(browserQa,/ms-playwright\/chromium-1228/);
+  assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
+  assert.match(health,/SCHEDULE_WORKERS/);
+  assert.match(packageJson,/"version": "2\.0\.0"/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
