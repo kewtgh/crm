@@ -7,7 +7,7 @@ const base=process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/,"");
 const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
 const headers={apikey:key,authorization:`Bearer ${key}`,"content-type":"application/json"};
 const heartbeat=createWorkerHeartbeat(base,key,"GENERATED_JOBS");
-const workerId=process.env.WORKER_ID??`generated-jobs:${process.pid}:${crypto.randomUUID()}`;
+const workerId=process.env.WORKER_ID?.trim()||`generated-jobs:${process.pid}:${crypto.randomUUID()}`;
 
 async function request(path,options={}){const response=await fetch(`${base}${path}`,{...options,headers:{...headers,...options.headers}});const body=await response.json().catch(()=>null);if(!response.ok)throw new Error(`${path} failed (${response.status}: ${body?.code??body?.message??"unknown"})`);return body;}
 const csvCell=value=>{const text=String(value??"");const safe=typeof value==="string"&&/^[=+@-]/.test(text)?`'${text}`:text;return`"${safe.replaceAll('"','""')}"`;};
@@ -41,6 +41,60 @@ async function marketingContactsExport(job){
   const rows=await request(`/rest/v1/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
   return csv([["Contact ID","Name (ZH)","Name (EN)","Email","Phone","Authorized channel","Consent source","Obtained at","Retention until"],...rows.map(item=>[item.contact_id,item.name_zh,item.name_en,item.email,item.phone,item.channel,item.consent_source,item.obtained_at,item.retention_until])]);
 }
+async function requestAll(path){
+  const rows=[];
+  for(let start=0;start<10_000;start+=500){
+    const page=await request(path,{headers:{Range:`${start}-${start+499}`}});
+    rows.push(...page);
+    if(page.length<500)break;
+  }
+  return rows;
+}
+async function crmExport(job){
+  const resource=String(job.parameters?.resource??"");
+  const definitions={
+    schools:{
+      table:"organizations",
+      select:"id,name_zh,name_en,city,curriculum,status,owner_id,key_contact_coverage,completeness,last_contact_at,updated_at",
+      search:["name_zh","name_en","city","curriculum"],
+      sort:{primary:"name_zh",secondary:"city",status:"status",meta:"key_contact_coverage",extra:"last_contact_at",completeness:"completeness"},
+      header:["ID","Name (ZH)","Name (EN)","City","Curriculum","Status","Owner ID","Key contact coverage","Completeness","Last contact","Updated at"],
+      row:item=>[item.id,item.name_zh,item.name_en,item.city,item.curriculum,item.status,item.owner_id,item.key_contact_coverage,item.completeness,item.last_contact_at,item.updated_at],
+    },
+    people:{
+      table:"contacts",
+      select:"id,name_zh,name_en,title,email,phone,status,owner_id,completeness,last_interaction_at,updated_at",
+      search:["name_zh","name_en","title","email","phone"],
+      sort:{primary:"name_zh",secondary:"title",status:"status",meta:"email",extra:"last_interaction_at",completeness:"completeness"},
+      header:["ID","Name (ZH)","Name (EN)","Title","Email","Phone","Status","Owner ID","Completeness","Last interaction","Updated at"],
+      row:item=>[item.id,item.name_zh,item.name_en,item.title,item.email,item.phone,item.status,item.owner_id,item.completeness,item.last_interaction_at,item.updated_at],
+    },
+    tasks:{
+      table:"crm_tasks",
+      select:"id,title_zh,title_en,related_type,related_label,status,priority,owner_id,due_at,sla_due_at,completed_at,updated_at",
+      search:["title_zh","title_en","related_label"],
+      sort:{primary:"title_zh",secondary:"related_label",status:"status",meta:"owner_id",extra:"due_at",completeness:"updated_at"},
+      header:["ID","Title (ZH)","Title (EN)","Related type","Related record","Status","Priority","Owner ID","Due at","SLA due at","Completed at","Updated at"],
+      row:item=>[item.id,item.title_zh,item.title_en,item.related_type,item.related_label,item.status,item.priority,item.owner_id,item.due_at,item.sla_due_at,item.completed_at,item.updated_at],
+    },
+  };
+  const definition=definitions[resource];
+  if(!definition)throw new Error("Invalid CRM export resource");
+  const query=String(job.parameters?.query??"").replace(/[*,()]/g," ").trim().slice(0,100);
+  const status=String(job.parameters?.status??"all");
+  const sort=String(job.parameters?.sort??"primary");
+  const direction=job.parameters?.direction==="desc"?"desc":"asc";
+  const params=new URLSearchParams({select:definition.select,workspace_id:`eq.${job.workspace_id}`,archived_at:"is.null"});
+  if(query)params.set("or",`(${definition.search.map(field=>`${field}.ilike.*${query}*`).join(",")})`);
+  if(status!=="all")params.set("status",`eq.${status}`);
+  if(job.parameters?.scope==="OWNER"){
+    const requester=String(job.parameters?.requesterId??job.created_by);
+    params.set("owner_id",`eq.${requester}`);
+  }
+  params.set("order",`${definition.sort[sort]??definition.sort.primary}.${direction}`);
+  const rows=await requestAll(`/rest/v1/${definition.table}?${params}`);
+  return csv([definition.header,...rows.map(definition.row)]);
+}
 async function setJob(id,status,extra={}){return request(`/rest/v1/generated_jobs?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString(),...extra})});}
 async function expireArtifacts(){const expired=await request(`/rest/v1/generated_jobs?select=id,artifact_path&status=eq.READY&expires_at=lt.${encodeURIComponent(new Date().toISOString())}&limit=50`);for(const job of expired){if(job.artifact_path)await fetch(`${base}/storage/v1/object/crm-exports/${job.artifact_path}`,{method:"DELETE",headers}).catch(()=>undefined);await setJob(job.id,"EXPIRED");}}
 
@@ -52,7 +106,7 @@ try{
   });
   let ready=0;
   for(const job of jobs){
-    try{const content=job.job_type==="CONTRACT_EXPORT"?await contractExport(job):job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job):await performanceExport(job);const path=`${job.workspace_id}/${job.id}.csv`;const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":"text/csv","x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);const expiresAt=new Date(Date.now()+86400000).toISOString();await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type},source_type:"EXPORT",source_id:job.id})});ready+=1;}catch(error){await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure:String(error instanceof Error?error.message:"Unknown export error").slice(0,500)})});}
+    try{const content=job.job_type==="CONTRACT_EXPORT"?await contractExport(job):job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job):job.job_type==="CRM_EXPORT"?await crmExport(job):await performanceExport(job);const path=`${job.workspace_id}/${job.id}.csv`;const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":"text/csv","x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);const expiresAt=new Date(Date.now()+86400000).toISOString();await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type},source_type:"EXPORT",source_id:job.id})});ready+=1;}catch(error){await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure:String(error instanceof Error?error.message:"Unknown export error").slice(0,500)})});}
   }
   await heartbeat.success({claimed:jobs.length,ready});
   process.stdout.write(`Processed ${jobs.length} export jobs; ${ready} ready.\n`);

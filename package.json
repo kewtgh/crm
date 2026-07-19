@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -24,6 +24,8 @@
     "exports:process": "node --env-file=.env.local scripts/process-generated-jobs.mjs",
     "webhooks:process": "node --env-file=.env.local scripts/process-webhook-inbox.mjs",
     "integrations:process": "node --env-file=.env.local scripts/process-integration-sync.mjs",
+    "workers:process": "node --env-file=.env.local scripts/process-worker-cycle.mjs",
+    "release:gate": "node --env-file=.env.local scripts/release-gate.mjs",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {

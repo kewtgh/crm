@@ -1,21 +1,19 @@
-# Implementation status — v1.1.0
+# Implementation status — v1.2.0
 
-Status date: 2026-07-18
+Status date: 2026-07-19
 
 ## Repository outcome
 
-The repository-scoped v1.1.0 audit and remediation plan is complete. No actionable P0, P1, or P2 finding remains in source.
+The repository-scoped audit and remediation plan is implemented. No known actionable P0, P1, or P2 source defect remains open.
 
-- Opportunity creation and every stage transition now share the same server-owned contract and a guided, accessible workflow.
-- Finance lists use independent pagination and exact risk aggregates; query failures are explicit.
-- Schools, people, and tasks have resource-specific fields, client/server validation, duplicate invalidation, exact metrics, and shared 10/20/50 pagination.
-- User timezone and date-format preferences drive the main client workflows and dashboard reporting boundary.
-- Internal component requests use the resilient API client except the intentional authentication bootstrap flows.
-- Drawers and mobile navigation have keyboard focus management, Escape handling, focus restoration, and background scroll locking.
-- CSS custom properties have executable coverage; personal saved views and direct data-quality remediation links are available.
-- Payment-overdue automation and the release-readiness console are integrated into the existing operations model.
-- Runtime configuration is schema-validated and production login throttling fails closed without an independent secret.
-- Local environment generation is merge-safe, and all smoke suites restore their isolated state.
+- Core CRM records support edit, archive, optimistic conflict handling, history, data-quality correction, and approved export.
+- Team tasks support safe delegation, SLA, reminders, team capacity, individual and bulk completion.
+- Password recovery has durable hashed throttling, Turnstile, anti-enumeration responses, 429, and `Retry-After`.
+- Dangerous mutations expose only transactionally idempotent public RPC boundaries.
+- Growing lists use a shared 10/20/50 pagination contract; remote data loads cancel stale requests.
+- Personal and RLS-protected team views use versioned schemas.
+- CSV parsing, duplicate review, global search, loading/error boundaries, metadata, bilingual UI, mobile behavior, and keyboard focus handling were remediated.
+- All six queue processors have a unified cycle command; the release gate works on Windows and Unix-style environments.
 
 ## Final verification
 
@@ -24,27 +22,25 @@ The repository-scoped v1.1.0 audit and remediation plan is complete. No actionab
 | TypeScript | Pass |
 | ESLint | Pass |
 | Production build | Pass |
-| Node tests | 20/20 pass |
-| pgTAP | 132/132 pass |
+| Node source contracts | 22/22 pass |
+| pgTAP | 177/177 pass |
 | PostgreSQL schema lint | 0 errors |
-| Dependency audit | 0 vulnerabilities |
-| Base HTTP smoke | Pass |
+| Database reset from empty | Pass through migration `202607190039` |
+| Base HTTP smoke | Pass, version 1.2.0 |
 | Webhook HTTP security smoke | Pass |
 | Phase-two business smoke | Pass |
 | v0.9 compatibility smoke | Pass |
 | v1.1 remediation smoke | Pass |
-| Liveness | 200, version 1.1.0 |
-| Readiness | Expected local 503: six workers are intentionally not scheduled |
-
-The final database reset applied migrations through `202607180037`; all business and HTTP smoke suites passed after the reset.
+| Unified release gate | Pass |
+| Real browser connector | Environment-blocked; no false pass recorded |
 
 ## External production gates
 
-Repository completion does not manufacture external production state. Production remains fail-closed until:
+Repository completion cannot manufacture production credentials or third-party state. Before a public rollout, the environment owner must:
 
-1. Real Supabase, Turnstile, SMTP, integration, Webhook, callback, backup, and alerting configuration is stored in the hosting environment.
-2. All six production workers are scheduled and report fresh successful heartbeats.
-3. Production `GET /api/health?mode=ready` returns 200.
-4. An available real browser completes 1440/1024/375px, bilingual, overflow, keyboard/focus, and assistive-technology acceptance.
+1. Configure production Supabase, Turnstile, mail, integration, webhook, backup, and alerting values.
+2. Schedule the unified worker cycle and observe six fresh successful heartbeats.
+3. Confirm production readiness returns 200 without test data or forged heartbeats.
+4. Complete the browser matrix in `BROWSER_QA_2026-07-19_V1.2.0.md` on an available browser runtime.
 
-The existing Sites project is owner-only. Its production environment has no entries, no custom domain, and therefore must not receive a known-degraded live deployment. Saving the exact source version is safe; deployment remains intentionally gated by the conditions above.
+Optional AI configuration only reports provider availability. v1.2.0 remains rules-first and sends no customer data to an AI provider.

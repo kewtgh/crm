@@ -26,6 +26,7 @@ import type {
 } from "@/lib/operations-repository";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 type PermissionExplanation = {
   allowed?: boolean;
@@ -43,6 +44,8 @@ export function OperationsCenterPage({
   initialNextActions,
   initialInsights,
   initialReadiness,
+  initialLoadFailed,
+  aiProviderConfigured,
 }: {
   initialSnapshot: OperationalSnapshot | null;
   initialRetryableJobs: PagedResult<RetryableJob>;
@@ -50,6 +53,8 @@ export function OperationsCenterPage({
   initialNextActions: PagedResult<NextBestAction>;
   initialInsights: BusinessInsights | null;
   initialReadiness:ReleaseReadiness|null;
+  initialLoadFailed:boolean;
+  aiProviderConfigured:boolean;
 }) {
   const { locale, t } = useI18n();
   const { formatDate: formatPreferredDate } = useUserPreferences();
@@ -76,11 +81,14 @@ export function OperationsCenterPage({
     accountLabel: item.externalAccountLabel,
   }])));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(initialSnapshot ? "" : t("operations.loadFailed"));
+  const [error, setError] = useState(initialLoadFailed || !initialSnapshot ? t("operations.loadFailed") : "");
   const [toast, setToast] = useState("");
   const [rejecting, setRejecting] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [permission, setPermission] = useState<PermissionExplanation | null>(null);
+  const runOperationsLoad=useRemoteSearch();
+  const runActionsLoad=useRemoteSearch();
+  const runIntegrationsLoad=useRemoteSearch();
 
   const applyOperationsResult = (result: {
     snapshot: OperationalSnapshot;
@@ -100,64 +108,67 @@ export function OperationsCenterPage({
   const loadRetryablePage = async (nextPage: number, nextPageSize: number) => {
     setLoading(true);
     setError("");
-    try {
-      const result = await apiFetch<{
+    const request=await runOperationsLoad(signal=>apiFetch<{
         snapshot: OperationalSnapshot;
         retryableJobs: PagedResult<RetryableJob>;
         insights: BusinessInsights;
         readiness: ReleaseReadiness;
-      }>(`/api/operations?page=${nextPage}&pageSize=${nextPageSize}`);
-      applyOperationsResult(result);
-    } catch {
+      }>(`/api/operations?page=${nextPage}&pageSize=${nextPageSize}`,{signal}));
+    if(!request.current)return;
+    if("error" in request){
       setError(t("operations.loadFailed"));
-    } finally {
       setLoading(false);
+      return;
     }
+    applyOperationsResult(request.value);
+    setLoading(false);
   };
 
   const loadNextActionsPage = async (nextPage: number, nextPageSize: number) => {
     setLoading(true);
     setError("");
-    try {
-      const result = await apiFetch<PagedResult<NextBestAction>>(
-        `/api/next-actions?page=${nextPage}&pageSize=${nextPageSize}`,
-      );
-      setNextActions(result.items);
-      setActionTotal(result.total);
-      setActionPage(result.page);
-      setActionPageSize(result.pageSize);
-    } catch {
+    const request=await runActionsLoad(signal=>apiFetch<PagedResult<NextBestAction>>(
+      `/api/next-actions?page=${nextPage}&pageSize=${nextPageSize}`,{signal},
+    ));
+    if(!request.current)return;
+    if("error" in request){
       setError(t("operations.loadFailed"));
-    } finally {
       setLoading(false);
+      return;
     }
+    setNextActions(request.value.items);
+    setActionTotal(request.value.total);
+    setActionPage(request.value.page);
+    setActionPageSize(request.value.pageSize);
+    setLoading(false);
   };
 
   const refresh = async () => {
     setLoading(true);
     setError("");
-    try {
-      const [operationsResult, integrationsResult, actionsResult] = await Promise.all([
-        apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: PagedResult<RetryableJob>; insights: BusinessInsights;readiness:ReleaseReadiness }>(`/api/operations?page=${retryPage}&pageSize=${retryPageSize}`),
-        apiFetch<{ items: IntegrationConnection[] }>("/api/integrations"),
-        apiFetch<PagedResult<NextBestAction>>(`/api/next-actions?page=${actionPage}&pageSize=${actionPageSize}`),
-      ]);
-      applyOperationsResult(operationsResult);
-      setIntegrations(integrationsResult.items);
-      setIntegrationDrafts(Object.fromEntries(integrationsResult.items.map((item) => [item.provider, {
+    const [operationsRequest,integrationsRequest,actionsRequest]=await Promise.all([
+      runOperationsLoad(signal=>apiFetch<{ snapshot: OperationalSnapshot; retryableJobs: PagedResult<RetryableJob>; insights: BusinessInsights;readiness:ReleaseReadiness }>(`/api/operations?page=${retryPage}&pageSize=${retryPageSize}`,{signal})),
+      runIntegrationsLoad(signal=>apiFetch<{ items: IntegrationConnection[] }>("/api/integrations",{signal})),
+      runActionsLoad(signal=>apiFetch<PagedResult<NextBestAction>>(`/api/next-actions?page=${actionPage}&pageSize=${actionPageSize}`,{signal})),
+    ]);
+    if(!operationsRequest.current||!integrationsRequest.current||!actionsRequest.current)return;
+    if("error" in operationsRequest||"error" in integrationsRequest||"error" in actionsRequest){
+      setError(t("operations.loadFailed"));
+      setLoading(false);
+      return;
+    }
+      applyOperationsResult(operationsRequest.value);
+      setIntegrations(integrationsRequest.value.items);
+      setIntegrationDrafts(Object.fromEntries(integrationsRequest.value.items.map((item) => [item.provider, {
         status: item.status,
         syncDirection: item.syncDirection,
         accountLabel: item.externalAccountLabel,
       }])));
-      setNextActions(actionsResult.items);
-      setActionTotal(actionsResult.total);
-      setActionPage(actionsResult.page);
-      setActionPageSize(actionsResult.pageSize);
-    } catch {
-      setError(t("operations.loadFailed"));
-    } finally {
+      setNextActions(actionsRequest.value.items);
+      setActionTotal(actionsRequest.value.total);
+      setActionPage(actionsRequest.value.page);
+      setActionPageSize(actionsRequest.value.pageSize);
       setLoading(false);
-    }
   };
 
   const retry = async (job: RetryableJob) => {
@@ -307,10 +318,10 @@ export function OperationsCenterPage({
     </section>
 
     <section className="surface operations-section">
-      <div className="surface-heading"><div><p className="eyebrow">SLA</p><h2>{t("operations.queues")}</h2></div><Database size={20}/></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("operations.queueEyebrow")}</p><h2>{t("operations.queues")}</h2></div><Database size={20}/></div>
       <div className="operations-queue-grid">{snapshot?.queues.map((queue) => <article key={queue.key}>
         <span className={queue.failed || queue.breached || queue.stuck ? "red" : queue.pending ? "amber" : "green"}>{queue.failed || queue.breached || queue.stuck ? <TriangleAlert size={19}/> : <Activity size={19}/>}</span>
-        <div><b>{queue.key.replaceAll("_", " ")}</b><small>{queue.oldest ? t("operations.oldest", { date: formatDate(queue.oldest) }) : t("operations.emptyQueue")}</small><small>{t("operations.queueSla", { minutes: queue.slaMinutes, stuck: queue.stuck, breached: queue.breached })}</small></div>
+        <div><b>{t(`operations.key.${queue.key}`)}</b><small>{queue.oldest ? t("operations.oldest", { date: formatDate(queue.oldest) }) : t("operations.emptyQueue")}</small><small>{t("operations.queueSla", { minutes: queue.slaMinutes, stuck: queue.stuck, breached: queue.breached })}</small></div>
         <strong>{t("operations.pending", { count: queue.pending })}</strong>
         <StatusBadge tone={queue.failed || queue.breached ? "red" : "green"}>{t("operations.failed", { count: queue.failed })}</StatusBadge>
       </article>)}</div>
@@ -318,19 +329,19 @@ export function OperationsCenterPage({
 
     <div className="operations-two-column">
       <section className="surface operations-section">
-        <div className="surface-heading"><div><p className="eyebrow">WORKERS</p><h2>{t("operations.workers")}</h2></div><Activity size={20}/></div>
+        <div className="surface-heading"><div><p className="eyebrow">{t("operations.workerEyebrow")}</p><h2>{t("operations.workers")}</h2></div><Activity size={20}/></div>
         <div className="worker-list">{snapshot?.workers.map((worker) => <article key={worker.key}>
           <span className={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{worker.stale ? <TriangleAlert size={17}/> : <Check size={17}/>}</span>
-          <div><b>{worker.key.replaceAll("_", " ")}</b><small>{formatDate(worker.lastSeenAt)} · {t("operations.failures", { count: worker.consecutiveFailures })}</small>{worker.lastError && <small className="error-text">{worker.lastError}</small>}</div>
+          <div><b>{t(`operations.key.${worker.key}`)}</b><small>{formatDate(worker.lastSeenAt)} · {t("operations.failures", { count: worker.consecutiveFailures })}</small>{worker.lastError && <small className="error-text">{worker.lastError}</small>}</div>
           <StatusBadge tone={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{t(worker.stale ? "operations.workerStale" : "operations.workerHealthy")}</StatusBadge>
         </article>)}
         {!snapshot?.workers.length && <div className="empty-state"><span>{t("operations.neverRun")}</span></div>}</div>
       </section>
 
       <section className="surface operations-section">
-        <div className="surface-heading"><div><p className="eyebrow">RECOVERY</p><h2>{t("operations.retryable")}</h2></div><RotateCcw size={20}/></div>
+        <div className="surface-heading"><div><p className="eyebrow">{t("operations.recoveryEyebrow")}</p><h2>{t("operations.retryable")}</h2></div><RotateCcw size={20}/></div>
         <div className="retry-list">{retryableJobs.map((job) => <article key={`${job.type}:${job.id}`}>
-          <div><b>{job.label}</b><small>{job.type.replaceAll("_", " ")} · {formatDate(job.updatedAt)}</small><small className="error-text">{job.error || job.status}</small></div>
+          <div><b>{job.label}</b><small>{t(`operations.key.${job.type}`)} · {formatDate(job.updatedAt)}</small><small className="error-text">{job.error || t(`operations.jobStatus.${job.status}`)}</small></div>
           <button className="secondary-button" type="button" onClick={() => void retry(job)}><RotateCcw size={15}/>{t("operations.retry")}</button>
         </article>)}
         {!retryableJobs.length && <div className="empty-state"><span>{t("operations.noRetryable")}</span></div>}</div>
@@ -346,7 +357,7 @@ export function OperationsCenterPage({
     </div>
 
     <section className="surface operations-section">
-      <div className="surface-heading"><div><p className="eyebrow">PROVIDERS</p><h2>{t("operations.integrations")}</h2><p>{t("operations.integrationHelp")}</p></div><CloudCog size={20}/></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("operations.providerEyebrow")}</p><h2>{t("operations.integrations")}</h2><p>{t("operations.integrationHelp")}</p></div><CloudCog size={20}/></div>
       <div className="integration-grid">{integrations.map((integration) => {
         const draft = integrationDrafts[integration.provider] ?? {
           status: integration.status,
@@ -357,8 +368,8 @@ export function OperationsCenterPage({
         <span><CloudCog size={20}/></span><div><b>{t(`operations.provider.${integration.provider}`)}</b><small>{integration.externalAccountLabel || t("operations.neverSynced")}</small><small>{integration.lastSyncedAt ? formatDate(integration.lastSyncedAt) : t("operations.neverSynced")}</small>{integration.lastError && <small className="error-text">{integration.lastError}</small>}</div>
         <StatusBadge tone={integration.status === "CONNECTED" ? "green" : integration.status === "DISCONNECTED" ? "gray" : "amber"}>{t(`operations.status.${integration.status}`)}</StatusBadge>
         <details><summary>{t("operations.configure")}</summary><div className="integration-controls">
-          <label className="field"><span>{t("common.status")}</span><select value={draft.status} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, status: event.target.value as IntegrationConnection["status"] } }))}>{(integration.status === "CONNECTED" || integration.status === "DEGRADED" ? ["DISCONNECTED","CONNECTING","CONNECTED","DEGRADED","ACTION_REQUIRED"] : ["DISCONNECTED","CONNECTING","ACTION_REQUIRED"]).map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="field"><span>{t("operations.syncDirection")}</span><select value={draft.syncDirection} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, syncDirection: event.target.value as IntegrationConnection["syncDirection"] } }))}>{["NONE","IMPORT_ONLY","EXPORT_ONLY","BIDIRECTIONAL"].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="field"><span>{t("common.status")}</span><select value={draft.status} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, status: event.target.value as IntegrationConnection["status"] } }))}>{(integration.status === "CONNECTED" || integration.status === "DEGRADED" ? ["DISCONNECTED","CONNECTING","CONNECTED","DEGRADED","ACTION_REQUIRED"] : ["DISCONNECTED","CONNECTING","ACTION_REQUIRED"]).map((value) => <option key={value} value={value}>{t(`operations.status.${value}`)}</option>)}</select></label>
+          <label className="field"><span>{t("operations.syncDirection")}</span><select value={draft.syncDirection} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, syncDirection: event.target.value as IntegrationConnection["syncDirection"] } }))}>{["NONE","IMPORT_ONLY","EXPORT_ONLY","BIDIRECTIONAL"].map((value) => <option key={value} value={value}>{t(`operations.sync.${value}`)}</option>)}</select></label>
           <label className="field"><span>{t("operations.accountLabel")}</span><input value={draft.accountLabel} maxLength={160} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, accountLabel: event.target.value } }))}/></label>
           <div className="integration-buttons"><button className="secondary-button" type="button" disabled={integrationPending === integration.provider} onClick={() => void configure(integration.provider)}>{t("common.save")}</button><button className="primary-button" type="button" disabled={integrationPending === integration.provider || integration.status !== "CONNECTED" || integration.syncDirection === "NONE"} onClick={() => void sync(integration.provider)}><RefreshCw size={15}/>{t("operations.syncNow")}</button></div>
         </div></details>
@@ -366,9 +377,10 @@ export function OperationsCenterPage({
     </section>
 
     <section className="surface operations-section">
-      <div className="surface-heading"><div><p className="eyebrow">RULES-FIRST</p><h2>{t("operations.nextActions")}</h2><p>{t("operations.nextActionsHelp")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => void generate()}><Lightbulb size={16}/>{t("operations.generate")}</button></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("operations.rulesEyebrow")}</p><h2>{t("operations.nextActions")}</h2><p>{t("operations.nextActionsHelp")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => void generate()}><Lightbulb size={16}/>{t("operations.generate")}</button></div>
+      <InlineMessage type="info">{t(aiProviderConfigured?"ai.providerConfigured":"ai.providerDisabled")}</InlineMessage>
       <div className="next-action-grid">{nextActions.map((item) => <article key={item.id}>
-        <div className="next-action-heading"><span className={item.priority.toLowerCase()}><Lightbulb size={18}/></span><div><b>{locale === "zh-CN" ? item.titleZh : item.titleEn}</b><small>{locale === "zh-CN" ? item.organizationNameZh : item.organizationNameEn}</small></div><StatusBadge tone={item.priority === "HIGH" ? "red" : "amber"}>{item.priority}</StatusBadge></div>
+        <div className="next-action-heading"><span className={item.priority.toLowerCase()}><Lightbulb size={18}/></span><div><b>{locale === "zh-CN" ? item.titleZh : item.titleEn}</b><small>{locale === "zh-CN" ? item.organizationNameZh : item.organizationNameEn}</small></div><StatusBadge tone={item.priority === "HIGH" ? "red" : "amber"}>{t(`modules.priority.${item.priority.toLowerCase()}`)}</StatusBadge></div>
         <p>{locale === "zh-CN" ? item.rationaleZh : item.rationaleEn}</p>
         <small>{t("operations.ruleEvidence", { rule: `${item.ruleKey}/${item.ruleVersion}`, confidence: Math.round(item.confidence * 100) })}</small>
         <small>{t("operations.validUntil", { date: formatDate(item.validUntil) })}</small>
@@ -386,8 +398,8 @@ export function OperationsCenterPage({
     </section>
 
     <section className="surface operations-section permission-explainer">
-      <div className="surface-heading"><div><p className="eyebrow">AUTHORIZATION</p><h2>{t("operations.permission")}</h2><p>{t("operations.permissionHelp")}</p></div><ShieldQuestion size={20}/></div>
-      <form onSubmit={explain}><label className="field"><span>{t("operations.resourceType")}</span><select name="resourceType">{["ORGANIZATION","CONTACT","OPPORTUNITY","CONTRACT","APPOINTMENT","TASK","QUOTE"].map((value) => <option key={value}>{value}</option>)}</select></label><label className="field"><span>{t("operations.resourceId")}</span><input name="resourceId" type="text" pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("operations.action")}</span><select name="action">{["READ","EDIT","DELETE","APPROVE","RETRY"].map((value) => <option key={value}>{value}</option>)}</select></label><button className="primary-button" type="submit">{t("operations.explain")}</button></form>
+      <div className="surface-heading"><div><p className="eyebrow">{t("operations.authorizationEyebrow")}</p><h2>{t("operations.permission")}</h2><p>{t("operations.permissionHelp")}</p></div><ShieldQuestion size={20}/></div>
+      <form onSubmit={explain}><label className="field"><span>{t("operations.resourceType")}</span><select name="resourceType">{["ORGANIZATION","CONTACT","OPPORTUNITY","CONTRACT","APPOINTMENT","TASK","QUOTE"].map((value) => <option key={value} value={value}>{t(`operations.resource.${value}`)}</option>)}</select></label><label className="field"><span>{t("operations.resourceId")}</span><input name="resourceId" type="text" pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("operations.action")}</span><select name="action">{["READ","EDIT","DELETE","APPROVE","RETRY"].map((value) => <option key={value} value={value}>{t(`operations.action.${value}`)}</option>)}</select></label><button className="primary-button" type="submit">{t("operations.explain")}</button></form>
       {permission && <InlineMessage type={permission.allowed ? "success" : "warning"}><b>{t(permission.allowed ? "operations.allowed" : "operations.denied")}</b> · {t("operations.reason", { reason: permission.reason ?? "UNKNOWN" })} · {t("operations.mfa", { level: permission.mfaLevel ?? "unknown" })}</InlineMessage>}
     </section>
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}

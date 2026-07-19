@@ -66,7 +66,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "1\.1\.0"/);
+  assert.match(packageJson, /"version": "1\.2\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +82,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "1\.1\.0"/);
+  assert.match(packageJson, /"version": "1\.2\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -490,7 +490,71 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /1\.1\.0/);
+  assert.match(version, /1\.2\.0/);
+});
+
+test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
+  const [
+    migration,
+    csv,
+    pagedHook,
+    remoteSearchHook,
+    recordEditor,
+    taskWorkspace,
+    appShell,
+    searchableSelect,
+    resetRoute,
+    duplicateRoute,
+    workerCycle,
+    generatedWorker,
+    releaseGate,
+    audit,
+    plan,
+    version,
+  ]=await Promise.all([
+    readFile(new URL("../supabase/migrations/202607190039_v120_business_closure.sql",import.meta.url),"utf8"),
+    readFile(new URL("../lib/csv.ts",import.meta.url),"utf8"),
+    readFile(new URL("../hooks/use-paged-resource.ts",import.meta.url),"utf8"),
+    readFile(new URL("../hooks/use-remote-search.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/crm-record-editor.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../components/task-workspace.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../components/app-shell.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../components/ui.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/auth/password-reset/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/duplicates/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/process-worker-cycle.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/process-generated-jobs.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/release-gate.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-19_V1.2.0.md",import.meta.url),"utf8"),
+    readFile(new URL("../docs/IMPLEMENTATION_PLAN_V1.2.0.md",import.meta.url),"utf8"),
+    readFile(new URL("../lib/version.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(migration,/can_assign_crm_task/);
+  assert.match(migration,/crm_version_conflict/);
+  assert.match(migration,/idempotent_merge_duplicate_records/);
+  assert.match(migration,/create_crm_export_approval/);
+  assert.match(migration,/recovery_throttle_buckets/);
+  assert.match(csv,/UNCLOSED_QUOTE/);
+  assert.match(csv,/TOO_MANY_ROWS/);
+  assert.match(pagedHook,/AbortController/);
+  assert.match(pagedHook,/router\.replace/);
+  assert.match(remoteSearchHook,/sequence/);
+  assert.match(recordEditor,/expectedUpdatedAt/);
+  assert.match(taskWorkspace,/tasks\.teamCapacity/);
+  assert.match(appShell,/nav\.skipContent/);
+  assert.match(appShell,/searchHref/);
+  assert.match(searchableSelect,/aria-activedescendant/);
+  assert.match(searchableSelect,/scrollIntoView/);
+  assert.match(resetRoute,/applyAccountRecoveryRateLimit/);
+  assert.match(resetRoute,/Retry-After/);
+  assert.match(duplicateRoute,/idempotent_merge_duplicate_records/);
+  assert.match(workerCycle,/GENERATED_JOBS/);
+  assert.match(generatedWorker,/WORKER_ID\?\.trim\(\)\|\|/);
+  assert.match(releaseGate,/supabase.*test.*db/s);
+  assert.match(releaseGate,/npm_execpath/);
+  assert.match(audit,/CRM-01/);
+  assert.match(plan,/RELEASE-02/);
+  assert.match(version,/1\.2\.0/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {

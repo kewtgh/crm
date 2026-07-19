@@ -24,6 +24,7 @@ import {
 } from "@/lib/opportunity-schema";
 import type { FunnelMetric, OpportunityRecord } from "@/lib/sales-repository";
 import { useUserPreferences } from "@/components/user-preferences-context";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 const stageTone: Record<OpportunityStage, string> = {
   DISCOVERY: "blue",
@@ -69,6 +70,8 @@ export function PipelinePage({
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [product, setProduct] = useState("");
   const [productOptions, setProductOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const runOrganizationSearch=useRemoteSearch();
+  const runPageLoad=useRemoteSearch();
 
   const funnelMap = useMemo(() => new Map(funnel.map((item) => [item.stage, item])), [funnel]);
   const currency = items[0]?.currency ?? "CNY";
@@ -99,24 +102,24 @@ export function PipelinePage({
     if (!persistent) return;
     setLoading(true);
     setError("");
-    try {
-      const result = await apiFetch<OpportunityPage>(
-        `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}`,
-      );
-      const nextPages = Math.max(1, Math.ceil(result.total / nextPageSize));
+    const result=await runPageLoad(signal=>apiFetch<OpportunityPage>(
+      `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}`,{signal},
+    ));
+    if(!result.current)return;
+    setLoading(false);
+    if("error" in result){
+      setError(describeError(result.error, "pipeline.loadFailed"));
+      return;
+    }
+      const nextPages = Math.max(1, Math.ceil(result.value.total / nextPageSize));
       if (nextPage > nextPages) {
         setPage(nextPages);
         return;
       }
-      setItems(result.items);
-      setTotal(result.total);
-      setFunnel(result.funnel);
-    } catch (caught) {
-      setError(describeError(caught, "pipeline.loadFailed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [describeError, pageSize, persistent]);
+      setItems(result.value.items);
+      setTotal(result.value.total);
+      setFunnel(result.value.funnel);
+  }, [describeError, pageSize, persistent,runPageLoad]);
 
   useEffect(() => {
     if (page === 1 && !query) return;
@@ -137,23 +140,23 @@ export function PipelinePage({
 
   const searchOrganizations = useCallback(async (value: string) => {
     setRelatedLoading(true);
-    try {
-      const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(
-        `/api/search/related?q=${encodeURIComponent(value)}`,
-      );
-      setOrganizationOptions(result.items
-        .filter((item) => item.type === "ORGANIZATION")
-        .map((item) => ({
-          value: item.value.split(":")[1],
-          label: locale === "zh-CN" ? item.labelZh : item.labelEn,
-          detail: t("pipeline.organization"),
-        })));
-    } catch (caught) {
-      setDrawerError(describeError(caught, "pipeline.loadFailed"));
-    } finally {
-      setRelatedLoading(false);
+    const result=await runOrganizationSearch(signal=>apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(
+      `/api/search/related?q=${encodeURIComponent(value)}`,{signal},
+    ));
+    if(!result.current)return;
+    setRelatedLoading(false);
+    if("error" in result){
+      setDrawerError(describeError(result.error, "pipeline.loadFailed"));
+      return;
     }
-  }, [describeError, locale, t]);
+    setOrganizationOptions(result.value.items
+      .filter((item) => item.type === "ORGANIZATION")
+      .map((item) => ({
+        value: item.value.split(":")[1],
+        label: locale === "zh-CN" ? item.labelZh : item.labelEn,
+        detail: t("pipeline.organization"),
+      })));
+  }, [describeError, locale, runOrganizationSearch, t]);
 
   const create = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

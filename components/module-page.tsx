@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Download, Plus, ScanSearch, SlidersHorizontal } from "lucide-react";
 import type { ModuleConfig } from "@/lib/crm-data";
 import type { CrmMetrics, PersistentResource } from "@/lib/crm-repository";
@@ -9,22 +10,26 @@ import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/comp
 import { useI18n } from "@/components/i18n-provider";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 type Duplicate = { nameZh: string; nameEn: string; reason: string };
-type RelatedResult = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" };
+type RelatedResult = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" };
 
 export function ModulePage({
   config,
   resource,
   initialTotal,
   initialMetrics,
+  workspacePanel,
 }: {
   config: ModuleConfig;
   resource?: PersistentResource;
   initialTotal?: number;
   initialMetrics?: CrmMetrics;
+  workspacePanel?:React.ReactNode;
 }) {
   const { locale, t } = useI18n();
+  const searchParams=useSearchParams();
   const { localDateTimeToIso } = useUserPreferences();
   const prefix = `modules.${config.key}`;
   const [drawer, setDrawer] = useState(false);
@@ -48,6 +53,9 @@ export function ModulePage({
   const [organizationOptions, setOrganizationOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
   const [relatedOptions, setRelatedOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
   const [ownerOptions, setOwnerOptions] = useState<Array<{ value: string; label: string; detail?: string }>>([]);
+  const [exportOpen,setExportOpen]=useState(false);
+  const [exportPending,setExportPending]=useState(false);
+  const runRelatedSearch=useRemoteSearch();
 
   const invalidateDuplicateCheck = () => {
     if (duplicateChecked || duplicates.length) {
@@ -113,20 +121,21 @@ export function ModulePage({
     query: string,
     target: "organization" | "related" | "owner",
   ) => {
-    try {
-      const result = await apiFetch<{ items: RelatedResult[] }>(`/api/search/related?q=${encodeURIComponent(query)}`);
-      const toOption = (item: RelatedResult) => ({
-        value: target === "related" ? item.value : item.value.split(":")[1],
-        label: locale === "zh-CN" ? item.labelZh : item.labelEn,
-        detail: item.type,
-      });
-      if (target === "organization") setOrganizationOptions(result.items.filter((item) => item.type === "ORGANIZATION").map(toOption));
-      if (target === "related") setRelatedOptions(result.items.filter((item) => item.type !== "USER").map(toOption));
-      if (target === "owner") setOwnerOptions(result.items.filter((item) => item.type === "USER").map(toOption));
-    } catch (caught) {
-      setError(describeError(caught, "modules.relatedSearchFailed"));
+    const result=await runRelatedSearch(signal=>apiFetch<{ items: RelatedResult[] }>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));
+    if(!result.current)return;
+    if("error" in result){
+      setError(describeError(result.error, "modules.relatedSearchFailed"));
+      return;
     }
-  }, [describeError, locale]);
+    const toOption = (item: RelatedResult) => ({
+      value: target === "related" ? item.value : item.value.split(":")[1],
+      label: locale === "zh-CN" ? item.labelZh : item.labelEn,
+      detail: t(`search.type.${item.type.toLowerCase()}`),
+    });
+    if (target === "organization") setOrganizationOptions(result.value.items.filter((item) => item.type === "ORGANIZATION").map(toOption));
+    if (target === "related") setRelatedOptions(result.value.items.filter((item) => item.type === "ORGANIZATION"||item.type==="CONTACT").map(toOption));
+    if (target === "owner") setOwnerOptions(result.value.items.filter((item) => item.type === "USER").map(toOption));
+  }, [describeError, locale, runRelatedSearch, t]);
   const check = async (form: HTMLFormElement) => {
     if (!resource) return;
     const values = payload(form);
@@ -180,12 +189,25 @@ export function ModulePage({
       setSaving(false);
     }
   };
+  const requestExport=async(event:React.FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();if(!resource)return;
+    const reason=String(new FormData(event.currentTarget).get("reason")??"").trim();
+    setExportPending(true);setError("");
+    try{
+      await apiFetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+        type:"CRM_EXPORT",resource,query:searchParams.get("q")??"",status:searchParams.get("status")??"all",
+        sort:searchParams.get("sort")??"primary",direction:searchParams.get("direction")==="desc"?"desc":"asc",reason,
+      })});
+      setExportOpen(false);setToast(t("export.submitted"));
+    }catch(caught){setError(describeError(caught,"export.failed"));}
+    finally{setExportPending(false);}
+  };
 
   return <div className="page-stack module-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div>
       <div className="page-actions">
-        <button className="secondary-button" type="button" disabled title={t("records.exportApprovalRequired")}><Download size={16}/>{t("modules.export")}</button>
+        <button className="secondary-button" type="button" disabled={!resource} onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>
         <button className="primary-button" type="button" onClick={() => setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button>
       </div>
     </section>
@@ -195,6 +217,7 @@ export function ModulePage({
       <span><b>{metrics.averageCompleteness}%</b><small>{t("modules.averageCompleteness")}</small></span>
       <button type="button" onClick={() => setSavedViewsOpen(true)}><SlidersHorizontal size={16}/>{t("modules.savedViews")}</button>
     </section>
+    {workspacePanel}
     <DataTable
       config={config}
       resource={resource}
@@ -252,6 +275,14 @@ export function ModulePage({
           <button className="secondary-button" type="button" onClick={close}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={!duplicateChecked || duplicates.length > 0 || saving}><CheckCircle2 size={17}/>{saving ? t("common.saving") : t("modules.createRecord", { record: t(`${prefix}.singular`) })}</button>
         </div>
+      </form>
+    </AccessibleDrawer>}
+    {exportOpen&&resource&&<AccessibleDrawer title={t("export.requestTitle")} eyebrow={t("exports.eyebrow")} description={t("export.requestHelp")} onClose={()=>setExportOpen(false)}>
+      <form onSubmit={requestExport}>
+        <InlineMessage type="info">{t("export.requestHelp")}</InlineMessage>
+        <label className="field"><span>{t("export.reason")} *</span><textarea name="reason" rows={4} minLength={3} maxLength={1000} placeholder={t("export.reasonPlaceholder")} required/></label>
+        {error&&<InlineMessage type="error">{error}</InlineMessage>}
+        <div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setExportOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={exportPending}><Download size={16}/>{exportPending?t("common.processing"):t("export.request")}</button></div>
       </form>
     </AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}

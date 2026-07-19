@@ -255,21 +255,23 @@ select ok(
 );
 
 select throws_ok(
-  $$select public.merge_duplicate_records(
+  $$select public.idempotent_merge_duplicate_records(
     'CONTACTS',
     '92000000-0000-4000-8000-000000000001',
     '92000000-0000-4000-8000-000000000002',
-    '{"unknown":"SOURCE"}'
+    '{"unknown":"SOURCE"}',
+    'v100-invalid-merge'
   )$$,
   'P0001','duplicate_field_choice_invalid',
   'unknown merge-field choices are rejected'
 );
 select lives_ok(
-  $$select public.merge_duplicate_records(
+  $$select public.idempotent_merge_duplicate_records(
     'CONTACTS',
     '92000000-0000-4000-8000-000000000001',
     '92000000-0000-4000-8000-000000000002',
-    '{"nameZh":"TARGET","nameEn":"TARGET","email":"TARGET","status":"TARGET"}'
+    '{"nameZh":"TARGET","nameEn":"TARGET","email":"TARGET","status":"TARGET"}',
+    'v100-controlled-merge'
   )$$,
   'a controlled contact merge succeeds'
 );
@@ -473,6 +475,7 @@ select is(
 
 reset role;
 set local role service_role;
+delete from public.worker_heartbeats;
 select is(
   (public.service_readiness_snapshot(
     '00000000-0000-4000-8000-000000000001'

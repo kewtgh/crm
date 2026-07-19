@@ -1,28 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useI18n } from "./i18n-provider";
+import { TurnstileWidget } from "./turnstile-widget";
 
 export function PasswordResetRequestForm() {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [turnstileToken,setTurnstileToken]=useState("");
+  const [turnstileResetKey,setTurnstileResetKey]=useState(0);
+  const handleTurnstileToken=useCallback((token:string)=>setTurnstileToken(token),[]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true); setError(""); setSuccess("");
     const email = String(new FormData(event.currentTarget).get("email") ?? "");
+    if(!turnstileToken){setError(t("auth.error.turnstileRequired"));setPending(false);return;}
     try {
       const response = await fetch("/api/auth/password-reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email,turnstileToken }),
       });
       const result = (await response.json()) as { code?: string };
-      if (!response.ok) setError(t(result.code === "INVALID_EMAIL" ? "auth.error.invalidEmail" : result.code === "AUTH_NOT_CONFIGURED" ? "auth.error.notConfigured" : "auth.error.retry"));
+      if (!response.ok){
+        const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",TURNSTILE_REQUIRED:"auth.error.turnstileRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
+        setError(t(keys[result.code??""]??"auth.error.retry"));
+        setTurnstileResetKey(value=>value+1);
+      }
       else setSuccess(t("auth.reset.sent"));
     } catch {
       setError(t("auth.error.network"));
@@ -34,6 +43,7 @@ export function PasswordResetRequestForm() {
   return <form className="auth-form" onSubmit={submit} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.accountRecovery")}</p><h1>{t("auth.reset.title")}</h1><p>{t("auth.reset.requestDescription")}</p></div>
     <label className="field"><span>{t("auth.email")}</span><input type="email" name="email" autoComplete="email" required /></label>
+    <TurnstileWidget action="password_recovery" onToken={handleTurnstileToken} resetKey={turnstileResetKey}/>
     {error && <div className="form-message error" role="alert"><LockKeyhole size={17} /><span>{error}</span></div>}
     {success && <div className="form-message success" role="status"><Check size={17} /><span>{success}</span></div>}
     <button className="primary-button auth-submit" type="submit" disabled={pending}>{pending && <LoaderCircle className="spin" size={18} />}{t("auth.reset.send")}</button>

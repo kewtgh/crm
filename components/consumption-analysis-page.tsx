@@ -6,11 +6,13 @@ import { useI18n } from "@/components/i18n-provider";
 import { InlineMessage, ProgressBar, StatusBadge } from "@/components/ui";
 import type { ConsumptionPeriod as Period, ConsumptionResult } from "@/lib/consumption-repository";
 import { apiFetch } from "@/lib/api-client";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 export function ConsumptionAnalysisPage({ initialData, persistent = false }: { initialData: ConsumptionResult; persistent?: boolean }) {
   const { locale, t } = useI18n(); const [period,setPeriod] = useState<Period>(initialData.period);const [currency,setCurrency]=useState(initialData.currency);
   const [cache,setCache] = useState<Record<string,ConsumptionResult>>({[`${initialData.period}:${initialData.currency}`]:initialData}); const [error,setError] = useState(""); const [loading,setLoading] = useState(false);
-  const load=async(next:Period,nextCurrency:string)=>{const key=`${next}:${nextCurrency}`;if(!persistent||cache[key])return;setLoading(true);setError("");try{const result=await apiFetch<{data:ConsumptionResult}>(`/api/analytics/consumption?period=${next}&currency=${nextCurrency}`);setCache(current=>({...current,[key]:result.data}));}catch{setError(t("consumption.loadFailed"));}finally{setLoading(false);}};
+  const runLatest=useRemoteSearch();
+  const load=async(next:Period,nextCurrency:string)=>{const key=`${next}:${nextCurrency}`;if(!persistent||cache[key])return;setLoading(true);setError("");const request=await runLatest(signal=>apiFetch<{data:ConsumptionResult}>(`/api/analytics/consumption?period=${next}&currency=${nextCurrency}`,{signal}));if(!request.current)return;if("error" in request){setError(t("consumption.loadFailed"));setLoading(false);return;}setCache(current=>({...current,[key]:request.value.data}));setLoading(false);};
   const choosePeriod=async(next:Period)=>{setPeriod(next);await load(next,currency);};
   const chooseCurrency=async(next:string)=>{setCurrency(next);await load(period,next);};
   const data = cache[`${period}:${currency}`] ?? initialData;

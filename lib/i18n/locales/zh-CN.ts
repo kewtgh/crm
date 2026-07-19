@@ -6,6 +6,7 @@ import { zhGovernancePages } from "./governance-pages";
 import { zhUiEyebrows } from "./ui-eyebrows";
 import { zhPhase2 } from "./phase2-pages";
 import { zhOperationsV09 } from "./operations-v09";
+import { zhV120 } from "./v120";
 
 export const zhCN: Messages = {
   ...zhSalesPlaybook,
@@ -15,6 +16,7 @@ export const zhCN: Messages = {
   ...zhUiEyebrows,
   ...zhPhase2,
   ...zhOperationsV09,
+  ...zhV120,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.english": "English",

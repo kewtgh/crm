@@ -15,7 +15,7 @@ declare global {
 
 const SCRIPT_ID = "cloudflare-turnstile-script";
 
-export function TurnstileWidget({ onToken, resetKey, error }: { onToken: (token: string) => void; resetKey: number; error?: string }) {
+export function TurnstileWidget({ onToken, resetKey, error, action="staff_login" }: { onToken: (token: string) => void; resetKey: number; error?: string; action?:string }) {
   const { locale, t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<string | null>(null);
@@ -31,7 +31,7 @@ export function TurnstileWidget({ onToken, resetKey, error }: { onToken: (token:
         language: locale === "zh-CN" ? "zh-CN" : "en",
         theme: "light",
         size: "flexible",
-        action: "staff_login",
+        action,
         callback: (token: string) => onToken(token),
         "expired-callback": () => onToken(""),
         "error-callback": () => onToken(""),
@@ -54,7 +54,7 @@ export function TurnstileWidget({ onToken, resetKey, error }: { onToken: (token:
       if (widgetRef.current && window.turnstile) window.turnstile.remove(widgetRef.current);
       widgetRef.current = null;
     };
-  }, [locale, onToken, siteKey]);
+  }, [action, locale, onToken, siteKey]);
 
   useEffect(() => {
     if (!resetKey || !widgetRef.current || !window.turnstile) return;

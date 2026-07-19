@@ -46,8 +46,8 @@ async function get(request: Request, context: { params: Promise<{ resource: stri
   const url = new URL(request.url);
   try {
     const {page,pageSize}=parsePagination(url.searchParams,20);
-    const result = await listCrmRows(resource, { query: url.searchParams.get("q") ?? "", page, pageSize, status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "desc" });
     if (url.searchParams.get("format") === "csv") return NextResponse.json({code:"EXPORT_APPROVAL_REQUIRED"},{status:403});
+    const result = await listCrmRows(resource, { query: url.searchParams.get("q") ?? "", page, pageSize, status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "asc" });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) { return failure(error); }
 }

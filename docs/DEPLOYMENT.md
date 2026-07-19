@@ -1,51 +1,44 @@
-# Lumina Education CRM v1.1.0 部署指引
+# Lumina Education CRM v1.2.0 部署指引
 
 ## 1. 前置条件
 
 - Node.js 22.13+。
 - 独立的 Supabase 项目（Auth、Postgres、Storage）。
-- HTTPS 正式域名。
-- 服务器/worker 密钥管理、正式 SMTP/邮件投递端点、Webhook 处理端点。
-- 可调度六个 worker 并对失败、积压、SLA 超限和心跳过期告警的平台。
+- HTTPS 正式域名、密钥管理、备份、告警与 worker 调度平台。
+- 正式 Turnstile、SMTP/邮件投递、Webhook 与已启用集成的供应商凭据。
 
-先备份数据库并在暂存项目演练迁移和向前修复。不要复用其他项目的 Supabase、用户、密钥或回调地址。
+先备份数据库并在隔离暂存项目演练迁移和向前修复。不得复用其他项目的 Supabase、用户、密钥或回调地址。本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；`/api/health` 必须返回 `version=1.2.0`。
 
-本地 CRM 固定使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。验收时同时确认启动地址和 `/api/health` 的 `version=1.1.0`。
+本地 Supabase 的默认开发密钥、Mailpit 与 Studio 只允许在单机或受信开发网络使用，禁止暴露到公网、共享测试环境或生产。
 
 ## 2. 环境变量
 
-以 [.env.example](../.env.example) 为唯一字段清单。至少必须设置：
+以 [.env.example](../.env.example) 为唯一字段清单。应用必需值：
 
 ```dotenv
 APP_URL=https://crm.example.com
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=production-site-key
 TURNSTILE_SECRET_KEY=production-server-secret
 TURNSTILE_EXPECTED_HOSTNAME=crm.example.com
-
 NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
 CRM_WORKSPACE_ID=workspace-uuid
 LOGIN_THROTTLE_HASH_SECRET=independent-random-secret-at-least-32-bytes
-
-EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.com/crm-delivery
-EMAIL_DELIVERY_WEBHOOK_TOKEN=server-only-token
-WEBHOOK_PROCESSOR_URL=https://integration-worker.example.com/crm-events
-WEBHOOK_PROCESSOR_TOKEN=server-only-token
-INTEGRATION_SYNC_PROCESSOR_URL=https://integration-worker.example.com/crm-sync
-INTEGRATION_SYNC_PROCESSOR_TOKEN=server-only-token
 ```
 
-每个启用的 provider 必须配置独立的 `WEBHOOK_<PROVIDER>_SECRET`。`NEXT_PUBLIC_*` 只能放公开值；Turnstile secret、service role、限流 HMAC、邮件/Webhook token 绝不能进入浏览器或日志。初始化成功后必须从本地、CI 和托管环境删除 `ADMIN_PASSWORD`。
+邮件、Webhook 与同步 worker 按启用能力配置 `EMAIL_DELIVERY_*`、`WEBHOOK_<PROVIDER>_SECRET`、`WEBHOOK_PROCESSOR_*` 和 `INTEGRATION_SYNC_PROCESSOR_*`。`AI_PROVIDER_*` 是可选状态标记；当前版本不会调用 AI 或发送 CRM 数据。
 
-## 3. Supabase
+`NEXT_PUBLIC_*` 只能保存公开值。Turnstile secret、service role、限流 HMAC、邮件/集成 token 绝不能进入浏览器、提交、构建日志或客户端 bundle。初始化后立即删除 `ADMIN_PASSWORD`。
 
-1. 保持全局公开 signup 关闭，但必须允许已创建员工使用 email/password 登录。仓库本地配置以 `[auth] enable_signup=false` 和 `[auth.email] enable_signup=true` 表达这个边界。
+## 3. 数据库与身份
+
+1. 保持公开 signup 关闭，但允许管理员创建的员工使用 email/password 登录。
 2. 配置正式 `APP_URL`、密码重置回调、SMTP 和邮件模板。
-3. 为正式域名配置 Turnstile site key、server secret 和精确 hostname。
-4. 超级管理员和管理员必须达到 TOTP AAL2；邮箱验证不能替代第二因素。
+3. 配置精确 Turnstile hostname。
+4. 超级管理员与管理员必须达到 TOTP AAL2。
 5. 确认 `crm-avatars`、`crm-exports` 为 private。
-6. 在暂存项目应用全部迁移：
+6. 按原顺序应用 `202607160001` 至 `202607190039` 的全部迁移：
 
 ```bash
 npx supabase db push --linked
@@ -53,89 +46,61 @@ npx supabase db lint --linked --level warning
 npx supabase test db --linked
 ```
 
-当前迁移序列为 `202607160001` 至 `202607180037`。`031`–`036` 关闭租户/身份、租约与可观测性、业务闭环、v1 报价边界、Webhook 原子幂等、Auth 两步建档兼容和旧报价写接口退役；`037` 增加精确 CRM 指标、时区感知仪表盘、付款逾期自动化及 Worker 心跳权限。不得遗漏或重排。
+`038` 统一增长型列表分页；`039` 增加任务委派/SLA、CRM 编辑与历史、共享视图、持久密码恢复限流、危险操作幂等边界、数据质量复核及 CRM 导出审批。不得遗漏、重排或重新开放底层 merge/rollback/accept RPC。
 
-## 4. 初始管理员
+首次初始化时运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、`must_change_password=true` 与 username，随后删除临时密码。首次登录必须完成改密和 TOTP。
 
-仅在首次初始化时提供 `ADMIN_*` 变量，然后运行：
-
-```bash
-npm run auth:bootstrap-admin
-```
-
-确认 Auth 用户、`SUPER_ADMIN` membership、`must_change_password=true` 和 username 正确，随后立即删除 `ADMIN_PASSWORD`。首次登录必须完成临时密码替换和 TOTP，达到 AAL2 前管理员数据/API 均应拒绝访问。
-
-## 5. 构建与自动化验收
+## 4. 构建与验收
 
 ```bash
 npm ci
-npm run typecheck
-npm run lint
-npm test
-npm run smoke:http-v09
-npm run smoke:http-v10
-npm run smoke:phase2
-npm run smoke:v09
-npm run smoke:v11
-npx supabase db lint --local --level warning
-npx supabase test db --local
+npm run release:gate
 ```
 
-五项 smoke 会写入并自动清理隔离测试数据；只能对专用暂存 workspace 执行。`npm test` 包含 production build。
+门禁包括 typecheck、lint、production build、22 条 Node 契约、177 条 pgTAP、schema lint、五组 smoke 与生产服务器 liveness。smoke 会写入并清理隔离数据，只能对专用本地/暂存 workspace 执行。
 
-## 6. Worker 与外部集成
+## 5. Worker 与外部集成
 
-按分钟或业务 SLA 调度：
+统一执行六类 worker：
 
 ```bash
-npm run reminders:process
-npm run outbox:process
-npm run calendar-deliveries:process
-npm run exports:process
-npm run webhooks:process
-npm run integrations:process
+npm run workers:process
 ```
 
-六个 worker 分别记录成功/失败心跳。不得使用手工数据库更新伪造“健康”。邮件、日历、Webhook 和集成同步只有在外部端点确认成功后才能完成；失败任务进入带租约、退避、死信和审计重放的流程。导出文件存储在私有桶，签名链接 60 秒有效，文件 24 小时后清理。
+生产调度器按业务 SLA 周期执行该命令。六类处理器分别负责提醒、通知 outbox、日历投递、生成文件、Webhook inbox 和集成同步。任一失败会记录失败心跳并让命令失败；不得手工修改数据库伪造健康。
 
-Webhook 请求必须小于等于 1 MiB，携带 provider 对应的 HMAC 签名、稳定事件 ID、事件类型和时间戳。签名覆盖完整 canonical envelope，时间窗口为 5 分钟；重复事件由单事务 RPC 原子确认。浏览器角色不能写入收件箱；只有服务角色可摄取、claim、完成或标记失败。
+导出文件位于私有桶，下载使用短期签名 URL，文件按过期策略清理。Webhook 必须使用供应商独立 HMAC secret、稳定事件 ID、完整 canonical envelope、5 分钟重放窗口和原子幂等摄取。
 
-## 7. 健康、监控与备份
+## 6. 健康、监控与备份
 
-- `GET /api/health`：liveness，进程可响应时返回 200。
-- `GET /api/health?mode=ready`：readiness；Auth、数据库、队列或任一预期 worker 不健康时返回 503。
-- 对 5xx、登录限流、RLS 拒绝、审批失败、身份补偿失败、队列最老年龄、失败任务、心跳过期、邮件/Webhook 失败和存储容量告警。
-- 启用 PITR 或每日备份；每季度在隔离项目恢复并验证 Auth、RLS、合同、付款、提醒、Webhook 和私有文件。
+- `GET /api/health`：liveness，返回 200 与版本。
+- `GET /api/health?mode=ready`：检查 Auth、数据库、环境、队列 SLA 和六个 worker；不健康时返回 503。
+- 告警覆盖 5xx、限流、RLS 拒绝、审批执行失败、身份补偿失败、失败/卡死任务、最老积压、心跳过期、邮件/Webhook 失败和存储容量。
+- 启用 PITR 或每日备份；定期在隔离项目恢复并验证 Auth、RLS、合同、付款、提醒、审计与私有文件。
 
-## 8. 上线验收
+## 7. 上线验收
 
-- 公开 signup 被拒绝，不存在注册页面/API。
-- 错误密码返回表单内 401；受保护 API 未登录返回 JSON 401 和 request ID，不返回登录 HTML。
-- Turnstile、首次改密、管理员 TOTP/AAL2、角色和团队边界全部生效。
-- 停用员工后旧会话不能继续访问；任何身份补偿失败均可见并告警。
-- maker/checker、自审限制、旧退款 RPC 缺失和跨 workspace 负向用例通过。
-- 报价、合同、收付款/退款、导入 dry run/执行/回滚、去重预览/合并可追溯。
-- 客户活动、续约 Playbook、商机阶段守卫、产品包、汇率快照和 Next Best Action 使用真实持久化和审计。
-- 五个集成状态与真实供应商一致；只有 provider callback 可确认 `CONNECTED`，未连接时明确显示未连接。
-- 运维中心能看到队列、失败、卡死、SLA 超限和六个新鲜 worker 心跳，readiness 返回 200。
-- 以 1440、1024、375px 验证中英文、键盘焦点、弹层、表单错误、移动字段标签、无横向溢出和 accessibility。
-- CSP 响应包含每请求 nonce 与 `strict-dynamic`，生产脚本策略不包含 `unsafe-inline`。
+- 公开注册拒绝；错误认证保持 JSON/表单内错误与 request ID。
+- Turnstile、首次改密、TOTP/AAL2、角色、团队和 workspace 边界生效。
+- 学校、联系人、任务编辑/归档/历史/并发冲突和导出审批完整。
+- 报价、合同、付款、退款、导入 dry run/执行/幂等回滚、去重预览/幂等合并可追溯。
+- 数据质量只能在源字段修复并重检后正常关闭；忽略必须记录理由。
+- 运维中心显示真实积压、集成配置和六个新鲜 worker；readiness 为 200。
+- 以 1440、1024、375px 验证中英文、键盘、焦点、菜单、抽屉、表单错误和横向溢出。
+- CSP 包含每请求 nonce 与 `strict-dynamic`，生产脚本策略不含 `unsafe-inline`。
 
-## 9. Sites 发布条件
+## 8. Sites 发布
 
-若使用 OpenAI Sites：
+1. 复用 `.openai/hosting.json` 的既有项目。
+2. 在 Sites 运行时保存正式环境变量与 secrets，不复制本地测试值。
+3. 推送通过门禁的精确提交，再以同一 commit 保存 version。
+4. 只部署已保存 version；先使用 private 访问级别。
+5. 部署完成后检查状态、liveness、readiness 和核心 smoke。
 
-1. 复用 `.openai/hosting.json` 中的真实 `project_id`，不得另建重复站点。
-2. 将生产环境变量和 secrets 保存到站点运行时；不得复制本地测试密钥。
-3. 推送已通过上述门禁的精确提交，保存对应 version。
-4. 只部署已保存的 version，并在部署后重新检查 readiness 和核心业务 smoke。
+## 9. 回滚
 
-生产凭据、worker 调度或浏览器验收不完整时，只保留站点项目/配置，不发布一个已知 degraded 的生产版本。
-
-## 10. 回滚
-
-1. 停止 worker 和新写入流量。
-2. 回滚应用到上一已验证 version。
-3. 数据库优先用向前修复迁移；只有恢复演练确认后才执行备份恢复。
-4. 不删除审批、审计、合同版本、付款、Webhook 收件箱或业务历史来“回滚界面”。
-5. 恢复后重跑 readiness、权限矩阵、pgTAP、HTTP、业务和浏览器验收。
+1. 停止新写入流量和 worker。
+2. 将应用回滚到上一已验证 Sites version。
+3. 数据库优先使用向前修复迁移；仅在恢复演练确认后执行备份恢复。
+4. 不删除审批、审计、合同版本、付款、通知或 Webhook 历史来“回滚界面”。
+5. 恢复后重跑 release gate、readiness、权限、业务和浏览器矩阵。

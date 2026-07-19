@@ -6,7 +6,8 @@ import Link from "next/link";
 import type { QualityIssue } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
-import { apiFetch } from "@/lib/api-client";
+import { ApiClientError, apiFetch } from "@/lib/api-client";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 export function DataQualityPage({ initialItems, initialTotal }: { initialItems: QualityIssue[]; initialTotal: number }) {
   const { t } = useI18n();
@@ -21,16 +22,18 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
   const [toast, setToast] = useState("");
   const [action, setAction] = useState<{ id: string; dismiss: boolean } | null>(null);
   const [resolution, setResolution] = useState("");
+  const runLatest = useRemoteSearch();
 
   const load = async (nextPage = page, nextPageSize = pageSize) => {
-    try {
-      const result = await apiFetch<{ items: QualityIssue[]; total: number }>(`/api/data-quality?page=${nextPage}&pageSize=${nextPageSize}&q=${encodeURIComponent(query)}`);
-      setError("");
-      setItems(result.items);
-      setTotal(result.total);
-    } catch {
+    const request = await runLatest((signal) => apiFetch<{ items: QualityIssue[]; total: number }>(`/api/data-quality?page=${nextPage}&pageSize=${nextPageSize}&q=${encodeURIComponent(query)}`, { signal }));
+    if (!request.current) return;
+    if ("error" in request) {
       setError(t("quality.loadFailed"));
+      return;
     }
+    setError("");
+    setItems(request.value.items);
+    setTotal(request.value.total);
   };
 
   const runRules = async () => {
@@ -60,9 +63,9 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ operation: "resolve", id: action.id, resolution: resolution.trim(), dismiss: action.dismiss }),
       });
-    } catch {
+    } catch(caught) {
       setPending(false);
-      setRowError({ id: action.id, message: t("quality.operationFailed") });
+      setRowError({ id: action.id, message: t(caught instanceof ApiClientError&&caught.code==="QUALITY_SOURCE_NOT_FIXED"?"quality.stillInvalid":"quality.operationFailed") });
       return;
     }
     setPending(false);
@@ -90,11 +93,11 @@ export function DataQualityPage({ initialItems, initialTotal }: { initialItems: 
       <div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("quality.search")} /><button className="secondary-button" onClick={() => void load(1)}>{t("common.search")}</button></div>
       {items.map((item) => <article className="quality-row" key={item.id}>
         <span className={`quality-icon ${item.severity.toLowerCase()}`}><ShieldAlert size={17} /></span>
-        <div><b>{t(item.titleKey)}</b><small>{item.entityType} · {item.entityId.slice(0, 8)}</small><small>{Object.values(item.details).filter(Boolean).join(" / ")}</small>{qualityHref(item)&&<Link className="text-button" href={qualityHref(item)!}>{t("quality.openRecord")}</Link>}</div>
+        <div><b>{t(item.titleKey)}</b><small>{t(`search.type.${item.entityType.toLowerCase()}`)} · {item.entityId.slice(0, 8)}</small><small>{Object.values(item.details).filter(Boolean).join(" / ")}</small>{qualityHref(item)&&<Link className="text-button" href={qualityHref(item)!}>{t("quality.openRecord")}</Link>}<small>{t("quality.fixFirst")}</small></div>
         <StatusBadge tone={item.severity === "HIGH" ? "red" : item.severity === "MEDIUM" ? "amber" : "blue"}>{t(`quality.severity.${item.severity.toLowerCase()}`)}</StatusBadge>
-        <div className="quality-actions"><button onClick={() => beginResolution(item.id, false)}><CheckCircle2 size={15} />{t("quality.resolve")}</button><button onClick={() => beginResolution(item.id, true)}>{t("quality.dismiss")}</button></div>
+        <div className="quality-actions"><button onClick={() => beginResolution(item.id, false)}><CheckCircle2 size={15} />{t("quality.verifyResolve")}</button><button onClick={() => beginResolution(item.id, true)}>{t("quality.dismiss")}</button></div>
         {action?.id === item.id && <form className="quality-resolution-form" onSubmit={submitResolution}>
-          <label className="field"><span>{t(action.dismiss ? "quality.dismissPrompt" : "quality.resolvePrompt")}</span><textarea rows={3} value={resolution} onChange={(event) => setResolution(event.target.value)} required autoFocus /></label>
+          <label className="field"><span>{t(action.dismiss ? "quality.dismissReason" : "quality.resolvePrompt")}</span><textarea rows={3} value={resolution} onChange={(event) => setResolution(event.target.value)} required autoFocus /></label>
           {rowError?.id === item.id && <InlineMessage type="error">{rowError.message}</InlineMessage>}
           <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setAction(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending || !resolution.trim()}>{pending ? t("common.saving") : t("common.confirm")}</button></div>
         </form>}

@@ -91,6 +91,8 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
   const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef=useRef<HTMLInputElement>(null);
+  const optionRefs=useRef<Array<HTMLButtonElement|null>>([]);
   const listboxId = useId();
   const selected = options.find((option) => option.value === value);
   const filtered = useMemo(() => options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLowerCase().includes(search.toLowerCase())), [options, search]);
@@ -109,8 +111,12 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
   }, []);
   useEffect(() => {
     if (!open) return;
-    window.requestAnimationFrame(() => ref.current?.querySelector<HTMLInputElement>(".search-field input")?.focus());
+    window.requestAnimationFrame(() => searchRef.current?.focus());
   }, [open]);
+  useEffect(()=>{
+    if(!open||!filtered[activeIndex])return;
+    optionRefs.current[activeIndex]?.scrollIntoView({block:"nearest"});
+  },[activeIndex,filtered,open]);
   useEffect(() => {
     if (!open || !onSearch) return;
     const timer = window.setTimeout(() => onSearch(search), 250);
@@ -131,23 +137,30 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
       setActiveIndex((index) => (index + direction + filtered.length) % filtered.length);
       return;
     }
+    if((event.key==="Home"||event.key==="End")&&open&&filtered.length){
+      event.preventDefault();setActiveIndex(event.key==="Home"?0:filtered.length-1);return;
+    }
     if (event.key === "Enter" && open && filtered[activeIndex]) {
       event.preventDefault();
       choose(filtered[activeIndex].value);
     }
   };
   return (
-    <div className="select-field" ref={ref} onKeyDown={handleKeyDown}>
+    <div className="select-field" ref={ref} onKeyDown={handleKeyDown} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null)){setOpen(false);setSearch("");}}}>
       <span className="select-label">{label}</span>
-      <button ref={triggerRef} type="button" role="combobox" aria-label={label} aria-autocomplete="list" aria-activedescendant={open&&filtered[activeIndex]?`${listboxId}-${activeIndex}`:undefined} className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
+      <button ref={triggerRef} type="button" aria-label={label} className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
         <span className={selected ? "" : "placeholder"}>{selected?.label ?? resolvedPlaceholder}</span><ChevronDown size={17} />
       </button>
       {open && (
         <div className="select-popover">
-          <SearchField value={search} onChange={(nextSearch) => { setSearch(nextSearch); setActiveIndex(0); }} placeholder={t("common.typeToSearch")} compact />
+          <label className="search-field compact">
+            <Search size={17}/>
+            <input ref={searchRef} role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded="true" aria-controls={listboxId} aria-activedescendant={filtered[activeIndex]?`${listboxId}-${activeIndex}`:undefined} value={search} onChange={event=>{setSearch(event.target.value);setActiveIndex(0);}} placeholder={t("common.typeToSearch")}/>
+            {search&&<button type="button" onClick={()=>{setSearch("");setActiveIndex(0);}} aria-label={t("common.clearSearch")}><X size={15}/></button>}
+          </label>
           <div className="select-options" id={listboxId} role="listbox" aria-label={label}>
             {filtered.map((option, index) => (
-              <button id={`${listboxId}-${index}`} key={option.value} type="button" className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option.value)} role="option" aria-selected={option.value === value}>
+              <button ref={element=>{optionRefs.current[index]=element;}} id={`${listboxId}-${index}`} key={option.value} type="button" tabIndex={-1} className={index === activeIndex ? "active" : ""} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option.value)} role="option" aria-selected={option.value === value}>
                 <span><b>{option.label}</b>{option.detail && <small>{option.detail}</small>}</span>
                 {option.value === value ? <Check size={16} /> : null}
               </button>

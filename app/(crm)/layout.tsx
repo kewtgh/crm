@@ -11,9 +11,11 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
   const user = await requireUser();
   if (user.mustChangePassword) redirect("/change-password");
   if (isMfaRequiredRole(user.role) && user.aal !== "aal2") redirect(user.mfaEnabled ? "/mfa-challenge" : "/mfa-setup");
-  const [relationshipHealth,settings] = await Promise.all([
-    loadWorkspaceRelationshipHealth().catch(() => emptyRelationshipHealth),
+  const [relationshipResult,settings] = await Promise.all([
+    loadWorkspaceRelationshipHealth()
+      .then((value) => ({ value, unavailable: false }))
+      .catch(() => ({ value: emptyRelationshipHealth, unavailable: true })),
     loadUserSettings(user),
   ]);
-  return <AppShell user={user} relationshipHealth={relationshipHealth} preferences={{timezone:settings.timezone,dateFormat:settings.dateFormat}}>{children}</AppShell>;
+  return <AppShell user={user} relationshipHealth={relationshipResult.value} relationshipHealthUnavailable={relationshipResult.unavailable} preferences={{timezone:settings.timezone,dateFormat:settings.dateFormat}}>{children}</AppShell>;
 }

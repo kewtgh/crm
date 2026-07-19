@@ -15,7 +15,7 @@ const headers = {
   "content-type": "application/json",
 };
 const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "WEBHOOK_INBOX");
-const workerId = process.env.WORKER_ID ?? `webhook-inbox:${process.pid}:${crypto.randomUUID()}`;
+const workerId = process.env.WORKER_ID?.trim() || `webhook-inbox:${process.pid}:${crypto.randomUUID()}`;
 
 async function rpc(name, body) {
   const response = await fetch(`${baseUrl}/rest/v1/rpc/${name}`, {
