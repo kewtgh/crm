@@ -74,6 +74,8 @@ try{
   assertServerRunning(server);
 await runNpm(["run","smoke:v11"]);
 await runNpm(["run","smoke:exports"]);
+  process.env.AUTH_SMOKE_BASE_URL=appUrl;
+  await runNpm(["run","smoke:auth-device"]);
   assertServerRunning(server);
   await runNpm(["run","qa:chromium-1228"]);
 }finally{

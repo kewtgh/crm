@@ -19,7 +19,7 @@ type ServiceReadiness = {
 
 const requiredWorkers=["REMINDERS","NOTIFICATION_OUTBOX","CALENDAR_DELIVERIES","GENERATED_JOBS","WEBHOOK_INBOX","INTEGRATION_SYNC"];
 const integrationStatus=()=>({
-  email:Boolean(process.env.EMAIL_DELIVERY_URL&&process.env.EMAIL_DELIVERY_TOKEN),
+  email:Boolean(process.env.EMAIL_DELIVERY_WEBHOOK_URL&&process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN),
   webhook:Boolean(process.env.WEBHOOK_PROCESSOR_URL),
   integrationSync:Boolean(process.env.INTEGRATION_SYNC_PROCESSOR_URL),
   externalAi:false,
@@ -46,7 +46,7 @@ async function get(request: Request) {
       integrations:integrationStatus(),
       remediation:[
         {code:"CONFIGURE_RUNTIME",action:"Configure every named missing variable in the private Sites/runtime secret store; never copy local test values.",missing:environment.missing},
-        {code:"APPLY_MIGRATIONS",action:"Back up the target database, then apply all Supabase migrations through 202607190040."},
+        {code:"APPLY_MIGRATIONS",action:"Back up the target database, then apply all Supabase migrations through 202607200042."},
         {code:"SCHEDULE_WORKERS",action:"Enable the protected production schedule for npm run workers:process and confirm all six heartbeats.",workers:requiredWorkers},
       ],
     }, { status: 503 });

@@ -65,6 +65,7 @@ export function PipelinePage({
   const [toast, setToast] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [transition, setTransition] = useState<TransitionState | null>(null);
+  const [subjectType, setSubjectType] = useState<"SCHOOL" | "HOUSEHOLD">("SCHOOL");
   const [organization, setOrganization] = useState("");
   const [organizationOptions, setOrganizationOptions] = useState<Array<{ value: string; label: string; detail: string }>>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -140,6 +141,24 @@ export function PipelinePage({
 
   const searchOrganizations = useCallback(async (value: string) => {
     setRelatedLoading(true);
+    if (subjectType === "HOUSEHOLD") {
+      try {
+        const result = await apiFetch<{ items: Array<{ id: string; nameZh: string; nameEn: string; address: string }> }>(
+          `/api/education?resource=households&page=1&pageSize=20&q=${encodeURIComponent(value)}`,
+        );
+        setOrganizationOptions(result.items.map((item) => ({
+          value: item.id,
+          label: locale === "zh-CN" ? item.nameZh : item.nameEn,
+          detail: item.address || t("nav.households"),
+        })));
+        setDrawerError("");
+      } catch (caught) {
+        setDrawerError(describeError(caught, "pipeline.loadFailed"));
+      } finally {
+        setRelatedLoading(false);
+      }
+      return;
+    }
     const result=await runOrganizationSearch(signal=>apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(
       `/api/search/related?q=${encodeURIComponent(value)}`,{signal},
     ));
@@ -156,7 +175,7 @@ export function PipelinePage({
         label: locale === "zh-CN" ? item.labelZh : item.labelEn,
         detail: t("pipeline.organization"),
       })));
-  }, [describeError, locale, runOrganizationSearch, t]);
+  }, [describeError, locale, runOrganizationSearch, subjectType, t]);
 
   const create = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,7 +183,9 @@ export function PipelinePage({
     const form = new FormData(event.currentTarget);
     const stage = String(form.get("stage")) as OpportunityStage;
     const parsed = createOpportunitySchema.safeParse({
-      organizationId: organization,
+      subjectType,
+      organizationId: subjectType === "SCHOOL" ? organization : null,
+      householdId: subjectType === "HOUSEHOLD" ? organization : null,
       productId: product || null,
       titleZh: String(form.get("titleZh") ?? ""),
       titleEn: String(form.get("titleEn") ?? ""),
@@ -190,6 +211,7 @@ export function PipelinePage({
       });
       setCreateOpen(false);
       setOrganization("");
+      setSubjectType("SCHOOL");
       setProduct("");
       setPage(1);
       await load(1, query);
@@ -302,7 +324,7 @@ export function PipelinePage({
                   </select>
                 </span>
                 <b>{locale === "zh-CN" ? card.titleZh : card.titleEn}</b>
-                <small>{locale === "zh-CN" ? card.organizationZh : card.organizationEn}</small>
+                <small>{t(card.subjectType === "SCHOOL" ? "leads.type.school" : "leads.type.household")} · {locale === "zh-CN" ? card.subjectZh : card.subjectEn}</small>
                 <div className="opportunity-meta">
                   <b>{money(card.amount, card.currency)}</b>
                   <span><CalendarDays size={13}/>{card.expectedCloseDate
@@ -330,7 +352,8 @@ export function PipelinePage({
       onClose={() => setCreateOpen(false)}
     >
       <form onSubmit={create}>
-        <SearchableSelect label={`${t("pipeline.organization")} *`} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
+        <label className="field"><span>{t("leads.type")} *</span><select value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
+        <SearchableSelect label={`${t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} *`} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
         <SearchableSelect label={t("products.title")} options={productOptions} value={product} onChange={setProduct}/>
         <div className="form-grid two-column">
           <label className="field"><span>{t("products.nameZh")} *</span><input name="titleZh" required maxLength={160}/></label>

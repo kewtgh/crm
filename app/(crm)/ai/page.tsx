@@ -7,6 +7,6 @@ import { listSuggestions } from "@/lib/v200-repository";
 export const generateMetadata = () => localizedPageMetadata("meta.ai");
 export default async function Page() {
   await requireCapability("ai.review");
-  const data = await listSuggestions().catch(() => null);
+  const data = await listSuggestions({status:"OPEN"}).catch(() => null);
   return data ? <SuggestionsWorkspace initial={data}/> : <DataLoadError/>;
 }

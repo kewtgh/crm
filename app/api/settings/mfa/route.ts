@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { authCookieNames, isMfaRequiredRole } from "@/lib/auth";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
+import { revokeUserTrustedDevices, securityCookieNames, trustedDeviceMaxAge } from "@/lib/trusted-devices";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("enroll") }),
@@ -38,8 +40,16 @@ async function post(request: Request) {
       const session = await supabaseJson<{ access_token?: string; refresh_token?: string; expires_in?: number }>(`/auth/v1/factors/${parsed.data.factorId}/verify`, { method: "POST", body: JSON.stringify({ challenge_id: parsed.data.challengeId, code: parsed.data.code }) }, token);
       const response = NextResponse.json({ ok: true, next: "/dashboard" });
       const cookieBase = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
+      const remember = (await cookies()).get(securityCookieNames.mfaRemember)?.value === "1";
       if (session.access_token) response.cookies.set(authCookieNames.access, session.access_token, { ...cookieBase, maxAge: Number(session.expires_in ?? 3600) });
-      if (session.refresh_token) response.cookies.set(authCookieNames.refresh, session.refresh_token, cookieBase);
+      if (session.refresh_token) response.cookies.set(authCookieNames.refresh, session.refresh_token, remember ? { ...cookieBase, maxAge: trustedDeviceMaxAge } : cookieBase);
+      await revokeUserTrustedDevices(user.id, "MFA_VERIFIED").catch(() => undefined);
+      response.cookies.delete(securityCookieNames.trustedDevice);
+      response.cookies.set(securityCookieNames.mfaRemember, "", {
+        ...cookieBase,
+        path: "/api/settings/mfa",
+        maxAge: 0,
+      });
       return response;
     }
     if (isMfaRequiredRole(user.role)) return NextResponse.json({ code: "MFA_REQUIRED_FOR_ROLE" }, { status: 409 });

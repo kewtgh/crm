@@ -16,6 +16,7 @@ export const coreRuntimeEnvironmentSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: configured,
   CRM_WORKSPACE_ID: z.uuid(),
   LOGIN_THROTTLE_HASH_SECRET: productionSecret,
+  TRUSTED_DEVICE_HASH_SECRET: productionSecret,
 });
 
 export type RuntimeEnvironmentStatus = {
@@ -48,4 +49,16 @@ export function requireLoginThrottleSecret(environment: NodeJS.ProcessEnv = proc
     if (!parsed.success) throw new Error("LOGIN_THROTTLE_HASH_SECRET_NOT_CONFIGURED");
   }
   return secret || environment.SUPABASE_SERVICE_ROLE_KEY?.trim();
+}
+
+export function requireTrustedDeviceSecret(environment: NodeJS.ProcessEnv = process.env) {
+  const secret = environment.TRUSTED_DEVICE_HASH_SECRET?.trim();
+  if (environment.NODE_ENV === "production") {
+    const parsed = productionSecret.safeParse(secret);
+    if (!parsed.success) throw new Error("TRUSTED_DEVICE_HASH_SECRET_NOT_CONFIGURED");
+  }
+  return secret
+    || environment.LOGIN_THROTTLE_HASH_SECRET?.trim()
+    || environment.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    || "lumina-local-trusted-device-development-key";
 }

@@ -12,6 +12,19 @@ const codeKeys: Record<string, string> = {
   NETWORK_ERROR: "error.network",
   SESSION_REFRESH_REQUIRED: "error.session",
   AUTH_REQUIRED: "error.session",
+  RECORD_CONFLICT: "error.conflict",
+  RELATED_RECORD_CONFLICT: "error.relatedConflict",
+  CONSTRAINT_VIOLATION: "error.invalidInput",
+  EDUCATION_VERSION_CONFLICT: "error.versionConflict",
+  PROGRESSION_RULE_INVALID: "progression.ruleInvalid",
+  PROGRESSION_ITEM_INVALID: "progression.itemInvalid",
+  PROGRESSION_NOT_EDITABLE: "progression.notEditable",
+  PROGRESSION_NOT_CANCELLABLE: "progression.notCancellable",
+  STUDENT_VERSION_CONFLICT: "progression.studentConflict",
+  LEAD_NOT_CONVERTIBLE: "leads.notConvertible",
+  EDUCATION_RELATIONSHIP_SUBJECT_NOT_FOUND: "education.relationshipSubjectMissing",
+  EDUCATION_RELATIONSHIP_NOT_FOUND: "education.relationshipMissing",
+  EDUCATION_PRIMARY_REPLACEMENT_REQUIRED: "education.primaryReplacementRequired",
 };
 
 export type PresentedApiError = {

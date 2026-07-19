@@ -34,7 +34,9 @@ const nextActionFields = {
 };
 
 export const createOpportunitySchema = z.object({
-  organizationId: z.string().uuid(),
+  subjectType: z.enum(["SCHOOL", "HOUSEHOLD"]),
+  organizationId: z.string().uuid().nullable().optional(),
+  householdId: z.string().uuid().nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
   titleZh: z.string().trim().min(1).max(160),
   titleEn: z.string().trim().min(1).max(180),
@@ -43,6 +45,13 @@ export const createOpportunitySchema = z.object({
   currency: z.string().regex(/^[A-Z]{3}$/),
   probability: z.number().int().min(0).max(100),
   ...nextActionFields,
+}).superRefine((value, context) => {
+  if (value.subjectType === "SCHOOL" && (!value.organizationId || value.householdId)) {
+    context.addIssue({ code: "custom", message: "SCHOOL_SUBJECT_REQUIRED", path: ["organizationId"] });
+  }
+  if (value.subjectType === "HOUSEHOLD" && (!value.householdId || value.organizationId)) {
+    context.addIssue({ code: "custom", message: "HOUSEHOLD_SUBJECT_REQUIRED", path: ["householdId"] });
+  }
 });
 
 export const transitionOpportunitySchema = z.object({

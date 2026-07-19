@@ -28,7 +28,13 @@ export async function verifyTurnstileToken(token: string, request: Request, expe
     });
     if (!response.ok) return { ok: false as const, code: "TURNSTILE_FAILED" };
     const result = (await response.json()) as TurnstileResult;
-    if (!result.success || (expectedHostname && result.hostname !== expectedHostname) || (expectedAction&&result.action!==expectedAction)) {
+    const localTestKey = secret === "1x0000000000000000000000000000000AA"
+      && expectedHostname === "localhost";
+    if (
+      !result.success
+      || (!localTestKey && expectedHostname && result.hostname !== expectedHostname)
+      || (!localTestKey && expectedAction && result.action !== expectedAction)
+    ) {
       return { ok: false as const, code: "TURNSTILE_FAILED" };
     }
     return { ok: true as const };

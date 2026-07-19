@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.0.0 部署指引
+# Lumina Education CRM v2.1.0 部署指引
 
 ## 1. 前置条件
 
@@ -7,7 +7,7 @@
 - HTTPS 正式域名、密钥管理、备份、告警与 worker 调度平台。
 - 正式 Turnstile、SMTP/邮件投递、Webhook 与已启用集成的供应商凭据。
 
-先备份数据库并在隔离暂存项目演练迁移和向前修复。不得复用其他项目的 Supabase、用户、密钥或回调地址。本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；`/api/health` 必须返回 `version=2.0.0`。
+先备份数据库并在隔离暂存项目演练迁移和向前修复。不得复用其他项目的 Supabase、用户、密钥或回调地址。本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；`/api/health` 必须返回 `version=2.1.0`。
 
 本地 Supabase 的默认开发密钥、Mailpit 与 Studio 只允许在单机或受信开发网络使用，禁止暴露到公网、共享测试环境或生产。
 
@@ -25,20 +25,27 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
 CRM_WORKSPACE_ID=workspace-uuid
 LOGIN_THROTTLE_HASH_SECRET=independent-random-secret-at-least-32-bytes
+TRUSTED_DEVICE_HASH_SECRET=different-independent-random-secret-at-least-32-bytes
 ```
 
 邮件、Webhook 与同步 worker 按启用能力配置 `EMAIL_DELIVERY_*`、`WEBHOOK_<PROVIDER>_SECRET`、`WEBHOOK_PROCESSOR_*` 和 `INTEGRATION_SYNC_PROCESSOR_*`。`AI_PROVIDER_*` 是可选状态标记；当前版本的建议由本地规则引擎生成，不会调用外部 AI 或发送 CRM 数据。
 
-`NEXT_PUBLIC_*` 只能保存公开值。Turnstile secret、service role、限流 HMAC、邮件/集成 token 绝不能进入浏览器、提交、构建日志或客户端 bundle。初始化后立即删除 `ADMIN_PASSWORD`。
+`NEXT_PUBLIC_*` 只能保存公开值。Turnstile secret、service role、限流 HMAC、可信设备
+HMAC、邮件/集成 token 绝不能进入浏览器、提交、构建日志或客户端 bundle。旋转
+`TRUSTED_DEVICE_HASH_SECRET` 会令所有已记住设备失效。初始化后立即删除 `ADMIN_PASSWORD`。
 
 ## 3. 数据库与身份
 
 1. 保持公开 signup 关闭，但允许管理员创建的员工使用 email/password 登录。
-2. 配置正式 `APP_URL`、密码重置回调、SMTP 和邮件模板。
+2. 配置正式 `APP_URL`、密码重置回调、SMTP 和邮件模板。Supabase 的 Magic Link/OTP
+   模板必须显示 `{{ .Token }}` 六位验证码；本地模板位于
+   `supabase/templates/device_verification.html`，托管项目需在 Auth Email Templates
+   中配置同等模板。
 3. 配置精确 Turnstile hostname。
-4. 超级管理员、管理员、销售总监和销售经理执行敏感能力前必须达到 TOTP AAL2。
+4. 超级管理员和管理员必须启用 TOTP MFA 并达到 AAL2；其他员工可自愿启用。未启用
+   MFA 的普通员工在新设备完成邮箱 OTP，可选择保存 30 天可信设备。
 5. 确认 `crm-avatars`、`crm-exports` 为 private。
-6. 按原顺序应用 `202607160001` 至 `202607190040` 的全部迁移：
+6. 按原顺序应用 `202607160001` 至 `202607200042` 的全部迁移：
 
 ```bash
 npx supabase db push --linked
@@ -46,7 +53,11 @@ npx supabase db lint --linked --level warning
 npx supabase test db --linked
 ```
 
-`038` 统一增长型列表分页；`039` 增加任务委派/SLA、CRM 编辑与历史、共享视图、持久密码恢复限流、危险操作幂等边界、数据质量复核及 CRM 导出审批；`040` 增加学生/家庭/监护/学术记录、学籍升级、Lead、隐私请求、导入映射与逐行修复、精确财务聚合和可审计建议。不得遗漏、重排或重新开放底层 merge/rollback/accept RPC。
+`038` 统一增长型列表分页；`039` 增加任务委派/SLA、CRM 编辑与历史、共享视图、持久
+密码恢复限流、危险操作幂等边界、数据质量复核及 CRM 导出审批；`040` 增加教育、Lead、
+隐私、导入与建议能力；`041` 完成学年晋级、家庭商机、关系维护、搜索、Dashboard 与建议
+去重；`042` 修正管理员强制 MFA 边界并加入可信设备。不得遗漏、重排或重新开放底层
+merge/rollback/accept RPC。
 
 首次初始化时运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、`must_change_password=true` 与 username，随后删除临时密码。首次登录必须完成改密和 TOTP。
 
@@ -57,7 +68,11 @@ npm ci
 npm run release:gate
 ```
 
-门禁包括 typecheck、lint、production build、23 条 Node 契约、222 条 pgTAP、schema lint、依赖审计、业务/HTTP/export smoke、生产静态资源与 MIME 检查，以及指定 `ms-playwright/chromium-1228` 的 23 组 UI/权限/无障碍检查。smoke 会写入并清理隔离数据，只能对专用本地/暂存 workspace 执行。
+门禁包括 typecheck、lint、production build、25 条 Node 契约、275 条 pgTAP、schema
+lint、依赖审计、业务/HTTP/export/auth smoke、生产静态资源与 MIME 检查，以及指定
+`ms-playwright/chromium-1228` 的 27 组 UI/权限/无障碍检查。认证 smoke 会真实发送本地
+邮箱验证码并验证可信设备复用；所有 smoke 会写入并清理隔离数据，只能对专用本地/暂存
+workspace 执行。
 
 ## 5. Worker 与外部集成
 
@@ -81,7 +96,8 @@ npm run workers:process
 ## 7. 上线验收
 
 - 公开注册拒绝；错误认证保持 JSON/表单内错误与 request ID。
-- Turnstile、首次改密、TOTP/AAL2、角色、团队和 workspace 边界生效。
+- Turnstile、账户名/邮箱登录、首次改密、管理员强制 MFA、普通员工可选 MFA、邮箱 OTP、
+  可信设备列出/撤销、角色、团队和 workspace 边界生效。
 - 学校、联系人、任务编辑/归档/历史/并发冲突和导出审批完整。
 - 报价、合同、付款、退款、导入 dry run/执行/幂等回滚、去重预览/幂等合并可追溯。
 - 数据质量只能在源字段修复并重检后正常关闭；忽略必须记录理由。

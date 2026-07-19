@@ -4,6 +4,7 @@ import { apiRoute, requireApiUser } from "@/lib/api";
 import { authCookieNames } from "@/lib/auth";
 import { getAccessToken, supabaseJson } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
+import { revokeUserTrustedDevices, securityCookieNames } from "@/lib/trusted-devices";
 
 const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(128) });
 
@@ -18,8 +19,10 @@ async function post(request: Request) {
   if (!verification.ok) return NextResponse.json({ code: "CURRENT_PASSWORD_INCORRECT" }, { status: 400 });
   try {
     await supabaseJson("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password: parsed.data.newPassword }) }, await getAccessToken());
+    await revokeUserTrustedDevices(user.id, "PASSWORD_CHANGED");
     const response = NextResponse.json({ ok: true });
     response.cookies.delete(authCookieNames.refresh);
+    response.cookies.delete(securityCookieNames.trustedDevice);
     return response;
   } catch { return NextResponse.json({ code: "PASSWORD_UPDATE_FAILED" }, { status: 500 }); }
 }

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, apiRoute, parsePagination, requireApiCapability } from "@/lib/api";
+import { ApiError, apiRoute, parsePagination, parseUuid, requireApiCapability } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { convertLead, createLead, listLeads } from "@/lib/v200-repository";
+import { convertLead, createLead, getLead, listLeads } from "@/lib/v200-repository";
 
 const createSchema = z.object({
   operation: z.literal("create"), type: z.enum(["SCHOOL", "HOUSEHOLD"]),
@@ -21,6 +21,12 @@ const schema = z.discriminatedUnion("operation", [createSchema, convertSchema]);
 async function get(request: Request) {
   await requireApiCapability("leads.view");
   const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  if (id) {
+    const item = await getLead(parseUuid(id));
+    if (!item) throw new ApiError("LEAD_NOT_FOUND", 404);
+    return NextResponse.json({ item });
+  }
   return NextResponse.json(await listLeads({
     ...parsePagination(url.searchParams, 20),
     query: url.searchParams.get("q") ?? "",

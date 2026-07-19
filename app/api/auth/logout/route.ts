@@ -3,6 +3,7 @@ import { authCookieNames } from "@/lib/auth";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { getAccessToken, supabaseRequest } from "@/lib/supabase-server";
 import { apiErrorResponse } from "@/lib/api";
+import { securityCookieNames } from "@/lib/trusted-devices";
 
 export async function POST(request: Request) {
   if (!mutationIsTrusted(request)) return apiErrorResponse("UNTRUSTED_ORIGIN", 403);
@@ -14,5 +15,7 @@ export async function POST(request: Request) {
   for (const name of Object.values(authCookieNames)) {
     response.cookies.set(name, "", { path: "/", maxAge: 0 });
   }
+  response.cookies.set(securityCookieNames.pendingDeviceVerification, "", { path: "/", maxAge: 0 });
+  response.cookies.set(securityCookieNames.mfaRemember, "", { path: "/api/settings/mfa", maxAge: 0 });
   return response;
 }
