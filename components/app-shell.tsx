@@ -153,7 +153,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       setSearchLoading(true);
       setSearchError("");
       try {
-        const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
         setSearchResults(result.items
           .filter((item): item is typeof item & { type: Exclude<typeof item.type, "USER"> } => item.type !== "USER")
           .map((item) => ({
@@ -351,13 +351,16 @@ function ProfilePopover({ user, close,triggerRef }: { user: AppUser; close: () =
   </div>;
 }
 
-function searchHref(type:"ORGANIZATION"|"CONTACT"|"OPPORTUNITY"|"TASK"|"CONTRACT"|"QUOTE"|"PRODUCT",id:string){
+function searchHref(type:"ORGANIZATION"|"CONTACT"|"OPPORTUNITY"|"TASK"|"CONTRACT"|"QUOTE"|"PRODUCT"|"STUDENT"|"HOUSEHOLD"|"LEAD",id:string){
   if(type==="ORGANIZATION")return`/schools/${id}`;
   if(type==="CONTACT")return`/people/${id}`;
   if(type==="TASK")return`/tasks/${id}`;
   if(type==="OPPORTUNITY")return`/opportunities?focus=${id}`;
   if(type==="CONTRACT")return`/contracts?focus=${id}`;
   if(type==="QUOTE")return`/finance?quote=${id}`;
+  if(type==="STUDENT")return`/students?focus=${id}`;
+  if(type==="HOUSEHOLD")return`/households?focus=${id}`;
+  if(type==="LEAD")return`/leads?focus=${id}`;
   return`/products?focus=${id}`;
 }
 

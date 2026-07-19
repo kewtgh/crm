@@ -9,7 +9,8 @@ export default async function MfaSetupPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword) redirect("/change-password");
-  if (!isMfaRequiredRole(user.role) || user.aal === "aal2") redirect("/dashboard");
+  if (user.aal === "aal2") redirect("/dashboard");
+  if (!isMfaRequiredRole(user.role) && !user.mfaEnabled) redirect("/dashboard");
   if (user.mfaEnabled) redirect("/mfa-challenge");
   return <AuthLayout><MfaSecurityForm mode="setup"/></AuthLayout>;
 }

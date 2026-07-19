@@ -31,8 +31,8 @@ select ok(has_function_privilege('authenticated','public.list_students_page(text
 select ok(not has_function_privilege('anon','public.update_student_record(uuid,timestamptz,text,text,uuid,text)','EXECUTE'),'anonymous users cannot update student records');
 select ok(has_function_privilege('authenticated','public.repair_import_row(uuid,jsonb)','EXECUTE'),'staff can repair their invalid import rows');
 select ok(not has_function_privilege('anon','public.repair_import_row(uuid,jsonb)','EXECUTE'),'anonymous users cannot repair import rows');
-select ok(pg_get_functiondef('public.current_crm_role()'::regprocedure) like '%SALES_DIRECTOR%','director sessions are included in the privileged MFA gate');
-select ok(pg_get_functiondef('public.current_crm_role()'::regprocedure) like '%SALES_MANAGER%','manager sessions are included in the privileged MFA gate');
+select ok(pg_get_functiondef('public.current_crm_role()'::regprocedure) not like '%SALES_DIRECTOR%SALES_MANAGER%','sales roles are not forced through the administrator MFA gate');
+select ok(pg_get_functiondef('public.current_crm_role()'::regprocedure) like '%SUPER_ADMIN%ADMIN%','administrator sessions remain in the mandatory MFA gate');
 select ok(pg_get_functiondef('public.product_catalog_snapshot()'::regprocedure) like '%group by pay.currency%','product revenue remains separated by currency');
 select ok(pg_get_functiondef('public.apply_student_progression(uuid,text)'::regprocedure) like '%idempotency_key%','progression application verifies its idempotency key');
 select ok(pg_get_functiondef('public.convert_lead_to_opportunity(uuid,text,text,numeric,text,text)'::regprocedure) like '%lead_conversions%','lead conversion records its evidence and idempotency');

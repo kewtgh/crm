@@ -16,7 +16,11 @@ const schema = z.discriminatedUnion("operation", [
 
 async function get(request: Request) {
   await requireApiCapability("ai.review");
-  return NextResponse.json(await listSuggestions(parsePagination(new URL(request.url).searchParams, 20)));
+  const url = new URL(request.url);
+  return NextResponse.json(await listSuggestions({
+    ...parsePagination(url.searchParams, 20),
+    status: url.searchParams.get("status") ?? "OPEN",
+  }));
 }
 
 async function post(request: Request) {

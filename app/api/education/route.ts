@@ -5,15 +5,24 @@ import { mutationIsTrusted } from "@/lib/request-security";
 import {
   applyProgression,
   addStudentAcademicRecord,
+  cancelProgression,
   createHousehold,
   createStudent,
   getHouseholdDetail,
+  getProgressionBatchDetail,
   getStudentDetail,
   listHouseholds,
   listProgressionBatches,
+  listProgressionRules,
   listStudents,
   previewProgression,
+  removeHouseholdMember,
+  removeStudentGuardian,
+  saveHouseholdMember,
+  saveProgressionRule,
+  saveStudentGuardian,
   updateHousehold,
+  updateProgressionItem,
   updateStudent,
 } from "@/lib/v200-repository";
 
@@ -25,6 +34,13 @@ const schema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("addAcademic"), studentId: z.uuid(), schoolId: z.uuid().nullable().optional(), curriculum: z.string().trim().min(1).max(120), grade: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), validFrom: z.iso.date(), validTo: z.iso.date().nullable().optional(), status: z.enum(["CURRENT","COMPLETED","PLANNED"]) }).refine((value) => !value.validTo || value.validTo >= value.validFrom, { path: ["validTo"] }),
   z.object({ operation: z.literal("previewProgression"), fromYear: z.string().trim().min(4).max(20), toYear: z.string().trim().min(4).max(20), requestKey: z.string().trim().min(8).max(160) }),
   z.object({ operation: z.literal("applyProgression"), id: z.uuid(), requestKey: z.string().trim().min(8).max(160) }),
+  z.object({ operation: z.literal("updateProgressionItem"), id: z.uuid(), selected: z.boolean(), toGrade: z.string().trim().min(1).max(40), action: z.enum(["ADVANCE","GRADUATE","HOLD"]), reason: z.string().trim().max(500).default("") }),
+  z.object({ operation: z.literal("cancelProgression"), id: z.uuid() }),
+  z.object({ operation: z.literal("saveProgressionRule"), id: z.uuid().nullable().optional(), fromGrade: z.string().trim().min(1).max(40), toGrade: z.string().trim().min(1).max(40), action: z.enum(["ADVANCE","GRADUATE"]), active: z.boolean().default(true) }),
+  z.object({ operation: z.literal("saveHouseholdMember"), householdId: z.uuid(), contactId: z.uuid(), role: z.enum(["PARENT","GUARDIAN","STUDENT","PAYER","OTHER"]), primary: z.boolean().default(false) }),
+  z.object({ operation: z.literal("removeHouseholdMember"), id: z.uuid() }),
+  z.object({ operation: z.literal("saveStudentGuardian"), studentId: z.uuid(), contactId: z.uuid(), relationship: z.enum(["MOTHER","FATHER","GUARDIAN","RELATIVE","OTHER"]), primary: z.boolean().default(false), emergency: z.boolean().default(false), legalAuthority: z.boolean().default(false) }),
+  z.object({ operation: z.literal("removeStudentGuardian"), id: z.uuid() }),
 ]);
 
 async function get(request: Request) {
@@ -41,6 +57,16 @@ async function get(request: Request) {
     const item = await getHouseholdDetail(parseUuid(id ?? "", "id"));
     if (!item) throw new ApiError("HOUSEHOLD_NOT_FOUND", 404);
     return NextResponse.json({ item });
+  }
+  if (resource === "progressionDetail") {
+    await requireApiCapability("progression.manage");
+    const item = await getProgressionBatchDetail(parseUuid(id ?? "", "id"));
+    if (!item) throw new ApiError("PROGRESSION_NOT_FOUND", 404);
+    return NextResponse.json(item);
+  }
+  if (resource === "progressionRules") {
+    await requireApiCapability("progression.manage");
+    return NextResponse.json({ items: await listProgressionRules() });
   }
   const page = parsePagination(url.searchParams, 20);
   const options = { ...page, query: url.searchParams.get("q") ?? "", status: url.searchParams.get("status") ?? "all" };
@@ -77,10 +103,34 @@ async function post(request: Request) {
     await requireApiCapability("education.manage");
     return NextResponse.json({ item: await addStudentAcademicRecord(parsed.data) }, { status: 201 });
   }
+  if (parsed.data.operation === "saveHouseholdMember") {
+    await requireApiCapability("education.manage");
+    return NextResponse.json({ item: await saveHouseholdMember(parsed.data) });
+  }
+  if (parsed.data.operation === "removeHouseholdMember") {
+    await requireApiCapability("education.manage");
+    await removeHouseholdMember(parsed.data.id);
+    return new NextResponse(null, { status: 204 });
+  }
+  if (parsed.data.operation === "saveStudentGuardian") {
+    await requireApiCapability("education.manage");
+    return NextResponse.json({ item: await saveStudentGuardian(parsed.data) });
+  }
+  if (parsed.data.operation === "removeStudentGuardian") {
+    await requireApiCapability("education.manage");
+    await removeStudentGuardian(parsed.data.id);
+    return new NextResponse(null, { status: 204 });
+  }
   await requireApiCapability("progression.manage");
   const item = parsed.data.operation === "previewProgression"
     ? await previewProgression(parsed.data.fromYear, parsed.data.toYear, parsed.data.requestKey)
-    : await applyProgression(parsed.data.id, parsed.data.requestKey);
+    : parsed.data.operation === "applyProgression"
+      ? await applyProgression(parsed.data.id, parsed.data.requestKey)
+      : parsed.data.operation === "updateProgressionItem"
+        ? await updateProgressionItem(parsed.data)
+        : parsed.data.operation === "cancelProgression"
+          ? await cancelProgression(parsed.data.id)
+          : await saveProgressionRule(parsed.data);
   return NextResponse.json({ item });
 }
 

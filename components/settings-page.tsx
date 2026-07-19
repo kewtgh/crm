@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BellRing, Camera, Check, ChevronRight, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, Save, ShieldCheck, UserRound } from "lucide-react";
+import { BellRing, Camera, Check, ChevronRight, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, Save, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
 import { useAppUser } from "@/components/app-user-context";
 import type { AppUser } from "@/lib/user";
@@ -61,14 +61,86 @@ function NotificationSettings({ settings, setSettings, persist }: { settings: Us
 
 type Factor = { id: string; status: string; friendly_name?: string };
 function SecuritySettings() {
-  const { t } = useI18n(); const [error, setError] = useState(""); const [success, setSuccess] = useState(""); const [factors, setFactors] = useState<Factor[]>([]); const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string }>(); const [busy, setBusy] = useState(false);
+  const { t } = useI18n(); const user=useAppUser(); const [error, setError] = useState(""); const [success, setSuccess] = useState(""); const [factors, setFactors] = useState<Factor[]>([]); const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string }>(); const [busy, setBusy] = useState(false);
   const loadMfa = () => apiFetch<{ factors?: Factor[] }>("/api/settings/mfa").then((result) => setFactors(result.factors ?? [])).catch(() => setError(t("settings.mfaFailed")));
   useEffect(() => { loadMfa(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const enroll = async () => { setBusy(true); setError(""); try { const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string } } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) }); if (!result.factor?.id) throw new Error(); const challengeResult = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) }); if (!challengeResult.challenge?.id) throw new Error(); setEnrollment({ factorId: result.factor.id, challengeId: challengeResult.challenge.id, qrCode: result.factor.totp?.qr_code ?? "" }); } catch { setError(t("settings.mfaFailed")); } finally { setBusy(false); } };
   const verify = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!enrollment) return; const code = String(new FormData(event.currentTarget).get("code")); setBusy(true); setError(""); try { await apiFetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) }); setEnrollment(undefined); setSuccess(t("settings.mfaEnabled")); void loadMfa(); } catch { setError(t("settings.mfaCodeInvalid")); } setBusy(false); };
+  const disableMfa = async (factorId:string) => { setBusy(true);setError("");setSuccess("");try{await apiFetch("/api/settings/mfa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"unenroll",factorId})});setSuccess(t("settings.mfaDisabled"));void loadMfa();}catch{setError(t("settings.mfaDisableFailed"));}finally{setBusy(false);} };
   const changePassword = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); setSuccess(""); const data = new FormData(event.currentTarget); if (data.get("newPassword") !== data.get("confirmPassword")) { setError(t("settings.passwordMismatch")); return; } setBusy(true); try { await apiFetch("/api/settings/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword: data.get("newPassword") }) }); setSuccess(t("settings.passwordSaved")); event.currentTarget.reset(); } catch (cause) { setError(t(cause instanceof ApiClientError && cause.code === "CURRENT_PASSWORD_INCORRECT" ? "settings.currentPasswordIncorrect" : "settings.passwordFailed")); } setBusy(false); };
-  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{factors.some((factor) => factor.status === "verified") ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={factors.some((factor) => factor.status === "verified") ? "green" : "amber"}>{t(factors.some((factor) => factor.status === "verified") ? "common.enabled" : "settings.setupRequired")}</StatusBadge>{!factors.some((factor) => factor.status === "verified") && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}</section>{enrollment && <form className="settings-subform" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3>{enrollment.qrCode && <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} />}<label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required /></label><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></form>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={10} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={10} required /></label></div>{error && <InlineMessage type="error">{error}</InlineMessage>}{success && <InlineMessage type="success">{success}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form></div>;
+  const verifiedFactor=factors.find((factor)=>factor.status==="verified");const administrator=user.role==="SUPER_ADMIN"||user.role==="ADMIN";
+  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor&&!administrator&&<button className="danger-button" type="button" disabled={busy} onClick={()=>void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section>{enrollment && <form className="settings-subform" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3>{enrollment.qrCode && <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} />}<label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required /></label><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></form>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={10} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={10} required /></label></div>{error && <InlineMessage type="error">{error}</InlineMessage>}{success && <InlineMessage type="success">{success}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form></div>;
 }
 
-function PrivacySettings() { const { t } = useI18n(); const [status, setStatus] = useState<"" | "success" | "error">(""); const revoke = async () => { setStatus(""); try { await apiFetch("/api/settings/sessions", { method: "DELETE" }); setStatus("success"); } catch { setStatus("error"); } }; return <div><SettingsHeader eyebrow="PRIVACY" title={t("settings.privacyDevices")} description={t("settings.privacyDevicesHelp")} /><section className="privacy-links"><Link href="/privacy-requests"><span><ShieldCheck size={18} /></span><div><b>{t("settings.privacyRequests")}</b><p>{t("settings.privacyRequestsHelp")}</p></div><ChevronRight size={16} /></Link><Link href="/privacy"><span><Eye size={18} /></span><div><b>{t("settings.privacyPolicy")}</b><p>{t("settings.privacyPolicyHelp")}</p></div><ChevronRight size={16} /></Link></section><h3 className="device-heading">{t("settings.loginDevices")}</h3><InlineMessage type="warning">{t("settings.sessionPrivacyNote")}</InlineMessage><div className="device-list"><div className="device-row"><span><Laptop size={20} /></span><div><b>{t("settings.currentBrowser")}</b><small>{t("settings.currentDevice")} · {t("settings.now")}</small></div><StatusBadge tone="green">{t("settings.currentDevice")}</StatusBadge></div></div>{status === "success" && <InlineMessage type="success">{t("settings.otherDevicesRevoked")}</InlineMessage>}{status === "error" && <InlineMessage type="error">{t("settings.sessionRevokeFailed")}</InlineMessage>}<button className="danger-button" type="button" onClick={revoke}><MonitorSmartphone size={17} />{t("settings.signOutOthers")}</button></div>; }
+type TrustedDeviceView = { id: string; label: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean };
+function PrivacySettings() {
+  const { locale, t } = useI18n();
+  const [status, setStatus] = useState<"" | "success" | "error">("");
+  const [devices, setDevices] = useState<TrustedDeviceView[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const loadDevices = () => {
+    setLoadingDevices(true);
+    void apiFetch<{ devices?: TrustedDeviceView[] }>("/api/settings/trusted-devices")
+      .then((result) => setDevices(result.devices ?? []))
+      .catch(() => setStatus("error"))
+      .finally(() => setLoadingDevices(false));
+  };
+  useEffect(() => {
+    let active = true;
+    void apiFetch<{ devices?: TrustedDeviceView[] }>("/api/settings/trusted-devices")
+      .then((result) => { if (active) setDevices(result.devices ?? []); })
+      .catch(() => { if (active) setStatus("error"); })
+      .finally(() => { if (active) setLoadingDevices(false); });
+    return () => { active = false; };
+  }, []);
+  const revoke = async () => {
+    setStatus("");
+    try {
+      await apiFetch("/api/settings/sessions", { method: "DELETE" });
+      setStatus("success");
+      loadDevices();
+    } catch {
+      setStatus("error");
+    }
+  };
+  const revokeDevice = async (id: string) => {
+    setStatus("");
+    try {
+      await apiFetch("/api/settings/trusted-devices", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "device", id }),
+      });
+      setDevices((current) => current.filter((device) => device.id !== id));
+    } catch {
+      setStatus("error");
+    }
+  };
+  const formatDate = (value: string) => new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+  return <div>
+    <SettingsHeader eyebrow="PRIVACY" title={t("settings.privacyDevices")} description={t("settings.privacyDevicesHelp")} />
+    <section className="privacy-links">
+      <Link href="/privacy-requests"><span><ShieldCheck size={18} /></span><div><b>{t("settings.privacyRequests")}</b><p>{t("settings.privacyRequestsHelp")}</p></div><ChevronRight size={16} /></Link>
+      <Link href="/privacy"><span><Eye size={18} /></span><div><b>{t("settings.privacyPolicy")}</b><p>{t("settings.privacyPolicyHelp")}</p></div><ChevronRight size={16} /></Link>
+    </section>
+    <h3 className="device-heading">{t("settings.loginDevices")}</h3>
+    <InlineMessage type="warning">{t("settings.sessionPrivacyNote")}</InlineMessage>
+    <div className="device-list">
+      {loadingDevices && <div className="device-row"><span><Laptop size={20}/></span><div><b>{t("settings.devicesLoading")}</b></div></div>}
+      {!loadingDevices && devices.length === 0 && <div className="device-row"><span><Laptop size={20}/></span><div><b>{t("settings.currentBrowser")}</b><small>{t("settings.currentDevice")} · {t("settings.now")}</small></div><StatusBadge tone="green">{t("settings.currentDevice")}</StatusBadge></div>}
+      {devices.map((device) => <div className="device-row" key={device.id}>
+        <span><Laptop size={20}/></span>
+        <div><b>{device.label}</b><small>{t("settings.deviceLastUsed", { date: formatDate(device.lastUsedAt) })} · {t("settings.deviceExpires", { date: formatDate(device.expiresAt) })}</small></div>
+        {device.current && <StatusBadge tone="green">{t("settings.currentDevice")}</StatusBadge>}
+        <button type="button" onClick={() => void revokeDevice(device.id)} aria-label={t("settings.forgetDevice", { device: device.label })}><Trash2 size={16}/>{t("settings.forget")}</button>
+      </div>)}
+    </div>
+    {status === "success" && <InlineMessage type="success">{t("settings.otherDevicesRevoked")}</InlineMessage>}
+    {status === "error" && <InlineMessage type="error">{t("settings.sessionRevokeFailed")}</InlineMessage>}
+    <button className="danger-button" type="button" onClick={revoke}><MonitorSmartphone size={17} />{t("settings.signOutOthers")}</button>
+  </div>;
+}
 function SaveRow({ saving }: { saving: boolean }) { const { t } = useI18n(); return <div className="settings-actions"><span>{t("settings.requiredHelp")}</span><button className="primary-button" type="submit" disabled={saving}><Save size={16} />{saving ? t("settings.saving") : t("settings.saveChanges")}</button></div>; }

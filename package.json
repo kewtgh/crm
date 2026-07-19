@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -19,6 +19,7 @@
     "smoke:phase2": "node --env-file=.env.local scripts/smoke-phase2.mjs",
     "smoke:http-v09": "node --env-file=.env.local scripts/smoke-http-v09.mjs",
     "smoke:http-v10": "node --env-file=.env.local scripts/smoke-http-v10.mjs",
+    "smoke:auth-device": "node --env-file=.env.local scripts/smoke-auth-device.cjs",
     "smoke:v09": "node --env-file=.env.local scripts/smoke-v09.mjs",
     "smoke:v11": "node --env-file=.env.local scripts/smoke-v11.mjs",
     "smoke:exports": "node scripts/smoke-export-artifacts.mjs",

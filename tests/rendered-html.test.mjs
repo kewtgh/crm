@@ -32,6 +32,35 @@ test("keeps authentication failures local to their forms", async () => {
   await assert.rejects(access(new URL("../app/api/auth/register/route.ts", import.meta.url)));
 });
 
+test("implements role-scoped MFA and revocable trusted-device verification", async () => {
+  const [auth, login, verification, trusted, migration, settings, environment] = await Promise.all([
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/device-verification/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/trusted-devices.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607200042_identity_device_trust.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/runtime-environment.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(auth, /role === "SUPER_ADMIN" \|\| role === "ADMIN"/);
+  assert.match(auth, /isMfaRequiredRole\(user\.role\) \|\| user\.mfaEnabled/);
+  assert.doesNotMatch(auth, /\["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER"\]/);
+  assert.match(login, /resolveStaffLoginEmail\(identifier\)/);
+  assert.match(login, /verifyTurnstileToken/);
+  assert.match(login, /auth\/v1\/otp/);
+  assert.match(login, /consumeTrustedDevice/);
+  assert.match(verification, /auth\/v1\/verify/);
+  assert.match(verification, /registerTrustedDevice/);
+  assert.match(trusted, /HMAC/);
+  assert.match(trusted, /crypto\.getRandomValues/);
+  assert.doesNotMatch(trusted, /localStorage|sessionStorage/);
+  assert.match(migration, /revoke all on public\.trusted_login_devices from public,anon,authenticated/);
+  assert.match(migration, /TRUSTED_DEVICE_REGISTERED/);
+  assert.match(settings, /api\/settings\/trusted-devices/);
+  assert.match(environment, /TRUSTED_DEVICE_HASH_SECRET/);
+  await access(new URL("../app/(auth)/verify-device/page.tsx", import.meta.url));
+});
+
 test("keeps authentication and user context safe across hydration and client bundles", async () => {
   const [authForm, shell, context, settings, governance, switcher, loginPage] = await Promise.all([
     readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
@@ -66,7 +95,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.0\.0"/);
+  assert.match(packageJson, /"version": "2\.1\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -82,7 +111,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.0\.0"/);
+  assert.match(packageJson, /"version": "2\.1\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -490,7 +519,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.0\.0/);
+  assert.match(version, /2\.1\.0/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -554,7 +583,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.0\.0/);
+  assert.match(version,/2\.1\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -588,7 +617,45 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.0\.0"/);
+  assert.match(packageJson,/"version": "2\.1\.0"/);
+});
+
+test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
+  const [migration, behavior, workspaces, relatedSearch, dashboard, opportunitySchema, pipeline, supabaseServer, imports, audit, plan, version] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607200041_v210_workflow_closure.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/tests/v210_workflow_closure.sql",import.meta.url),"utf8"),
+    readFile(new URL("../components/v200-workspaces.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../lib/related-search-repository.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/dashboard-repository.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/opportunity-schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/pipeline-page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../lib/supabase-server.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/imports-page.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-20_V2.1.0.md",import.meta.url),"utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_V2.1.0.md",import.meta.url),"utf8"),
+    readFile(new URL("../lib/version.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(migration,/apply_idempotency_key/);
+  assert.match(migration,/grade_progression_rules/);
+  assert.match(migration,/student_updated_at/);
+  assert.match(migration,/subject_type='HOUSEHOLD'/);
+  assert.match(migration,/workspace_household_fk/);
+  assert.match(migration,/ai_suggestions_owner_open_uidx/);
+  assert.match(behavior,/preview_student_progression/);
+  assert.match(behavior,/Household opportunity/);
+  assert.match(workspaces,/updateProgressionItem/);
+  assert.match(workspaces,/saveStudentGuardian/);
+  assert.match(workspaces,/saveHouseholdMember/);
+  assert.match(workspaces,/status=\$\{status\}/);
+  for(const type of ["STUDENT","HOUSEHOLD","LEAD"]) assert.match(relatedSearch,new RegExp(type));
+  assert.match(dashboard,/pendingProgression/);
+  assert.match(opportunitySchema,/HOUSEHOLD/);
+  assert.match(pipeline,/subjectType === "HOUSEHOLD"/);
+  assert.match(supabaseServer,/normalizeSupabaseErrorCode/);
+  assert.match(imports,/import-source-file/);
+  assert.match(audit,/PROG-01/);
+  assert.match(plan,/REVIEW-01/);
+  assert.match(version,/2\.1\.0/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {

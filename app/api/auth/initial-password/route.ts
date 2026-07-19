@@ -20,7 +20,10 @@ async function post(request: Request) {
     await supabaseJson("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password: parsed.data.newPassword }) }, token);
     await supabaseRequest("/auth/v1/logout?scope=others", { method: "POST" }, token);
     await supabaseJson("/rest/v1/rpc/complete_initial_password_change", { method: "POST", body: "{}" }, token);
-    return NextResponse.json({ ok: true, next: user.role === "SUPER_ADMIN" || user.role === "ADMIN" ? (user.mfaEnabled ? "/mfa-challenge" : "/mfa-setup") : "/dashboard" });
+    return NextResponse.json({
+      ok: true,
+      next: nextAuthenticatedPath({ ...user, mustChangePassword: false }),
+    });
   } catch (error) {
     return NextResponse.json({ code: error instanceof SupabaseRequestError ? error.code : "PASSWORD_UPDATE_FAILED" }, { status: 400 });
   }

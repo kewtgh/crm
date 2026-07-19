@@ -5,6 +5,20 @@ export class SupabaseRequestError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
 
+const postgresCodeMap: Record<string, string> = {
+  "23503": "RELATED_RECORD_CONFLICT",
+  "23505": "RECORD_CONFLICT",
+  "23514": "CONSTRAINT_VIOLATION",
+  "22P02": "INVALID_INPUT",
+};
+
+export function normalizeSupabaseErrorCode(code?: string, message?: string) {
+  if (code === "P0001" && message && /^[a-z][a-z0-9_]{2,80}$/.test(message)) {
+    return message.toUpperCase();
+  }
+  return postgresCodeMap[code ?? ""] ?? code ?? "SUPABASE_REQUEST_FAILED";
+}
+
 export async function getAccessToken() {
   return (await cookies()).get(authCookieNames.access)?.value ?? null;
 }
@@ -27,7 +41,11 @@ export async function supabaseRequest(path: string, init: RequestInit = {}, toke
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({})) as { code?: string; message?: string; hint?: string };
-    throw new SupabaseRequestError(response.status, detail.code ?? "SUPABASE_REQUEST_FAILED", detail.message ?? detail.hint ?? "Supabase request failed");
+    throw new SupabaseRequestError(
+      response.status,
+      normalizeSupabaseErrorCode(detail.code, detail.message),
+      detail.message ?? detail.hint ?? "Supabase request failed",
+    );
   }
   return response;
 }
@@ -54,7 +72,11 @@ export async function supabaseAdminRequest(path: string, init: RequestInit = {})
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({})) as { code?: string; error_code?: string; message?: string; msg?: string };
-    throw new SupabaseRequestError(response.status, detail.code ?? detail.error_code ?? "SUPABASE_ADMIN_FAILED", detail.message ?? detail.msg ?? "Supabase administration request failed");
+    throw new SupabaseRequestError(
+      response.status,
+      normalizeSupabaseErrorCode(detail.code ?? detail.error_code, detail.message ?? detail.msg),
+      detail.message ?? detail.msg ?? "Supabase administration request failed",
+    );
   }
   return response;
 }

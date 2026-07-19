@@ -30,8 +30,34 @@
 .import-template-actions small { color:var(--muted); }
 .import-mapping-profiles { align-items:end; margin-bottom:14px; }
 .import-mapping-save { min-height:42px; justify-content:center; }
+.file-picker-row { min-height:44px; display:flex; align-items:center; gap:12px; padding:4px 0; }
+.file-picker-row label { cursor:pointer; flex:0 0 auto; }
+.file-placeholder { color:var(--muted); }
+.selected-file { color:var(--ink); font-weight:700; overflow-wrap:anywhere; }
+.relationship-form { margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); display:grid; gap:12px; }
+.relationship-checks { display:flex; flex-wrap:wrap; gap:8px 18px; }
+.icon-button.danger { color:var(--red); }
+.progression-rules,.progression-items { display:grid; gap:12px; }
+.progression-rule-form { grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.progression-rule-form .drawer-actions { grid-column:1/-1; }
+.progression-item { padding:14px; border:1px solid var(--line); border-radius:12px; display:grid; gap:12px; }
+.progression-item-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.progression-item-heading > div { display:grid; gap:3px; }
+.lead-facts { display:grid; gap:0; margin-bottom:18px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.lead-facts p { margin:0; padding:11px 13px; display:flex; justify-content:space-between; gap:18px; border-bottom:1px solid var(--line); }
+.lead-facts p:last-child { border-bottom:0; }
+.segmented-control { display:flex; gap:4px; padding:4px; margin-bottom:14px; border-radius:10px; background:var(--surface-soft); width:max-content; max-width:100%; }
+.segmented-control button { min-height:38px; padding:0 12px; border:0; border-radius:8px; display:flex; align-items:center; gap:7px; color:var(--muted); background:transparent; font-weight:750; }
+.segmented-control button.active { color:var(--ink); background:var(--surface); box-shadow:0 1px 5px rgba(20,40,34,.1); }
 @media(max-width:680px){
   .import-mapping-save { width:100%; }
+  .file-picker-row { align-items:flex-start; flex-direction:column; }
+  .file-picker-row label { width:100%; justify-content:center; }
+  .progression-rule-form { grid-template-columns:1fr; }
+  .progression-item { padding:12px; }
+  .v200-workspace .empty-state,.imports-page .empty-state { padding:24px 14px; min-height:0; }
+  .segmented-control { width:100%; }
+  .segmented-control button { flex:1; justify-content:center; }
 }
 
 /* WCAG text and contrast floor: legacy compact rules may not reduce functional text below 12px. */

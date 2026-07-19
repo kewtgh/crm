@@ -84,7 +84,7 @@ export function AuthForm() {
         setTurnstileResetKey((value) => value + 1);
         const errorKeys: Record<string, string> = {
           INVALID_CREDENTIALS: "auth.error.invalidCredentials",
-          INVALID_EMAIL: "auth.error.invalidEmail",
+          INVALID_IDENTIFIER: "auth.error.invalidIdentifier",
           PASSWORD_TOO_SHORT: "auth.error.passwordShort",
           AUTH_NOT_CONFIGURED: "auth.error.notConfigured",
           STAFF_ACCESS_DENIED: "auth.error.staffAccess",
@@ -97,7 +97,7 @@ export function AuthForm() {
         const message = t(errorKeys[result.code ?? ""] ?? "auth.error.retry");
         if (result.field === "turnstile") {
           setFieldErrors({ turnstile: message });
-        } else if (result.field === "email" || result.field === "password") {
+        } else if (result.field === "identifier" || result.field === "password") {
           setFieldErrors({ [result.field]: message });
         } else {
           setFormError(message);
@@ -127,18 +127,18 @@ export function AuthForm() {
         <span><b>{t("auth.staffOnly")}</b><br />{t("auth.staffOnlyHelp")}</span>
       </div>
 
-      <label className="field" htmlFor="email">
-        <span>{t("auth.email")}</span>
+      <label className="field" htmlFor="identifier">
+        <span>{t("auth.identifier")}</span>
         <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
+          id="identifier"
+          name="identifier"
+          type="text"
+          autoComplete="username"
           required
-          aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
+          aria-invalid={Boolean(fieldErrors.identifier)}
+          aria-describedby={fieldErrors.identifier ? "identifier-error" : undefined}
         />
-        {fieldErrors.email && <small className="field-error" id="email-error">{fieldErrors.email}</small>}
+        {fieldErrors.identifier && <small className="field-error" id="identifier-error">{fieldErrors.identifier}</small>}
       </label>
 
       <PasswordField error={fieldErrors.password} />
@@ -146,7 +146,7 @@ export function AuthForm() {
       <div className="login-extras">
         <label className="checkbox-field compact">
           <input type="checkbox" name="remember" />
-          <span>{t("auth.remember")}</span>
+          <span>{t("auth.rememberDevice")}</span>
         </label>
         <Link href="/forgot-password">{t("auth.forgot")}</Link>
       </div>

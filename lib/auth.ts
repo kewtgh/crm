@@ -31,12 +31,18 @@ export async function requireAal2() {
 }
 
 export function isMfaRequiredRole(role: AppRole) {
-  return ["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER"].includes(role);
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+export function shouldChallengeMfa(user: Pick<AppUser, "role" | "mfaEnabled">) {
+  return isMfaRequiredRole(user.role) || user.mfaEnabled;
 }
 
 export function nextAuthenticatedPath(user: AppUser) {
   if (user.mustChangePassword) return "/change-password";
-  if (isMfaRequiredRole(user.role) && user.aal !== "aal2") return user.mfaEnabled ? "/mfa-challenge" : "/mfa-setup";
+  if (shouldChallengeMfa(user) && user.aal !== "aal2") {
+    return user.mfaEnabled ? "/mfa-challenge" : "/mfa-setup";
+  }
   return "/dashboard";
 }
 

@@ -32,6 +32,10 @@ minimum_password_length = 10
 enable_signup = true
 enable_confirmations = true
 
+[auth.email.template.magic_link]
+subject = "Lumina CRM device verification code"
+content_path = "./supabase/templates/device_verification.html"
+
 [auth.mfa]
 max_enrolled_factors = 10
 
