@@ -6,6 +6,7 @@ import { enGovernancePages } from "./governance-pages";
 import { enUiEyebrows } from "./ui-eyebrows";
 import { enPhase2 } from "./phase2-pages";
 import { enOperationsV09 } from "./operations-v09";
+import { enV120 } from "./v120";
 
 export const en: Messages = {
   ...enSalesPlaybook,
@@ -15,6 +16,7 @@ export const en: Messages = {
   ...enUiEyebrows,
   ...enPhase2,
   ...enOperationsV09,
+  ...enV120,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.english": "English",

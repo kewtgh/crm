@@ -7,6 +7,7 @@ import type { ContactPrivacy } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, StatusBadge, Toast } from "./ui";
 import { apiFetch } from "@/lib/api-client";
+import { CrmRecordEditor } from "@/components/crm-record-editor";
 
 export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   const { t } = useI18n();
@@ -63,7 +64,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   return <div className="page-stack consent-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("consent.eyebrow")}</p><h1>{data.nameZh} / {data.nameEn}</h1><p>{t("consent.description")}</p></div>
-      <div className="page-actions"><Link className="secondary-button" href="/people">{t("consent.back")}</Link><button className={data.doNotContact ? "secondary-button" : "danger-button"} type="button" disabled={pending} onClick={handleDnc}><Ban size={16} />{t(data.doNotContact ? "consent.removeDnc" : "consent.enableDnc")}</button></div>
+      <div className="page-actions"><Link className="secondary-button" href="/people">{t("consent.back")}</Link><CrmRecordEditor resource="people" id={initial.id}/><button className={data.doNotContact ? "secondary-button" : "danger-button"} type="button" disabled={pending} onClick={handleDnc}><Ban size={16} />{t(data.doNotContact ? "consent.removeDnc" : "consent.enableDnc")}</button></div>
     </section>
     {dncOpen && <form className="surface dnc-form" onSubmit={(event) => { event.preventDefault(); void updateDnc(true); }}>
       <label className="field"><span>{t("consent.dncReasonPrompt")}</span><textarea value={dncReason} onChange={(event) => setDncReason(event.target.value)} rows={3} maxLength={300} required autoFocus /></label>

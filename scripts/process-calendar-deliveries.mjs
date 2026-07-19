@@ -4,7 +4,7 @@ const required=["NEXT_PUBLIC_SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","EMAIL_DE
 const missing=required.filter(key=>!process.env[key]);if(missing.length)throw new Error(`Missing calendar-delivery variables: ${missing.join(", ")}`);
 const baseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/,"");const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;const headers={apikey:serviceKey,authorization:`Bearer ${serviceKey}`,"content-type":"application/json"};
 const heartbeat=createWorkerHeartbeat(baseUrl,serviceKey,"CALENDAR_DELIVERIES");
-const workerId=process.env.WORKER_ID??`calendar-deliveries:${process.pid}:${crypto.randomUUID()}`;
+const workerId=process.env.WORKER_ID?.trim()||`calendar-deliveries:${process.pid}:${crypto.randomUUID()}`;
 async function rpc(name,body){const response=await fetch(`${baseUrl}/rest/v1/rpc/${name}`,{method:"POST",headers,body:JSON.stringify(body)});const result=await response.json().catch(()=>null);if(!response.ok)throw new Error(`${name} failed (${response.status})`);return result;}
 async function row(table,select,id){const response=await fetch(`${baseUrl}/rest/v1/${table}?select=${select}&id=eq.${id}&limit=1`,{headers});const result=await response.json();if(!response.ok||!result[0])throw new Error(`${table} record is unavailable`);return result[0];}
 try{

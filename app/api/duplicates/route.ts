@@ -18,6 +18,7 @@ const schema = z.discriminatedUnion("operation", [
     sourceId: z.uuid(),
     fieldChoices: z.record(z.string(), z.enum(["TARGET", "SOURCE"])).default({}),
     confirmed: z.literal(true),
+    requestKey:z.string().trim().min(8).max(160),
   }),
 ]);
 
@@ -39,9 +40,9 @@ async function post(request: Request) {
     });
     return NextResponse.json({ preview });
   }
-  const id = await supabaseJson<string>("/rest/v1/rpc/merge_duplicate_records", {
+  const id = await supabaseJson<string>("/rest/v1/rpc/idempotent_merge_duplicate_records", {
     method: "POST",
-    body: JSON.stringify({ ...payload, field_choices: parsed.data.fieldChoices }),
+    body: JSON.stringify({ ...payload, field_choices: parsed.data.fieldChoices,p_request_key:parsed.data.requestKey }),
   });
   return NextResponse.json({ id });
 }

@@ -7,7 +7,7 @@ type TurnstileResult = {
 
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-export async function verifyTurnstileToken(token: string, request: Request) {
+export async function verifyTurnstileToken(token: string, request: Request, expectedAction?:string) {
   const secret = process.env.TURNSTILE_SECRET_KEY;
   const expectedHostname = process.env.TURNSTILE_EXPECTED_HOSTNAME?.trim();
   if (!secret || (process.env.NODE_ENV === "production" && !expectedHostname)) return { ok: false as const, code: "TURNSTILE_NOT_CONFIGURED" };
@@ -28,7 +28,7 @@ export async function verifyTurnstileToken(token: string, request: Request) {
     });
     if (!response.ok) return { ok: false as const, code: "TURNSTILE_FAILED" };
     const result = (await response.json()) as TurnstileResult;
-    if (!result.success || (expectedHostname && result.hostname !== expectedHostname)) {
+    if (!result.success || (expectedHostname && result.hostname !== expectedHostname) || (expectedAction&&result.action!==expectedAction)) {
       return { ok: false as const, code: "TURNSTILE_FAILED" };
     }
     return { ok: true as const };

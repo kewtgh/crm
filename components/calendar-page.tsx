@@ -19,6 +19,7 @@ import { AccessibleDrawer, InlineMessage, Pagination, SearchableSelect, Toast } 
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 type CalendarEvent = {
   id: string;
@@ -68,6 +69,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
   const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
+  const runRelatedSearch=useRemoteSearch();
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
   const upcoming = useMemo(
@@ -80,7 +82,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
 
   useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(()=>{if(!controller.signal.aborted)setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
 
-  const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);try{const result=await apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(query)}`);setRelatedOptions(result.items.filter(item=>item.type!=="USER").map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));}catch{setFormError(t("calendar.relatedLoadFailed"));}finally{setRelatedLoading(false);}},[locale,persistent,t]);
+  const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);const result=await runRelatedSearch(signal=>apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));if(!result.current)return;setRelatedLoading(false);if("error" in result){setFormError(t("calendar.relatedLoadFailed"));return;}setRelatedOptions(result.value.items.filter(item=>item.type!=="USER").map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));},[locale,persistent,runRelatedSearch,t]);
 
   const openSchedule = (date = selectedDate) => {
     setSelectedDate(date);

@@ -19,9 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Lumina Education CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/og.png", baseUrl).toString(), width: 1734, height: 907, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/og-v120.png", baseUrl).toString(), width: 1734, height: 907, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og.png", baseUrl).toString()] },
+    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v120.png", baseUrl).toString()] },
   };
 }
 

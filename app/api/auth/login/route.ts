@@ -23,7 +23,7 @@ async function post(request: Request) {
       "Retry-After": String(limit.retryAfter),
     });
   }
-  const turnstile = await verifyTurnstileToken(turnstileToken, request);
+  const turnstile = await verifyTurnstileToken(turnstileToken, request,"staff_login");
   if (!turnstile.ok) {
     await recordLoginFailure(throttleIdentity);
     throw new ApiError(turnstile.code, turnstile.code === "TURNSTILE_NOT_CONFIGURED" ? 503 : 400, turnstile.code, { field: "turnstile" });

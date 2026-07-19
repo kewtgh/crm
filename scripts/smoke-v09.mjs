@@ -275,16 +275,13 @@ try {
     source_record: mergedContactId,
   });
   if (preview.requiresConfirmation !== true) throw new Error("Duplicate preview omitted confirmation");
-  const merged = await rpc("merge_duplicate_records", {
+  const bypassedMerge = await rpc("merge_duplicate_records", {
     resource: "CONTACTS",
     target_record: contactId,
     source_record: mergedContactId,
     field_choices: { phone: "SOURCE" },
-  });
-  if (merged !== contactId) throw new Error("Duplicate merge returned the wrong master");
-  const removed = await request(`/rest/v1/contacts?select=id&id=eq.${mergedContactId}`);
-  if (removed.length !== 0) throw new Error("Duplicate source record still exists");
-  mergedContactId = "";
+  }, { expectFailure: true });
+  if (![401,403,404].includes(bypassedMerge.status)) throw new Error("Raw duplicate merge bypass was not denied");
 
   const generated = await rpc("generate_next_best_actions", {
     target_organization: staleOrganizationId,

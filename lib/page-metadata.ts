@@ -7,7 +7,11 @@ export async function getRequestLocale(): Promise<Locale> {
   return isLocale(locale) ? locale : "zh-CN";
 }
 
-export async function localizedPageMetadata(titleKey: string): Promise<Metadata> {
+export async function localizedPageMetadata(titleKey: string,descriptionKey=`${titleKey}.description`): Promise<Metadata> {
   const locale = await getRequestLocale();
-  return { title: translate(locale, titleKey) };
+  const translatedDescription=translate(locale,descriptionKey);
+  return {
+    title: translate(locale, titleKey),
+    description:translatedDescription===descriptionKey?translate(locale,"meta.description"):translatedDescription,
+  };
 }

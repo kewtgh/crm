@@ -1,11 +1,11 @@
 import { supabaseJson, supabaseRequest } from "./supabase-server";
 
 export type ApprovalRecord = {
-  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"; object: string; requester: string; submitted: string; level: "admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
+  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"|"crmExport"; object: string; requester: string; submitted: string; level: "admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
 };
 
-const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation",QUOTE_DISCOUNT:"quoteDiscount",REFUND:"refund",MARKETING_CONTACT_EXPORT:"marketingContactExport" };
-const databaseApprovalTypes:Record<ApprovalRecord["type"],string>={contractSign:"CONTRACT_SIGN",contractExport:"CONTRACT_EXPORT",performanceSummary:"PERFORMANCE_SUMMARY",performanceAllocation:"PERFORMANCE_ALLOCATION",quoteDiscount:"QUOTE_DISCOUNT",refund:"REFUND",marketingContactExport:"MARKETING_CONTACT_EXPORT"};
+const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation",QUOTE_DISCOUNT:"quoteDiscount",REFUND:"refund",MARKETING_CONTACT_EXPORT:"marketingContactExport",CRM_EXPORT:"crmExport" };
+const databaseApprovalTypes:Record<ApprovalRecord["type"],string>={contractSign:"CONTRACT_SIGN",contractExport:"CONTRACT_EXPORT",performanceSummary:"PERFORMANCE_SUMMARY",performanceAllocation:"PERFORMANCE_ALLOCATION",quoteDiscount:"QUOTE_DISCOUNT",refund:"REFUND",marketingContactExport:"MARKETING_CONTACT_EXPORT",crmExport:"CRM_EXPORT"};
 export type ApprovalSummary={pending:number;approved:number;rejected:number;highPrivilegePending:number};
 export type ApprovalPage={items:ApprovalRecord[];total:number;page:number;pageSize:number;summary:ApprovalSummary};
 
@@ -25,7 +25,16 @@ export async function listApprovals(options:{query?:string;type?:string;status?:
   return {items,total,page,pageSize,summary:{pending,approved,rejected,highPrivilegePending}};
 }
 
-export async function createApproval(input:{type:"CONTRACT_SIGN"|"CONTRACT_EXPORT"|"PERFORMANCE_SUMMARY"|"PERFORMANCE_ALLOCATION";objectType:string;objectId:string;reason:string}) {
+export async function createApproval(input:
+  | {type:"CONTRACT_SIGN"|"CONTRACT_EXPORT"|"PERFORMANCE_SUMMARY"|"PERFORMANCE_ALLOCATION";objectType:string;objectId:string;reason:string}
+  | {type:"CRM_EXPORT";resource:"schools"|"people"|"tasks";query:string;status:string;sort:string;direction:"asc"|"desc";reason:string}
+) {
+  if(input.type==="CRM_EXPORT"){
+    return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_crm_export_approval",{method:"POST",body:JSON.stringify({
+      resource_key:input.resource,search_query:input.query,status_filter:input.status,
+      sort_key:input.sort,sort_direction:input.direction,business_reason:input.reason,
+    })});
+  }
   return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_approval",{method:"POST",body:JSON.stringify({request_kind:input.type,object_type:input.objectType,object_id:input.objectId,business_reason:input.reason})});
 }
 

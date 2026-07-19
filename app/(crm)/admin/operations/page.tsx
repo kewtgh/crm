@@ -24,5 +24,7 @@ export default async function Page() {
     initialNextActions={actionsResult.status === "fulfilled" ? actionsResult.value : {items:[],total:0,page:1,pageSize:10}}
     initialInsights={insightsResult.status === "fulfilled" ? insightsResult.value : null}
     initialReadiness={readinessResult.status === "fulfilled" ? readinessResult.value : null}
+    initialLoadFailed={[snapshotResult,jobsResult,integrationsResult,actionsResult,insightsResult,readinessResult].some(result=>result.status==="rejected")}
+    aiProviderConfigured={process.env.AI_PROVIDER_ENABLED==="true"&&Boolean(process.env.AI_PROVIDER_URL&&process.env.AI_PROVIDER_TOKEN)}
   />;
 }

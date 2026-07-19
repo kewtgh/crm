@@ -14,4 +14,5 @@ export const initialPasswordSchema = z.object({
 
 export const passwordResetRequestSchema = z.object({
   email: z.string().trim().email("INVALID_EMAIL"),
+  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED"),
 });

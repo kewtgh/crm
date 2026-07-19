@@ -8,7 +8,7 @@ const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const headers = { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, "content-type": "application/json" };
 const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "NOTIFICATION_OUTBOX");
-const workerId = process.env.WORKER_ID ?? `notification-outbox:${process.pid}:${crypto.randomUUID()}`;
+const workerId = process.env.WORKER_ID?.trim() || `notification-outbox:${process.pid}:${crypto.randomUUID()}`;
 
 async function rpc(name, body) {
   const response = await fetch(`${baseUrl}/rest/v1/rpc/${name}`, { method:"POST",headers,body:JSON.stringify(body) });

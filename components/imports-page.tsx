@@ -4,43 +4,16 @@ import { useMemo, useState } from "react";
 import { FileSpreadsheet, Play, RotateCcw, SearchCheck, Upload } from "lucide-react";
 import type { ImportBatchRecord, ImportRowRecord } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
-import { InlineMessage, Pagination, SearchableSelect, StatusBadge, Toast } from "./ui";
+import { AccessibleDrawer, InlineMessage, Pagination, SearchableSelect, StatusBadge, Toast } from "./ui";
 import { useAppUser } from "./app-user-context";
 import { ADMIN_ROLES } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
+import { CsvParseError, parseCsvDocument } from "@/lib/csv";
+import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
-function parseCsv(text: string) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) throw new Error("EMPTY");
-  const parse = (line: string) => {
-    const cells: string[] = [];
-    let value = "";
-    let quoted = false;
-    for (let index = 0; index < line.length; index += 1) {
-      const char = line[index];
-      if (char === '"' && quoted && line[index + 1] === '"') {
-        value += '"';
-        index += 1;
-      } else if (char === '"') quoted = !quoted;
-      else if (char === "," && !quoted) {
-        cells.push(value.trim());
-        value = "";
-      } else value += char;
-    }
-    cells.push(value.trim());
-    return cells;
-  };
-  const headers = parse(lines[0]);
-  return {
-    headers,
-    rows: lines.slice(1).map((line) => {
-      const cells = parse(line);
-      return Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
-    }),
-  };
-}
+type RelatedSearchItem={value:string;labelZh:string;labelEn:string;type:string};
 
 async function hashText(text: string) {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -93,6 +66,12 @@ export function ImportsPage({
   } | null>(null);
   const [fieldChoices, setFieldChoices] = useState<Record<string, "TARGET" | "SOURCE">>({});
   const [mergeConfirmed, setMergeConfirmed] = useState(false);
+  const [mergePending,setMergePending]=useState(false);
+  const [mergeOptions,setMergeOptions]=useState<Array<{value:string;label:string;detail?:string}>>([]);
+  const [rollbackOpen,setRollbackOpen]=useState(false);
+  const runMergeSearch=useRemoteSearch();
+  const runBatchLoad=useRemoteSearch();
+  const runRowLoad=useRemoteSearch();
 
   const current = batches.find((item) => item.id === selected);
   const visibleDuplicateRows = useMemo(() => rows.filter((item) => item.status === "DUPLICATE"), [rows]);
@@ -100,38 +79,43 @@ export function ImportsPage({
   const rowPages = Math.max(1, Math.ceil(rowTotal / rowPageSize));
   const headerOptions = [{ value: "", label: t("imports.ignore") }, ...headers.map((header) => ({ value: header, label: header }))];
 
-  const loadBatches = async (nextPage = page) => {
-    try {
-      const result = await apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}&pageSize=${pageSize}`);
-      setBatches(result.items);
-      setTotal(result.total ?? 0);
-    } catch {
+  const loadBatches = async (nextPage = page, nextPageSize = pageSize) => {
+    const request=await runBatchLoad(signal=>apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}&pageSize=${nextPageSize}`,{signal}));
+    if(!request.current)return;
+    if("error" in request){
       setError(t("imports.loadFailed"));
+      return;
     }
+    setError("");
+    setBatches(request.value.items);
+    setTotal(request.value.total ?? 0);
   };
 
   const open = async (id: string, nextRowPage = 1, nextRowPageSize = rowPageSize) => {
     setSelected(id);
-    try {
-      const [result, dryRunResult] = await Promise.all([
-        apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}&rowPageSize=${nextRowPageSize}`),
-        apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`),
-      ]);
-      setRows(result.items);
-      setRowTotal(result.total ?? 0);
-      setRowPage(nextRowPage);
-      setDryRun(dryRunResult.summary);
-    } catch {
+    const request=await runRowLoad(signal=>Promise.all([
+      apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}&rowPageSize=${nextRowPageSize}`,{signal}),
+      apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`,{signal}),
+    ]));
+    if(!request.current)return;
+    if("error" in request){
       setError(t("imports.loadFailed"));
       setDryRun(null);
+      return;
     }
+    const [result,dryRunResult]=request.value;
+    setError("");
+    setRows(result.items);
+    setRowTotal(result.total ?? 0);
+    setRowPage(nextRowPage);
+    setDryRun(dryRunResult.summary);
   };
 
   const chooseFile = async (file: File) => {
     setError("");
     try {
       const text = await file.text();
-      const parsed = parseCsv(text);
+      const parsed = parseCsvDocument(text,500);
       setFileName(file.name);
       setFileText(text);
       setHeaders(parsed.headers);
@@ -142,8 +126,14 @@ export function ImportsPage({
         if (match) automatic[field] = match;
       }
       setMapping(automatic);
-    } catch {
-      setError(t("imports.parseFailed"));
+    } catch(caught) {
+      const key=caught instanceof CsvParseError
+        ?caught.code==="TOO_MANY_ROWS"?"imports.tooManyRows"
+          :caught.code==="UNCLOSED_QUOTE"?"imports.unclosedQuote"
+            :caught.code==="DUPLICATE_HEADER"?"imports.duplicateHeader"
+              :"imports.parseFailed"
+        :"imports.parseFailed";
+      setError(t(key));
     }
   };
 
@@ -237,7 +227,7 @@ export function ImportsPage({
       await apiFetch("/api/imports", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "rollback", target_batch: selected }),
+        body: JSON.stringify({ operation: "rollback", target_batch: selected,requestKey:crypto.randomUUID() }),
       });
     } catch {
       setPending(false);
@@ -245,6 +235,7 @@ export function ImportsPage({
       return;
     }
     setPending(false);
+    setRollbackOpen(false);
     await loadBatches();
     await open(selected, rowPage);
     setToast(t("imports.rolledBack"));
@@ -269,6 +260,7 @@ export function ImportsPage({
 
   const mergeRecords = async () => {
     if (!mergePreview || !mergeConfirmed) return;
+    setMergePending(true);setError("");
     try {
       await apiFetch("/api/duplicates", {
         method: "POST",
@@ -280,16 +272,26 @@ export function ImportsPage({
           sourceId: mergeSource,
           fieldChoices,
           confirmed: true,
+          requestKey:crypto.randomUUID(),
         }),
       });
     } catch {
       setError(t("duplicates.previewFailed"));
+      setMergePending(false);
       return;
     }
+    setMergePending(false);
     setMergePreview(null);
     setMergeTarget("");
     setMergeSource("");
     setToast(t("duplicates.mergeSuccess"));
+  };
+  const searchMergeRecords=async(query:string)=>{
+    const result=await runMergeSearch(signal=>apiFetch<{items:RelatedSearchItem[]}>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));
+    if(!result.current)return;
+    if("error" in result){setError(t("duplicates.previewFailed"));return;}
+    const expected=mergeResource==="CONTACTS"?"CONTACT":"ORGANIZATION";
+    setMergeOptions(result.value.items.filter(item=>item.type===expected).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`,detail:t(mergeResource==="CONTACTS"?"imports.contacts":"imports.organizations")})));
   };
 
   return <div className="page-stack imports-page">
@@ -302,16 +304,16 @@ export function ImportsPage({
     </section>
 
     {duplicatesOnly && (ADMIN_ROLES.includes(user.role) || user.role === "SALES_DIRECTOR" || user.role === "SALES_MANAGER") && <section className="surface duplicate-merge-panel">
-      <div className="surface-heading"><div><p className="eyebrow">CONTROLLED MERGE</p><h2>{t("duplicates.mergePreview")}</h2><p>{t("duplicates.mergeHelp")}</p></div><SearchCheck size={21}/></div>
-      <div className="form-grid three-column"><label className="field"><span>{t("imports.resource")}</span><select value={mergeResource} onChange={(event) => { setMergeResource(event.target.value as typeof mergeResource); setMergePreview(null); }}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label><label className="field"><span>{t("duplicates.targetId")}</span><input value={mergeTarget} onChange={(event) => setMergeTarget(event.target.value)} pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("duplicates.sourceId")}</span><input value={mergeSource} onChange={(event) => setMergeSource(event.target.value)} pattern="[0-9a-fA-F-]{36}" required/></label></div>
+      <div className="surface-heading"><div><p className="eyebrow">{t("duplicates.controlledMerge")}</p><h2>{t("duplicates.mergePreview")}</h2><p>{t("duplicates.mergeHelp")}</p></div><SearchCheck size={21}/></div>
+      <div className="form-grid three-column"><label className="field"><span>{t("imports.resource")}</span><select value={mergeResource} onChange={(event) => { setMergeResource(event.target.value as typeof mergeResource);setMergeTarget("");setMergeSource("");setMergeOptions([]);setMergePreview(null); }}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label><SearchableSelect label={t("imports.mergeTarget")} options={mergeOptions.filter(item=>item.value!==mergeSource)} value={mergeTarget} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeTarget(value);setMergePreview(null);}}/><SearchableSelect label={t("imports.mergeSource")} options={mergeOptions.filter(item=>item.value!==mergeTarget)} value={mergeSource} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeSource(value);setMergePreview(null);}}/></div>
       <button className="secondary-button" type="button" disabled={!mergeTarget || !mergeSource || mergeTarget === mergeSource} onClick={() => void previewMerge()}><SearchCheck size={16}/>{t("duplicates.preview")}</button>
       {mergePreview && <div className="merge-preview">
         <InlineMessage type={mergePreview.recommendedMaster === mergeTarget ? "success" : "warning"}>{t("duplicates.recommendedMaster", { id: mergePreview.recommendedMaster })}{mergePreview.recommendedMaster !== mergeTarget && <button className="inline-action" type="button" onClick={() => { const oldTarget = mergeTarget; const oldSource = mergeSource; setMergeTarget(oldSource); setMergeSource(oldTarget); void previewMerge(oldSource, oldTarget); }}>{t("duplicates.useRecommended")}</button>}</InlineMessage>
         <InlineMessage type="info">{t("duplicates.editableFieldsOnly")}</InlineMessage>
-        <div className="merge-fields"><div className="merge-fields-head"><b>{t("duplicates.targetId")}</b><b>{t("duplicates.sourceId")}</b><b>{t("duplicates.confirmMerge")}</b></div>{mergePreview.editableFields.map((key) => <div className="merge-field" key={key}><span><small>{key}</small><b>{String(mergePreview.target[key] ?? "—")}</b></span><span><small>{key}</small><b>{String(mergePreview.source[key] ?? "—")}</b></span><select aria-label={key} value={fieldChoices[key] ?? "TARGET"} onChange={(event) => setFieldChoices((current) => ({ ...current, [key]: event.target.value as "TARGET" | "SOURCE" }))}><option value="TARGET">TARGET</option><option value="SOURCE">SOURCE</option></select></div>)}</div>
-        <InlineMessage type="warning">{Object.entries(mergePreview.impact).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}</InlineMessage>
+        <div className="merge-fields"><div className="merge-fields-head"><b>{t("imports.mergeTarget")}</b><b>{t("imports.mergeSource")}</b><b>{t("duplicates.confirmMerge")}</b></div>{mergePreview.editableFields.map((key) => <div className="merge-field" key={key}><span><small>{t(`imports.field.${key}`)}</small><b>{String(mergePreview.target[key] ?? "—")}</b></span><span><small>{t(`imports.field.${key}`)}</small><b>{String(mergePreview.source[key] ?? "—")}</b></span><select aria-label={t(`imports.field.${key}`)} value={fieldChoices[key] ?? "TARGET"} onChange={(event) => setFieldChoices((current) => ({ ...current, [key]: event.target.value as "TARGET" | "SOURCE" }))}><option value="TARGET">{t("imports.targetChoice")}</option><option value="SOURCE">{t("imports.sourceChoice")}</option></select></div>)}</div>
+        <InlineMessage type="warning">{Object.entries(mergePreview.impact).map(([key, value]) => `${t(`duplicates.impact.${key}`)}: ${String(value)}`).join(" · ")}</InlineMessage>
         <label className="check-row"><input type="checkbox" checked={mergeConfirmed} onChange={(event) => setMergeConfirmed(event.target.checked)}/><span>{t("duplicates.mergeHelp")}</span></label>
-        <button className="danger-button" type="button" disabled={!mergeConfirmed} onClick={() => void mergeRecords()}>{t("duplicates.confirmMerge")}</button>
+        <button className="danger-button" type="button" disabled={!mergeConfirmed||mergePending} onClick={() => void mergeRecords()}>{mergePending?t("common.processing"):t("duplicates.confirmMerge")}</button>
       </div>}
       {error && <InlineMessage type="error">{error}</InlineMessage>}
     </section>}
@@ -340,7 +342,7 @@ export function ImportsPage({
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}
-        <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); void loadBatches(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);void apiFetch<{items:ImportBatchRecord[];total?:number}>(`/api/imports?page=1&pageSize=${value}`).then((result)=>{setBatches(result.items);setTotal(result.total??0);}).catch(()=>setError(t("imports.loadFailed")));}} />
+        <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); void loadBatches(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);void loadBatches(1,value);}} />
       </div>
 
       <div className="surface import-rows">
@@ -361,11 +363,12 @@ export function ImportsPage({
         {current && !rows.length && <div className="empty-state"><span>{t("imports.noRows")}</span></div>}
         {current && <div className="import-actions">
           {["READY", "PROCESSING", "PARTIAL_FAILED"].includes(current.status) && !visibleDuplicateRows.length && <button className="primary-button" disabled={pending} onClick={() => void process()}><Play size={16} />{t("imports.execute")}</button>}
-          {["COMPLETED", "PARTIAL_FAILED"].includes(current.status) && current.applied > 0 && <button className="danger-button" disabled={pending} onClick={() => void rollback()}><RotateCcw size={16} />{t("imports.rollback")}</button>}
+          {["COMPLETED", "PARTIAL_FAILED"].includes(current.status) && current.applied > 0 && <button className="danger-button" disabled={pending} onClick={() => setRollbackOpen(true)}><RotateCcw size={16} />{t("imports.rollback")}</button>}
         </div>}
         {error && <InlineMessage type="error">{error}</InlineMessage>}
       </div>
     </section>
+    {rollbackOpen&&current&&<AccessibleDrawer title={t("common.confirmAction")} description={t("common.actionCannotUndo")} onClose={()=>setRollbackOpen(false)}><InlineMessage type="warning">{t("imports.rollbackConfirm",{count:current.applied})}</InlineMessage><div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setRollbackOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void rollback()}>{pending?t("common.processing"):t("imports.rollback")}</button></div></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;
 }

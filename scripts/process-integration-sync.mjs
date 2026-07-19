@@ -14,7 +14,7 @@ const headers = {
   authorization: `Bearer ${serviceKey}`,
   "content-type": "application/json",
 };
-const workerId = process.env.WORKER_ID ?? `integration-sync:${process.pid}:${crypto.randomUUID()}`;
+const workerId = process.env.WORKER_ID?.trim() || `integration-sync:${process.pid}:${crypto.randomUUID()}`;
 const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "INTEGRATION_SYNC");
 
 async function rpc(name, body) {
