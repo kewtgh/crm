@@ -1,0 +1,87 @@
+/* v2 feature, narrow-layout and accessibility closure.
+   Kept after the legacy global bundle so the release-tested floors remain deterministic. */
+:where(.app-frame, .auth-page) small { font-size:12px !important; line-height:1.5; }
+.eyebrow, .nav-group > p, .status-badge, .data-table th { font-size:12px; }
+.turnstile-status { min-height:32px; padding:7px 9px; border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:10px; color:#41534e; background:var(--surface-soft); font-size:12px; }
+.turnstile-status.verified { color:#20694e; background:var(--green-soft); }
+.turnstile-status.error { color:#943b37; background:var(--red-soft); }
+.turnstile-status button { min-height:32px; padding:0 10px; border:1px solid currentColor; border-radius:7px; color:inherit; background:transparent; font-weight:750; }
+@media(max-width:680px){
+  .finance-risk-center { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; gap:0; padding:0; }
+  .finance-risk-center > span { min-width:0; min-height:78px; padding:12px !important; border-right:0; border-bottom:1px solid var(--line); justify-content:center; }
+  .finance-risk-center > span:nth-child(odd) { border-right:1px solid var(--line); }
+  .finance-risk-center > span:nth-last-child(-n+2) { border-bottom:0; }
+  .auth-form-heading h1 { max-width:100%; overflow-wrap:anywhere; line-height:1.2; }
+}
+.v200-list { display:grid; }
+.v200-list article { min-height:70px; padding:12px 0; border-top:1px solid var(--line); display:grid; grid-template-columns:42px minmax(0,1fr) auto auto; align-items:center; gap:12px; }
+.v200-list article > div:nth-child(2) { min-width:0; display:grid; gap:3px; }
+.v200-list article > div:nth-child(2) small { color:var(--muted); overflow-wrap:anywhere; }
+.v200-actions { display:flex; gap:8px; }
+.v200-action-form { display:grid; gap:8px; }
+.v200-action-form > .primary-button { justify-self:start; }
+@media(max-width:680px){
+  .v200-list article { grid-template-columns:38px minmax(0,1fr); align-items:start; }
+  .v200-list article > .status-badge, .v200-list article > .secondary-button, .v200-list article > .v200-actions { grid-column:2; justify-self:start; }
+  .v200-actions { width:100%; flex-direction:column; }
+  .v200-actions button { width:100%; }
+}
+.import-template-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.import-template-actions small { color:var(--muted); }
+.import-mapping-profiles { align-items:end; margin-bottom:14px; }
+.import-mapping-save { min-height:42px; justify-content:center; }
+@media(max-width:680px){
+  .import-mapping-save { width:100%; }
+}
+
+/* WCAG text and contrast floor: legacy compact rules may not reduce functional text below 12px. */
+:root {
+  --muted:#596964;
+  --muted-2:#5f706a;
+  --green:#20694e;
+  --blue:#315fae;
+  --purple:#6345ae;
+  --amber:#8f5b19;
+  --red:#a83f3a;
+}
+:where(.app-frame,.auth-page) :is(a,button,p,span,small,b,strong,em,time,kbd,label,input,textarea,select,th,td) { font-size:12px; line-height:1.45; }
+.nav-group > p,.sidebar-insight small,.sidebar-collapse,.sidebar-version,.auth-brand-footer { color:rgba(255,255,255,.76); opacity:1; }
+.nav-children a { color:rgba(255,255,255,.82); }
+.sidebar-collapse small { color:rgba(255,255,255,.82); opacity:1; }
+.profile-copy small,.notifications a small,.notifications time { color:var(--muted); }
+.select-trigger .placeholder { color:var(--muted); }
+.metric-card > div > b { font-size:21px; }
+.product-kpi b,.contract-kpi b { font-size:18px; }
+.consumption-kpi b,.consumption-board-metric b { font-size:19px; }
+.health-donut b { font-size:27px; }
+.health-donut.small b { font-size:20px; }
+.allocation-summary b { font-size:1.1rem; }
+.operations-insight-card strong { font-size:24px; }
+.quick-summary b { font-size:18px; }
+:where(.app-frame,.auth-page) :is(.primary-button,.secondary-button,.danger-button,.ghost-button,.text-button) { min-height:44px; }
+
+/* Final computed-type floor for compact selectors that otherwise outrank the baseline above. */
+:where(.app-frame,.auth-page) :is(
+  .auth-help,
+  .auth-brand-footer,
+  .metric-label,
+  .progress-with-label,
+  .record-avatar,
+  .sidebar-insight b,
+  .attention-row b,
+  .product-list-row b
+),
+:where(.app-frame,.auth-page) :is(
+  .page-heading-row > div > p:last-child,
+  .welcome-strip > div > p:last-child,
+  .empty-state p,
+  .surface-heading > a,
+  .surface-heading > button,
+  .quick-summary > button,
+  .primary-button,
+  .secondary-button,
+  .pagination-summary > span,
+  .pagination-summary label,
+  .pagination button,
+  .profile-trigger > span:first-child
+) { font-size:12px !important; }

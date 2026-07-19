@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { deleteSharedView, listSharedViews, saveSharedView, viewConfigSchema } from "@/lib/saved-views";
+import { deleteSharedView, listSharedViews, saveSharedView } from "@/lib/saved-views";
+import { viewConfigSchema } from "@/lib/saved-view-schema";
 
 const resource=z.enum(["schools","people","tasks","opportunities","contracts","finance","data-quality"]);
 const mutation=z.discriminatedUnion("operation",[

@@ -7,7 +7,7 @@ import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
 const schema=z.discriminatedUnion("type",[
   z.object({type:z.enum(["CONTRACT_SIGN","CONTRACT_EXPORT","PERFORMANCE_SUMMARY","PERFORMANCE_ALLOCATION"]),objectType:z.string().min(1).max(80),objectId:z.string().min(1).max(160),reason:z.string().trim().min(3).max(1000)}),
-  z.object({type:z.literal("CRM_EXPORT"),resource:z.enum(["schools","people","tasks"]),query:z.string().max(100).default(""),status:z.string().max(40).default("all"),sort:z.string().max(40).default("primary"),direction:z.enum(["asc","desc"]).default("asc"),reason:z.string().trim().min(3).max(1000)}),
+  z.object({type:z.literal("CRM_EXPORT"),resource:z.enum(["schools","people","tasks","students","households","leads","sales","finance"]),query:z.string().max(100).default(""),status:z.string().max(40).default("all"),sort:z.string().max(40).default("primary"),direction:z.enum(["asc","desc"]).default("asc"),format:z.enum(["CSV","XLSX","PDF"]).default("CSV"),reason:z.string().trim().min(3).max(1000)}),
 ]);
 const fail=(error:unknown)=>error instanceof SupabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_FAILED"},{status:500});
 async function get(request:Request){await requireApiUser();const params=new URL(request.url).searchParams;const{page,pageSize}=parsePagination(params,10);try{return NextResponse.json(await listApprovals({query:params.get("q")??"",type:params.get("type")??"all",status:params.get("status")??"pending",page,pageSize}));}catch(error){return fail(error);}}

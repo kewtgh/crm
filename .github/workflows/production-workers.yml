@@ -1,0 +1,37 @@
+name: Production worker cycle
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-worker-cycle
+  cancel-in-progress: false
+
+jobs:
+  workers:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --omit=dev
+      - run: npm run workers:process
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CRM_WORKSPACE_ID: ${{ secrets.CRM_WORKSPACE_ID }}
+          EMAIL_DELIVERY_URL: ${{ secrets.EMAIL_DELIVERY_URL }}
+          EMAIL_DELIVERY_TOKEN: ${{ secrets.EMAIL_DELIVERY_TOKEN }}
+          WEBHOOK_PROCESSOR_URL: ${{ secrets.WEBHOOK_PROCESSOR_URL }}
+          WEBHOOK_PROCESSOR_TOKEN: ${{ secrets.WEBHOOK_PROCESSOR_TOKEN }}
+          INTEGRATION_SYNC_PROCESSOR_URL: ${{ secrets.INTEGRATION_SYNC_PROCESSOR_URL }}
+          INTEGRATION_SYNC_PROCESSOR_TOKEN: ${{ secrets.INTEGRATION_SYNC_PROCESSOR_TOKEN }}

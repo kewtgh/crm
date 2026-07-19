@@ -1,5 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 
+process.env.DO_NOT_TRACK="1";
+process.env.SUPABASE_TELEMETRY_DISABLED="1";
+
 const appUrl=(process.env.APP_URL??"http://127.0.0.1:3200").replace(/\/$/,"");
 const npmCli=process.env.npm_execpath;
 if(!npmCli)throw new Error("npm_execpath is required; run this gate through npm run release:gate");
@@ -51,6 +54,7 @@ function stopTree(child){
 await runNpm(["run","typecheck"]);
 await runNpm(["run","lint"]);
 await runNpm(["test"]);
+await runNpm(["audit","--audit-level=moderate"]);
 await runSupabase(["db","lint","--local","--level","warning"]);
 await runSupabase(["test","db","--local"]);
 await runNpm(["run","smoke:phase2"]);
@@ -63,14 +67,17 @@ const server=spawn(process.execPath,[npmCli,"run","start","--","--port","3200"],
 });
 try{
   await waitForApp(server);
+  await runNpm(["run","qa:assets"]);
   await runNpm(["run","smoke:http-v09"]);
   assertServerRunning(server);
   await runNpm(["run","smoke:http-v10"]);
   assertServerRunning(server);
-  await runNpm(["run","smoke:v11"]);
+await runNpm(["run","smoke:v11"]);
+await runNpm(["run","smoke:exports"]);
   assertServerRunning(server);
+  await runNpm(["run","qa:chromium-1228"]);
 }finally{
   stopTree(server);
 }
 
-process.stdout.write("\nRelease gate passed: types, lint, build, Node, pgTAP, schema lint, and all smoke suites.\n");
+process.stdout.write("\nRelease gate passed: types, lint, build, dependency audit, Node, pgTAP, schema lint, smokes, production assets, and ms-playwright/chromium-1228 UI QA.\n");

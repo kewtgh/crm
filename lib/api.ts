@@ -8,6 +8,7 @@ import {
   type AppRole,
   type AppUser,
 } from "./auth";
+import { aal2Capabilities, hasCapability, type Capability } from "./capabilities";
 import { SupabaseRequestError } from "./supabase-server";
 
 export type ApiErrorBody = {
@@ -145,6 +146,15 @@ export async function requireApiRole(...roles: AppRole[]) {
 export async function requireApiAal2() {
   const token = (await cookies()).get(authCookieNames.access)?.value;
   if (!token || decodeJwtPayload(token).aal !== "aal2") throw new ApiError("MFA_REQUIRED", 403);
+}
+
+export async function requireApiCapability(capability: Capability) {
+  const user = await requireApiUser();
+  if (!hasCapability(user.role, capability)) {
+    throw new ApiError("CAPABILITY_FORBIDDEN", 403, "CAPABILITY_FORBIDDEN", { capability });
+  }
+  if (aal2Capabilities.has(capability)) await requireApiAal2();
+  return user;
 }
 
 const paginationSchema = z.object({

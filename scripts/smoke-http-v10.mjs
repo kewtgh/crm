@@ -15,7 +15,7 @@ const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const eventId = `v100-${Date.now()}-${crypto.randomUUID()}`;
 const eventType = "delivery.v100-smoke";
-const rawBody = JSON.stringify({ smoke: true, release: "1.2.0" });
+const rawBody = JSON.stringify({ smoke: true, release: "2.0.0" });
 const timestamp = String(Math.floor(Date.now() / 1000));
 const bodyDigest = crypto.createHash("sha256").update(rawBody).digest("hex");
 const canonical = ["v1", "EMAIL", eventId, eventType, timestamp, bodyDigest].join("\n");
@@ -91,7 +91,7 @@ try {
   assert(tampered.response.status === 401, "a tampered event ID reused the original signature");
 
   process.stdout.write(
-    "v1.2.0 HTTP security smoke passed: trusted origin, canonical signature, replay window, header tamper rejection, and event deduplication.\n",
+    "v2.0.0 HTTP security smoke passed: trusted origin, canonical signature, replay window, header tamper rejection, and event deduplication.\n",
   );
 } finally {
   await fetch(

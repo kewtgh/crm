@@ -191,12 +191,14 @@ export function ModulePage({
   };
   const requestExport=async(event:React.FormEvent<HTMLFormElement>)=>{
     event.preventDefault();if(!resource)return;
-    const reason=String(new FormData(event.currentTarget).get("reason")??"").trim();
+    const formData=new FormData(event.currentTarget);
+    const reason=String(formData.get("reason")??"").trim();
+    const format=String(formData.get("format")??"CSV");
     setExportPending(true);setError("");
     try{
       await apiFetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
         type:"CRM_EXPORT",resource,query:searchParams.get("q")??"",status:searchParams.get("status")??"all",
-        sort:searchParams.get("sort")??"primary",direction:searchParams.get("direction")==="desc"?"desc":"asc",reason,
+        sort:searchParams.get("sort")??"primary",direction:searchParams.get("direction")==="desc"?"desc":"asc",format,reason,
       })});
       setExportOpen(false);setToast(t("export.submitted"));
     }catch(caught){setError(describeError(caught,"export.failed"));}
@@ -280,6 +282,7 @@ export function ModulePage({
     {exportOpen&&resource&&<AccessibleDrawer title={t("export.requestTitle")} eyebrow={t("exports.eyebrow")} description={t("export.requestHelp")} onClose={()=>setExportOpen(false)}>
       <form onSubmit={requestExport}>
         <InlineMessage type="info">{t("export.requestHelp")}</InlineMessage>
+        <label className="field"><span>{t("export.format")}</span><select name="format" defaultValue="CSV"><option value="CSV">CSV</option><option value="XLSX">XLSX</option><option value="PDF">PDF</option></select><small>{t("export.formatHelp")}</small></label>
         <label className="field"><span>{t("export.reason")} *</span><textarea name="reason" rows={4} minLength={3} maxLength={1000} placeholder={t("export.reasonPlaceholder")} required/></label>
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setExportOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={exportPending}><Download size={16}/>{exportPending?t("common.processing"):t("export.request")}</button></div>

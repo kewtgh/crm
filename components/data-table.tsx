@@ -9,7 +9,7 @@ import { AccessibleDrawer, InlineMessage, Pagination, ProgressBar, SearchField, 
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
-import { savedViewSchema, viewConfigSchema, type SavedView } from "@/lib/saved-views";
+import { savedViewSchema, viewConfigSchema, type SavedView } from "@/lib/saved-view-schema";
 import { usePagedResource } from "@/hooks/use-paged-resource";
 
 type SortKey = "primary" | "secondary" | "status" | "meta" | "extra" | "completeness";

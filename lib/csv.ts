@@ -17,7 +17,7 @@ function detectDelimiter(text:string){
   return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[1]? [...counts.entries()].sort((a,b)=>b[1]-a[1])[0][0]:",";
 }
 
-export function parseCsvDocument(source:string,maxRows=500):CsvDocument{
+export function parseCsvDocument(source:string,maxRows=10_000):CsvDocument{
   const text=source.replace(/^\uFEFF/,"");
   const delimiter=detectDelimiter(text);
   const parsed:string[][]=[];

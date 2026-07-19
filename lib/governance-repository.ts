@@ -27,12 +27,12 @@ export async function listApprovals(options:{query?:string;type?:string;status?:
 
 export async function createApproval(input:
   | {type:"CONTRACT_SIGN"|"CONTRACT_EXPORT"|"PERFORMANCE_SUMMARY"|"PERFORMANCE_ALLOCATION";objectType:string;objectId:string;reason:string}
-  | {type:"CRM_EXPORT";resource:"schools"|"people"|"tasks";query:string;status:string;sort:string;direction:"asc"|"desc";reason:string}
+  | {type:"CRM_EXPORT";resource:"schools"|"people"|"tasks"|"students"|"households"|"leads"|"sales"|"finance";query:string;status:string;sort:string;direction:"asc"|"desc";format:"CSV"|"XLSX"|"PDF";reason:string}
 ) {
   if(input.type==="CRM_EXPORT"){
     return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_crm_export_approval",{method:"POST",body:JSON.stringify({
       resource_key:input.resource,search_query:input.query,status_filter:input.status,
-      sort_key:input.sort,sort_direction:input.direction,business_reason:input.reason,
+      sort_key:input.sort,sort_direction:input.direction,business_reason:input.reason,export_format:input.format,
     })});
   }
   return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_approval",{method:"POST",body:JSON.stringify({request_kind:input.type,object_type:input.objectType,object_id:input.objectId,business_reason:input.reason})});

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { elevateQaSessionToAal2 } from "./lib/qa-auth.mjs";
 
 const required = [
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -103,7 +104,13 @@ try {
     method: "POST",
     body: { email, password },
   });
-  token = signed.access_token;
+  const elevated = await elevateQaSessionToAal2({
+    supabaseUrl: base,
+    anonKey: anon,
+    accessToken: signed.access_token,
+    friendlyName: `v09-${suffix}`,
+  });
+  token = elevated.access_token;
 
   const organizations = await request("/rest/v1/organizations?select=id", {
     method: "POST",

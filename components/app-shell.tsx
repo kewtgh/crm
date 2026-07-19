@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { AppUser } from "@/lib/user";
 import { ADMIN_ROLES, roleMessageKey } from "@/lib/roles";
+import { hasCapability, type Capability } from "@/lib/capabilities";
 import { APP_VERSION } from "@/lib/version";
 import { AppUserProvider } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
@@ -38,6 +39,7 @@ import type { UserSettings } from "@/lib/settings-repository";
 import { UserPreferencesProvider } from "./user-preferences-context";
 import { useUserPreferences } from "./user-preferences-context";
 import { apiFetch } from "@/lib/api-client";
+import { presentApiError } from "@/lib/api-error-presenter";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
 
@@ -53,9 +55,12 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   { titleKey: "nav.relationships", items: [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
     { labelKey: "nav.people", href: "/people", icon: Users },
+    { labelKey: "nav.students", href: "/students", icon: GraduationCap },
+    { labelKey: "nav.households", href: "/households", icon: Users },
   ]},
   { titleKey: "nav.operations", items: [
     { labelKey: "nav.sales", icon: Target, children: [
+      { labelKey: "nav.leads", href: "/leads" },
       { labelKey: "nav.opportunities", href: "/opportunities" },
       { labelKey: "nav.performance", href: "/sales/performance" },
       { labelKey: "nav.allocation", href: "/sales/allocation" },
@@ -64,10 +69,12 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
       { labelKey: "nav.finance", href: "/finance" },
     ]},
     { labelKey: "nav.data", icon: DatabaseZap, children: [
+      { labelKey: "nav.progression", href: "/progression" },
       { labelKey: "nav.imports", href: "/imports" },
       { labelKey: "nav.duplicates", href: "/duplicates" },
       { labelKey: "nav.quality", href: "/data-quality" },
     ]},
+    { labelKey: "nav.ai", href: "/ai", icon: Sparkles },
     { labelKey: "nav.reports", icon: FileBarChart, children: [
       { labelKey: "nav.reportCenter", href: "/reports" },
       { labelKey: "nav.consumption", href: "/analytics/consumption" },
@@ -85,8 +92,26 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
   ]},
   { titleKey: "nav.account", items: [
     { labelKey: "nav.settings", href: "/settings/profile", icon: Settings },
+    { labelKey: "nav.privacyRequests", href: "/privacy-requests", icon: ShieldCheck },
   ]},
 ];
+
+const routeCapabilities: Partial<Record<string, Capability>> = {
+  "/students": "education.view",
+  "/households": "education.view",
+  "/progression": "progression.manage",
+  "/leads": "leads.view",
+  "/finance": "finance.view",
+  "/imports": "imports.view",
+  "/duplicates": "duplicates.manage",
+  "/data-quality": "dataQuality.manage",
+  "/ai": "ai.review",
+  "/admin": "admin.access",
+  "/admin/approvals": "admin.access",
+  "/admin/operations": "admin.access",
+  "/admin/users": "users.manage",
+  "/admin/security": "admin.access",
+};
 
 export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferences, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; children: React.ReactNode }) {
   const { locale, t } = useI18n();
@@ -109,12 +134,14 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const notificationsTriggerRef=useRef<HTMLButtonElement>(null);
   const profileTriggerRef=useRef<HTMLButtonElement>(null);
   const visibleNavigation = useMemo(() => {
-    const canAllocate = ADMIN_ROLES.includes(user.role) || user.role === "SALES_DIRECTOR" || user.role === "SALES_MANAGER";
+    const canVisit = (href?: string) => !href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]);
+    const canAllocate = hasCapability(user.role, "performance.manage");
     return navigation.map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => item.labelKey !== "nav.admin" || ADMIN_ROLES.includes(user.role))
-        .map((item) => item.children ? { ...item, children: item.children.filter((child) => child.labelKey !== "nav.allocation" || canAllocate) } : item),
+        .filter((item) => canVisit(item.href) && (item.labelKey !== "nav.admin" || hasCapability(user.role, "admin.access")))
+        .map((item) => item.children ? { ...item, children: item.children.filter((child) => canVisit(child.href) && (child.labelKey !== "nav.allocation" || canAllocate)) } : item)
+        .filter((item) => !item.children || item.children.length > 0),
     })).filter((group) => group.items.length > 0);
   }, [user.role]);
   const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
@@ -298,8 +325,8 @@ function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: Na
 function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {
   const {t} = useI18n();const {formatDate}=useUserPreferences();const [items,setItems]=useState<NotificationRecord[]>([]);const [total,setTotal]=useState(0);const [error,setError]=useState("");const dialogRef=useRef<HTMLDivElement>(null);const restoreFocus=useRef(true);
   useEffect(()=>{const trigger=triggerRef.current;const frame=window.requestAnimationFrame(()=>dialogRef.current?.querySelector<HTMLElement>("button:not([disabled]),a[href]")?.focus());const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();close();return;}if(event.key!=="Tab"||!dialogRef.current)return;const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],[tabindex]:not([tabindex='-1'])"));const first=focusable[0],last=focusable[focusable.length-1];if((event.shiftKey&&document.activeElement===first)||(!event.shiftKey&&document.activeElement===last)){event.preventDefault();restoreFocus.current=false;const next=findAdjacentFocusable(trigger,dialogRef.current,event.shiftKey);close();window.requestAnimationFrame(()=>next?.focus());}};const current=dialogRef.current;current?.addEventListener("keydown",key);return()=>{window.cancelAnimationFrame(frame);current?.removeEventListener("keydown",key);if(restoreFocus.current)trigger?.focus();};},[close,triggerRef]);
-  useEffect(()=>{let active=true;void apiFetch<{items:NotificationRecord[];total:number}>("/api/notifications").then(result=>{if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(()=>active&&setError(t("nav.notification.loadFailed")));return()=>{active=false};},[t]);
-  const markAll=async()=>{try{await apiFetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});setItems([]);setTotal(0);}catch{setError(t("nav.notification.markFailed"));}};
+  useEffect(()=>{let active=true;void apiFetch<{items:NotificationRecord[];total:number}>("/api/notifications").then(result=>{if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(caught=>active&&setError(presentApiError(caught,t,"nav.notification.loadFailed").message));return()=>{active=false};},[t]);
+  const markAll=async()=>{try{await apiFetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});setItems([]);setTotal(0);}catch(caught){setError(presentApiError(caught,t,"nav.notification.markFailed").message);}};
   const href=(item:NotificationRecord)=>item.sourceType==="CONTRACT"?"/contracts":item.sourceType==="APPOINTMENT"?"/calendar":item.sourceType==="EXPORT"?"/reports/exports":"/tasks";
   const notificationTime=(date:string)=>formatDate(date,{includeTime:true});
   return <div ref={dialogRef} className="top-popover notifications" role="dialog" aria-modal="false" aria-label={t("nav.notifications")}><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: total })}</small></span><button type="button" disabled={!items.length} onClick={markAll}>{t("nav.markAllRead")}</button></div>

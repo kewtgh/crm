@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { hasCapability, type Capability } from "./capabilities";
 import { APP_ROLES, type AppRole } from "./roles";
 import type { AppUser } from "./user";
 
@@ -30,7 +31,7 @@ export async function requireAal2() {
 }
 
 export function isMfaRequiredRole(role: AppRole) {
-  return role === "SUPER_ADMIN" || role === "ADMIN";
+  return ["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER"].includes(role);
 }
 
 export function nextAuthenticatedPath(user: AppUser) {
@@ -137,6 +138,12 @@ export async function requireUser() {
 export async function requireRole(...roles: AppRole[]) {
   const user = await requireUser();
   if (!roles.includes(user.role)) redirect("/dashboard");
+  return user;
+}
+
+export async function requireCapability(capability: Capability) {
+  const user = await requireUser();
+  if (!hasCapability(user.role, capability)) redirect("/dashboard");
   return user;
 }
 

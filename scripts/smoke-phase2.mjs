@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { elevateQaSessionToAal2 } from "./lib/qa-auth.mjs";
 
 const required=["NEXT_PUBLIC_SUPABASE_URL","NEXT_PUBLIC_SUPABASE_ANON_KEY","SUPABASE_SERVICE_ROLE_KEY"];
 const missing=required.filter(key=>!process.env[key]);if(missing.length)throw new Error(`Missing smoke variables: ${missing.join(", ")}`);
@@ -8,7 +9,9 @@ async function request(path,{method="GET",body,serviceRole=false,headers={}}={})
 async function rpc(name,body){return request(`/rest/v1/rpc/${name}`,{method:"POST",body});}
 try{
   const created=await request("/auth/v1/admin/users",{method:"POST",serviceRole:true,body:{email,password,email_confirm:true,app_metadata:{role:"SALES_DIRECTOR",workspace_id:process.env.CRM_WORKSPACE_ID??"00000000-0000-4000-8000-000000000001"},user_metadata:{username:`phase2.${suffix}`,display_name_zh:"阶段测试",display_name_en:"Phase Two Test"}}});userId=created.id;
-  const signed=await request("/auth/v1/token?grant_type=password",{method:"POST",body:{email,password},headers:{apikey:anon},serviceRole:false});token=signed.access_token;
+  const signed=await request("/auth/v1/token?grant_type=password",{method:"POST",body:{email,password},headers:{apikey:anon},serviceRole:false});
+  const elevated=await elevateQaSessionToAal2({supabaseUrl:base,anonKey:anon,accessToken:signed.access_token,friendlyName:`phase2-${suffix}`});
+  token=elevated.access_token;
   const organizations=await request("/rest/v1/organizations?select=id",{method:"POST",body:{name_zh:`测试机构${suffix}`,name_en:`Test Organization ${suffix}`,city:"Taipei",status:"UNVERIFIED",owner_id:userId},headers:{Prefer:"return=representation"}});organizationId=organizations[0].id;
   const contacts=await request("/rest/v1/contacts?select=id",{method:"POST",body:{organization_id:organizationId,name_zh:"测试联系人",name_en:"Test Contact",email,status:"UNVERIFIED",owner_id:userId},headers:{Prefer:"return=representation"}});contactId=contacts[0].id;
   await rpc("save_contact_consent",{target_contact:contactId,target_channel:"EMAIL",target_purpose:"MARKETING",target_status:"GRANTED",consent_source:"SIGNED_FORM",evidence:"phase-two smoke",retained_until:null,quiet_start:null,quiet_end:null});

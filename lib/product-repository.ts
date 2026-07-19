@@ -1,15 +1,25 @@
 import { supabaseJson } from "./supabase-server";
 
 export type ProductPrice={currency:string;amount:number;effectiveFrom:string};
-export type ProductRecord={id:string;nameZh:string;nameEn:string;code:string;price:number;prices:ProductPrice[];billing:string;duration:string;durationEn:string;customers:number;revenue:number;active:boolean;isDefault:boolean;currency:string};
+export type ProductCurrencyMetric={revenue:number;customers:number};
+export type ProductRecord={id:string;nameZh:string;nameEn:string;code:string;price:number;prices:ProductPrice[];metrics:Record<string,ProductCurrencyMetric>;billing:string;duration:string;durationEn:string;customers:number;revenue:number;active:boolean;isDefault:boolean;currency:string};
 
 export async function listProducts():Promise<ProductRecord[]>{
-  const [products,payments]=await Promise.all([
-    supabaseJson<Record<string,unknown>[]>("/rest/v1/products?select=id,name_zh,name_en,code,billing_unit,duration_zh,duration_en,active,is_default,product_prices(currency,amount,effective_from,effective_to)&order=is_default.desc,name_en"),
-    supabaseJson<Record<string,unknown>[]>("/rest/v1/payments?select=product_id,amount,currency,status,contracts:contracts!payments_workspace_contract_fk(organization_id)"),
-  ]);
-  const revenue=new Map<string,number>();const customers=new Map<string,Set<string>>();for(const payment of payments){if(payment.status!=="CONFIRMED"||!payment.product_id)continue;const key=`${payment.product_id}:${payment.currency}`;revenue.set(key,(revenue.get(key)??0)+Number(payment.amount));const contract=payment.contracts as {organization_id?:string}|null;const set=customers.get(key)??new Set<string>();if(contract?.organization_id)set.add(contract.organization_id);customers.set(key,set);}
-  const today=new Date().toISOString().slice(0,10);return products.map(item=>{const rows=(item.product_prices??[]) as Record<string,unknown>[];const byCurrency=new Map<string,Record<string,unknown>[]>();for(const row of rows){const code=String(row.currency);byCurrency.set(code,[...(byCurrency.get(code)??[]),row]);}const prices=[...byCurrency.entries()].map(([currency,versions])=>{const current=versions.find(entry=>String(entry.effective_from)<=today&&(entry.effective_to===null||String(entry.effective_to)>=today))??versions.sort((a,b)=>String(b.effective_from).localeCompare(String(a.effective_from)))[0];return{currency,amount:Number(current?.amount??0),effectiveFrom:String(current?.effective_from??"")};}).sort((a,b)=>a.currency==="CNY"?-1:b.currency==="CNY"?1:a.currency.localeCompare(b.currency));const primary=prices[0]??{currency:"CNY",amount:0,effectiveFrom:""};const key=`${item.id}:${primary.currency}`;return{id:String(item.id),nameZh:String(item.name_zh),nameEn:String(item.name_en),code:String(item.code),price:primary.amount,prices,billing:`products.billing.${String(item.billing_unit).toLowerCase().replace("school_year","schoolYear")}`,duration:String(item.duration_zh),durationEn:String(item.duration_en),customers:customers.get(key)?.size??0,revenue:revenue.get(key)??0,active:Boolean(item.active),isDefault:Boolean(item.is_default),currency:primary.currency};});
+  const products=await supabaseJson<Array<Record<string,unknown>>>("/rest/v1/rpc/product_catalog_snapshot",{method:"POST",body:"{}"});
+  return products.map((item)=>{
+    const prices=(item.prices as ProductPrice[]|undefined)??[];
+    const metrics=(item.metrics as Record<string,ProductCurrencyMetric>|undefined)??{};
+    const primary=prices[0]??{currency:"CNY",amount:0,effectiveFrom:""};
+    const primaryMetric=metrics[primary.currency]??{revenue:0,customers:0};
+    return {
+      id:String(item.id),nameZh:String(item.nameZh),nameEn:String(item.nameEn),code:String(item.code),
+      price:Number(primary.amount),prices,metrics,
+      billing:`products.billing.${String(item.billing).toLowerCase().replace("school_year","schoolYear")}`,
+      duration:String(item.durationZh),durationEn:String(item.durationEn),
+      customers:Number(primaryMetric.customers),revenue:Number(primaryMetric.revenue),
+      active:Boolean(item.active),isDefault:Boolean(item.isDefault),currency:primary.currency,
+    };
+  });
 }
 
 export async function createProduct(input:{nameZh:string;nameEn:string;code:string;price:number;currency:string;billing:string;duration:string;durationEn:string}){return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_product_with_price",{method:"POST",body:JSON.stringify({product_code:input.code,product_name_zh:input.nameZh,product_name_en:input.nameEn,product_billing:input.billing,product_duration_zh:input.duration,product_duration_en:input.durationEn,price_currency:input.currency,price_amount:input.price})});}

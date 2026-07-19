@@ -7,6 +7,7 @@ import type { ContactPrivacy } from "@/lib/phase2-repository";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage, StatusBadge, Toast } from "./ui";
 import { apiFetch } from "@/lib/api-client";
+import { presentApiError } from "@/lib/api-error-presenter";
 import { CrmRecordEditor } from "@/components/crm-record-editor";
 
 export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
@@ -20,7 +21,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   const [toast, setToast] = useState("");
 
   const reload = async () => {
-    try{setData(await apiFetch<ContactPrivacy>(`/api/contacts/${initial.id}/consents`));}catch{setConsentError(t("consent.saveFailed"));}
+    try{setData(await apiFetch<ContactPrivacy>(`/api/contacts/${initial.id}/consents`));}catch(caught){setConsentError(presentApiError(caught,t,"consent.saveFailed").message);}
   };
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -29,9 +30,9 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     setConsentError("");
     const form = new FormData(event.currentTarget);
     const body = { operation: "consent", channel: form.get("channel"), purpose: form.get("purpose"), status: form.get("status"), source: form.get("source"), evidence: form.get("evidence"), retentionUntil: form.get("retentionUntil") || null, quietStart: form.get("quietStart") || null, quietEnd: form.get("quietEnd") || null };
-    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });}catch{
+    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });}catch(caught){
       setPending(false);
-      setConsentError(t("consent.saveFailed"));
+      setConsentError(presentApiError(caught,t,"consent.saveFailed").message);
       return;
     }
     setPending(false);
@@ -44,9 +45,9 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     if (enabled && !dncReason.trim()) return;
     setPending(true);
     setDncError("");
-    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "doNotContact", enabled, reason: enabled ? dncReason.trim() : "" }) });}catch{
+    try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "doNotContact", enabled, reason: enabled ? dncReason.trim() : "" }) });}catch(caught){
       setPending(false);
-      setDncError(t("consent.saveFailed"));
+      setDncError(presentApiError(caught,t,"consent.saveFailed").message);
       return;
     }
     setPending(false);

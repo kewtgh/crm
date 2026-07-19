@@ -18,6 +18,7 @@ import {
 import { AccessibleDrawer, InlineMessage, Pagination, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
+import { presentApiError } from "@/lib/api-error-presenter";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
 
@@ -80,7 +81,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const safeUpcomingPage=Math.min(upcomingPage,upcomingPages);
   const visibleUpcoming=upcoming.slice((safeUpcomingPage-1)*upcomingPageSize,safeUpcomingPage*upcomingPageSize);
 
-  useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(()=>{if(!controller.signal.aborted)setFormError(t("calendar.loadFailed"));});return()=>controller.abort();},[month,persistent,t]);
+  useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(caught=>{if(!controller.signal.aborted)setFormError(presentApiError(caught,t,"calendar.loadFailed").message);});return()=>controller.abort();},[month,persistent,t]);
 
   const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);const result=await runRelatedSearch(signal=>apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));if(!result.current)return;setRelatedLoading(false);if("error" in result){setFormError(t("calendar.relatedLoadFailed"));return;}setRelatedOptions(result.value.items.filter(item=>item.type!=="USER").map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));},[locale,persistent,runRelatedSearch,t]);
 
@@ -100,7 +101,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     if (persistent) {
       const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
       const attendeeEmails=String(form.get("attendees")??"").split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);const consentConfirmed=form.get("attendeeConsent")==="on";
-      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch{setFormError(t("calendar.saveFailed"));return;}
+      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch(caught){setFormError(presentApiError(caught,t,"calendar.saveFailed").message);return;}
     }
     setEvents((current) => [...current, {
       id,
@@ -121,7 +122,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     if (persistent) { try{await apiFetch(`/api/calendar/${id}`, { method: "PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"COMPLETE"}) });}catch{setToast(t("calendar.completeFailed")); return;} }
     setDismissed((current) => [...current, id]);
   };
-  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");try{await apiFetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});}catch{setFormError(t("calendar.deliveryUpdateFailed"));return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
+  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");try{await apiFetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});}catch(caught){setFormError(presentApiError(caught,t,"calendar.deliveryUpdateFailed").message);return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
 
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
