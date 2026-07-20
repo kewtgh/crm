@@ -1,12 +1,16 @@
 # Lumina Education CRM
 
-Current release: **v2.1.0**
+Current release: **v2.1.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
 
-v2.1.0 adds and closes:
+v2.1.1 adds an automated GitHub Actions quality gate for main-branch pushes and pull
+requests, covering type checks, linting, production builds, Node contracts and dependency
+audits.
+
+v2.1.0 added and closed:
 
 - editable students, households, guardians and academic timelines, plus configurable, reviewable,
   cancellable and idempotent progression batches;
