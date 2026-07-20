@@ -88,8 +88,8 @@ application and household lead conversion.
 
 The v2.2 source implementation, second omission review, migrations, schema lint and all 433 pgTAP
 assertions are complete. The release remains blocked until authenticated device smoke and the pinned
-Chromium 1228 matrix pass. A production rollout additionally requires real Sites
-runtime secrets, a backed-up production Supabase migration, hosted email OTP template, scheduler
+Chromium 1228 matrix pass. A production rollout to the dedicated server additionally requires real
+runtime secrets, a backed-up production Supabase migration, hosted email OTP template, systemd timer
 heartbeats and readiness 200. See the [v2.2 source audit](docs/AUDIT_2026-07-20_V2.1.1.md),
 [executed remediation plan](docs/REMEDIATION_AND_EXPANSION_PLAN_V2.2.0.md),
 [final omission review](docs/FINAL_REAUDIT_2026-07-21_V2.2.0.md),

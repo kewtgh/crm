@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Lumina CRM background workers every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=lumina-crm-workers.service
+
+[Install]
+WantedBy=timers.target
