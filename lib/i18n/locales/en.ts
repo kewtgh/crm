@@ -8,8 +8,10 @@ import { enPhase2 } from "./phase2-pages";
 import { enOperationsV09 } from "./operations-v09";
 import { enV120 } from "./v120";
 import { enV200 } from "./v200";
+import { enV220 } from "./v220";
 
 export const en: Messages = {
+  "pipeline.currencyScope":"Currency scope",
   ...enSalesPlaybook,
   ...enWorkspacePages,
   ...enAnalysisPages,
@@ -19,6 +21,7 @@ export const en: Messages = {
   ...enOperationsV09,
   ...enV120,
   ...enV200,
+  ...enV220,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.english": "English",

@@ -442,24 +442,43 @@ export function convertLead(input: {
 export type PrivacyRequestRecord = {
   id: string; type: string; status: string; identityStatus: string; note: string;
   decisionNote: string; dueAt: string; createdAt: string; assignedTo: string; executionTaskId: string;
+  requestedChanges: Record<string, string>;
+  executionStatus: string; executionSummary: Record<string, unknown>; legalHold: Record<string, unknown>;
+  artifactJobId: string; artifactExpiresAt: string; receiptSha256: string; executionFailure: string;
 };
 type PrivacyRow = {
   id: string; request_type: string; status: string; identity_status: string;
   request_note: string; decision_note: string | null; due_at: string; created_at: string;
   assigned_to: string | null; execution_task_id: string | null;
+  requested_changes: Record<string, string> | null;
+  privacy_executions?: {
+    status: string; result_summary: Record<string, unknown>; legal_hold: Record<string, unknown>;
+    generated_job_id: string | null; artifact_expires_at: string | null; receipt_sha256: string | null;
+    failure_code: string | null; failure_detail: string | null;
+  } | Array<{
+    status: string; result_summary: Record<string, unknown>; legal_hold: Record<string, unknown>;
+    generated_job_id: string | null; artifact_expires_at: string | null; receipt_sha256: string | null;
+    failure_code: string | null; failure_detail: string | null;
+  }> | null;
 };
 
 function privacyRequest(row: PrivacyRow): PrivacyRequestRecord {
+  const execution = Array.isArray(row.privacy_executions) ? row.privacy_executions[0] : row.privacy_executions;
   return {
     id: row.id, type: row.request_type, status: row.status, identityStatus: row.identity_status,
     note: row.request_note, decisionNote: row.decision_note ?? "", dueAt: row.due_at,
     createdAt: row.created_at, assignedTo: row.assigned_to ?? "", executionTaskId: row.execution_task_id ?? "",
+    requestedChanges: row.requested_changes ?? {},
+    executionStatus: execution?.status ?? "", executionSummary: execution?.result_summary ?? {},
+    legalHold: execution?.legal_hold ?? {}, artifactJobId: execution?.generated_job_id ?? "",
+    artifactExpiresAt: execution?.artifact_expires_at ?? "", receiptSha256: execution?.receipt_sha256 ?? "",
+    executionFailure: [execution?.failure_code, execution?.failure_detail].filter(Boolean).join(": "),
   };
 }
 
 export async function listPrivacyRequests(options: PageOptions = {}): Promise<PageResult<PrivacyRequestRecord>> {
   const params = new URLSearchParams({
-    select: "id,request_type,status,identity_status,request_note,decision_note,due_at,created_at,assigned_to,execution_task_id",
+    select: "id,request_type,status,identity_status,request_note,decision_note,due_at,created_at,assigned_to,execution_task_id,requested_changes,privacy_executions:privacy_executions!privacy_executions_request_id_fkey(status,result_summary,legal_hold,generated_job_id,artifact_expires_at,receipt_sha256,failure_code,failure_detail)",
     order: "created_at.desc",
   });
   if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
@@ -467,10 +486,10 @@ export async function listPrivacyRequests(options: PageOptions = {}): Promise<Pa
   return { ...result, items: result.items.map(privacyRequest) };
 }
 
-export async function createPrivacyRequest(input: { type: string; note: string; contactId?: string | null }) {
+export async function createPrivacyRequest(input: { type: string; note: string; contactId?: string | null; changes?: Record<string, string> }) {
   const rows = await supabaseJson<PrivacyRow[]>("/rest/v1/privacy_requests", {
     method: "POST", headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ request_type: input.type, request_note: input.note, requester_contact_id: input.contactId || null }),
+    body: JSON.stringify({ request_type: input.type, request_note: input.note, requester_contact_id: input.contactId || null, requested_changes: input.changes ?? {} }),
   });
   return rows[0];
 }

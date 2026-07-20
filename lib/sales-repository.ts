@@ -6,18 +6,18 @@ export type FunnelMetric = { stage:"DISCOVERY"|"EVALUATION"|"HESITATION"|"PAYMEN
 export type RelationshipScores = { contact:number; meal:number; family:number; advocacy:number };
 export type RelationshipAccount = { id:string; name_zh:string; name_en:string; owner_zh:string; owner_en:string; contract_value:number; contact:boolean; meal:boolean; family:boolean; advocacy:boolean };
 export type SalesPerformanceData = {
-  period:"month"|"quarter"|"year"; periodStart:string; periodEnd:string; currency:string;
+  period:"month"|"quarter"|"year"; periodStart:string; periodEnd:string; currency:string; currencies:string[];
   target:number; actual:number; forecast:number; teams:string[]; members:SalesMemberMetric[];
   trends:SalesTrendPoint[]; funnel:FunnelMetric[]; relationshipTargets:RelationshipScores;
   relationshipActual:RelationshipScores; relationshipAccounts:RelationshipAccount[];
 };
 
 function number(value:unknown){return Number(value??0);}
-export async function loadSalesPerformance(period:"month"|"quarter"|"year"="quarter",team="all"):Promise<SalesPerformanceData>{
-  const raw=await supabaseJson<Record<string,unknown>>("/rest/v1/rpc/sales_performance_report",{method:"POST",body:JSON.stringify({report_period:period,team_filter:team})});
+export async function loadSalesPerformance(period:"month"|"quarter"|"year"="quarter",team="all",currency?:string|null):Promise<SalesPerformanceData>{
+  const raw=await supabaseJson<Record<string,unknown>>("/rest/v1/rpc/sales_performance_report_v220",{method:"POST",body:JSON.stringify({report_period:period,team_filter:team,currency_filter:currency?.toUpperCase()??null})});
   const score=(value:unknown):RelationshipScores=>{const item=(value??{}) as Record<string,unknown>;return{contact:number(item.contact),meal:number(item.meal),family:number(item.family),advocacy:number(item.advocacy)};};
   return {
-    period:String(raw.period??period) as SalesPerformanceData["period"],periodStart:String(raw.periodStart??""),periodEnd:String(raw.periodEnd??""),currency:String(raw.currency??"CNY"),
+    period:String(raw.period??period) as SalesPerformanceData["period"],periodStart:String(raw.periodStart??""),periodEnd:String(raw.periodEnd??""),currency:String(raw.currency??"CNY"),currencies:Array.isArray(raw.currencies)?raw.currencies.map(String):[String(raw.currency??"CNY")],
     target:number(raw.target),actual:number(raw.actual),forecast:number(raw.forecast),teams:Array.isArray(raw.teams)?raw.teams.map(String):[],
     members:(Array.isArray(raw.members)?raw.members:[]).map((item)=>{const row=item as Record<string,unknown>;return{id:String(row.id),nameZh:String(row.nameZh??""),nameEn:String(row.nameEn??""),team:String(row.team??""),role:String(row.role??""),target:number(row.target),actual:number(row.actual),forecast:number(row.forecast),opportunities:number(row.opportunities)};}),
     trends:(Array.isArray(raw.trends)?raw.trends:[]).map((item)=>{const row=item as Record<string,unknown>;return{date:String(row.date),target:number(row.target),actual:number(row.actual)};}),
@@ -38,9 +38,10 @@ export async function recordRelationshipMilestone(input:{organizationId:string;m
 export type OpportunityRecord={id:string;subjectType:"SCHOOL"|"HOUSEHOLD";organizationId:string;householdId:string;subjectZh:string;subjectEn:string;organizationZh:string;organizationEn:string;pipeline:string;titleZh:string;titleEn:string;stage:FunnelMetric["stage"];amount:number;currency:string;probability:number;expectedCloseDate:string|null;nextActionZh:string;nextActionEn:string;ownerId:string;ownerZh:string;ownerEn:string;lastActivityAt:string|null};
 type OpportunityRow={id:string;subject_type:"SCHOOL"|"HOUSEHOLD";pipeline_key:string;organization_id:string|null;household_id:string|null;title_zh:string;title_en:string;stage:OpportunityRecord["stage"];amount:number|string;currency:string;probability:number;expected_close_date:string|null;next_action_zh:string;next_action_en:string;owner_id:string;last_activity_at:string|null;organizations:{name_zh:string;name_en:string}|null;households:{name_zh:string;name_en:string}|null};
 
-export async function listOpportunities(input:{page?:number;pageSize?:number;query?:string;stage?:string;team?:string}={}){
+export async function listOpportunities(input:{page?:number;pageSize?:number;query?:string;stage?:string;team?:string;currency?:string}={}){
   const page=Math.max(1,input.page??1);const pageSize=Math.min(100,Math.max(1,input.pageSize??20));const params=new URLSearchParams({select:"id,subject_type,pipeline_key,organization_id,household_id,title_zh,title_en,stage,amount,currency,probability,expected_close_date,next_action_zh,next_action_en,owner_id,last_activity_at,organizations:organizations!opportunities_workspace_organization_fk(name_zh,name_en),households:households!opportunities_workspace_household_fk(name_zh,name_en)",order:"updated_at.desc"});
   if(input.stage&&input.stage!=="all")params.set("stage",`eq.${input.stage}`);
+  if(input.currency&&/^[A-Z]{3}$/.test(input.currency))params.set("currency",`eq.${input.currency}`);
   const query=input.query?.replace(/[*,()]/g," ").trim().slice(0,100);if(query)params.set("or",`(title_zh.ilike.*${query}*,title_en.ilike.*${query}*)`);
   const response=await supabaseRequest(`/rest/v1/opportunities?${params}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});const rows=await response.json() as OpportunityRow[];
   const ownerIds=[...new Set(rows.map(row=>row.owner_id))];const owners=new Map<string,{zh:string;en:string}>();if(ownerIds.length){const profiles=await supabaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/rest/v1/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ownerIds.join(",")})`);profiles.forEach(profile=>owners.set(profile.user_id,{zh:profile.display_name_zh,en:profile.display_name_en}));}

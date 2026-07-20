@@ -11,6 +11,11 @@ const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://127.0.0.1:3200
 const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1228");
 fs.mkdirSync(output,{recursive:true});
 
+function commandValue(command,args){const result=spawnSync(command,args,{encoding:"utf8",timeout:10_000});return result.status===0?result.stdout.trim():"unavailable";}
+function buildHash(){const root=[path.resolve("dist"),path.resolve(".next")].find(candidate=>fs.existsSync(candidate));if(!root)return"unavailable";const files=[];const visit=(directory)=>{for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory())visit(target);else if(entry.isFile())files.push(target);}};visit(root);const hash=crypto.createHash("sha256");for(const file of files.sort()){hash.update(path.relative(root,file).replaceAll("\\","/"));hash.update(fs.readFileSync(file));}return hash.digest("hex");}
+const migrationHead=fs.readdirSync(path.resolve("supabase/migrations")).filter(name=>name.endsWith(".sql")).sort().at(-1)?.replace(/\.sql$/,'')||"unavailable";
+const appVersion=JSON.parse(fs.readFileSync(path.resolve("package.json"),"utf8")).version;
+
 function envFile(){
   const values={};
   const filename=path.resolve(".env.local");
@@ -25,7 +30,7 @@ function envFile(){
   return values;
 }
 const env={...envFile(),...process.env};
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -138,7 +143,7 @@ async function createIdentity(role,label){
   const tokenResponse=await fetch(`${supabase}/auth/v1/token?grant_type=password`,{method:"POST",headers:{apikey:anon,"content-type":"application/json"},body:JSON.stringify({email,password})});
   const token=await tokenResponse.json();
   if(!tokenResponse.ok||!token.access_token)throw new Error(`QA login failed (${tokenResponse.status})`);
-  if(role==="SALES_MANAGER"){
+  if(role==="SALES_MANAGER"||role==="SUPER_ADMIN"){
     const {elevateQaSessionToAal2}=await import("./lib/qa-auth.mjs");
     return{id:created.id,supabase,anon,headers,token:await elevateQaSessionToAal2({supabaseUrl:supabase,anonKey:anon,accessToken:token.access_token,friendlyName:`chromium-1228-${suffix}`})};
   }
@@ -288,10 +293,10 @@ async function main(){
     const context=await browser.newContext({locale:"zh-CN"});
     await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
     const page=await context.newPage();observe(page);
-    const routes=["/dashboard","/schools","/people","/tasks","/products","/finance","/imports","/students","/households","/progression","/leads","/opportunities","/ai","/privacy-requests"];
+    const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/automation","/ai","/privacy-requests","/settings/profile","/settings/security"];
     for(const route of routes)await inspect(page,`${route.slice(1).replaceAll("/","-")}-1440`,route,{width:1440,height:900});
     for(const route of ["/dashboard","/finance","/imports","/students"])await inspect(page,`${route.slice(1)}-1024`,route,{width:1024,height:768});
-    for(const route of ["/dashboard","/finance","/imports","/students","/households","/leads"])await inspect(page,`${route.slice(1)}-375`,route,{width:375,height:812});
+    for(const route of ["/dashboard","/calendar","/messages","/finance","/imports","/students","/households","/leads","/opportunities","/contracts","/guardian-portal"])await inspect(page,`${route.slice(1)}-375`,route,{width:375,height:812});
     await exerciseV210Workflows(page,scenario);
     await page.setViewportSize({width:375,height:812});await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});const menu=page.locator("button.mobile-menu");
     if(await menu.isVisible()){await menu.focus();await menu.press("Enter");await page.waitForFunction(()=>document.querySelector("button.mobile-menu")?.getAttribute("aria-expanded")==="true",null,{timeout:3_000}).catch(()=>null);if(await menu.getAttribute("aria-expanded")!=="true")report.errors.push({kind:"keyboard",url:"/dashboard",message:"Mobile menu did not open from keyboard"});await page.keyboard.press("Escape");}
@@ -313,6 +318,13 @@ async function main(){
       }
     }
     await context.close();
+    const admin=await createIdentity("SUPER_ADMIN","admin");identities.push(admin);
+    const adminContext=await browser.newContext({locale:"zh-CN"});
+    await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+    const adminPage=await adminContext.newPage();observe(adminPage);
+    await inspect(adminPage,"admin-operations-1440","/admin/operations",{width:1440,height:900});
+    await inspect(adminPage,"admin-operations-375","/admin/operations",{width:375,height:812});
+    await adminContext.close();
     const support=await createIdentity("SALES_SUPPORT","support");identities.push(support);
     const supportContext=await browser.newContext({locale:"zh-CN"});
     await supportContext.addCookies([{name:"crm_access_token",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:support.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);

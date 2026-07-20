@@ -95,7 +95,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.1\.1"/);
+  assert.match(packageJson, /"version": "2\.2\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -111,7 +111,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.1\.1"/);
+  assert.match(packageJson, /"version": "2\.2\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -519,7 +519,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.1\.1/);
+  assert.match(version, /2\.2\.0/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -583,7 +583,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.1\.1/);
+  assert.match(version,/2\.2\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -617,7 +617,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.1\.1"/);
+  assert.match(packageJson,/"version": "2\.2\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -655,7 +655,74 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.1\.1/);
+  assert.match(version,/2\.2\.0/);
+});
+
+test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
+  const [
+    readiness,
+    privacy,
+    exportIntegrity,
+    expansion,
+    completion,
+    privacyExportFix,
+    capabilities,
+    workerCycle,
+    generatedJobs,
+    operations,
+    v220Repository,
+    navigation,
+    metadata,
+    audit,
+    plan,
+  ] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607200043_worker_readiness_hardening.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/migrations/202607200044_privacy_execution_closure.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/migrations/202607200046_multicurrency_export_integrity.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/migrations/202607200048_business_expansion_v220.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/migrations/202607200051_expansion_completion.sql",import.meta.url),"utf8"),
+    readFile(new URL("../supabase/migrations/202607200050_privacy_export_completion_disambiguation.sql",import.meta.url),"utf8"),
+    readFile(new URL("../lib/capabilities.ts",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/process-worker-cycle.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../scripts/process-generated-jobs.mjs",import.meta.url),"utf8"),
+    readFile(new URL("../lib/operations-repository.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/v220-repository.ts",import.meta.url),"utf8"),
+    readFile(new URL("../components/app-shell.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/layout.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-20_V2.1.1.md",import.meta.url),"utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_EXPANSION_PLAN_V2.2.0.md",import.meta.url),"utf8"),
+  ]);
+  assert.match(readiness,/service_readiness_snapshot\(/);
+  assert.match(privacy,/privacy_executions/);
+  assert.match(privacy,/privacy_restrictions/);
+  assert.match(exportIntegrity,/expected_row_count/);
+  assert.match(exportIntegrity,/currency_scope/);
+  for(const entity of ["automation_rules","growth_campaigns","portal_invitations","communication_threads","data_quality_daily_snapshots","PAYMENT"]) assert.match(expansion,new RegExp(entity));
+  for(const closure of ["preview_automation_rule","retry_automation_run","portal_access_consents","record_inbound_communication","retry_communication_message","data_quality_rule_configs","connector_reconciliation_receipts","growth_performance_snapshot"]) assert.match(completion,new RegExp(closure));
+  assert.match(completion,/portal_consent_required/);
+  assert.match(completion,/communication_idempotency_conflict/);
+  assert.match(privacyExportFix,/artifact_expires_at=\$4/);
+  for(const capability of ["automation.manage","portal.manage","portal.decide","messages.manage"]) assert.match(capabilities,new RegExp(capability.replace(".","\\.")));
+  assert.match(workerCycle,/featureEnabled/);
+  assert.match(generatedJobs,/EXPORT_MAX_ROWS/);
+  assert.match(generatedJobs,/complete_privacy_export_execution/);
+  assert.match(operations,/INTEGRATION_SYNC/);
+  assert.match(v220Repository,/loadAutomationWorkspace/);
+  assert.match(v220Repository,/loadGrowthSnapshot/);
+  assert.match(v220Repository,/retryCommunicationMessage/);
+  assert.match(v220Repository,/configureQualityRule/);
+  for(const route of ["/automation","/growth","/guardian-portal","/messages"]) assert.match(navigation,new RegExp(route));
+  assert.match(metadata,/og-v220\.png/);
+  assert.match(navigation,/mobileSearchOpen/);
+  assert.match(audit,/P0/);
+  assert.match(plan,/REL-01/);
+  for(const page of [
+    "../app/(crm)/automation/page.tsx",
+    "../app/(crm)/growth/page.tsx",
+    "../app/(crm)/guardian-portal/page.tsx",
+    "../app/portal/invite/[token]/page.tsx",
+  ]) await access(new URL(page,import.meta.url));
+  await access(new URL("../public/og-v220.png",import.meta.url));
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {

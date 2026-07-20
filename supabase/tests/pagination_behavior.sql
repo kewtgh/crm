@@ -16,6 +16,16 @@ insert into auth.users(
 insert into public.workspaces(id,slug,name)
 values('00000000-0000-4000-8000-000000000098','pagination-other','Pagination Other');
 
+-- Keep the fixture deterministic even when the local validation database has
+-- genuine retryable jobs. The surrounding transaction rolls these deletes back.
+delete from public.notification_outbox where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('FAILED','DEAD');
+delete from public.calendar_deliveries where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('FAILED','DEAD');
+delete from public.generated_jobs where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('FAILED','DEAD');
+delete from public.reminders where workspace_id='00000000-0000-4000-8000-000000000001' and status='FAILED';
+delete from public.webhook_inbox where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('FAILED','DEAD');
+delete from public.integration_sync_jobs where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('FAILED','DEAD');
+delete from public.staff_identity_repair_jobs where workspace_id='00000000-0000-4000-8000-000000000001' and status in ('PENDING','FAILED','DEAD');
+
 insert into public.webhook_inbox(
   workspace_id,provider,event_id,event_type,payload,signature_digest,status,attempts,last_error
 )

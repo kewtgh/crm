@@ -12,7 +12,7 @@ import {
 } from "@/lib/operations-repository";
 
 const retrySchema = z.object({
-  jobType: z.enum(["NOTIFICATION_OUTBOX", "CALENDAR_DELIVERIES", "GENERATED_JOBS", "REMINDERS", "WEBHOOK_INBOX", "IDENTITY_REPAIR"]),
+  jobType: z.enum(["NOTIFICATION_OUTBOX", "CALENDAR_DELIVERIES", "GENERATED_JOBS", "REMINDERS", "WEBHOOK_INBOX", "INTEGRATION_SYNC", "IDENTITY_REPAIR"]),
   jobId: z.uuid(),
 });
 
