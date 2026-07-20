@@ -322,8 +322,13 @@ try {
   const integrations = await request(
     `/rest/v1/integration_connections?select=provider,status&workspace_id=eq.${workspaceId}`,
   );
-  if (integrations.length !== 5 || integrations.some((item) => item.status !== "DISCONNECTED")) {
-    throw new Error("Integration center does not expose five honest disconnected states");
+  const expectedProviders = ["ACCOUNTING", "EMAIL", "E_SIGNATURE", "GOOGLE_CALENDAR", "MICROSOFT_365", "PAYMENT"];
+  const actualProviders = integrations.map((item) => item.provider).sort();
+  if (
+    actualProviders.join(",") !== expectedProviders.join(",")
+    || integrations.some((item) => item.status !== "DISCONNECTED")
+  ) {
+    throw new Error("Integration center does not expose six honest disconnected provider states");
   }
 
   const insertedWebhook = await request("/rest/v1/webhook_inbox?select=id", {

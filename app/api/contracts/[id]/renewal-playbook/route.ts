@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError, apiRoute, parseUuid, requireApiUser } from "@/lib/api";
+import { ApiError, apiRoute, parseUuid, requireApiCapability } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { supabaseJson } from "@/lib/supabase-server";
 
@@ -14,7 +14,7 @@ const schema = z.object({
 });
 
 async function get(_: Request, routeContext: { params: Promise<{ id: string }> }) {
-  await requireApiUser();
+  await requireApiCapability("contracts.view");
   const { id } = await routeContext.params;
   const playbookContext = await supabaseJson<Record<string, unknown>>(
     "/rest/v1/rpc/renewal_playbook_context",
@@ -25,7 +25,7 @@ async function get(_: Request, routeContext: { params: Promise<{ id: string }> }
 
 async function post(request: Request, context: { params: Promise<{ id: string }> }) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
-  await requireApiUser();
+  await requireApiCapability("contracts.manage");
   const { id } = await context.params;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_RENEWAL_PLAYBOOK", 400);

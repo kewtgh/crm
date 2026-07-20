@@ -1,14 +1,17 @@
 # Lumina Education CRM
 
-Current release: **v2.1.1**
+Current release candidate: **v2.2.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
 
-v2.1.1 adds an automated GitHub Actions quality gate for main-branch pushes and pull
-requests, covering type checks, linting, production builds, Node contracts and dependency
-audits.
+v2.2.0 closes the July 20 full audit: privacy requests execute real correction,
+restriction, deletion or verified exports; reports use explicit currency scope and
+verifiable row/hash receipts; optional workers no longer block core readiness. It also
+adds versioned deterministic automation with preview/retry, campaign/admissions attribution
+and ROI, a verified-recipient and consent-first guardian portal, idempotent communications,
+configurable data-quality rules and receipted payment/accounting/e-signature boundaries.
 
 v2.1.0 added and closed:
 
@@ -54,7 +57,7 @@ and writes the one-time credential only to the Git-ignored work directory.
 
 ## Operations and verification
 
-Run all six queue processors once:
+Run the four core processors and any explicitly enabled optional processors once:
 
 ```bash
 npm run workers:process
@@ -66,13 +69,12 @@ Run the complete release gate:
 npm run release:gate
 ```
 
-The gate runs typecheck, lint, production build, 25 Node contracts, dependency audit,
-schema lint, 275 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
-validation, and real UI QA with the installed
-`ms-playwright/chromium-1228/chrome-win64/chrome.exe`.
+The gate runs typecheck, lint, production build, 26 Node contracts, dependency audit,
+schema lint, 433 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
+validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
-Browser evidence is saved in `work/browser-qa-chromium-1228/report.json`. The current
-matrix covers 27 public/authenticated page-and-viewport checks at 1440, 1024 and 375px,
+When executed, browser evidence is saved in `work/browser-qa-chromium-1228/report.json`. The
+staged matrix covers public/authenticated page-and-viewport checks at 1440, 1024 and 375px,
 Chinese/English switching, optional manager AAL2, a support-role permission boundary, hydration,
 console/page/network errors, headings, labels, contrast, text size, overflow, mobile
 navigation, drawer focus restoration, global search, relationship maintenance, progression
@@ -82,11 +84,14 @@ application and household lead conversion.
 
 - `GET /api/health`: process liveness and release version.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
-  integrations and all six worker heartbeats, with executable remediation details.
+  integrations and the enabled worker heartbeat set, with executable remediation details.
 
-Repository work is complete; a production rollout still requires real Sites runtime
-secrets, a backed-up production Supabase migration, hosted email OTP template, scheduler
-heartbeats and readiness 200. See the [v2.1 audit](docs/AUDIT_2026-07-20_V2.1.0.md),
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_V2.1.0.md),
+The v2.2 source implementation, second omission review, migrations, schema lint and all 433 pgTAP
+assertions are complete. The release remains blocked until authenticated device smoke and the pinned
+Chromium 1228 matrix pass. A production rollout additionally requires real Sites
+runtime secrets, a backed-up production Supabase migration, hosted email OTP template, scheduler
+heartbeats and readiness 200. See the [v2.2 source audit](docs/AUDIT_2026-07-20_V2.1.1.md),
+[executed remediation plan](docs/REMEDIATION_AND_EXPANSION_PLAN_V2.2.0.md),
+[final omission review](docs/FINAL_REAUDIT_2026-07-21_V2.2.0.md),
 [implementation status](docs/IMPLEMENTATION_STATUS.md), and
 [deployment guide](docs/DEPLOYMENT.md).

@@ -1,15 +1,17 @@
-# Lumina Education CRM v2.1.0 部署指引
+# Lumina Education CRM v2.2.0 部署指引
 
-## 1. 前置条件
+## 1. 发布前提
 
-- Node.js 22.13+。
-- 独立的 Supabase 项目（Auth、Postgres、Storage）。
-- HTTPS 正式域名、密钥管理、备份、告警与 worker 调度平台。
-- 正式 Turnstile、SMTP/邮件投递、Webhook 与已启用集成的供应商凭据。
+- Node.js 22.13+（Node 24 已验证）。
+- 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
+- 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
+- 数据库必须按顺序应用到 `202607210052`，且不得跳过 `050` 的隐私导出修复或 `052` 的 Worker 最小读取权限。
 
-先备份数据库并在隔离暂存项目演练迁移和向前修复。不得复用其他项目的 Supabase、用户、密钥或回调地址。本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324；`/api/health` 必须返回 `version=2.1.0`。
+当前工作树是 v2.2.0 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
+在隔离本地环境通过；剩余门禁见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
-本地 Supabase 的默认开发密钥、Mailpit 与 Studio 只允许在单机或受信开发网络使用，禁止暴露到公网、共享测试环境或生产。
+本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
+`GET /api/health` 必须返回 `version=2.2.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -28,24 +30,21 @@ LOGIN_THROTTLE_HASH_SECRET=independent-random-secret-at-least-32-bytes
 TRUSTED_DEVICE_HASH_SECRET=different-independent-random-secret-at-least-32-bytes
 ```
 
-邮件、Webhook 与同步 worker 按启用能力配置 `EMAIL_DELIVERY_*`、`WEBHOOK_<PROVIDER>_SECRET`、`WEBHOOK_PROCESSOR_*` 和 `INTEGRATION_SYNC_PROCESSOR_*`。`AI_PROVIDER_*` 是可选状态标记；当前版本的建议由本地规则引擎生成，不会调用外部 AI 或发送 CRM 数据。
+邮件使用 `EMAIL_DELIVERY_WEBHOOK_URL` / `EMAIL_DELIVERY_WEBHOOK_TOKEN`。Webhook 与同步
+Worker 由对应 enable flag 显式启用；未启用的可选 Worker 不参与 readiness，启用后缺凭据、
+心跳过期或队列不健康必须阻断发布。支付、会计、电子签和 AI 均不得用测试值伪装已连接。
 
-`NEXT_PUBLIC_*` 只能保存公开值。Turnstile secret、service role、限流 HMAC、可信设备
-HMAC、邮件/集成 token 绝不能进入浏览器、提交、构建日志或客户端 bundle。旋转
-`TRUSTED_DEVICE_HASH_SECRET` 会令所有已记住设备失效。初始化后立即删除 `ADMIN_PASSWORD`。
+`NEXT_PUBLIC_*` 只能保存公开值。service role、Turnstile secret、限流/可信设备 HMAC、邮件及
+连接器 token 不得进入浏览器、提交、构建日志或客户端 bundle。初始化后删除 `ADMIN_PASSWORD`。
 
 ## 3. 数据库与身份
 
-1. 保持公开 signup 关闭，但允许管理员创建的员工使用 email/password 登录。
-2. 配置正式 `APP_URL`、密码重置回调、SMTP 和邮件模板。Supabase 的 Magic Link/OTP
-   模板必须显示 `{{ .Token }}` 六位验证码；本地模板位于
-   `supabase/templates/device_verification.html`，托管项目需在 Auth Email Templates
-   中配置同等模板。
-3. 配置精确 Turnstile hostname。
-4. 超级管理员和管理员必须启用 TOTP MFA 并达到 AAL2；其他员工可自愿启用。未启用
-   MFA 的普通员工在新设备完成邮箱 OTP，可选择保存 30 天可信设备。
-5. 确认 `crm-avatars`、`crm-exports` 为 private。
-6. 按原顺序应用 `202607160001` 至 `202607200042` 的全部迁移：
+1. 先备份，并在隔离暂存项目演练完整迁移与向前修复。
+2. 保持公开 signup 关闭；只允许管理员建立员工身份。
+3. 配置正式 APP URL、密码重置回调、SMTP 和显示六位 `{{ .Token }}` 的 OTP 模板。
+4. 管理员必须 TOTP/AAL2；普通员工可选 MFA，否则在新设备完成邮箱 OTP。
+5. 确认 `crm-avatars` 与 `crm-exports` 为 private。
+6. 按文件名顺序应用全部迁移到 `202607210052`：
 
 ```bash
 npx supabase db push --linked
@@ -53,78 +52,87 @@ npx supabase db lint --linked --level warning
 npx supabase test db --linked
 ```
 
-`038` 统一增长型列表分页；`039` 增加任务委派/SLA、CRM 编辑与历史、共享视图、持久
-密码恢复限流、危险操作幂等边界、数据质量复核及 CRM 导出审批；`040` 增加教育、Lead、
-隐私、导入与建议能力；`041` 完成学年晋级、家庭商机、关系维护、搜索、Dashboard 与建议
-去重；`042` 修正管理员强制 MFA 边界并加入可信设备。不得遗漏、重排或重新开放底层
-merge/rollback/accept RPC。
+`043–045` 修正 Worker readiness；`044/049/050` 完成隐私执行和导出凭证；`046` 完成多币种
+导出；`048` 建立新业务域；`051` 补齐自动化预览/重试、门户同意、通信幂等、质量规则、增长
+绩效与连接器对账；`052` 修复日历与隐私导出 Worker 通过 PostgREST 读取来源记录所需的最小
+`service_role` 权限。最终数据库测试总数应为 433，任一失败都不得部署应用。
 
-首次初始化时运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、`must_change_password=true` 与 username，随后删除临时密码。首次登录必须完成改密和 TOTP。
+首次初始化运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、
+`must_change_password=true` 与 username，随后删除临时密码。首次登录必须改密并配置 TOTP。
 
-## 4. 构建与验收
+## 4. 构建与发布门
 
 ```bash
 npm ci
 npm run release:gate
 ```
 
-门禁包括 typecheck、lint、production build、25 条 Node 契约、275 条 pgTAP、schema
-lint、依赖审计、业务/HTTP/export/auth smoke、生产静态资源与 MIME 检查，以及指定
-`ms-playwright/chromium-1228` 的 27 组 UI/权限/无障碍检查。认证 smoke 会真实发送本地
-邮箱验证码并验证可信设备复用；所有 smoke 会写入并清理隔离数据，只能对专用本地/暂存
-workspace 执行。
+门禁必须包含：typecheck、ESLint、production build、26 条 Node 契约、schema lint、433 条
+pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
+`ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
+只能对专用环境执行。
+
+浏览器证据必须记录 Git SHA、APP_VERSION、migration head、build hash 与 base URL，并覆盖
+1440/1024/375、中英文、键盘/焦点、合同、日历、消息、设置、运营、自动化、门户及高风险流程。
 
 ## 5. Worker 与外部集成
-
-统一执行六类 worker：
 
 ```bash
 npm run workers:process
 ```
 
-生产调度器按业务 SLA 周期执行该命令。六类处理器分别负责提醒、通知 outbox、日历投递、生成文件、Webhook inbox 和集成同步。任一失败会记录失败心跳并让命令失败；不得手工修改数据库伪造健康。
+四个核心处理器始终运行：提醒、通知 outbox、日历投递和生成文件。Webhook inbox 与集成同步
+只在显式启用时运行和纳入 readiness。任一启用处理器失败都要写失败心跳并令命令失败；不得
+手工改库伪造健康。
 
-导出文件位于私有桶，下载使用短期签名 URL，文件按过期策略清理。Webhook 必须使用供应商独立 HMAC secret、稳定事件 ID、完整 canonical envelope、5 分钟重放窗口和原子幂等摄取。
+导出位于私有桶并使用短期签名 URL。Webhook 必须使用供应商独立 HMAC、稳定事件 ID、规范
+签名包、重放窗口和原子幂等摄取。连接器对账必须写不可变 receipt；相同事件 ID 若内容不同
+应明确失败。
 
 ## 6. 健康、监控与备份
 
-- `GET /api/health`：liveness，返回 200 与版本。
-- `GET /api/health?mode=ready`：检查 Auth、数据库、环境、队列 SLA 和六个 worker；不健康时返回 503。
-- 告警覆盖 5xx、限流、RLS 拒绝、审批执行失败、身份补偿失败、失败/卡死任务、最老积压、心跳过期、邮件/Webhook 失败和存储容量。
-- 启用 PITR 或每日备份；定期在隔离项目恢复并验证 Auth、RLS、合同、付款、提醒、审计与私有文件。
+- `GET /api/health`：liveness 与版本。
+- `GET /api/health?mode=ready`：Auth、数据库、环境、队列 SLA、stuck/failed job，以及启用的
+  Worker/连接器；不健康时返回 503 和可执行修复建议。
+- 告警覆盖 5xx、限流、RLS 拒绝、审批/隐私执行失败、失败与卡死任务、最老积压、心跳过期、
+  邮件/Webhook 失败和存储容量。
+- 启用 PITR 或每日备份，并定期恢复验证 Auth、RLS、合同、付款、隐私、审计与私有文件。
 
 ## 7. 上线验收
 
-- 公开注册拒绝；错误认证保持 JSON/表单内错误与 request ID。
-- Turnstile、账户名/邮箱登录、首次改密、管理员强制 MFA、普通员工可选 MFA、邮箱 OTP、
-  可信设备列出/撤销、角色、团队和 workspace 边界生效。
-- 学校、联系人、任务编辑/归档/历史/并发冲突和导出审批完整。
-- 报价、合同、付款、退款、导入 dry run/执行/幂等回滚、去重预览/幂等合并可追溯。
-- 数据质量只能在源字段修复并重检后正常关闭；忽略必须记录理由。
-- 运维中心显示真实积压、集成配置和六个新鲜 worker；readiness 为 200。
-- 学生、家庭、学籍升级、Lead 转化、隐私请求、10,000 行导入和私有 CSV/XLSX/PDF 输出闭环。
-- 以 1440、1024、375px 验证中英文、键盘、焦点、菜单、抽屉、表单错误、对比度和横向溢出。
-- CSP 包含每请求 nonce 与 `strict-dynamic`，生产脚本策略不含 `unsafe-inline`。
+- 公开注册拒绝；认证错误保持 JSON/表单内错误和 request ID。
+- Turnstile、首次改密、MFA、邮箱 OTP、可信设备、角色、团队与 workspace 边界生效。
+- 合同、付款、退款、导入、去重、审批、任务和日历均可审计且权限与 UI 一致。
+- 五类隐私请求有真实执行证据；限制立即阻断发送/导出；删除保留法定证据。
+- 多币种报表不混加；10,001+ 行导出完整或明确失败，并有行数与 SHA-256。
+- 自动化预览无副作用，失败可重试；门户授权前不泄露家庭数据；通信重试重新检查同意。
+- 数据质量八类规则可配置和分配；连接器状态、重放保护和对账 receipt 可核验。
+- readiness 为 200，所有启用 Worker 有新鲜成功心跳。
+- 1440/1024/375 无横向溢出、未命名控件、焦点丢失、低于 12px 正文或错误吞没。
 
 ## 8. Sites 发布
 
-1. 复用 `.openai/hosting.json` 的既有项目。
-2. 在 Sites 运行时保存正式环境变量与 secrets，不复制本地测试值。
-3. 推送通过门禁的精确提交，再以同一 commit 保存 version。
-4. 只部署已保存 version；先使用 private 访问级别。
-5. 部署完成后检查状态、liveness、readiness 和核心 smoke。
+本项目包含 `.openai/hosting.json`，必须使用 Sites 保存和托管流程：
+
+1. 在 Sites 运行时保存正式 secrets，不复制本地测试值。
+2. 只对通过全部门禁的精确 commit 保存 version。
+3. 先 private 部署该已保存 version。
+4. 部署后重复 liveness、readiness、核心 smoke 与浏览器抽查。
+
+数据库或浏览器门禁未通过时，不得为了“完成发布”而跳过验证。本轮数据库门禁已通过；
+固定 Chromium 矩阵和生产凭据/readiness 尚未完成，因此尚未执行 Sites 保存/发布。
 
 ## 9. 回滚
 
-1. 停止新写入流量和 worker。
-2. 将应用回滚到上一已验证 Sites version。
-3. 数据库优先使用向前修复迁移；仅在恢复演练确认后执行备份恢复。
-4. 不删除审批、审计、合同版本、付款、通知或 Webhook 历史来“回滚界面”。
-5. 恢复后重跑 release gate、readiness、权限、业务和浏览器矩阵。
+1. 停止新写入流量和 Worker。
+2. 应用回滚到上一已验证 Sites version。
+3. 数据库优先用向前修复迁移；只在恢复演练确认后使用备份恢复。
+4. 不删除审批、审计、合同版本、付款、通知、隐私或 Webhook 历史来回滚界面。
+5. 恢复后重跑全部发布门、readiness、权限、业务与浏览器矩阵。
 
 ## 10. GitHub Actions
 
-生产 worker 工作流使用 Node.js 24 与 `actions/checkout@v6`、`actions/setup-node@v6`，
-且不再调用产生 Node.js 20 强制运行警告的 artifact 步骤。仓库发布门禁不下载浏览器；
-浏览器门禁使用已预置的 `ms-playwright/chromium-1228`，若 runner 不具备该精确运行时
-应明确失败。
+生产 Worker 工作流使用 Node.js 24 与 `actions/checkout@v6`、`actions/setup-node@v6`。
+仓库门禁不临时下载浏览器；本开发环境直接使用已安装的精确
+`ms-playwright/chromium-1228`。缺少 in-app Browser 会话不构成阻断；只有精确运行时确实缺失
+或执行失败时才应报告浏览器门禁失败。

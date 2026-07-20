@@ -8,8 +8,10 @@ import { zhPhase2 } from "./phase2-pages";
 import { zhOperationsV09 } from "./operations-v09";
 import { zhV120 } from "./v120";
 import { zhV200 } from "./v200";
+import { zhV220 } from "./v220";
 
 export const zhCN: Messages = {
+  "pipeline.currencyScope":"币种范围",
   ...zhSalesPlaybook,
   ...zhWorkspacePages,
   ...zhAnalysisPages,
@@ -19,6 +21,7 @@ export const zhCN: Messages = {
   ...zhOperationsV09,
   ...zhV120,
   ...zhV200,
+  ...zhV220,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.english": "English",

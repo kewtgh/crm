@@ -8,7 +8,7 @@ import {
 } from "@/lib/operations-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 
-const provider = z.enum(["MICROSOFT_365", "GOOGLE_CALENDAR", "EMAIL", "E_SIGNATURE", "ACCOUNTING"]);
+const provider = z.enum(["MICROSOFT_365", "GOOGLE_CALENDAR", "EMAIL", "E_SIGNATURE", "ACCOUNTING", "PAYMENT"]);
 const schema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("configure"),

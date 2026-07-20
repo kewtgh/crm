@@ -1,4 +1,5 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -133,32 +134,58 @@ async function contractExport(job){
 function periodRange(objectId){const match=/^(\d{4}-\d{2}-\d{2})_(month|quarter|year)_/.exec(objectId);if(!match)throw new Error("Invalid performance period");const start=new Date(`${match[1]}T00:00:00Z`);const end=new Date(start);if(match[2]==="month")end.setUTCMonth(end.getUTCMonth()+1);if(match[2]==="quarter")end.setUTCMonth(end.getUTCMonth()+3);if(match[2]==="year")end.setUTCFullYear(end.getUTCFullYear()+1);return{start:match[1],end:end.toISOString().slice(0,10)};}
 async function performanceExport(job){
   const range=periodRange(String(job.parameters?.objectId??""));const ws=job.workspace_id;if(!ws)throw new Error("Export job workspace is missing");
-  const [members,targets,payments]=await Promise.all([
-    request(`/rest/v1/sales_team_members?select=id,name_zh,name_en,role,team&workspace_id=eq.${ws}&active=eq.true&order=name_en`),
-    request(`/rest/v1/performance_targets?select=id,target_amount,currency&workspace_id=eq.${ws}&period_start=lte.${range.end}&period_end=gte.${range.start}`),
-    request(`/rest/v1/payments?select=id,amount,currency,paid_at&workspace_id=eq.${ws}&status=eq.CONFIRMED&paid_at=gte.${range.start}T00:00:00Z&paid_at=lt.${range.end}T00:00:00Z`),
-  ]);
-  const targetIds=targets.map(item=>item.id);const paymentIds=payments.map(item=>item.id);
-  const [allocations,contributions]=await Promise.all([
-    targetIds.length?request(`/rest/v1/performance_allocations?select=contributor_member_id,allocated_amount&target_id=in.(${targetIds.join(",")})`):[],
-    paymentIds.length?request(`/rest/v1/performance_contributions?select=contributor_member_id,amount,payment_id&payment_id=in.(${paymentIds.join(",")})`):[],
-  ]);
-  const targetBy=new Map();for(const item of allocations)targetBy.set(item.contributor_member_id,(targetBy.get(item.contributor_member_id)??0)+Number(item.allocated_amount));
-  const actualBy=new Map();for(const item of contributions)actualBy.set(item.contributor_member_id,(actualBy.get(item.contributor_member_id)??0)+Number(item.amount));
-  return [["Staff ID","Name (ZH)","Name (EN)","Role","Team","Period start","Period end","Allocated target","Confirmed performance"],...members.map(item=>[item.id,item.name_zh,item.name_en,item.role,item.team,range.start,range.end,targetBy.get(item.id)??0,actualBy.get(item.id)??0])];
+  const rows=await requestAll("/rest/v1/rpc/performance_export_rows_v220",{method:"POST",body:JSON.stringify({target_workspace:ws,period_from:range.start,period_to:range.end})});
+  return [["Staff ID","Name (ZH)","Name (EN)","Role","Team","Period start","Period end","Currency","Allocated target","Confirmed performance","Base currency","Exchange rate","Rate source","Rate effective at","Base target","Base actual"],...rows.map(item=>[item.staff_id,item.name_zh,item.name_en,item.staff_role,item.team,item.period_start,item.period_end,item.currency,item.allocated_target,item.confirmed_performance,item.base_currency,item.exchange_rate,item.rate_source,item.rate_effective_at,item.base_target,item.base_actual])];
 }
 async function marketingContactsExport(job){
   const channel=String(job.parameters?.channel??"").toUpperCase();if(!["EMAIL","SMS","PHONE","WECHAT","WHATSAPP"].includes(channel))throw new Error("Invalid marketing channel");
-  const rows=await request(`/rest/v1/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
+  const rows=await requestAll(`/rest/v1/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
   return [["Contact ID","Name (ZH)","Name (EN)","Email","Phone","Authorized channel","Consent source","Obtained at","Retention until"],...rows.map(item=>[item.contact_id,item.name_zh,item.name_en,item.email,item.phone,item.channel,item.consent_source,item.obtained_at,item.retention_until])];
 }
-async function requestAll(path){
+async function requestAll(path,options={}){
   const rows=[];
-  for(let start=0;start<10_000;start+=500){
-    const page=await request(path,{headers:{Range:`${start}-${start+499}`}});
+  const maximum=Math.max(10_000,Number(process.env.EXPORT_MAX_ROWS??250_000));
+  for(let start=0;start<maximum;start+=500){
+    const page=await request(path,{...options,headers:{...options.headers,Range:`${start}-${start+499}`}});
     rows.push(...page);
     if(page.length<500)break;
+    if(start+500>=maximum)throw new Error(`EXPORT_ROW_LIMIT_EXCEEDED:${maximum}`);
   }
+  return rows;
+}
+const exportValue=value=>value&&typeof value==="object"?JSON.stringify(value):value;
+function appendPrivacyRecords(rows,resource,records){
+  for(const record of records){
+    const id=String(record.id??record.contact_id??record.student_id??"");
+    for(const [field,value] of Object.entries(record))rows.push([resource,id,field,exportValue(value)]);
+  }
+}
+async function privacyExport(job){
+  const requestId=String(job.parameters?.privacyRequestId??"");
+  const contactId=String(job.parameters?.contactId??"");
+  if(!requestId||!contactId)throw new Error("Privacy export scope is missing");
+  const [privacyRequests,contacts,consents,activities,appointments,memberships,guardianRelations,students]=await Promise.all([
+    request(`/rest/v1/privacy_requests?select=id,request_type,request_note,decision_note,created_at,due_at&id=eq.${encodeURIComponent(requestId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
+    request(`/rest/v1/contacts?select=id,name_zh,name_en,contact_type,email,phone,title,status,created_at,updated_at&id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
+    requestAll(`/rest/v1/contact_consents?select=id,channel,purpose,status,source,evidence_note,obtained_at,revoked_at,retention_until,created_at,updated_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/rest/v1/crm_activities?select=id,activity_type,occurred_at,summary_zh,summary_en,next_step_zh,next_step_en,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=occurred_at`),
+    requestAll(`/rest/v1/appointment_attendees?select=id,appointment_id,email,name,consent_confirmed,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/rest/v1/household_members?select=id,household_id,member_role,primary_contact,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/rest/v1/student_guardian_relationships?select=id,student_id,relationship_type,primary_guardian,emergency_contact,legal_authority,created_at&guardian_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/rest/v1/students?select=id,student_number,birth_date,current_grade,academic_year,status,created_at,updated_at&person_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+  ]);
+  if(!privacyRequests[0]||!contacts[0])throw new Error("Privacy export subject was not found");
+  const academicRecords=students.length?await requestAll(`/rest/v1/student_academic_records?select=id,student_id,curriculum,grade,academic_year,valid_from,valid_to,status,created_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=created_at`):[];
+  const rows=[["Resource","Record ID","Field","Value"]];
+  appendPrivacyRecords(rows,"privacy_request",privacyRequests);
+  appendPrivacyRecords(rows,"contact",contacts);
+  appendPrivacyRecords(rows,"consent",consents);
+  appendPrivacyRecords(rows,"activity",activities);
+  appendPrivacyRecords(rows,"appointment_attendee",appointments);
+  appendPrivacyRecords(rows,"household_membership",memberships);
+  appendPrivacyRecords(rows,"guardian_relationship",guardianRelations);
+  appendPrivacyRecords(rows,"student",students);
+  appendPrivacyRecords(rows,"academic_record",academicRecords);
   return rows;
 }
 async function crmExport(job){
@@ -252,6 +279,7 @@ async function crmExport(job){
     const requester=String(job.parameters?.requesterId??job.created_by);
     params.set("owner_id",`eq.${requester}`);
   }
+  if(resource==="people")params.set("do_not_contact","eq.false");
   params.set("order",`${definition.sort[sort]??definition.sort.primary}.${direction}`);
   const rows=await requestAll(`/rest/v1/${definition.table}?${params}`);
   return [definition.header,...rows.map(definition.row)];
@@ -267,7 +295,45 @@ try{
   });
   let ready=0;
   for(const job of jobs){
-    try{const rows=job.job_type==="CONTRACT_EXPORT"?await contractExport(job):job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job):job.job_type==="CRM_EXPORT"?await crmExport(job):await performanceExport(job);const requested=String(job.parameters?.format??"CSV").toUpperCase();const format=exportFormats.has(requested)?requested:"CSV";const content=await artifact(rows,format);const type=artifactTypes[format];const path=`${job.workspace_id}/${job.id}.${type.extension}`;const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":type.contentType,"x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);const expiresAt=new Date(Date.now()+86400000).toISOString();await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type,format},source_type:"EXPORT",source_id:job.id})});ready+=1;}catch(error){await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure:String(error instanceof Error?error.message:"Unknown export error").slice(0,500)})});}
+    try{
+      const rows=job.job_type==="CONTRACT_EXPORT"?await contractExport(job)
+        :job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job)
+        :job.job_type==="CRM_EXPORT"?await crmExport(job)
+        :job.job_type==="PRIVACY_EXPORT"?await privacyExport(job)
+        :await performanceExport(job);
+      const requested=String(job.parameters?.format??"CSV").toUpperCase();
+      const format=exportFormats.has(requested)?requested:"CSV";
+      const content=await artifact(rows,format);
+      const type=artifactTypes[format];
+      const path=`${job.workspace_id}/${job.id}.${type.extension}`;
+      const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":type.contentType,"x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});
+      if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);
+      const expiresAt=new Date(Date.now()+86400000).toISOString();
+      const exportedRows=Math.max(0,rows.length-1);
+      const artifactSha256=createHash("sha256").update(content).digest("hex");
+      const currencyScope=job.job_type==="PERFORMANCE_SUMMARY"
+        ?[...new Set(rows.slice(1).map(row=>String(row[7]??"")).filter(Boolean))]
+        :[];
+      await setJob(job.id,"PROCESSING",{
+        expected_row_count:exportedRows,exported_row_count:exportedRows,
+        artifact_sha256:artifactSha256,query_snapshot:{...job.parameters,capturedAt:new Date().toISOString()},
+        currency_scope:currencyScope,
+      });
+      await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});
+      if(job.job_type==="PRIVACY_EXPORT"){
+        await request("/rest/v1/rpc/complete_privacy_export_execution",{method:"POST",body:JSON.stringify({
+          target_request:job.privacy_request_id,target_job:job.id,object_path:path,
+          artifact_expires_at:expiresAt,exported_rows:exportedRows,
+          artifact_sha256:artifactSha256,
+        })});
+      }
+      await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type,format},source_type:"EXPORT",source_id:job.id})});
+      ready+=1;
+    }catch(error){
+      const failure=String(error instanceof Error?error.message:"Unknown export error").slice(0,500);
+      await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure})});
+      if(job.job_type==="PRIVACY_EXPORT")await request("/rest/v1/rpc/fail_privacy_export_execution",{method:"POST",body:JSON.stringify({target_request:job.privacy_request_id,target_job:job.id,failure})});
+    }
   }
   await heartbeat.success({claimed:jobs.length,ready});
   process.stdout.write(`Processed ${jobs.length} export jobs; ${ready} ready.\n`);

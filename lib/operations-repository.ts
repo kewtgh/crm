@@ -1,5 +1,5 @@
 import { supabaseAdminJson, supabaseJson, supabaseRequest } from "./supabase-server";
-import { inspectCoreRuntimeEnvironment } from "./runtime-environment";
+import { inspectWorkerRuntimeEnvironment, type WorkerKey } from "./runtime-environment";
 
 export type QueueMetric = {
   key: string;
@@ -38,13 +38,17 @@ export type ReleaseReadiness={
     delivery:boolean;
     webhooks:boolean;
     integrations:boolean;
+    webhooksEnabled:boolean;
+    integrationsEnabled:boolean;
+    enabledWorkers:WorkerKey[];
     configured:number;
     expected:number;
+    missing:string[];
   };
 };
 export type RetryableJob = {
   id: string;
-  type: "NOTIFICATION_OUTBOX" | "CALENDAR_DELIVERIES" | "GENERATED_JOBS" | "REMINDERS" | "WEBHOOK_INBOX" | "IDENTITY_REPAIR";
+  type: "NOTIFICATION_OUTBOX" | "CALENDAR_DELIVERIES" | "GENERATED_JOBS" | "REMINDERS" | "WEBHOOK_INBOX" | "INTEGRATION_SYNC" | "IDENTITY_REPAIR";
   label: string;
   status: string;
   error: string;
@@ -52,7 +56,7 @@ export type RetryableJob = {
 };
 export type IntegrationConnection = {
   id: string;
-  provider: "MICROSOFT_365" | "GOOGLE_CALENDAR" | "EMAIL" | "E_SIGNATURE" | "ACCOUNTING";
+  provider: "MICROSOFT_365" | "GOOGLE_CALENDAR" | "EMAIL" | "E_SIGNATURE" | "ACCOUNTING" | "PAYMENT";
   status: "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "DEGRADED" | "ACTION_REQUIRED";
   syncDirection: "NONE" | "IMPORT_ONLY" | "EXPORT_ONLY" | "BIDIRECTIONAL";
   externalAccountLabel: string;
@@ -131,27 +135,13 @@ export async function loadOperationalSnapshot() {
 }
 
 export async function loadReleaseReadiness():Promise<ReleaseReadiness>{
-  const requiredCore=["APP_URL","NEXT_PUBLIC_TURNSTILE_SITE_KEY","TURNSTILE_SECRET_KEY","TURNSTILE_EXPECTED_HOSTNAME","NEXT_PUBLIC_SUPABASE_URL","NEXT_PUBLIC_SUPABASE_ANON_KEY","SUPABASE_SERVICE_ROLE_KEY","CRM_WORKSPACE_ID","LOGIN_THROTTLE_HASH_SECRET"];
-  const requiredDelivery=["EMAIL_DELIVERY_WEBHOOK_URL","EMAIL_DELIVERY_WEBHOOK_TOKEN","OUTBOX_BATCH_SIZE","CALENDAR_DELIVERY_BATCH_SIZE","EXPORT_BATCH_SIZE","REMINDER_BATCH_SIZE"];
-  const requiredWebhooks=["WEBHOOK_MICROSOFT_365_SECRET","WEBHOOK_GOOGLE_CALENDAR_SECRET","WEBHOOK_EMAIL_SECRET","WEBHOOK_E_SIGNATURE_SECRET","WEBHOOK_ACCOUNTING_SECRET","WEBHOOK_PROCESSOR_URL","WEBHOOK_PROCESSOR_TOKEN","WEBHOOK_BATCH_SIZE"];
-  const requiredIntegrations=["INTEGRATION_SYNC_PROCESSOR_URL","INTEGRATION_SYNC_PROCESSOR_TOKEN","INTEGRATION_SYNC_BATCH_SIZE"];
-  const groups=[requiredCore,requiredDelivery,requiredWebhooks,requiredIntegrations];
-  const configured=groups.flat().filter(key=>Boolean(process.env[key]?.trim())).length;
-  const coreStatus=inspectCoreRuntimeEnvironment();
-  const environment={
-    core:coreStatus.valid,
-    delivery:requiredDelivery.every(key=>Boolean(process.env[key]?.trim())),
-    webhooks:requiredWebhooks.every(key=>Boolean(process.env[key]?.trim())),
-    integrations:requiredIntegrations.every(key=>Boolean(process.env[key]?.trim())),
-    configured,
-    expected:groups.flat().length,
-  };
+  const environment=inspectWorkerRuntimeEnvironment();
   const workspaceId=process.env.CRM_WORKSPACE_ID;
-  if(!workspaceId||!/^[0-9a-f-]{36}$/i.test(workspaceId))return{ready:false,database:false,staleWorkers:0,missingWorkers:6,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
-  if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.SUPABASE_SERVICE_ROLE_KEY)return{ready:false,database:false,staleWorkers:0,missingWorkers:6,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
-  const snapshot=await supabaseAdminJson<Partial<ReleaseReadiness>>("/rest/v1/rpc/service_readiness_snapshot",{method:"POST",body:JSON.stringify({target_workspace:workspaceId})});
-  const environmentReady=environment.core&&environment.delivery&&environment.webhooks&&environment.integrations;
-  return{ready:snapshot.ready===true&&environmentReady,database:snapshot.database===true,staleWorkers:Number(snapshot.staleWorkers??0),missingWorkers:Number(snapshot.missingWorkers??0),failedJobs:Number(snapshot.failedJobs??0),stuckJobs:Number(snapshot.stuckJobs??0),oldestPendingAt:snapshot.oldestPendingAt??null,environment};
+  const missingWorkers=environment.enabledWorkers.length;
+  if(!workspaceId||!/^[0-9a-f-]{36}$/i.test(workspaceId))return{ready:false,database:false,staleWorkers:0,missingWorkers,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
+  if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.SUPABASE_SERVICE_ROLE_KEY)return{ready:false,database:false,staleWorkers:0,missingWorkers,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
+  const snapshot=await supabaseAdminJson<Partial<ReleaseReadiness>>("/rest/v1/rpc/service_readiness_snapshot_for_workers",{method:"POST",body:JSON.stringify({target_workspace:workspaceId,enabled_workers:environment.enabledWorkers})});
+  return{ready:snapshot.ready===true&&environment.valid,database:snapshot.database===true,staleWorkers:Number(snapshot.staleWorkers??0),missingWorkers:Number(snapshot.missingWorkers??0),failedJobs:Number(snapshot.failedJobs??0),stuckJobs:Number(snapshot.stuckJobs??0),oldestPendingAt:snapshot.oldestPendingAt??null,environment};
 }
 
 export async function retryOperationalJob(jobType: string, jobId: string) {

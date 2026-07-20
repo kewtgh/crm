@@ -303,10 +303,11 @@ export function OperationsCenterPage({
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.releaseEyebrow")}</p><h2>{t("operations.releaseReadiness")}</h2><p>{t("operations.releaseHelp")}</p></div><StatusBadge tone={readiness?.ready?"green":"red"}>{t(readiness?.ready?"operations.releaseReady":"operations.releaseBlocked")}</StatusBadge></div>
       <div className="operations-insight-grid">
         <InsightCard value={`${readiness?.environment.configured??0}/${readiness?.environment.expected??0}`} label={t("operations.environment")} detail={t(readiness?.environment.core?"operations.coreConfigured":"operations.coreMissing")}/>
-        <InsightCard value={String(readiness?.missingWorkers??6)} label={t("operations.missingWorkers")} detail={t((readiness?.staleWorkers??0)>0?"operations.workersUnhealthy":"operations.workersReady")}/>
+        <InsightCard value={String(readiness?.missingWorkers??4)} label={t("operations.missingWorkers")} detail={t((readiness?.staleWorkers??0)>0?"operations.workersUnhealthy":"operations.workersReady")}/>
         <InsightCard value={String(readiness?.failedJobs??0)} label={t("operations.failedJobs")} detail={t((readiness?.stuckJobs??0)>0?"operations.jobsStuck":"operations.jobsReady")}/>
-        <InsightCard value={`${[readiness?.environment.delivery,readiness?.environment.webhooks,readiness?.environment.integrations].filter(Boolean).length}/3`} label={t("operations.externalServices")} detail={t("operations.externalServicesHelp")}/>
+        <InsightCard value={`${[readiness?.environment.delivery,...(readiness?.environment.webhooksEnabled?[readiness.environment.webhooks]:[]),...(readiness?.environment.integrationsEnabled?[readiness.environment.integrations]:[])].filter(Boolean).length}/${1+(readiness?.environment.webhooksEnabled?1:0)+(readiness?.environment.integrationsEnabled?1:0)}`} label={t("operations.externalServices")} detail={t("operations.externalServicesHelp")}/>
       </div>
+      <div className="release-feature-flags"><StatusBadge tone={readiness?.environment.webhooksEnabled?readiness.environment.webhooks?"green":"red":"gray"}>{t(readiness?.environment.webhooksEnabled?"operations.webhooksEnabled":"operations.webhooksDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.integrationsEnabled?readiness.environment.integrations?"green":"red":"gray"}>{t(readiness?.environment.integrationsEnabled?"operations.integrationsEnabled":"operations.integrationsDisabled")}</StatusBadge><small>{t("operations.optionalWorkerHelp")}</small></div>
     </section>
 
     <section className="operations-insight-grid" aria-label={t("operations.businessInsights")}>

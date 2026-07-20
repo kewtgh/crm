@@ -9,6 +9,21 @@ const createSchema = z.object({
   type: z.enum(["ACCESS", "EXPORT", "CORRECTION", "RESTRICTION", "DELETION"]),
   note: z.string().trim().min(10).max(2000),
   contactId: z.uuid(),
+  changes: z.object({
+    nameZh: z.string().trim().min(1).max(160).optional(),
+    nameEn: z.string().trim().min(1).max(160).optional(),
+    email: z.union([z.email(), z.literal("")]).optional(),
+    phone: z.string().trim().max(80).optional(),
+    title: z.string().trim().max(160).optional(),
+  }).optional(),
+}).superRefine((value, context) => {
+  const count = Object.keys(value.changes ?? {}).length;
+  if (value.type === "CORRECTION" && count === 0) {
+    context.addIssue({ code: "custom", path: ["changes"], message: "correction_requires_changes" });
+  }
+  if (value.type !== "CORRECTION" && count > 0) {
+    context.addIssue({ code: "custom", path: ["changes"], message: "changes_only_apply_to_correction" });
+  }
 });
 const manageSchema = z.object({
   operation: z.literal("manage"),

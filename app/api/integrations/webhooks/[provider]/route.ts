@@ -8,6 +8,7 @@ const providerConfig = {
   email: { provider: "EMAIL", secret: "WEBHOOK_EMAIL_SECRET" },
   "e-signature": { provider: "E_SIGNATURE", secret: "WEBHOOK_E_SIGNATURE_SECRET" },
   accounting: { provider: "ACCOUNTING", secret: "WEBHOOK_ACCOUNTING_SECRET" },
+  payment: { provider: "PAYMENT", secret: "WEBHOOK_PAYMENT_SECRET" },
 } as const;
 
 function bytesToHex(bytes: Uint8Array) {

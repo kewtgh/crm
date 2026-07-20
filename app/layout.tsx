@@ -5,6 +5,9 @@ import { dictionaries, isLocale, translate } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/page-metadata";
 import "./globals.css";
 import "./v200.css";
+import "./v220.css";
+import "./v220-quality.css";
+import "./v220-operations.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
@@ -20,9 +23,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Lumina Education CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/og-v120.png", baseUrl).toString(), width: 1734, height: 907, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/og-v220.png", baseUrl).toString(), width: 1734, height: 907, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v120.png", baseUrl).toString()] },
+    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v220.png", baseUrl).toString()] },
   };
 }
 

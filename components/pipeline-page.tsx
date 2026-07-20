@@ -25,6 +25,7 @@ import {
 import type { FunnelMetric, OpportunityRecord } from "@/lib/sales-repository";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { useCapability } from "@/components/app-user-context";
 
 const stageTone: Record<OpportunityStage, string> = {
   DISCOVERY: "blue",
@@ -36,25 +37,32 @@ const stageTone: Record<OpportunityStage, string> = {
 };
 
 type ProductOption = { id: string; nameZh: string; nameEn: string; active: boolean };
-type OpportunityPage = { items: OpportunityRecord[]; total: number; funnel: FunnelMetric[] };
+type OpportunityPage = { items: OpportunityRecord[]; total: number; funnel: FunnelMetric[]; currency:string; currencies:string[] };
 type TransitionState = { item: OpportunityRecord; stage: OpportunityStage };
 
 export function PipelinePage({
   initialItems,
   initialTotal,
   initialFunnel,
+  initialCurrency,
+  initialCurrencies,
   persistent = true,
 }: {
   initialItems: OpportunityRecord[];
   initialTotal: number;
   initialFunnel: FunnelMetric[];
+  initialCurrency: string;
+  initialCurrencies: string[];
   persistent?: boolean;
 }) {
   const { locale, t } = useI18n();
+  const canManage=useCapability("opportunities.manage");
   const { formatDate } = useUserPreferences();
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [funnel, setFunnel] = useState(initialFunnel);
+  const [currencyScope,setCurrencyScope]=useState(initialCurrency);
+  const [currencyOptions,setCurrencyOptions]=useState(initialCurrencies);
   const [page, setPage] = useState(1);
   const [pageSize,setPageSize]=useState(20);
   const [query, setQuery] = useState("");
@@ -75,7 +83,7 @@ export function PipelinePage({
   const runPageLoad=useRemoteSearch();
 
   const funnelMap = useMemo(() => new Map(funnel.map((item) => [item.stage, item])), [funnel]);
-  const currency = items[0]?.currency ?? "CNY";
+  const currency = currencyScope;
   const money = (value: number, currencyCode = currency) => new Intl.NumberFormat(
     locale === "zh-CN" ? "zh-CN" : "en-US",
     {
@@ -99,12 +107,12 @@ export function PipelinePage({
     return `${t(fallbackKey)}${caught.requestId ? ` · ${t("common.requestId")}: ${caught.requestId}` : ""}`;
   }, [t]);
 
-  const load = useCallback(async (nextPage: number, nextQuery: string, nextPageSize = pageSize) => {
+  const load = useCallback(async (nextPage: number, nextQuery: string, nextPageSize = pageSize, nextCurrency = currencyScope) => {
     if (!persistent) return;
     setLoading(true);
     setError("");
     const result=await runPageLoad(signal=>apiFetch<OpportunityPage>(
-      `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}`,{signal},
+      `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}&currency=${encodeURIComponent(nextCurrency)}`,{signal},
     ));
     if(!result.current)return;
     setLoading(false);
@@ -120,7 +128,9 @@ export function PipelinePage({
       setItems(result.value.items);
       setTotal(result.value.total);
       setFunnel(result.value.funnel);
-  }, [describeError, pageSize, persistent,runPageLoad]);
+      setCurrencyScope(result.value.currency);
+      setCurrencyOptions(result.value.currencies);
+  }, [currencyScope, describeError, pageSize, persistent,runPageLoad]);
 
   useEffect(() => {
     if (page === 1 && !query) return;
@@ -279,9 +289,9 @@ export function PipelinePage({
         <p>{t("pipeline.description")}</p>
       </div>
       <div className="page-actions">
-        <button className="primary-button" type="button" onClick={() => { setCreateOpen(true); setDrawerError(""); }}>
+        {canManage&&<button className="primary-button" type="button" onClick={() => { setCreateOpen(true); setDrawerError(""); }}>
           <Plus size={17}/>{t("pipeline.new")}
-        </button>
+        </button>}
       </div>
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}
@@ -293,6 +303,7 @@ export function PipelinePage({
     </section>
     <section className="surface table-toolbar">
       <SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("pipeline.search")}/>
+      <label className="compact-field"><span>{t("pipeline.currencyScope")}</span><select value={currencyScope} onChange={(event)=>{const value=event.target.value;setCurrencyScope(value);setPage(1);void load(1,query,pageSize,value);}}>{currencyOptions.map(value=><option value={value} key={value}>{value}</option>)}</select></label>
       <button className="icon-button" type="button" disabled={loading} aria-label={t("common.retry")} onClick={() => load(page, query)}>
         <RefreshCcw className={loading ? "spin" : ""} size={16}/>
       </button>
@@ -310,6 +321,7 @@ export function PipelinePage({
                 <span className="opportunity-top">
                   <StatusBadge tone={stageTone[card.stage]}>{t(`sales.stage.${card.stage.toLowerCase()}`)}</StatusBadge>
                   <select
+                    disabled={!canManage}
                     aria-label={t("pipeline.changeStage", { title: locale === "zh-CN" ? card.titleZh : card.titleEn })}
                     value={card.stage}
                     onChange={(event) => {
