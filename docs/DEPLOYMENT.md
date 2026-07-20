@@ -110,29 +110,38 @@ npm run workers:process
 - readiness 为 200，所有启用 Worker 有新鲜成功心跳。
 - 1440/1024/375 无横向溢出、未命名控件、焦点丢失、低于 12px 正文或错误吞没。
 
-## 8. Sites 发布
+## 8. 专用服务器发布
 
-本项目包含 `.openai/hosting.json`，必须使用 Sites 保存和托管流程：
+本项目部署到专用服务器，不保留 Sites 项目绑定或本地“部署版本”。服务器应从已验证 Git
+commit 构建不可变 release 目录，再由 `/opt/lumina-crm/current` 原子切换到该目录：
 
-1. 在 Sites 运行时保存正式 secrets，不复制本地测试值。
-2. 只对通过全部门禁的精确 commit 保存 version。
-3. 先 private 部署该已保存 version。
-4. 部署后重复 liveness、readiness、核心 smoke 与浏览器抽查。
+1. 在服务器密钥管理或 `/etc/lumina-crm/production.env` 保存正式 secrets，权限设为仅服务账号可读。
+2. 对精确 commit 执行 `npm ci --omit=dev`、生产构建和迁移门禁。
+3. 使用 systemd 管理 Web 服务，并安装 `deploy/systemd/lumina-crm-workers.service` 与 `.timer`。
+4. `systemctl enable --now lumina-crm-workers.timer` 后检查 timer、Worker journal 和 readiness。
+5. 切换流量后重复 liveness、readiness、核心 smoke 与 Chromium 抽查。
 
-数据库或浏览器门禁未通过时，不得为了“完成发布”而跳过验证。本轮数据库门禁已通过；
-固定 Chromium 矩阵和生产凭据/readiness 尚未完成，因此尚未执行 Sites 保存/发布。
+数据库或浏览器门禁未通过时，不得为了“完成发布”而跳过验证。本地仓库只保存源码、配置
+模板和验证证据，不保存生产 secrets、构建目录或服务器 release 副本。
 
 ## 9. 回滚
 
 1. 停止新写入流量和 Worker。
-2. 应用回滚到上一已验证 Sites version。
+2. 将 `/opt/lumina-crm/current` 原子切回上一已验证 release，并重启对应 systemd 服务。
 3. 数据库优先用向前修复迁移；只在恢复演练确认后使用备份恢复。
 4. 不删除审批、审计、合同版本、付款、通知、隐私或 Webhook 历史来回滚界面。
 5. 恢复后重跑全部发布门、readiness、权限、业务与浏览器矩阵。
 
 ## 10. GitHub Actions
 
-生产 Worker 工作流使用 Node.js 24 与 `actions/checkout@v6`、`actions/setup-node@v6`。
+高频生产 Worker 不再由 GitHub Actions 每五分钟启动一次临时 runner；该模式会重复 checkout、
+Node 初始化和依赖安装，而且未配置 production secrets 时仍会持续计费失败。生产环境改由
+专用服务器的 systemd timer 按业务 SLA 调用 Worker 入口，原生产 Worker workflow
+已删除。
+
+CI 对纯 Markdown/`docs/**` 变更不再运行，并在 `npm ci` 阶段关闭重复 audit/funding 请求；
+依赖安全仍由后续独立 `npm audit` 门禁负责。
+
 仓库门禁不临时下载浏览器；本开发环境直接使用已安装的精确
 `ms-playwright/chromium-1228`。缺少 in-app Browser 会话不构成阻断；只有精确运行时确实缺失
 或执行失败时才应报告浏览器门禁失败。

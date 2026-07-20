@@ -39,10 +39,9 @@
   同时其允许的浏览器客户端没有暴露任何 backend。这是工具策略冲突，不是缺少浏览器。
 - 因固定 Chromium 矩阵及同运行时的 device-auth smoke 未在本会话执行，不能虚报 REL-02、
   REL-03 或完整 release gate 通过。
-- Sites 不应发布未完成浏览器门禁的版本；正式发布还需要生产所有者提供真实 Supabase、
-  Turnstile、邮件/连接器 secrets、备份演练、调度心跳，并在托管环境确认 readiness 200。
-  本轮对 `.openai/hosting.json` 中既有 project ID 执行只读 Sites 检查时，连接器返回
-  `missing_account_user_id`，因此当前会话也不具备保存或发布该项目所需的 Sites 身份上下文。
+- 正式专用服务器发布还需要生产所有者提供真实 Supabase、Turnstile、邮件/连接器 secrets、
+  备份演练、systemd timer 心跳，并在托管环境确认 readiness 200。旧 Sites 项目绑定和
+  GitHub Actions 高频 Worker 调度已在后续额度审计中移除。
 
 除上述明确外部门禁外，计划中没有发现未实现、只建模未闭环、依赖模拟成功或未保存文档的
 仓库内项目。

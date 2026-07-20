@@ -52,7 +52,7 @@ Implemented scope:
 | Core worker cycle | Pass; 6/6 repaired plus 1/1 freshly queued calendar deliveries reached the local validation sink |
 | v1.1 authenticated smoke | Pass |
 | Pinned Chromium matrix | Pending continuation with installed `ms-playwright/chromium-1228` |
-| Sites save/deploy | Intentionally not performed before all release gates pass |
+| Dedicated-server deploy | Not performed; production credentials and browser gate remain external |
 
 ## Current blockers
 
@@ -64,18 +64,17 @@ Node REPL client and forbids invoking standalone Playwright/Chromium from the sh
 policy conflict, not a missing-browser condition; the repository browser command remains ready for
 an execution context that permits it.
 
-Production deployment also remains externally gated on real Sites secrets, email/Turnstile and any
-enabled connector credentials, scheduler heartbeats, backup verification and hosted readiness 200.
-The current Sites connector also returns `missing_account_user_id` when inspecting the existing
-project ID, so no version or deployment mutation was attempted.
+Production deployment remains externally gated on dedicated-server secrets, email/Turnstile and any
+enabled connector credentials, systemd timer heartbeats, backup verification and hosted readiness 200.
+The obsolete Sites project binding and high-frequency Actions Worker schedule have been removed.
 
 ## Required continuation sequence
 
 1. Run the pinned Chromium 1228 matrix and device-auth smoke in an execution context that permits the
    repository's installed runtime; inspect all target viewports, roles and generated evidence.
 2. Configure real production secrets and schedulers, then require hosted readiness 200.
-3. Only then save and privately deploy the exact Sites version, followed by liveness, readiness and
-   core production smoke.
+3. Only then deploy the exact commit to an immutable server release, followed by liveness, readiness
+   and core production smoke.
 
 External providers remain disabled until real credentials, explicit enablement, data-processing
 approval and scheduler heartbeats are supplied. The product does not present simulated provider,
