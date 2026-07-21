@@ -1,9 +1,9 @@
 {
   "name": "lumina-education-crm",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=24.0.0 <25"
   },
   "scripts": {
     "dev": "vinext dev --port 3200",

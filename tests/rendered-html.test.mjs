@@ -95,7 +95,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.2\.0"/);
+  assert.match(packageJson, /"version": "2\.2\.1"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -111,7 +111,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.2\.0"/);
+  assert.match(packageJson, /"version": "2\.2\.1"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -519,7 +519,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.2\.0/);
+  assert.match(version, /2\.2\.1/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -583,7 +583,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.2\.0/);
+  assert.match(version,/2\.2\.1/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -617,7 +617,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.2\.0"/);
+  assert.match(packageJson,/"version": "2\.2\.1"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -655,7 +655,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.2\.0/);
+  assert.match(version,/2\.2\.1/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
