@@ -1,10 +1,13 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.2.0**
+Current release candidate: **v2.2.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.2.1 standardizes development, CI and dedicated-server execution on Node.js 24,
+removes the redundant billed Actions worker schedule and moves production worker timing to systemd.
 
 v2.2.0 closes the July 20 full audit: privacy requests execute real correction,
 restriction, deletion or verified exports; reports use explicit currency scope and
@@ -40,7 +43,7 @@ simulated connection, delivery, worker heartbeat, AI result or security state as
 
 ## Local development
 
-Requirements: Node.js 22.13+ (Node 24 supported) and Docker Desktop.
+Requirements: Node.js 24.x (`24.18.0` is pinned in `.nvmrc`) and Docker Desktop.
 
 ```bash
 npm install

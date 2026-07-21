@@ -1,17 +1,17 @@
-# Lumina Education CRM v2.2.0 部署指引
+# Lumina Education CRM v2.2.1 部署指引
 
 ## 1. 发布前提
 
-- Node.js 22.13+（Node 24 已验证）。
+- Node.js 24.x；开发、CI 与服务器统一使用 `.nvmrc` 固定的 `24.18.0`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
 - 数据库必须按顺序应用到 `202607210052`，且不得跳过 `050` 的隐私导出修复或 `052` 的 Worker 最小读取权限。
 
-当前工作树是 v2.2.0 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
+当前工作树是 v2.2.1 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
 在隔离本地环境通过；剩余门禁见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.2.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.2.1`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -116,7 +116,7 @@ npm run workers:process
 commit 构建不可变 release 目录，再由 `/opt/lumina-crm/current` 原子切换到该目录：
 
 1. 在服务器密钥管理或 `/etc/lumina-crm/production.env` 保存正式 secrets，权限设为仅服务账号可读。
-2. 对精确 commit 执行 `npm ci --omit=dev`、生产构建和迁移门禁。
+2. 按 `.nvmrc` 安装 Node.js `24.18.0`，再对精确 commit 执行 `npm ci --omit=dev`、生产构建和迁移门禁。
 3. 使用 systemd 管理 Web 服务，并安装 `deploy/systemd/lumina-crm-workers.service` 与 `.timer`。
 4. `systemctl enable --now lumina-crm-workers.timer` 后检查 timer、Worker journal 和 readiness。
 5. 切换流量后重复 liveness、readiness、核心 smoke 与 Chromium 抽查。

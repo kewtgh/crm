@@ -1,11 +1,11 @@
-# Implementation status — v2.2.0 release candidate
+# Implementation status — v2.2.1 release candidate
 
 Status date: 2026-07-21
 
 ## Outcome
 
 The July 20 source audit, remediation implementation and second omission review are complete.
-The repository now contains the full v2.2.0 implementation. Migrations through `052`, final
+The repository now contains the full v2.2.1 implementation. Migrations through `052`, final
 schema lint, all 433 database assertions and the available business/HTTP/export/asset suites pass.
 The release is **not yet deployable** until the device-auth and pinned Chromium 1228 gates run,
 and real production provider configuration, worker heartbeats and readiness are supplied.
