@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { authCookieNames, isMfaRequiredRole } from "@/lib/auth";
+import { isMfaRequiredRole } from "@/lib/auth";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { revokeUserTrustedDevices, securityCookieNames, trustedDeviceMaxAge } from "@/lib/trusted-devices";
+import { revokeUserTrustedDevices, securityCookieNames } from "@/lib/trusted-devices";
+import { setAuthSessionCookies } from "@/lib/auth-session";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("enroll") }),
@@ -41,8 +42,7 @@ async function post(request: Request) {
       const response = NextResponse.json({ ok: true, next: "/dashboard" });
       const cookieBase = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
       const remember = (await cookies()).get(securityCookieNames.mfaRemember)?.value === "1";
-      if (session.access_token) response.cookies.set(authCookieNames.access, session.access_token, { ...cookieBase, maxAge: Number(session.expires_in ?? 3600) });
-      if (session.refresh_token) response.cookies.set(authCookieNames.refresh, session.refresh_token, remember ? { ...cookieBase, maxAge: trustedDeviceMaxAge } : cookieBase);
+      setAuthSessionCookies(response, session, remember);
       await revokeUserTrustedDevices(user.id, "MFA_VERIFIED").catch(() => undefined);
       response.cookies.delete(securityCookieNames.trustedDevice);
       response.cookies.set(securityCookieNames.mfaRemember, "", {

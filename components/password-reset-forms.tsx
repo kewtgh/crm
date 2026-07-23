@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { TurnstileWidget } from "./turnstile-widget";
+import { passwordValueSchema } from "@/lib/validation";
 
 export function PasswordResetRequestForm() {
   const { t } = useI18n();
@@ -76,7 +77,7 @@ export function NewPasswordForm() {
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") ?? "");
     const confirmPassword = String(form.get("confirmPassword") ?? "");
-    if (password.length < 10 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    if (!passwordValueSchema.safeParse(password).success) {
       setError(t("auth.reset.passwordRule")); return;
     }
     if (password !== confirmPassword) { setError(t("auth.reset.mismatch")); return; }
@@ -105,8 +106,9 @@ export function NewPasswordForm() {
   return <form className="auth-form" onSubmit={submit} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.newPassword")}</p><h1>{t("auth.reset.newTitle")}</h1><p>{t("auth.reset.newDescription")}</p></div>
     {!ready ? <div className="form-message" role="status"><LoaderCircle className="spin" size={17} /><span>{t("auth.reset.verifying")}</span></div> : <>
-      <label className="field"><span>{t("auth.reset.newPassword")}</span><input type="password" name="password" autoComplete="new-password" required /></label>
-      <label className="field"><span>{t("auth.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" required /></label>
+      <label className="field"><span>{t("auth.reset.newPassword")}</span><input type="password" name="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+      <label className="field"><span>{t("auth.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+      <small className="field-help auth-password-rule">{t("auth.reset.passwordRule")}</small>
       {error && <div className="form-message error" role="alert"><LockKeyhole size={17} /><span>{error}</span></div>}
       {success && <div className="form-message success" role="status"><Check size={17} /><span>{success}</span></div>}
       <button className="primary-button auth-submit" type="submit" disabled={pending || Boolean(success)}>{pending && <LoaderCircle className="spin" size={18} />}{t("auth.reset.update")}</button>

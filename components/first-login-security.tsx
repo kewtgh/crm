@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage } from "./ui";
+import { MfaAuthenticatorGuide } from "./mfa-authenticator-guide";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 
 export function InitialPasswordChangeForm() {
@@ -23,7 +24,7 @@ export function InitialPasswordChangeForm() {
     } catch (cause) {
       const code = cause instanceof ApiClientError ? cause.code : "";
       const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
-      const key = code === "PASSWORD_MISMATCH" ? "auth.firstLogin.mismatch" : code === "PASSWORD_TOO_SHORT" || code === "PASSWORD_COMPLEXITY" ? "auth.firstLogin.rule" : code === "NETWORK_ERROR" ? "auth.error.network" : "auth.firstLogin.failed";
+      const key = code === "PASSWORD_MISMATCH" ? "auth.firstLogin.mismatch" : ["PASSWORD_TOO_SHORT", "PASSWORD_TOO_LONG", "PASSWORD_COMPLEXITY"].includes(code) ? "auth.firstLogin.rule" : code === "NETWORK_ERROR" ? "auth.error.network" : "auth.firstLogin.failed";
       if (field) setFieldError({ [field]: t(key) }); else setError(t(key));
     }
     finally { setPending(false); }
@@ -40,7 +41,7 @@ export function InitialPasswordChangeForm() {
 }
 
 function PasswordInput({ name, label, error }: { name: string; label: string; error?: string }) {
-  return <label className="field"><span>{label}</span><input name={name} type="password" autoComplete="new-password" minLength={12} required aria-invalid={Boolean(error)}/>{error && <small className="field-error">{error}</small>}</label>;
+  return <label className="field"><span>{label}</span><input name={name} type="password" autoComplete="new-password" minLength={12} maxLength={128} required aria-invalid={Boolean(error)}/>{error && <small className="field-error">{error}</small>}</label>;
 }
 
 type Factor = { id: string; factor_type: string; status: string };
@@ -91,6 +92,7 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
   const ready = mode === "setup" ? Boolean(enrollment) : Boolean(factorId && challengeId);
   return <form className="auth-form" onSubmit={verify} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("auth.mfa.eyebrow")}</p><h1>{t(mode === "setup" ? "auth.mfa.setupTitle" : "auth.mfa.challengeTitle")}</h1><p>{t(mode === "setup" ? "auth.mfa.setupDescription" : "auth.mfa.challengeDescription")}</p></div>
+    {mode === "setup" && <MfaAuthenticatorGuide headingLevel="h2" />}
     {mode === "setup" && enrollment?.qrCode && <div className="mfa-enrollment"><img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")}/>{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div>}
     <label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required disabled={!ready}/></label>
     {error && <InlineMessage type="error">{error}</InlineMessage>}

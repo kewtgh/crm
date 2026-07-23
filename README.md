@@ -1,10 +1,17 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.2.1**
+Current release candidate: **v2.3.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.3.0 closes the July 23 security audit: it upgrades vulnerable framework and
+transitive dependencies, preserves the user's session-only versus 30-day sign-in
+choice across token rotation, prevents caching of private API responses, and aligns
+the local environment generator with every optional provider boundary. It also adds
+reusable MFA authenticator guidance, unifies every password-change path, validates
+avatars before upload, and closes the remaining small-text and contrast regressions.
 
 v2.2.1 standardizes development, CI and dedicated-server execution on Node.js 24,
 removes the redundant billed Actions worker schedule and moves production worker timing to systemd.
@@ -72,7 +79,7 @@ Run the complete release gate:
 npm run release:gate
 ```
 
-The gate runs typecheck, lint, production build, 26 Node contracts, dependency audit,
+The gate runs typecheck, lint, production build, 27 Node contracts, dependency audit,
 schema lint, 433 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
@@ -89,12 +96,12 @@ application and household lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.2 source implementation, second omission review, migrations, schema lint and all 433 pgTAP
-assertions are complete. The release remains blocked until authenticated device smoke and the pinned
-Chromium 1228 matrix pass. A production rollout to the dedicated server additionally requires real
-runtime secrets, a backed-up production Supabase migration, hosted email OTP template, systemd timer
-heartbeats and readiness 200. See the [v2.2 source audit](docs/AUDIT_2026-07-20_V2.1.1.md),
-[executed remediation plan](docs/REMEDIATION_AND_EXPANSION_PLAN_V2.2.0.md),
-[final omission review](docs/FINAL_REAUDIT_2026-07-21_V2.2.0.md),
+The v2.3.0 source implementation, remediation, migrations, schema lint, all 433 pgTAP assertions,
+real device-auth smoke and 43-page/viewport Chromium 1228 matrix are complete. A production rollout
+to the dedicated server still requires real runtime secrets, a backed-up production Supabase
+migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
+[v2.3.0 audit](docs/AUDIT_2026-07-23_V2.2.1.md),
+[executed remediation plan](docs/REMEDIATION_PLAN_2026-07-23_V2.3.0.md),
+[final omission review](docs/FINAL_REAUDIT_2026-07-23_V2.3.0.md),
 [implementation status](docs/IMPLEMENTATION_STATUS.md), and
 [deployment guide](docs/DEPLOYMENT.md).

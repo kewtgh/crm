@@ -58,16 +58,24 @@ foreach ($key in @(
   'WEBHOOK_GOOGLE_CALENDAR_SECRET',
   'WEBHOOK_EMAIL_SECRET',
   'WEBHOOK_E_SIGNATURE_SECRET',
-  'WEBHOOK_ACCOUNTING_SECRET'
+  'WEBHOOK_ACCOUNTING_SECRET',
+  'WEBHOOK_PAYMENT_SECRET'
 )) { Set-Default $key (New-RandomSecret) }
 
 foreach ($entry in @{
   OUTBOX_BATCH_SIZE = '20'
   CALENDAR_DELIVERY_BATCH_SIZE = '20'
   EXPORT_BATCH_SIZE = '10'
+  EXPORT_MAX_ROWS = '250000'
   REMINDER_BATCH_SIZE = '100'
   WEBHOOK_BATCH_SIZE = '20'
   INTEGRATION_SYNC_BATCH_SIZE = '10'
+}.GetEnumerator()) { Set-Default $entry.Key $entry.Value }
+
+foreach ($entry in @{
+  WEBHOOKS_ENABLED = 'false'
+  INTEGRATION_SYNC_ENABLED = 'false'
+  AI_PROVIDER_ENABLED = 'false'
 }.GetEnumerator()) { Set-Default $entry.Key $entry.Value }
 
 foreach ($key in @(
@@ -77,6 +85,8 @@ foreach ($key in @(
   'WEBHOOK_PROCESSOR_TOKEN',
   'INTEGRATION_SYNC_PROCESSOR_URL',
   'INTEGRATION_SYNC_PROCESSOR_TOKEN',
+  'AI_PROVIDER_URL',
+  'AI_PROVIDER_TOKEN',
   'WORKER_ID'
 )) { Set-Default $key '' }
 

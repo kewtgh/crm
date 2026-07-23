@@ -5,8 +5,9 @@ import { authCookieNames } from "@/lib/auth";
 import { getAccessToken, supabaseJson } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { revokeUserTrustedDevices, securityCookieNames } from "@/lib/trusted-devices";
+import { passwordValueSchema } from "@/lib/validation";
 
-const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(128) });
+const schema = z.object({ currentPassword: z.string().min(1), newPassword: passwordValueSchema });
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
@@ -22,6 +23,7 @@ async function post(request: Request) {
     await revokeUserTrustedDevices(user.id, "PASSWORD_CHANGED");
     const response = NextResponse.json({ ok: true });
     response.cookies.delete(authCookieNames.refresh);
+    response.cookies.delete(authCookieNames.persistence);
     response.cookies.delete(securityCookieNames.trustedDevice);
     return response;
   } catch { return NextResponse.json({ code: "PASSWORD_UPDATE_FAILED" }, { status: 500 }); }

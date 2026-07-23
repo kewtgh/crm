@@ -10,6 +10,7 @@ export type { AppUser } from "./user";
 export const authCookieNames = {
   access: "crm_access_token",
   refresh: "crm_refresh_token",
+  persistence: "crm_session_persistent",
 } as const;
 
 export class AuthSecurityError extends Error {

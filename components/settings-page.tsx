@@ -15,6 +15,8 @@ import { useI18n } from "./i18n-provider";
 import { useUserPreferences } from "./user-preferences-context";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
+import { passwordValueSchema } from "@/lib/validation";
+import { MfaAuthenticatorGuide } from "./mfa-authenticator-guide";
 
 const tabs = [
   { href: "/settings/profile", key: "settings.profile", icon: UserRound }, { href: "/settings/account", key: "settings.accountLanguage", icon: Languages },
@@ -38,9 +40,54 @@ type Setter = React.Dispatch<React.SetStateAction<UserSettings>>;
 type Persist = (body: unknown, successKey: string) => Promise<void>;
 
 function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUser; settings: UserSettings; setSettings: Setter; persist: Persist }) {
-  const { t } = useI18n(); const fileRef = useRef<HTMLInputElement>(null); const [avatar, setAvatar] = useState(""); const [file, setFile] = useState<File>(); const [error, setError] = useState(""); const [saving, setSaving] = useState(false); const avatarSource=avatar||(settings.avatarPath?"/api/settings/avatar":"");
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); setSaving(true); try { if (file) { const data = new FormData(); data.set("avatar", file); const result = await apiFetch<{ url?: string }>("/api/settings/avatar", { method: "POST", body: data }); setAvatar(result.url ?? "/api/settings/avatar"); } await persist({ section: "profile", displayNameZh: settings.displayNameZh, displayNameEn: settings.displayNameEn, honorific: settings.honorific, bio: settings.bio }, "settings.profileSaved"); } catch(caught) { setError(presentApiError(caught,t,"settings.saveFailed").message); } finally { setSaving(false); } };
-  return <form onSubmit={submit}><SettingsHeader eyebrow="PROFILE" title={t("settings.profile")} description={t("settings.profileDescription")} /><div className="avatar-editor"><span className="large-avatar">{avatarSource ? <img src={avatarSource} alt={t("settings.avatarPreview")} /> : user.initials}</span><div><b>{t("settings.avatar")}</b><p>{t("settings.avatarHelp")}</p><button className="secondary-button" type="button" onClick={() => fileRef.current?.click()}><Camera size={16} />{t("settings.changeAvatar")}</button><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const next = event.target.files?.[0]; if (next) { if (avatar.startsWith("blob:")) URL.revokeObjectURL(avatar); setFile(next); setAvatar(URL.createObjectURL(next)); } }} /></div></div><div className="form-grid two-column"><label className="field"><span>{t("settings.nameZh")}</span><input value={settings.displayNameZh} onChange={(event) => setSettings((current) => ({ ...current, displayNameZh: event.target.value }))} required /></label><label className="field"><span>{t("settings.nameEn")}</span><input value={settings.displayNameEn} onChange={(event) => setSettings((current) => ({ ...current, displayNameEn: event.target.value }))} required /></label></div><SearchableSelect label={t("settings.honorific")} options={[{ value: "ms", label: "Ms." }, { value: "mr", label: "Mr." }, { value: "dr", label: "Dr." }, { value: "mx", label: "Mx." }]} value={settings.honorific || "ms"} onChange={(honorific) => setSettings((current) => ({ ...current, honorific }))} /><label className="field"><span>{t("settings.bio")}</span><textarea rows={4} value={settings.bio} onChange={(event) => setSettings((current) => ({ ...current, bio: event.target.value }))} /></label><ProtectedFields user={user} />{error && <InlineMessage type="error">{error}</InlineMessage>}<SaveRow saving={saving} /></form>;
+  const { t } = useI18n();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatar, setAvatar] = useState("");
+  const [file, setFile] = useState<File>();
+  const [avatarError, setAvatarError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const avatarSource = avatar || (settings.avatarPath ? "/api/settings/avatar" : "");
+
+  useEffect(() => () => {
+    if (avatar.startsWith("blob:")) URL.revokeObjectURL(avatar);
+  }, [avatar]);
+
+  const chooseAvatar = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.files?.[0];
+    if (!next) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(next.type) || next.size > 5 * 1024 * 1024) {
+      event.currentTarget.value = "";
+      setFile(undefined);
+      setAvatarError(t("settings.avatarInvalid"));
+      return;
+    }
+    setAvatarError("");
+    setFile(next);
+    setAvatar(URL.createObjectURL(next));
+  };
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError("");
+    setSaving(true);
+    try {
+      if (file) {
+        const data = new FormData();
+        data.set("avatar", file);
+        const result = await apiFetch<{ url?: string }>("/api/settings/avatar", { method: "POST", body: data });
+        setAvatar(result.url ?? "/api/settings/avatar");
+        setFile(undefined);
+      }
+      await persist({ section: "profile", displayNameZh: settings.displayNameZh, displayNameEn: settings.displayNameEn, honorific: settings.honorific, bio: settings.bio }, "settings.profileSaved");
+    } catch (caught) {
+      setFormError(presentApiError(caught, t, "settings.saveFailed").message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <form onSubmit={submit}><SettingsHeader eyebrow="PROFILE" title={t("settings.profile")} description={t("settings.profileDescription")} /><div className="avatar-editor"><span className="large-avatar">{avatarSource ? <img src={avatarSource} alt={t("settings.avatarPreview")} /> : user.initials}</span><div><b>{t("settings.avatar")}</b><p>{t("settings.avatarHelp")}</p><button className="secondary-button" type="button" onClick={() => fileRef.current?.click()}><Camera size={16} />{t("settings.changeAvatar")}</button><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} /></div></div>{avatarError && <InlineMessage type="error">{avatarError}</InlineMessage>}<div className="form-grid two-column"><label className="field"><span>{t("settings.nameZh")}</span><input value={settings.displayNameZh} onChange={(event) => setSettings((current) => ({ ...current, displayNameZh: event.target.value }))} required /></label><label className="field"><span>{t("settings.nameEn")}</span><input value={settings.displayNameEn} onChange={(event) => setSettings((current) => ({ ...current, displayNameEn: event.target.value }))} required /></label></div><SearchableSelect label={t("settings.honorific")} options={[{ value: "ms", label: "Ms." }, { value: "mr", label: "Mr." }, { value: "dr", label: "Dr." }, { value: "mx", label: "Mx." }]} value={settings.honorific || "ms"} onChange={(honorific) => setSettings((current) => ({ ...current, honorific }))} /><label className="field"><span>{t("settings.bio")}</span><textarea rows={4} value={settings.bio} onChange={(event) => setSettings((current) => ({ ...current, bio: event.target.value }))} /></label><ProtectedFields user={user} />{formError && <InlineMessage type="error">{formError}</InlineMessage>}<SaveRow saving={saving} /></form>;
 }
 
 function ProtectedFields({ user }: { user: AppUser }) { const { t } = useI18n(); return <div className="protected-field-grid"><div><span>{t("settings.role")}</span><b>{t(roleMessageKey[user.role])}</b><small>{t("settings.immutable")}</small></div><div><span>{t("settings.verificationLevel")}</span><b>{t(user.aal==="aal2"?"settings.highPrivilege":"settings.byRole")} · {t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</b><small>{t("settings.immutable")}</small></div><div><span>{t("settings.accountStatus")}</span><b className="good-text">{t("settings.activeVerified")}</b><small>{t("settings.immutable")}</small></div></div>; }
@@ -61,15 +108,94 @@ function NotificationSettings({ settings, setSettings, persist }: { settings: Us
 
 type Factor = { id: string; status: string; friendly_name?: string };
 function SecuritySettings() {
-  const { t } = useI18n(); const user=useAppUser(); const [error, setError] = useState(""); const [success, setSuccess] = useState(""); const [factors, setFactors] = useState<Factor[]>([]); const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string }>(); const [busy, setBusy] = useState(false);
-  const loadMfa = () => apiFetch<{ factors?: Factor[] }>("/api/settings/mfa").then((result) => setFactors(result.factors ?? [])).catch(() => setError(t("settings.mfaFailed")));
+  const { t } = useI18n();
+  const user = useAppUser();
+  const [mfaError, setMfaError] = useState("");
+  const [mfaSuccess, setMfaSuccess] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [factors, setFactors] = useState<Factor[]>([]);
+  const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string }>();
+  const [busy, setBusy] = useState(false);
+
+  const loadMfa = () => apiFetch<{ factors?: Factor[] }>("/api/settings/mfa")
+    .then((result) => setFactors(result.factors ?? []))
+    .catch(() => setMfaError(t("settings.mfaFailed")));
   useEffect(() => { loadMfa(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const enroll = async () => { setBusy(true); setError(""); try { const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string } } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) }); if (!result.factor?.id) throw new Error(); const challengeResult = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) }); if (!challengeResult.challenge?.id) throw new Error(); setEnrollment({ factorId: result.factor.id, challengeId: challengeResult.challenge.id, qrCode: result.factor.totp?.qr_code ?? "" }); } catch { setError(t("settings.mfaFailed")); } finally { setBusy(false); } };
-  const verify = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!enrollment) return; const code = String(new FormData(event.currentTarget).get("code")); setBusy(true); setError(""); try { await apiFetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) }); setEnrollment(undefined); setSuccess(t("settings.mfaEnabled")); void loadMfa(); } catch { setError(t("settings.mfaCodeInvalid")); } setBusy(false); };
-  const disableMfa = async (factorId:string) => { setBusy(true);setError("");setSuccess("");try{await apiFetch("/api/settings/mfa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"unenroll",factorId})});setSuccess(t("settings.mfaDisabled"));void loadMfa();}catch{setError(t("settings.mfaDisableFailed"));}finally{setBusy(false);} };
-  const changePassword = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); setSuccess(""); const data = new FormData(event.currentTarget); if (data.get("newPassword") !== data.get("confirmPassword")) { setError(t("settings.passwordMismatch")); return; } setBusy(true); try { await apiFetch("/api/settings/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword: data.get("newPassword") }) }); setSuccess(t("settings.passwordSaved")); event.currentTarget.reset(); } catch (cause) { setError(t(cause instanceof ApiClientError && cause.code === "CURRENT_PASSWORD_INCORRECT" ? "settings.currentPasswordIncorrect" : "settings.passwordFailed")); } setBusy(false); };
-  const verifiedFactor=factors.find((factor)=>factor.status==="verified");const administrator=user.role==="SUPER_ADMIN"||user.role==="ADMIN";
-  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor&&!administrator&&<button className="danger-button" type="button" disabled={busy} onClick={()=>void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section>{enrollment && <form className="settings-subform" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3>{enrollment.qrCode && <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} />}<label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required /></label><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></form>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={10} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={10} required /></label></div>{error && <InlineMessage type="error">{error}</InlineMessage>}{success && <InlineMessage type="success">{success}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form></div>;
+
+  const enroll = async () => {
+    setBusy(true); setMfaError(""); setMfaSuccess("");
+    try {
+      const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string } } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
+      if (!result.factor?.id) throw new Error();
+      const challengeResult = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) });
+      if (!challengeResult.challenge?.id) throw new Error();
+      setEnrollment({ factorId: result.factor.id, challengeId: challengeResult.challenge.id, qrCode: result.factor.totp?.qr_code ?? "" });
+    } catch {
+      setMfaError(t("settings.mfaFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!enrollment) return;
+    const code = String(new FormData(event.currentTarget).get("code"));
+    setBusy(true); setMfaError(""); setMfaSuccess("");
+    try {
+      await apiFetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) });
+      setEnrollment(undefined);
+      setMfaSuccess(t("settings.mfaEnabled"));
+      void loadMfa();
+    } catch {
+      setMfaError(t("settings.mfaCodeInvalid"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableMfa = async (factorId: string) => {
+    setBusy(true); setMfaError(""); setMfaSuccess("");
+    try {
+      await apiFetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "unenroll", factorId }) });
+      setMfaSuccess(t("settings.mfaDisabled"));
+      void loadMfa();
+    } catch {
+      setMfaError(t("settings.mfaDisableFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(""); setPasswordSuccess("");
+    const data = new FormData(event.currentTarget);
+    const newPassword = String(data.get("newPassword") ?? "");
+    if (!passwordValueSchema.safeParse(newPassword).success) {
+      setPasswordError(t("settings.passwordRule"));
+      return;
+    }
+    if (newPassword !== data.get("confirmPassword")) {
+      setPasswordError(t("settings.passwordMismatch"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiFetch("/api/settings/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword }) });
+      setPasswordSuccess(t("settings.passwordSaved"));
+      event.currentTarget.reset();
+    } catch (cause) {
+      setPasswordError(t(cause instanceof ApiClientError && cause.code === "CURRENT_PASSWORD_INCORRECT" ? "settings.currentPasswordIncorrect" : "settings.passwordFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifiedFactor = factors.find((factor) => factor.status === "verified");
+  const administrator = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section><MfaAuthenticatorGuide />{mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}{mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}{enrollment && <form className="settings-subform" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3>{enrollment.qrCode && <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} />}<label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required /></label><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></form>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label></div><small className="field-help auth-password-rule">{t("settings.passwordRule")}</small>{passwordError && <InlineMessage type="error">{passwordError}</InlineMessage>}{passwordSuccess && <InlineMessage type="success">{passwordSuccess}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form></div>;
 }
 
 type TrustedDeviceView = { id: string; label: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean };

@@ -95,7 +95,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.2\.1"/);
+  assert.match(packageJson, /"version": "2\.3\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -111,7 +111,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.2\.1"/);
+  assert.match(packageJson, /"version": "2\.3\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -321,7 +321,7 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.match(turnstile, /siteverify/);
   assert.match(turnstile, /idempotency_key/);
   assert.match(auth, /nextAuthenticatedPath/);
-  assert.match(mfaRoute, /session\.access_token/);
+  assert.match(mfaRoute, /setAuthSessionCookies\(response, session, remember\)/);
   assert.match(crmLayout, /mfa-challenge/);
   assert.match(firstLoginMigration, /must_change_password/);
   assert.match(firstLoginMigration, /complete_initial_password_change/);
@@ -519,7 +519,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.2\.1/);
+  assert.match(version, /2\.3\.0/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -583,7 +583,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.2\.1/);
+  assert.match(version,/2\.3\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -617,7 +617,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.2\.1"/);
+  assert.match(packageJson,/"version": "2\.3\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -655,7 +655,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.2\.1/);
+  assert.match(version,/2\.3\.0/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -723,6 +723,102 @@ test("closes the v2.2 execution-integrity and business-expansion audit", async (
     "../app/portal/invite/[token]/page.tsx",
   ]) await access(new URL(page,import.meta.url));
   await access(new URL("../public/og-v220.png",import.meta.url));
+});
+
+test("closes the v2.3.0 dependency, session, API-cache, and environment audit", async () => {
+  const [
+    packageJson,
+    auth,
+    session,
+    login,
+    deviceVerification,
+    mfa,
+    refresh,
+    logout,
+    password,
+    api,
+    localEnvironment,
+    validation,
+    settingsPage,
+    passwordReset,
+    mfaGuide,
+    workspaceMessages,
+    browserQa,
+    authDeviceQa,
+    audit,
+    plan,
+    finalReview,
+    implementationStatus,
+    version,
+  ] = await Promise.all([
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth-session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/device-verification/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/mfa/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/refresh/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/logout/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/password/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/configure-local-environment.ps1", import.meta.url), "utf8"),
+    readFile(new URL("../lib/validation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/password-reset-forms.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/mfa-authenticator-guide.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/workspace-pages.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-chromium-1228.cjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/smoke-auth-device.cjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-23_V2.2.1.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_PLAN_2026-07-23_V2.3.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/FINAL_REAUDIT_2026-07-23_V2.3.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/IMPLEMENTATION_STATUS.md", import.meta.url), "utf8"),
+    readFile(new URL("../lib/version.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageJson, /"next": "16\.2\.11"/);
+  assert.match(packageJson, /"sharp": "0\.35\.3"/);
+  assert.match(packageJson, /"postcss": "8\.5\.14"/);
+  assert.match(auth, /persistence: "crm_session_persistent"/);
+  assert.match(session, /persistentSessionMaxAge/);
+  assert.match(session, /persistent \? \{ \.\.\.base, maxAge:/);
+  for (const source of [login, deviceVerification, mfa, refresh]) {
+    assert.match(source, /setAuthSessionCookies/);
+  }
+  assert.match(refresh, /authCookieNames\.persistence/);
+  assert.doesNotMatch(refresh, /maxAge:\s*60\s*\*\s*60\s*\*\s*24\s*\*\s*30/);
+  assert.match(logout, /clearAuthSessionCookies/);
+  assert.match(password, /authCookieNames\.persistence/);
+  assert.match(api, /"cache-control": "no-store"/);
+  assert.match(api, /headers\.has\("cache-control"\)/);
+  for (const key of [
+    "WEBHOOK_PAYMENT_SECRET",
+    "WEBHOOKS_ENABLED",
+    "INTEGRATION_SYNC_ENABLED",
+    "AI_PROVIDER_ENABLED",
+    "EXPORT_MAX_ROWS",
+  ]) assert.match(localEnvironment, new RegExp(key));
+  assert.match(validation, /passwordValueSchema/);
+  assert.match(password, /newPassword: passwordValueSchema/);
+  assert.match(settingsPage, /passwordValueSchema\.safeParse/);
+  assert.match(passwordReset, /passwordValueSchema\.safeParse/);
+  assert.doesNotMatch(passwordReset, /password\.length < 10/);
+  assert.match(settingsPage, /next\.size > 5 \* 1024 \* 1024/);
+  assert.match(mfaGuide, /settings\.mfaGuideMicrosoft/);
+  assert.match(mfaGuide, /settings\.mfaGuideGoogle/);
+  assert.match(mfaGuide, /settings\.mfaGuideOnePassword/);
+  assert.match(mfaGuide, /headingLevel = "h3"/);
+  assert.match(workspaceMessages, /二维码和手动密钥等同于第二验证因素/);
+  assert.match(browserQa, /require\("playwright-core\/package\.json"\)|playwrightCoreVersion/);
+  assert.match(browserQa, /process\.env\.PLAYWRIGHT_CORE_PATH\s*(?:\?\?|\|\|)\s*"playwright-core"/);
+  assert.match(authDeviceQa, /process\.env\.PLAYWRIGHT_CORE_PATH\s*(?:\?\?|\|\|)\s*"playwright-core"/);
+  assert.match(browserQa, /delete from public\.automation_events where actor_id/);
+  assert.match(audit, /AUTH-01/);
+  assert.match(plan, /完整验收/);
+  assert.match(finalReview, /43\/43 页面\/视口/);
+  assert.match(finalReview, /计划无遗漏、无未完成实现/);
+  assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
+  assert.doesNotMatch(implementationStatus, /Pending continuation/);
+  assert.match(version, /2\.3\.0/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
