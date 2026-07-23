@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const executable = process.env.PLAYWRIGHT_CHROMIUM_1228_PATH
   || "C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
 const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH
-  || "C:/Users/Horolf/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core";
+  || "playwright-core";
 const { chromium } = require(playwrightPath);
 const base = (process.env.AUTH_SMOKE_BASE_URL || "http://localhost:3210").replace(/\/$/, "");
 const supabase = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
@@ -124,13 +124,33 @@ async function submitLogin(page, username, password, remember) {
     await page.waitForURL("**/dashboard", { timeout: 15_000 });
     assert(!page.url().includes("verify-device"), "Trusted device was asked for another email code");
 
+    const sessionCookies = await context.cookies(base);
+    for (const name of ["crm_access_token", "crm_refresh_token"]) {
+      const cookie = sessionCookies.find((item) => item.name === name);
+      assert(cookie && cookie.expires === -1, `${name} ignored the session-only sign-in choice`);
+    }
+    assert(!sessionCookies.some((cookie) => cookie.name === "crm_session_persistent"), "Session-only sign-in received a persistence marker");
+    const refreshResult = await page.evaluate(async () => {
+      const response = await fetch("/api/auth/refresh?mode=json", { headers: { accept: "application/json" } });
+      return { status: response.status, cacheControl: response.headers.get("cache-control") };
+    });
+    assert(refreshResult.status === 200, "Session-only token rotation failed");
+    assert(refreshResult.cacheControl === "no-store", "Auth refresh response can be cached");
+    const rotatedCookies = await context.cookies(base);
+    for (const name of ["crm_access_token", "crm_refresh_token"]) {
+      const cookie = rotatedCookies.find((item) => item.name === name);
+      assert(cookie && cookie.expires === -1, `${name} became persistent after token rotation`);
+    }
+    assert(!rotatedCookies.some((cookie) => cookie.name === "crm_session_persistent"), "Token rotation created a persistence marker");
+
     const devices = await page.evaluate(async () => {
       const response = await fetch("/api/settings/trusted-devices");
-      return { status: response.status, body: await response.json() };
+      return { status: response.status, cacheControl: response.headers.get("cache-control"), body: await response.json() };
     });
     assert(devices.status === 200, "Trusted-device settings API was unavailable");
+    assert(devices.cacheControl === "no-store", "Private API response can be cached");
     assert(devices.body.devices?.some((device) => device.current), "Current trusted device was not listed");
-    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, password replacement, and trusted-device reuse.");
+    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, password replacement, trusted-device reuse, session-only rotation, and private API cache policy.");
   } finally {
     if (browser) await browser.close();
     if (userId) {

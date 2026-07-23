@@ -14,8 +14,15 @@ export const deviceVerificationSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, "INVALID_DEVICE_CODE"),
 });
 
+export const passwordValueSchema = z.string()
+  .min(12, "PASSWORD_TOO_SHORT")
+  .max(128, "PASSWORD_TOO_LONG")
+  .regex(/[A-Z]/, "PASSWORD_COMPLEXITY")
+  .regex(/[a-z]/, "PASSWORD_COMPLEXITY")
+  .regex(/[0-9]/, "PASSWORD_COMPLEXITY");
+
 export const initialPasswordSchema = z.object({
-  newPassword: z.string().min(12, "PASSWORD_TOO_SHORT").regex(/[A-Z]/, "PASSWORD_COMPLEXITY").regex(/[a-z]/, "PASSWORD_COMPLEXITY").regex(/[0-9]/, "PASSWORD_COMPLEXITY"),
+  newPassword: passwordValueSchema,
   confirmPassword: z.string(),
 }).refine((value) => value.newPassword === value.confirmPassword, { message: "PASSWORD_MISMATCH", path: ["confirmPassword"] });
 

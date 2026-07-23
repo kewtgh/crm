@@ -5,7 +5,7 @@ const crypto=require("node:crypto");
 const {spawnSync}=require("node:child_process");
 
 const executable=process.env.PLAYWRIGHT_CHROMIUM_1228_PATH||"C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
-const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"C:/Users/Horolf/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright-core";
+const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
 const {chromium}=require(playwrightPath);
 const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://127.0.0.1:3200").replace(/\/$/,"");
 const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1228");
@@ -30,7 +30,8 @@ function envFile(){
   return values;
 }
 const env={...envFile(),...process.env};
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -204,6 +205,7 @@ delete from public.students where id='${scenario.studentId}';
 delete from public.household_members where household_id='${scenario.householdId}';
 delete from public.households where id='${scenario.householdId}';
 delete from public.contacts where id in(${scenario.contactIds.map(id=>`'${id}'`).join(",")});
+delete from public.automation_events where actor_id='${identity.id}';
 delete from public.audit_events where actor_id='${identity.id}';
 commit;`;
   const config=fs.readFileSync(path.resolve("supabase/config.toml"),"utf8");
@@ -338,14 +340,19 @@ async function main(){
     await supportContext.close();
   }finally{
     for(const identity of identities){
-      await cleanupV210Scenario(identity,scenarios.get(identity.id));
-      const response=await fetch(`${identity.supabase}/auth/v1/admin/users/${identity.id}`,{method:"DELETE",headers:identity.headers}).catch(()=>null);
-      if(response?.ok)report.identity.cleaned+=1;
+      try{
+        await cleanupV210Scenario(identity,scenarios.get(identity.id));
+        const response=await fetch(`${identity.supabase}/auth/v1/admin/users/${identity.id}`,{method:"DELETE",headers:identity.headers}).catch(()=>null);
+        if(response?.ok)report.identity.cleaned+=1;
+        else report.errors.push({kind:"cleanup",url:"",message:`QA identity deletion failed (${response?.status??"network"})`});
+      }catch(error){
+        report.errors.push({kind:"cleanup",url:"",message:String(error instanceof Error?error.message:error).slice(0,300)});
+      }
     }
+    if(report.identity.cleaned!==report.identity.created)report.errors.push({kind:"cleanup",url:"",message:`QA identity cleanup incomplete (${report.identity.cleaned}/${report.identity.created})`});
     await browser.close();
     fs.writeFileSync(path.join(output,"report.json"),JSON.stringify(report,null,2));
   }
-  if(report.identity.cleaned!==report.identity.created)report.errors.push({kind:"cleanup",url:"",message:`QA identity cleanup incomplete (${report.identity.cleaned}/${report.identity.created})`});
   if(report.errors.length)throw new Error(`Chromium 1228 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);
   process.stdout.write(`Chromium 1228 QA passed ${report.pages.length} page/viewport checks with ${report.browserVersion}.\n`);
 }

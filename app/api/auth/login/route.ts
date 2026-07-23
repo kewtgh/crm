@@ -7,6 +7,7 @@ import { mutationIsTrusted } from "@/lib/request-security";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { ApiError, apiRoute } from "@/lib/api";
 import { resolveStaffLoginEmail } from "@/lib/login-identity";
+import { setAuthSessionCookies } from "@/lib/auth-session";
 import {
   consumeTrustedDevice,
   createPendingDeviceVerification,
@@ -20,22 +21,6 @@ type PasswordResult = {
   expires_in?: number;
   user?: Record<string, unknown>;
 };
-
-function setSessionCookies(response: NextResponse, result: PasswordResult, persistent: boolean) {
-  const cookieBase = {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  };
-  response.cookies.set(authCookieNames.access, String(result.access_token), {
-    ...cookieBase,
-    maxAge: Number(result.expires_in ?? 3600),
-  });
-  response.cookies.set(authCookieNames.refresh, String(result.refresh_token), persistent ? {
-    ...cookieBase, maxAge: 60 * 60 * 24 * 30,
-  } : cookieBase);
-}
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
@@ -88,7 +73,7 @@ async function post(request: Request) {
 
   if (isMfaRequiredRole(authorizedUser.role) || authorizedUser.mfaEnabled) {
     const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setSessionCookies(response, result, remember);
+    setAuthSessionCookies(response, result, remember);
     if (remember && authorizedUser.aal !== "aal2") {
       response.cookies.set(securityCookieNames.mfaRemember, "1", {
         httpOnly: true,
@@ -105,7 +90,7 @@ async function post(request: Request) {
   const trustedCookie = cookieStore.get(securityCookieNames.trustedDevice)?.value;
   if (await consumeTrustedDevice(authorizedUser.id, trustedCookie)) {
     const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setSessionCookies(response, result, remember);
+    setAuthSessionCookies(response, result, remember);
     return response;
   }
 
@@ -130,6 +115,7 @@ async function post(request: Request) {
   );
   response.cookies.delete(authCookieNames.access);
   response.cookies.delete(authCookieNames.refresh);
+  response.cookies.delete(authCookieNames.persistence);
   if (trustedCookie) response.cookies.delete(securityCookieNames.trustedDevice);
   return response;
 }

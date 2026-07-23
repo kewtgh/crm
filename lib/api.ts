@@ -51,7 +51,11 @@ export function apiErrorResponse(
   };
   return NextResponse.json(body, {
     status,
-    headers: { ...Object.fromEntries(new Headers(headers)), "x-request-id": requestId },
+    headers: {
+      ...Object.fromEntries(new Headers(headers)),
+      "cache-control": "no-store",
+      "x-request-id": requestId,
+    },
   });
 }
 
@@ -76,6 +80,7 @@ async function normalizeErrorResponse(response: Response, requestId: string) {
   };
   if (payload.error?.code) {
     const headers = new Headers(response.headers);
+    if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
     headers.set("x-request-id", requestId);
     return NextResponse.json(
       { ...payload, code: payload.error.code, error: { ...payload.error, requestId } },
@@ -90,6 +95,7 @@ async function normalizeErrorResponse(response: Response, requestId: string) {
     ),
   };
   const headers = new Headers(response.headers);
+  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
   headers.set("x-request-id", requestId);
   return NextResponse.json(
     {
@@ -114,6 +120,7 @@ export function apiRoute<Context = unknown>(
     const requestId = requestIdFor(request);
     try {
       const response = await handler(request, context);
+      if (!response.headers.has("cache-control")) response.headers.set("cache-control", "no-store");
       if (response.status >= 300 && response.status < 400) {
         response.headers.set("x-request-id", requestId);
         return response;

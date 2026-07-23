@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ApiError, apiRoute } from "@/lib/api";
-import { authCookieNames, hydrateStaffUser, isMfaRequiredRole, nextAuthenticatedPath, userFromSupabase } from "@/lib/auth";
+import { hydrateStaffUser, isMfaRequiredRole, nextAuthenticatedPath, userFromSupabase } from "@/lib/auth";
 import { getStaffAccountEmail } from "@/lib/login-identity";
 import { checkLoginRateLimit, clearLoginFailures, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
@@ -13,6 +13,7 @@ import {
   trustedDeviceMaxAge,
 } from "@/lib/trusted-devices";
 import { deviceVerificationSchema } from "@/lib/validation";
+import { setAuthSessionCookies } from "@/lib/auth-session";
 
 type OtpResult = {
   access_token?: string;
@@ -74,14 +75,7 @@ async function post(request: Request) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
   };
-  response.cookies.set(authCookieNames.access, result.access_token, {
-    ...cookieBase,
-    maxAge: Number(result.expires_in ?? 3600),
-  });
-  response.cookies.set(authCookieNames.refresh, result.refresh_token, pending.remember ? {
-    ...cookieBase,
-    maxAge: trustedDeviceMaxAge,
-  } : cookieBase);
+  setAuthSessionCookies(response, result, pending.remember);
   response.cookies.delete(securityCookieNames.pendingDeviceVerification);
 
   if (pending.remember && !user.mfaEnabled) {
