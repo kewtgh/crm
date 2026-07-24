@@ -14,6 +14,7 @@ import {
 } from "@/lib/trusted-devices";
 import { deviceVerificationSchema } from "@/lib/validation";
 import { setAuthSessionCookies } from "@/lib/auth-session";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 type OtpResult = {
   access_token?: string;
@@ -49,10 +50,12 @@ async function post(request: Request) {
   const email = await getStaffAccountEmail(pending.userId).catch(() => null);
   if (!email) throw new ApiError("DEVICE_VERIFICATION_EXPIRED", 401);
 
-  const upstream = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+  const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/verify`, {
     method: "POST",
     headers: { apikey: anonKey, "content-type": "application/json" },
     body: JSON.stringify({ type: "email", email, token: parsed.data.code }),
+  }, 10_000).catch(() => {
+    throw new ApiError("EMAIL_VERIFICATION_UNAVAILABLE", 503);
   });
   const result = (await upstream.json().catch(() => ({}))) as OtpResult;
   if (!upstream.ok || !result.access_token || !result.refresh_token) {

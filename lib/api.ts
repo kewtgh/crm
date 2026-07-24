@@ -88,6 +88,9 @@ async function normalizeErrorResponse(response: Response, requestId: string) {
     );
   }
   const code = typeof payload.code === "string" ? payload.code : `HTTP_${response.status}`;
+  const safePayload = Object.fromEntries(
+    Object.entries(payload).filter(([key]) => !["message", "error"].includes(key)),
+  );
   const details = {
     ...(typeof payload.field === "string" ? { field: payload.field } : {}),
     ...Object.fromEntries(
@@ -99,11 +102,11 @@ async function normalizeErrorResponse(response: Response, requestId: string) {
   headers.set("x-request-id", requestId);
   return NextResponse.json(
     {
-      ...payload,
+      ...safePayload,
       code,
       error: {
         code,
-        message: typeof payload.message === "string" ? payload.message : code,
+        message: code,
         requestId,
         ...(Object.keys(details).length ? { details } : {}),
       },

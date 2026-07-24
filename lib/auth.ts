@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasCapability, type Capability } from "./capabilities";
+import { fetchWithTimeout } from "./fetch-timeout";
 import { APP_ROLES, type AppRole } from "./roles";
 import type { AppUser } from "./user";
 
@@ -84,10 +85,16 @@ export async function hydrateStaffUser(baseUser: AppUser, accessToken: string) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) return null;
   const headers = { apikey: anonKey, authorization: `Bearer ${accessToken}` };
-  const [profileResponse, membershipResponse] = await Promise.all([
-    fetch(`${supabaseUrl}/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }),
-    fetch(`${supabaseUrl}/rest/v1/workspace_memberships?select=role,status,must_change_password&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }),
-  ]);
+  let profileResponse: Response;
+  let membershipResponse: Response;
+  try {
+    [profileResponse, membershipResponse] = await Promise.all([
+      fetchWithTimeout(`${supabaseUrl}/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }, 10_000),
+      fetchWithTimeout(`${supabaseUrl}/rest/v1/workspace_memberships?select=role,status,must_change_password&user_id=eq.${encodeURIComponent(baseUser.id)}&limit=1`, { headers, cache: "no-store" }, 10_000),
+    ]);
+  } catch {
+    return null;
+  }
   if (!membershipResponse.ok) return null;
   const memberships = (await membershipResponse.json()) as { role?: AppRole; status?: string; must_change_password?: boolean }[];
   const membership = memberships[0];
@@ -114,13 +121,13 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   if (!accessToken || !supabaseUrl || !anonKey) return null;
 
   try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    const response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         apikey: anonKey,
         authorization: `Bearer ${accessToken}`,
       },
       cache: "no-store",
-    });
+    }, 10_000);
     if (!response.ok) return null;
     const baseUser = userFromSupabase((await response.json()) as Record<string, unknown>);
     if (!baseUser) return null;

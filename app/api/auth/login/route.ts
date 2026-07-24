@@ -8,6 +8,7 @@ import { verifyTurnstileToken } from "@/lib/turnstile";
 import { ApiError, apiRoute } from "@/lib/api";
 import { resolveStaffLoginEmail } from "@/lib/login-identity";
 import { setAuthSessionCookies } from "@/lib/auth-session";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import {
   consumeTrustedDevice,
   createPendingDeviceVerification,
@@ -51,10 +52,12 @@ async function post(request: Request) {
   }
   const email = await resolveStaffLoginEmail(identifier).catch(() => null);
 
-  const upstream = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+  const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: anonKey, "content-type": "application/json" },
     body: JSON.stringify({ email: email ?? `${crypto.randomUUID()}@invalid.local`, password }),
+  }, 10_000).catch(() => {
+    throw new ApiError("AUTH_UNAVAILABLE", 503);
   });
   const result = (await upstream.json()) as PasswordResult;
   if (!upstream.ok || !email || !result.access_token || !result.refresh_token) {
@@ -94,10 +97,12 @@ async function post(request: Request) {
     return response;
   }
 
-  const otpResponse = await fetch(`${supabaseUrl}/auth/v1/otp`, {
+  const otpResponse = await fetchWithTimeout(`${supabaseUrl}/auth/v1/otp`, {
     method: "POST",
     headers: { apikey: anonKey, "content-type": "application/json" },
     body: JSON.stringify({ email, create_user: false }),
+  }, 10_000).catch(() => {
+    throw new ApiError("EMAIL_VERIFICATION_UNAVAILABLE", 503);
   });
   if (!otpResponse.ok) throw new ApiError("EMAIL_VERIFICATION_UNAVAILABLE", 503);
 

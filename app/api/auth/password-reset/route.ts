@@ -5,6 +5,7 @@ import { ApiError, apiRoute } from "@/lib/api";
 import { loginThrottleIdentity } from "@/lib/login-rate-limit";
 import { applyAccountRecoveryRateLimit } from "@/lib/account-recovery-rate-limit";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
@@ -27,11 +28,11 @@ async function post(request: Request) {
 
   const origin = process.env.APP_URL?.replace(/\/$/, "") ?? new URL(request.url).origin;
   try {
-    const upstream = await fetch(`${supabaseUrl}/auth/v1/recover?redirect_to=${encodeURIComponent(`${origin}/reset-password`)}`, {
+    const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/recover?redirect_to=${encodeURIComponent(`${origin}/reset-password`)}`, {
       method: "POST",
       headers: { apikey: anonKey, "content-type": "application/json" },
       body: JSON.stringify({ email: parsed.data.email }),
-    });
+    }, 10_000);
     if(upstream.status===429){
       const retryAfter=upstream.headers.get("retry-after")??"60";
       throw new ApiError("TOO_MANY_ATTEMPTS",429,"TOO_MANY_ATTEMPTS",undefined,{"Retry-After":retryAfter});

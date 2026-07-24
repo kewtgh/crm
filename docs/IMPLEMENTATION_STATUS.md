@@ -1,18 +1,19 @@
-# Implementation status — v2.3.0 release candidate
+# Implementation status — v2.4.0 release candidate
 
 Status date: 2026-07-24
 
 ## Outcome
 
-The July 20 source audit and the July 23 follow-up remediation are complete. v2.3.0 closes
-dependency, session-persistence, private API cache, environment-contract, MFA guidance, password
-policy, avatar validation, typography/contrast and browser-QA cleanup findings. Migrations through
+The July 20 source audit, July 23 follow-up and July 24 reliability/full-navigation remediation are
+complete. v2.4.0 adds bounded stage and no-output deadlines, process-tree termination, network
+request deadlines, stable API errors, image-signature validation, old-avatar cleanup, full
+navigation QA and responsive/accessibility fixes. Migrations through
 `052`, schema lint, all 433 database assertions, business/HTTP/export/asset suites, real device-auth
 smoke and the pinned Chromium 1228 matrix pass. The source release candidate is ready for controlled
 deployment; production activation still requires real provider credentials, worker heartbeats,
 backup/migration procedure and hosted readiness.
 
-The July 24 supplemental pass additionally enforces an always-on security-notification channel,
+The earlier July 24 supplemental pass additionally enforces an always-on security-notification channel,
 cleans and rolls back incomplete MFA enrollment, removes stale avatar previews, expands auth/settings/
 admin browser coverage, and supplies a bounded atomic `npm run deploy:production` workflow.
 
@@ -41,6 +42,10 @@ Implemented scope:
 - Security UX: reusable Microsoft Authenticator, Google Authenticator and managed 1Password TOTP
   guidance; protected QR/secret instructions; one 12–128 character password policy; local avatar
   validation; operation-local feedback and a 12px operational typography floor.
+- Reliability: every standard check and smoke has a hard deadline and idle deadline; the release
+  gate has a 900-second total budget; Chromium is split into ten independently resumable stages.
+- Runtime boundaries: all application Supabase/Auth/Storage calls are bounded; transient refresh
+  failure preserves the session; browser errors expose stable codes rather than upstream messages.
 
 ## Verification record
 
@@ -49,20 +54,20 @@ Implemented scope:
 | TypeScript | Pass |
 | ESLint | Pass |
 | Production build | Pass |
-| Node source contracts | 29/29 pass |
+| Node source contracts | 31/31 pass |
 | npm dependency audit | Pass, 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
 | v0.9 and v1.0 HTTP/security smoke | Pass |
 | Export artifact smoke | Pass (CSV/XLSX/PDF) |
-| Production assets/MIME | Pass, 25 assets |
+| Production assets/MIME | Pass, 26 assets |
 | Database migration head actually applied | `202607210052` |
 | Full pgTAP suite | 433/433 pass across 9 files |
 | PostgreSQL schema lint | Pass, 0 findings at `052` |
 | Core worker cycle | Pass; 6/6 repaired plus 1/1 freshly queued calendar deliveries reached the local validation sink |
 | v1.1 authenticated smoke | Pass |
 | Real device-auth smoke | Pass, including session-only refresh rotation and private cache policy |
-| Pinned Chromium matrix | Pass, 57/57 page/viewports, 0 errors/warnings, identities cleaned 3/3; targeted admin-security fix 2/2, cleaned 1/1 |
-| Browser evidence | Chromium 149.0.7827.55 from `ms-playwright/chromium-1228`; `playwright-core` 1.61.1 |
+| Pinned Chromium matrix | Pass, 75/75 page/viewports across 10 bounded phases in 232 seconds, 0 errors/warnings, identities cleaned 9/9 |
+| Browser evidence | Chromium 149.0.7827.55 from `ms-playwright/chromium-1228`; executable `C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe`; `playwright-core` 1.61.1 |
 | Dedicated-server deploy | Bounded atomic script and systemd units ready; actual production activation not performed because credentials and hosted readiness remain external |
 
 ## Current blockers
@@ -82,6 +87,7 @@ External providers remain disabled until real credentials, explicit enablement, 
 approval and scheduler heartbeats are supplied. The product does not present simulated provider,
 AI, delivery or worker state as real.
 
-The final omission reviews are recorded in
-[FINAL_REAUDIT_2026-07-23_V2.3.0.md](FINAL_REAUDIT_2026-07-23_V2.3.0.md) and
-[FINAL_SUPPLEMENTAL_REAUDIT_2026-07-24_V2.3.0.md](FINAL_SUPPLEMENTAL_REAUDIT_2026-07-24_V2.3.0.md).
+The current audit, executed plan and final omission review are recorded in
+[AUDIT_2026-07-24_V2.4.0.md](AUDIT_2026-07-24_V2.4.0.md),
+[REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md](REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md)
+and [FINAL_REAUDIT_2026-07-24_V2.4.0.md](FINAL_REAUDIT_2026-07-24_V2.4.0.md).

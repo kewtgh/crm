@@ -7,7 +7,7 @@ const {spawnSync}=require("node:child_process");
 const executable=process.env.PLAYWRIGHT_CHROMIUM_1228_PATH||"C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
 const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
 const {chromium}=require(playwrightPath);
-const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://127.0.0.1:3200").replace(/\/$/,"");
+const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://localhost:3200").replace(/\/$/,"");
 const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1228");
 fs.mkdirSync(output,{recursive:true});
 
@@ -60,6 +60,8 @@ function observe(page){
   });
 }
 async function inspect(page,label,route,viewport){
+  const startedAt=Date.now();
+  process.stdout.write(`[QA] start ${label} ${viewport.width}x${viewport.height}\n`);
   await page.setViewportSize(viewport);
   const response=await page.goto(`${base}${route}`,{waitUntil:"domcontentloaded",timeout:30_000});
   await page.waitForLoadState("networkidle",{timeout:5_000}).catch(()=>null);
@@ -102,6 +104,12 @@ async function inspect(page,label,route,viewport){
       lang:document.documentElement.lang,
       h1:[...document.querySelectorAll("h1")].filter(element=>element.getClientRects().length).map(element=>element.textContent.trim()),
       overflow:document.documentElement.scrollWidth>innerWidth+2,
+      scrollWidth:document.documentElement.scrollWidth,
+      overflowSamples:[...document.querySelectorAll("body *")].flatMap(element=>{
+        if(!element.getClientRects().length)return[];
+        const rect=element.getBoundingClientRect();
+        return rect.right>innerWidth+2?[{tag:element.tagName.toLowerCase(),className:String(element.className).slice(0,120),left:Math.round(rect.left),right:Math.round(rect.right),width:Math.round(rect.width),text:element.textContent.trim().slice(0,80)}]:[];
+      }).slice(0,50),
       width:innerWidth,
       unnamed:[...document.querySelectorAll("input,select,textarea,button,a[href]")].filter(element=>{
         if(!element.getClientRects().length)return false;
@@ -127,6 +135,7 @@ async function inspect(page,label,route,viewport){
   if(!response?.ok()||item.finalUrl!==route||item.applicationError||!item.h1.length||item.overflow||item.unnamed||item.below12||item.headingSkips.length||item.lowContrast){
     report.errors.push({kind:"inspection",url:route,message:JSON.stringify(item)});
   }
+  process.stdout.write(`[QA] pass ${label} ${Date.now()-startedAt}ms\n`);
 }
 async function createIdentity(role,label){
   const supabase=env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,"");
@@ -284,7 +293,91 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="admin-security"){
+    if(env.QA_SCOPE==="public"){
+      const publicContext=await browser.newContext({locale:"zh-CN"});
+      const publicPage=await publicContext.newPage();observe(publicPage);
+      publicPage.setDefaultTimeout(actionTimeoutMs);
+      const routes=(env.QA_ROUTES||"/login,/forgot-password,/reset-password").split(",").filter(Boolean);
+      for(const route of routes){
+        const label=route.slice(1).replaceAll("/","-");
+        await inspect(publicPage,`${label}-1440`,route,{width:1440,height:900});
+        await inspect(publicPage,`${label}-375`,route,{width:375,height:812});
+      }
+      await publicPage.goto(`${base}/login`,{waitUntil:"domcontentloaded"});
+      const locale=publicPage.locator("button.locale-switcher");
+      if(await locale.isVisible()){await locale.click();await publicPage.waitForFunction(()=>document.documentElement.lang==="en",null,{timeout:5_000}).catch(()=>null);if(await publicPage.locator("html").getAttribute("lang")!=="en")report.errors.push({kind:"locale",url:"/login",message:"English locale did not activate"});}
+      await publicContext.close();
+    }else if(env.QA_SCOPE==="routes"){
+      const role=env.QA_ROLE||"SALES_MANAGER";
+      if(!["SUPER_ADMIN","ADMIN","SALES_DIRECTOR","SALES_MANAGER","SALES_SPECIALIST","SALES_SUPPORT"].includes(role))throw new Error(`Unsupported QA_ROLE ${role}`);
+      const identity=await createIdentity(role,env.QA_LABEL||"routes");identities.push(identity);
+      const context=await browser.newContext({locale:"zh-CN"});
+      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
+      const routes=(env.QA_ROUTES||"/dashboard").split(",").filter(Boolean);
+      const mobile=new Set((env.QA_MOBILE_ROUTES||"").split(",").filter(Boolean));
+      const tablet=new Set((env.QA_TABLET_ROUTES||"").split(",").filter(Boolean));
+      for(const route of routes){
+        const label=route.slice(1).replaceAll("/","-")||"home";
+        await inspect(page,`${label}-1440`,route,{width:1440,height:900});
+        if(tablet.has(route))await inspect(page,`${label}-1024`,route,{width:1024,height:768});
+        if(mobile.has(route))await inspect(page,`${label}-375`,route,{width:375,height:812});
+      }
+      await context.close();
+    }else if(env.QA_SCOPE==="notification"){
+      const identity=await createIdentity("SALES_MANAGER","notification");identities.push(identity);
+      const context=await browser.newContext({locale:"zh-CN"});
+      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
+      await page.goto(`${base}/settings/notifications`,{waitUntil:"networkidle"});
+      const securityEmail=page.getByRole("checkbox",{name:"系统与安全 · 邮件"});
+      const securityInApp=page.getByRole("checkbox",{name:"系统与安全 · 站内"});
+      if(!await securityEmail.isVisible()||!await securityInApp.isVisible())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"Security notification channel controls are unavailable"});
+      else if(await securityEmail.isChecked()&&await securityInApp.isChecked()){
+        await securityEmail.evaluate(element=>element.click());
+        await page.waitForFunction(()=>document.querySelector('input[aria-label="系统与安全 · 站内"]')?.disabled);
+        if(!await securityInApp.isDisabled())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"The final security notification channel can be disabled"});
+      }else{
+        const lastChannel=await securityEmail.isChecked()?securityEmail:securityInApp;
+        if(!await lastChannel.isDisabled())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"The final security notification channel is not protected"});
+      }
+      process.stdout.write("[QA] pass security notification invariant\n");
+      await context.close();
+    }else if(env.QA_SCOPE==="workflows"){
+      const identity=await createIdentity("SALES_MANAGER","workflows");identities.push(identity);
+      const scenario=await seedV210Scenario(identity);scenarios.set(identity.id,scenario);
+      const context=await browser.newContext({locale:"zh-CN"});
+      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
+      await exerciseV210Workflows(page,scenario);
+      await page.setViewportSize({width:375,height:812});await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});const menu=page.locator("button.mobile-menu");
+      if(await menu.isVisible()){await menu.focus();await menu.press("Enter");if(await menu.getAttribute("aria-expanded")!=="true")report.errors.push({kind:"keyboard",url:"/dashboard",message:"Mobile menu did not open from keyboard"});await page.keyboard.press("Escape");}
+      await page.setViewportSize({width:1440,height:900});await page.goto(`${base}/schools`,{waitUntil:"networkidle"});
+      const drawerTrigger=page.locator(".page-actions button.primary-button").first();
+      if(!await drawerTrigger.isVisible())report.errors.push({kind:"keyboard",url:"/schools",message:"Expected drawer trigger is not visible"});
+      else{
+        await drawerTrigger.focus();await drawerTrigger.click();
+        const dialog=page.locator("[role='dialog'].record-drawer").first();
+        await dialog.waitFor({state:"visible",timeout:5_000});
+        if(!await dialog.evaluate(element=>element.contains(document.activeElement)))report.errors.push({kind:"keyboard",url:"/schools",message:"Focus did not enter record drawer"});
+        await page.keyboard.press("Escape");await dialog.waitFor({state:"hidden",timeout:5_000});
+        if(!await drawerTrigger.evaluate(element=>document.activeElement===element))report.errors.push({kind:"keyboard",url:"/schools",message:"Drawer trigger focus was not restored"});
+      }
+      process.stdout.write("[QA] pass workflow and keyboard interactions\n");
+      await context.close();
+    }else if(env.QA_SCOPE==="support"){
+      const support=await createIdentity("SALES_SUPPORT","support-targeted");identities.push(support);
+      const supportContext=await browser.newContext({locale:"zh-CN"});
+      await supportContext.addCookies([{name:"crm_access_token",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:support.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      const supportPage=await supportContext.newPage();observe(supportPage);supportPage.setDefaultTimeout(actionTimeoutMs);
+      await supportPage.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
+      const forbiddenLinks=await supportPage.locator('a[href="/imports"],a[href="/duplicates"],a[href="/data-quality"],a[href^="/admin"]').count();
+      if(forbiddenLinks)report.errors.push({kind:"permission",url:"/dashboard",message:`Support role exposes ${forbiddenLinks} forbidden navigation link(s)`});
+      await supportPage.goto(`${base}/imports`,{waitUntil:"networkidle"});
+      if(new URL(supportPage.url()).pathname!=="/dashboard")report.errors.push({kind:"permission",url:"/imports",message:`Support direct route was not redirected (${supportPage.url()})`});
+      await inspect(supportPage,"support-leads-1440","/leads",{width:1440,height:900});
+      await supportContext.close();
+    }else if(env.QA_SCOPE==="admin-security"){
       const admin=await createIdentity("SUPER_ADMIN","admin-targeted");identities.push(admin);
       const adminContext=await browser.newContext({locale:"zh-CN"});
       await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
@@ -312,10 +405,10 @@ async function main(){
     await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
     const page=await context.newPage();observe(page);
     page.setDefaultTimeout(actionTimeoutMs);
-    const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/automation","/ai","/privacy-requests","/settings/profile","/settings/account","/settings/notifications","/settings/security","/settings/privacy"];
+    const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/duplicates","/data-quality","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/sales/allocation","/analytics/consumption","/automation","/ai","/privacy-requests","/reports","/reports/exports","/reports/marketing","/help","/settings/profile","/settings/account","/settings/notifications","/settings/security","/settings/privacy"];
     for(const route of routes)await inspect(page,`${route.slice(1).replaceAll("/","-")}-1440`,route,{width:1440,height:900});
     for(const route of ["/dashboard","/finance","/imports","/students"])await inspect(page,`${route.slice(1)}-1024`,route,{width:1024,height:768});
-    for(const route of ["/dashboard","/calendar","/messages","/finance","/imports","/students","/households","/leads","/opportunities","/contracts","/guardian-portal"])await inspect(page,`${route.slice(1)}-375`,route,{width:375,height:812});
+    for(const route of ["/dashboard","/calendar","/messages","/finance","/imports","/duplicates","/data-quality","/students","/households","/leads","/opportunities","/contracts","/guardian-portal","/analytics/consumption","/reports","/reports/exports","/help"])await inspect(page,`${route.slice(1).replaceAll("/","-")}-375`,route,{width:375,height:812});
     for(const route of ["/settings/notifications","/settings/security","/settings/privacy"])await inspect(page,`${route.slice(1).replaceAll("/","-")}-375`,route,{width:375,height:812});
     await page.setViewportSize({width:1440,height:900});
     await page.goto(`${base}/settings/notifications`,{waitUntil:"networkidle"});
@@ -365,6 +458,10 @@ async function main(){
     adminPage.setDefaultTimeout(actionTimeoutMs);
     await inspect(adminPage,"admin-operations-1440","/admin/operations",{width:1440,height:900});
     await inspect(adminPage,"admin-operations-375","/admin/operations",{width:375,height:812});
+    await inspect(adminPage,"admin-dashboard-1440","/admin",{width:1440,height:900});
+    await inspect(adminPage,"admin-dashboard-375","/admin",{width:375,height:812});
+    await inspect(adminPage,"admin-approvals-1440","/admin/approvals",{width:1440,height:900});
+    await inspect(adminPage,"admin-approvals-375","/admin/approvals",{width:375,height:812});
     await inspect(adminPage,"admin-users-1440","/admin/users",{width:1440,height:900});
     await inspect(adminPage,"admin-users-375","/admin/users",{width:375,height:812});
     await inspect(adminPage,"admin-security-1440","/admin/security",{width:1440,height:900});
@@ -396,6 +493,7 @@ async function main(){
     }
     if(report.identity.cleaned!==report.identity.created)report.errors.push({kind:"cleanup",url:"",message:`QA identity cleanup incomplete (${report.identity.cleaned}/${report.identity.created})`});
     await browser.close();
+    report.durationMs=Date.now()-Date.parse(report.runAt);
     fs.writeFileSync(path.join(output,"report.json"),JSON.stringify(report,null,2));
   }
   if(report.errors.length)throw new Error(`Chromium 1228 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);

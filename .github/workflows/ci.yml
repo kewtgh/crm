@@ -43,16 +43,21 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: npm ci --no-audit --no-fund
 
       - name: Check types
+        timeout-minutes: 3
         run: npm run typecheck
 
       - name: Lint
+        timeout-minutes: 4
         run: npm run lint
 
       - name: Build and test
+        timeout-minutes: 8
         run: npm test
 
       - name: Audit dependencies
+        timeout-minutes: 3
         run: npm audit --audit-level=moderate
