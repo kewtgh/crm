@@ -82,7 +82,13 @@ function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUs
       }
       await persist({ section: "profile", displayNameZh: settings.displayNameZh, displayNameEn: settings.displayNameEn, honorific: settings.honorific, bio: settings.bio }, "settings.profileSaved");
     } catch (caught) {
-      setFormError(presentApiError(caught, t, "settings.saveFailed").message);
+      if (caught instanceof ApiClientError && caught.code === "INVALID_AVATAR") {
+        setAvatar("");
+        setFile(undefined);
+        setAvatarError(t("settings.avatarInvalid"));
+      } else {
+        setFormError(presentApiError(caught, t, "settings.saveFailed").message);
+      }
     } finally {
       setSaving(false);
     }

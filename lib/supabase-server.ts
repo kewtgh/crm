@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { authCookieNames } from "./auth";
+import { fetchWithTimeout, isTimeoutError } from "./fetch-timeout";
 
 export class SupabaseRequestError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -29,16 +30,25 @@ export async function supabaseRequest(path: string, init: RequestInit = {}, toke
   const accessToken = token === undefined ? await getAccessToken() : token;
   if (!url || !key) throw new SupabaseRequestError(503, "SUPABASE_NOT_CONFIGURED", "Supabase is not configured");
   if (!accessToken) throw new SupabaseRequestError(401, "AUTH_REQUIRED", "Authentication is required");
-  const response = await fetch(`${url}${path}`, {
-    ...init,
-    headers: {
-      apikey: key,
-      authorization: `Bearer ${accessToken}`,
-      ...(init.body ? { "content-type": "application/json" } : {}),
-      ...init.headers,
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${url}${path}`, {
+      ...init,
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${accessToken}`,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new SupabaseRequestError(
+      isTimeoutError(error) ? 504 : 502,
+      isTimeoutError(error) ? "UPSTREAM_TIMEOUT" : "SUPABASE_UNAVAILABLE",
+      isTimeoutError(error) ? "Supabase request timed out" : "Supabase is unavailable",
+    );
+  }
   if (!response.ok) {
     const detail = await response.json().catch(() => ({})) as { code?: string; message?: string; hint?: string };
     throw new SupabaseRequestError(
@@ -60,16 +70,25 @@ export async function supabaseAdminRequest(path: string, init: RequestInit = {})
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) throw new SupabaseRequestError(503, "ADMIN_SERVICE_NOT_CONFIGURED", "The Supabase administration service is not configured");
-  const response = await fetch(`${url}${path}`, {
-    ...init,
-    headers: {
-      apikey: serviceKey,
-      authorization: `Bearer ${serviceKey}`,
-      ...(init.body ? { "content-type": "application/json" } : {}),
-      ...init.headers,
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${url}${path}`, {
+      ...init,
+      headers: {
+        apikey: serviceKey,
+        authorization: `Bearer ${serviceKey}`,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new SupabaseRequestError(
+      isTimeoutError(error) ? 504 : 502,
+      isTimeoutError(error) ? "UPSTREAM_TIMEOUT" : "SUPABASE_UNAVAILABLE",
+      isTimeoutError(error) ? "Supabase administration request timed out" : "Supabase administration is unavailable",
+    );
+  }
   if (!response.ok) {
     const detail = await response.json().catch(() => ({})) as { code?: string; error_code?: string; message?: string; msg?: string };
     throw new SupabaseRequestError(

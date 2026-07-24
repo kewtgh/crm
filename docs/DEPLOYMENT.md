@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.3.0 部署指引
+# Lumina Education CRM v2.4.0 部署指引
 
 ## 1. 发布前提
 
@@ -7,11 +7,11 @@
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
 - 数据库必须按顺序应用到 `202607210052`，且不得跳过 `050` 的隐私导出修复或 `052` 的 Worker 最小读取权限。
 
-当前工作树是 v2.3.0 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
-在隔离本地环境通过；剩余门禁见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
+当前工作树是 v2.4.0 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
+在隔离本地环境通过；本轮完整门禁证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.3.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.4.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -67,13 +67,36 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、29 条 Node 契约、schema lint、433 条
+门禁必须包含：typecheck、ESLint、production build、31 条 Node 契约、schema lint、433 条
 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
 
-浏览器证据必须记录 Git SHA、APP_VERSION、migration head、build hash 与 base URL，并覆盖
-1440/1024/375、中英文、键盘/焦点、合同、日历、消息、设置、运营、自动化、门户及高风险流程。
+浏览器证据必须记录 Git SHA、APP_VERSION、migration head、build hash、精确 Chromium
+revision/executable 与 base URL，并覆盖 1440/1024/375、中英文、键盘/焦点、合同、日历、
+消息、设置、运营、自动化、门户及高风险流程。证据保存在
+`work/browser-qa-chromium-1228/phases/`，合并报告为同级 `report.json`。
+
+### 4.1 分阶段与卡死保护
+
+禁止用一个没有进度信号的长进程替代分阶段验收。标准入口和 release gate 都会终止超时或
+长期无输出的子进程树，并每 10–15 秒输出心跳：
+
+| 阶段 | 总上限 | 无输出上限 |
+| --- | ---: | ---: |
+| typecheck | 120 秒 | 60 秒 |
+| ESLint | 180 秒 | 90 秒 |
+| production build | 240 秒 | 90 秒 |
+| Node contracts | 120 秒 | 60 秒 |
+| 单个业务/HTTP smoke | 90–240 秒 | 45–90 秒 |
+| pgTAP | 300 秒 | 120 秒 |
+| Chromium 1228 | 整体 480 秒；10 个阶段各 45–90 秒 | 30–45 秒 |
+| 完整 release gate | 900 秒 | 每阶段独立控制 |
+
+需要定位浏览器阶段时可运行
+`$env:QA_PHASE='05-manager-insights'; npm run qa:chromium-1228:staged`；已有十阶段报告只需
+重新合并时可运行 `$env:QA_MERGE_ONLY='1'; npm run qa:chromium-1228:staged`。本地生产
+QA 必须使用 `http://localhost:3200`，以正确验证生产模式 Secure Cookie。
 
 ## 5. Worker 与外部集成
 

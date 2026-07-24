@@ -6,6 +6,7 @@ import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { TurnstileWidget } from "./turnstile-widget";
 import { passwordValueSchema } from "@/lib/validation";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
 export function PasswordResetRequestForm() {
   const { t } = useI18n();
@@ -22,20 +23,20 @@ export function PasswordResetRequestForm() {
     const email = String(new FormData(event.currentTarget).get("email") ?? "");
     if(!turnstileToken){setError(t("auth.error.turnstileRequired"));setPending(false);return;}
     try {
-      const response = await fetch("/api/auth/password-reset", {
+      const response = await fetchWithTimeout("/api/auth/password-reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email,turnstileToken }),
-      });
+      }, 15_000);
       const result = (await response.json()) as { code?: string };
       if (!response.ok){
-        const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",TURNSTILE_REQUIRED:"auth.error.turnstileRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
+        const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",AUTH_UNAVAILABLE:"auth.error.unavailable",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",TURNSTILE_REQUIRED:"auth.error.turnstileRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
         setError(t(keys[result.code??""]??"auth.error.retry"));
         setTurnstileResetKey(value=>value+1);
       }
       else setSuccess(t("auth.reset.sent"));
-    } catch {
-      setError(t("auth.error.network"));
+    } catch (caught) {
+      setError(t(isTimeoutError(caught) ? "auth.error.timeout" : "auth.error.network"));
     } finally {
       setPending(false);
     }
@@ -87,17 +88,17 @@ export function NewPasswordForm() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !anonKey) throw new Error("missing configuration");
-      const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      const response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
         method: "PUT",
         headers: { apikey: anonKey, authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
         body: JSON.stringify({ password }),
-      });
+      }, 15_000);
       if (!response.ok) { setError(t("auth.reset.invalid")); return; }
       setSuccess(t("auth.reset.updated"));
       setAccessToken("");
       event.currentTarget.reset();
-    } catch {
-      setError(t("auth.reset.unavailable"));
+    } catch (caught) {
+      setError(t(isTimeoutError(caught) ? "auth.error.timeout" : "auth.reset.unavailable"));
     } finally {
       setPending(false);
     }

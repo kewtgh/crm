@@ -17,6 +17,7 @@ import {
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
 import { TurnstileWidget } from "./turnstile-widget";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
 function PasswordField({ error }: { error?: string }) {
   const { t } = useI18n();
@@ -72,11 +73,11 @@ export function AuthForm() {
     const form = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetchWithTimeout("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...Object.fromEntries(form.entries()), turnstileToken }),
-      });
+      }, 15_000);
       const result = (await response.json()) as { code?: string; field?: string; next?: string };
       if (!response.ok) {
         // Turnstile tokens are single-use. Refresh after every server attempt,
@@ -93,6 +94,8 @@ export function AuthForm() {
           TURNSTILE_FAILED: "auth.error.turnstileFailed",
           TURNSTILE_UNAVAILABLE: "auth.error.turnstileUnavailable",
           TURNSTILE_NOT_CONFIGURED: "auth.turnstile.notConfigured",
+          AUTH_UNAVAILABLE: "auth.error.unavailable",
+          EMAIL_VERIFICATION_UNAVAILABLE: "auth.error.unavailable",
         };
         const message = t(errorKeys[result.code ?? ""] ?? "auth.error.retry");
         if (result.field === "turnstile") {
@@ -106,8 +109,8 @@ export function AuthForm() {
       }
       router.push(result.next ?? "/dashboard");
       router.refresh();
-    } catch {
-      setFormError(t("auth.error.network"));
+    } catch (error) {
+      setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.error.network"));
       setTurnstileResetKey((value) => value + 1);
     } finally {
       setPending(false);

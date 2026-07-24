@@ -502,3 +502,50 @@ body { overflow-x:hidden; }
 .settings-section-heading > p:last-child {
   font-size: 12px;
 }
+.progress-with-label {
+  color: #4f5c57;
+  font-size: 12px;
+}
+.consumption-kpi div > span,
+.segment-card p,
+.help-contact p {
+  font-size: 12px;
+}
+.allocation-summary article.allocation-progress > .progress-with-label {
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+  display: flex;
+  color: #4f5c57;
+  background: transparent;
+}
+.admin-alert :is(b, p, a),
+.admin-metric div span,
+.admin-task b {
+  font-size: 12px;
+}
+.admin-alert p {
+  color: #76552d;
+}
+@media (max-width: 720px) {
+  .governance-page .page-heading-row .status-badge {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .governance-page .quick-summary {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .governance-page .quick-summary > span {
+    min-width: 0;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

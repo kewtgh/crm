@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 test("replaces the disposable starter with Lumina CRM", async () => {
   const [page, layout, packageJson] = await Promise.all([
@@ -95,7 +97,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.3\.0"/);
+  assert.match(packageJson, /"version": "2\.4\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -111,7 +113,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.3\.0"/);
+  assert.match(packageJson, /"version": "2\.4\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -450,7 +452,7 @@ test("closes the v1.0 release audit with executable security and business bounda
   assert.match(releaseMigration, /confirm_integration_connection/);
   assert.match(webhookRoute, /canonicalEnvelope/);
   assert.match(webhookRoute, /WEBHOOK_REPLAY_WINDOW_EXCEEDED/);
-  assert.match(apiClient, /AbortSignal\.any/);
+  assert.match(apiClient, /boundedSignal/);
   assert.match(apiClient, /REQUEST_TIMEOUT/);
   for (const page of [operations, imports, finance]) assert.match(page, /apiFetch/);
   assert.match(operations, /operations\.businessInsights/);
@@ -519,7 +521,87 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.3\.0/);
+  assert.match(version, /2\.4\.0/);
+});
+
+test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
+  const [
+    packageJson,
+    runner,
+    boundedProcess,
+    releaseGate,
+    supabase,
+    fetchTimeout,
+    auth,
+    api,
+    avatar,
+    browserQa,
+    stagedBrowserQa,
+    forgotPassword,
+    audit,
+    plan,
+  ] = await Promise.all([
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/run-bounded.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/lib/bounded-process.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/release-gate.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../lib/supabase-server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/fetch-timeout.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/avatar/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-chromium-1228.cjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-staged.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../app/(auth)/forgot-password/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageJson, /"version": "2\.4\.0"/);
+  for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
+    assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
+  }
+  assert.match(runner, /idle timeout cannot exceed the total timeout/);
+  assert.match(runner, /npm-cli\.js/);
+  assert.match(boundedProcess, /produced no output/);
+  assert.match(boundedProcess, /taskkill/);
+  assert.match(boundedProcess, /last child output/);
+  assert.match(releaseGate, /RELEASE_GATE_TOTAL_TIMEOUT_SECONDS/);
+  assert.match(releaseGate, /gate remaining/);
+  assert.match(supabase, /fetchWithTimeout/);
+  assert.match(supabase, /UPSTREAM_TIMEOUT/);
+  assert.match(fetchTimeout, /AbortSignal\.any/);
+  assert.match(auth, /fetchWithTimeout/);
+  assert.match(api, /safePayload/);
+  assert.doesNotMatch(api, /message:\s*typeof payload\.message/);
+  assert.match(avatar, /hasImageSignature/);
+  assert.match(avatar, /previous\.avatarPath !== path/);
+  assert.match(forgotPassword, /meta\.forgotPassword/);
+  for (const route of [
+    "/reports", "/reports/exports", "/reports/marketing", "/analytics/consumption",
+    "/sales/allocation", "/duplicates", "/data-quality", "/help", "/admin", "/admin/approvals",
+  ]) assert.match(browserQa, new RegExp(route.replaceAll("/", "\\/")));
+  assert.match(stagedBrowserQa, /Refusing to merge Chromium phases from different builds/);
+  assert.match(audit, /发布门没有子阶段超时/);
+  assert.match(plan, /无输出时限/);
+});
+
+test("the bounded runner terminates a silent child process", () => {
+  const runner = new URL("../scripts/run-bounded.mjs", import.meta.url);
+  const startedAt = Date.now();
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(runner),
+    "--label", "silent-contract",
+    "--timeout-seconds", "3",
+    "--idle-seconds", "1",
+    "--heartbeat-seconds", "1",
+    "--",
+    "node",
+    "-e",
+    "setInterval(() => {}, 1000)",
+  ], { encoding: "utf8", timeout: 7_000, windowsHide: true });
+  assert.notEqual(result.status, 0);
+  assert.ok(Date.now() - startedAt < 6_000, "silent child was not terminated promptly");
+  assert.match(`${result.stdout}\n${result.stderr}`, /produced no output/);
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -583,7 +665,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.3\.0/);
+  assert.match(version,/2\.4\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -617,7 +699,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.3\.0"/);
+  assert.match(packageJson,/"version": "2\.4\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -655,7 +737,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.3\.0/);
+  assert.match(version,/2\.4\.0/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -818,7 +900,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
   assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.3\.0/);
+  assert.match(version, /2\.4\.0/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {

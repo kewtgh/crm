@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { authCookieNames, userFromSupabase } from "@/lib/auth";
 import { clearAuthSessionCookies, setAuthSessionCookies } from "@/lib/auth-session";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 function safeReturnTo(value: string | null) {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
@@ -26,14 +27,31 @@ export async function GET(request: Request) {
     return response;
   }
 
+  let upstream: Response;
   try {
-    const upstream = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
       method: "POST",
       headers: { apikey: anonKey, "content-type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
-    });
+    }, 10_000);
+  } catch {
+    const response = jsonMode
+      ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
+      : NextResponse.redirect(new URL("/login", requestUrl));
+    response.headers.set("cache-control", "no-store");
+    return response;
+  }
+
+  try {
     const result = (await upstream.json()) as Record<string, unknown>;
     const authorizedUser = userFromSupabase((result.user ?? {}) as Record<string, unknown>);
+    if (upstream.status >= 500) {
+      const response = jsonMode
+        ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
+        : NextResponse.redirect(new URL("/login", requestUrl));
+      response.headers.set("cache-control", "no-store");
+      return response;
+    }
     if (!upstream.ok || !authorizedUser) throw new Error("Session refresh rejected");
 
     const response = jsonMode

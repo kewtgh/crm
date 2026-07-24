@@ -1,3 +1,5 @@
+import { boundedSignal } from "./fetch-timeout";
+
 export type ApiFailurePayload = {
   code?: string;
   field?: string;
@@ -34,11 +36,6 @@ async function refreshSession() {
   return response.ok;
 }
 
-function requestSignal(signal?: AbortSignal | null, timeoutMs = 15_000) {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  return signal ? AbortSignal.any([signal, timeout]) : timeout;
-}
-
 export async function apiFetch<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -50,7 +47,7 @@ export async function apiFetch<T>(
     response = await fetch(input, {
       ...init,
       headers: { accept: "application/json", ...init.headers },
-      signal: requestSignal(init.signal, timeoutMs),
+      signal: boundedSignal(init.signal, timeoutMs),
     });
   } catch (error) {
     const code = error instanceof DOMException && error.name === "TimeoutError"
