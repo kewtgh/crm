@@ -30,6 +30,18 @@ const defaultNotifications: NotificationPreferences = {
   sales: { email: false, inApp: true }, security: { email: true, inApp: true },
 };
 
+export function normalizeNotificationPreferences(input: NotificationPreferences | null | undefined): NotificationPreferences {
+  const normalized = Object.fromEntries(Object.entries(defaultNotifications).map(([key, fallback]) => {
+    const candidate = input?.[key];
+    return [key, {
+      email: typeof candidate?.email === "boolean" ? candidate.email : fallback.email,
+      inApp: typeof candidate?.inApp === "boolean" ? candidate.inApp : fallback.inApp,
+    }];
+  })) as NotificationPreferences;
+  if (!normalized.security.email && !normalized.security.inApp) normalized.security.inApp = true;
+  return normalized;
+}
+
 export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
   const [profiles, preferences] = await Promise.all([
     supabaseJson<ProfileRow[]>(`/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${user.id}&limit=1`),
@@ -49,10 +61,7 @@ export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
     dateFormat: preference?.date_format ?? "yyyy-MM-dd",
     quietHoursStart: preference?.quiet_hours_start ?? null,
     quietHoursEnd: preference?.quiet_hours_end ?? null,
-    notifications: {
-      ...defaultNotifications,
-      ...Object.fromEntries(Object.entries(preference?.notifications ?? {}).filter(([key]) => key !== "ai")),
-    },
+    notifications: normalizeNotificationPreferences(preference?.notifications),
   };
 }
 
@@ -68,5 +77,5 @@ export async function updateAccount(userId: string, input: Pick<UserSettings, "l
 }
 
 export async function updateNotifications(userId: string, notifications: NotificationPreferences, quietHoursStart: string | null, quietHoursEnd: string | null) {
-  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ notifications, quiet_hours_start: quietHoursStart, quiet_hours_end: quietHoursEnd, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
+  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ notifications: normalizeNotificationPreferences(notifications), quiet_hours_start: quietHoursStart, quiet_hours_end: quietHoursEnd, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
 }

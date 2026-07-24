@@ -79,7 +79,18 @@ Run the complete release gate:
 npm run release:gate
 ```
 
-The gate runs typecheck, lint, production build, 27 Node contracts, dependency audit,
+Deploy an already initialized dedicated production server with one bounded command:
+
+```bash
+npm run deploy:production
+```
+
+The deployment command performs a fast-forward-only Git pull, builds and validates an immutable
+release, applies linked Supabase migrations, atomically switches `/opt/lumina-crm/current`, restarts
+systemd services, and checks liveness/readiness. The entire run defaults to a 15-minute hard limit;
+every stage has its own shorter timeout, and a failed cutover restores the previous release.
+
+The gate runs typecheck, lint, production build, 29 Node contracts, dependency audit,
 schema lint, 433 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
@@ -97,11 +108,12 @@ application and household lead conversion.
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
 The v2.3.0 source implementation, remediation, migrations, schema lint, all 433 pgTAP assertions,
-real device-auth smoke and 43-page/viewport Chromium 1228 matrix are complete. A production rollout
+real device-auth smoke and 57-page/viewport Chromium 1228 matrix are complete. A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
 [v2.3.0 audit](docs/AUDIT_2026-07-23_V2.2.1.md),
 [executed remediation plan](docs/REMEDIATION_PLAN_2026-07-23_V2.3.0.md),
 [final omission review](docs/FINAL_REAUDIT_2026-07-23_V2.3.0.md),
+[supplemental audit and final review](docs/FINAL_SUPPLEMENTAL_REAUDIT_2026-07-24_V2.3.0.md),
 [implementation status](docs/IMPLEMENTATION_STATUS.md), and
 [deployment guide](docs/DEPLOYMENT.md).

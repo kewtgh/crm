@@ -59,11 +59,9 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
       setPending(true); setError("");
       try {
         if (mode === "setup") {
-          const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string; secret?: string } } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
-          if (!result.factor?.id) throw new Error();
-          const challenge = await apiFetch<{ challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "challenge", factorId: result.factor.id }) });
-          if (!challenge.challenge?.id) throw new Error();
-          if (!cancelled) setEnrollment({ factorId: result.factor.id, challengeId: challenge.challenge.id, qrCode: result.factor.totp?.qr_code ?? "", secret: result.factor.totp?.secret });
+          const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string; secret?: string } }; challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
+          if (!result.factor?.id || !result.challenge?.id) throw new Error();
+          if (!cancelled) setEnrollment({ factorId: result.factor.id, challengeId: result.challenge.id, qrCode: result.factor.totp?.qr_code ?? "", secret: result.factor.totp?.secret });
         } else {
           const factors = await apiFetch<{ factors?: Factor[] }>("/api/settings/mfa");
           const factor = factors.factors?.find((entry) => entry.factor_type === "totp" && entry.status === "verified");

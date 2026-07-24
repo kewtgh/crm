@@ -67,7 +67,7 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、26 条 Node 契约、schema lint、433 条
+门禁必须包含：typecheck、ESLint、production build、29 条 Node 契约、schema lint、433 条
 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
@@ -116,10 +116,81 @@ npm run workers:process
 commit 构建不可变 release 目录，再由 `/opt/lumina-crm/current` 原子切换到该目录：
 
 1. 在服务器密钥管理或 `/etc/lumina-crm/production.env` 保存正式 secrets，权限设为仅服务账号可读。
-2. 按 `.nvmrc` 安装 Node.js `24.18.0`，再对精确 commit 执行 `npm ci --omit=dev`、生产构建和迁移门禁。
-3. 使用 systemd 管理 Web 服务，并安装 `deploy/systemd/lumina-crm-workers.service` 与 `.timer`。
+2. 按 `.nvmrc` 安装 Node.js `24.18.0`，再对精确 commit 执行锁文件安装、生产构建和迁移门禁。
+   当前运行命令需要仓库中的 `vinext`，因此 release 目录使用完整 `npm ci`，不得在构建后删除
+   启动所需依赖。
+3. 使用 systemd 管理 Web 服务，并安装 `deploy/systemd/lumina-crm.service`、
+   `lumina-crm-workers.service` 与 `.timer`。
 4. `systemctl enable --now lumina-crm-workers.timer` 后检查 timer、Worker journal 和 readiness。
 5. 切换流量后重复 liveness、readiness、核心 smoke 与 Chromium 抽查。
+
+### 8.1 首次服务器初始化
+
+保留一个只用于拉取代码的干净 checkout，例如 `/opt/lumina-crm/source`；部署脚本会把不可变
+worktree 写入 `/opt/lumina-crm/releases`，并只在全部构建与迁移门禁通过后原子更新
+`/opt/lumina-crm/current`。服务账号必须可以写入 `/opt/lumina-crm`，正式环境文件继续放在
+`/etc/lumina-crm/production.env`。
+
+首次安装 systemd unit：
+
+```bash
+sudo install -m 0644 deploy/systemd/lumina-crm.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/lumina-crm-workers.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/lumina-crm-workers.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable lumina-crm.service lumina-crm-workers.timer
+```
+
+`/usr/bin/node` 与 `/usr/bin/npm` 必须指向 Node.js 24；若服务器使用只在交互式 shell 生效的
+nvm 路径，应先创建稳定的系统级可执行路径，不能让 systemd 依赖用户 shell 初始化脚本。
+生产 Supabase 必须已在 source checkout 中完成 `supabase link`，部署账号需通过环境变量取得
+所需访问凭据。
+
+### 8.2 后续一键部署
+
+在 source checkout 输入且只需输入一行：
+
+```bash
+npm run deploy:production
+```
+
+该命令依次执行：
+
+1. 拒绝有受跟踪修改或错误分支的生产 checkout；
+2. `git pull --ff-only origin main`；
+3. 建立精确 Git SHA 的独立 release worktree；
+4. `npm ci`、typecheck、lint、Node contracts、依赖审计与 production build；
+5. linked Supabase migration 与 schema lint；
+6. 原子切换 `current`，重启 Web、启用 Worker timer 并执行一次 Worker；
+7. 校验新版本 liveness 与完整 readiness。
+
+构建、迁移或检查失败时不会切换服务。切换后的 systemd 或健康检查失败时，脚本会把
+`current` 恢复到上一 release 并重启旧版本。数据库迁移继续遵循只向前兼容规则，不做危险的
+自动数据库回滚。
+
+### 8.3 强制持续时间上限
+
+脚本不包含无限等待。默认硬上限：
+
+| 阶段 | 上限 |
+| --- | ---: |
+| 整次部署 | 900 秒 |
+| Git pull / worktree | 60 秒 |
+| 依赖安装 | 240 秒 |
+| 单项检查 | 180 秒 |
+| 构建 | 240 秒 |
+| 迁移 / schema lint | 各 180 秒 |
+| systemd 操作 | 各 60 秒 |
+| liveness | 60 秒 |
+| readiness | 120 秒 |
+
+超时会终止当前子进程树、输出卡住的阶段并以非零状态退出。所有值都可通过
+`DEPLOY_TOTAL_TIMEOUT_SECONDS`、`DEPLOY_PULL_TIMEOUT_SECONDS`、
+`DEPLOY_INSTALL_TIMEOUT_SECONDS`、`DEPLOY_CHECK_TIMEOUT_SECONDS`、
+`DEPLOY_BUILD_TIMEOUT_SECONDS`、`DEPLOY_MIGRATION_TIMEOUT_SECONDS`、
+`DEPLOY_SYSTEMD_TIMEOUT_SECONDS`、`DEPLOY_LIVENESS_TIMEOUT_SECONDS` 和
+`DEPLOY_READINESS_TIMEOUT_SECONDS` 调整，但每项强制限制在 1–3600 秒，不能配置成无限期。
+使用 `npm run deploy:production -- --help` 可在不部署的情况下查看当前约定。
 
 数据库或浏览器门禁未通过时，不得为了“完成发布”而跳过验证。本地仓库只保存源码、配置
 模板和验证证据，不保存生产 secrets、构建目录或服务器 release 副本。
