@@ -1,22 +1,26 @@
 [Unit]
-Description=Lumina CRM background worker cycle
+Description=Lumina Education CRM web application
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 User=lumina-crm
 Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/current
 EnvironmentFile=/etc/lumina-crm/production.env
-ExecStart=/usr/bin/node scripts/process-worker-cycle.mjs
-TimeoutStartSec=4min
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- --port 3200
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
 TimeoutStopSec=30s
 KillMode=mixed
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ReadWritePaths=/opt/lumina-crm
 
 [Install]
 WantedBy=multi-user.target

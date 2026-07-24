@@ -31,7 +31,8 @@ function envFile(){
 }
 const env={...envFile(),...process.env};
 const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const actionTimeoutMs=12_000;
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -283,10 +284,25 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
+    if(env.QA_SCOPE==="admin-security"){
+      const admin=await createIdentity("SUPER_ADMIN","admin-targeted");identities.push(admin);
+      const adminContext=await browser.newContext({locale:"zh-CN"});
+      await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      const adminPage=await adminContext.newPage();observe(adminPage);
+      adminPage.setDefaultTimeout(actionTimeoutMs);
+      await inspect(adminPage,"admin-security-1440","/admin/security",{width:1440,height:900});
+      await inspect(adminPage,"admin-security-375","/admin/security",{width:375,height:812});
+      await adminContext.close();
+    }else{
     const publicContext=await browser.newContext({locale:"zh-CN"});
     const publicPage=await publicContext.newPage();observe(publicPage);
+    publicPage.setDefaultTimeout(actionTimeoutMs);
     await inspect(publicPage,"login-1440","/login",{width:1440,height:900});
     await inspect(publicPage,"login-375","/login",{width:375,height:812});
+    await inspect(publicPage,"forgot-password-1440","/forgot-password",{width:1440,height:900});
+    await inspect(publicPage,"forgot-password-375","/forgot-password",{width:375,height:812});
+    await inspect(publicPage,"reset-password-1440","/reset-password",{width:1440,height:900});
+    await inspect(publicPage,"reset-password-375","/reset-password",{width:375,height:812});
     const locale=publicPage.locator("button.locale-switcher");
     if(await locale.isVisible()){await locale.click();await publicPage.waitForFunction(()=>document.documentElement.lang==="en",null,{timeout:5_000}).catch(()=>null);await publicPage.waitForLoadState("networkidle",{timeout:5_000}).catch(()=>null);if(await publicPage.locator("html").getAttribute("lang")!=="en")report.errors.push({kind:"locale",url:"/login",message:"English locale did not activate"});}
     await publicContext.close();
@@ -295,10 +311,32 @@ async function main(){
     const context=await browser.newContext({locale:"zh-CN"});
     await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
     const page=await context.newPage();observe(page);
-    const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/automation","/ai","/privacy-requests","/settings/profile","/settings/security"];
+    page.setDefaultTimeout(actionTimeoutMs);
+    const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/automation","/ai","/privacy-requests","/settings/profile","/settings/account","/settings/notifications","/settings/security","/settings/privacy"];
     for(const route of routes)await inspect(page,`${route.slice(1).replaceAll("/","-")}-1440`,route,{width:1440,height:900});
     for(const route of ["/dashboard","/finance","/imports","/students"])await inspect(page,`${route.slice(1)}-1024`,route,{width:1024,height:768});
     for(const route of ["/dashboard","/calendar","/messages","/finance","/imports","/students","/households","/leads","/opportunities","/contracts","/guardian-portal"])await inspect(page,`${route.slice(1)}-375`,route,{width:375,height:812});
+    for(const route of ["/settings/notifications","/settings/security","/settings/privacy"])await inspect(page,`${route.slice(1).replaceAll("/","-")}-375`,route,{width:375,height:812});
+    await page.setViewportSize({width:1440,height:900});
+    await page.goto(`${base}/settings/notifications`,{waitUntil:"networkidle"});
+    const securityEmail=page.getByRole("checkbox",{name:"系统与安全 · 邮件"});
+    const securityInApp=page.getByRole("checkbox",{name:"系统与安全 · 站内"});
+    if(!await securityEmail.isVisible()||!await securityInApp.isVisible()){
+      report.errors.push({kind:"interaction",url:"/settings/notifications",message:"Security notification channel controls are unavailable"});
+    }else{
+      const emailChecked=await securityEmail.isChecked();
+      const inAppChecked=await securityInApp.isChecked();
+      if(!emailChecked&&!inAppChecked){
+        report.errors.push({kind:"interaction",url:"/settings/notifications",message:"Both security notification channels are disabled"});
+      }else if(emailChecked&&inAppChecked){
+        await securityEmail.evaluate(element=>element.click());
+        await page.waitForFunction(()=>document.querySelector('input[aria-label="系统与安全 · 站内"]')?.disabled);
+        if(!await securityInApp.isDisabled())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"The final security notification channel can be disabled"});
+      }else{
+        const lastChannel=emailChecked?securityEmail:securityInApp;
+        if(!await lastChannel.isDisabled())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"The final security notification channel is not protected"});
+      }
+    }
     await exerciseV210Workflows(page,scenario);
     await page.setViewportSize({width:375,height:812});await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});const menu=page.locator("button.mobile-menu");
     if(await menu.isVisible()){await menu.focus();await menu.press("Enter");await page.waitForFunction(()=>document.querySelector("button.mobile-menu")?.getAttribute("aria-expanded")==="true",null,{timeout:3_000}).catch(()=>null);if(await menu.getAttribute("aria-expanded")!=="true")report.errors.push({kind:"keyboard",url:"/dashboard",message:"Mobile menu did not open from keyboard"});await page.keyboard.press("Escape");}
@@ -324,13 +362,19 @@ async function main(){
     const adminContext=await browser.newContext({locale:"zh-CN"});
     await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
     const adminPage=await adminContext.newPage();observe(adminPage);
+    adminPage.setDefaultTimeout(actionTimeoutMs);
     await inspect(adminPage,"admin-operations-1440","/admin/operations",{width:1440,height:900});
     await inspect(adminPage,"admin-operations-375","/admin/operations",{width:375,height:812});
+    await inspect(adminPage,"admin-users-1440","/admin/users",{width:1440,height:900});
+    await inspect(adminPage,"admin-users-375","/admin/users",{width:375,height:812});
+    await inspect(adminPage,"admin-security-1440","/admin/security",{width:1440,height:900});
+    await inspect(adminPage,"admin-security-375","/admin/security",{width:375,height:812});
     await adminContext.close();
     const support=await createIdentity("SALES_SUPPORT","support");identities.push(support);
     const supportContext=await browser.newContext({locale:"zh-CN"});
     await supportContext.addCookies([{name:"crm_access_token",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:support.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
     const supportPage=await supportContext.newPage();observe(supportPage);
+    supportPage.setDefaultTimeout(actionTimeoutMs);
     await supportPage.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
     const forbiddenLinks=await supportPage.locator('a[href="/imports"],a[href="/duplicates"],a[href="/data-quality"],a[href^="/admin"]').count();
     if(forbiddenLinks)report.errors.push({kind:"permission",url:"/dashboard",message:`Support role exposes ${forbiddenLinks} forbidden navigation link(s)`});
@@ -338,6 +382,7 @@ async function main(){
     if(new URL(supportPage.url()).pathname!=="/dashboard")report.errors.push({kind:"permission",url:"/imports",message:`Support direct route was not redirected (${supportPage.url()})`});
     await inspect(supportPage,"support-leads-1440","/leads",{width:1440,height:900});
     await supportContext.close();
+    }
   }finally{
     for(const identity of identities){
       try{

@@ -30,6 +30,7 @@
     "qa:assets": "node scripts/check-production-assets.mjs",
     "qa:chromium-1228": "node scripts/browser-qa-chromium-1228.cjs",
     "release:gate": "node --env-file-if-exists=.env.local scripts/release-gate.mjs",
+    "deploy:production": "node --env-file-if-exists=/etc/lumina-crm/production.env scripts/deploy-production.mjs",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {

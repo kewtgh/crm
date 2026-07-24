@@ -488,6 +488,8 @@ body { overflow-x:hidden; }
 .sales-bar-group :is(b,small),
 .relationship-goals-card .surface-heading p,
 .relationship-goal-grid article :is(b,p,small),
+.security-grid article:first-child p,
+.event-row b,
 .settings-role-note :is(b,p),
 .settings-content :is(p,span,b,small),
 .integration-grid :is(summary,small),

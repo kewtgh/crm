@@ -8,7 +8,14 @@ import { mutationIsTrusted } from "@/lib/request-security";
 const profileSchema = z.object({ section: z.literal("profile"), displayNameZh: z.string().trim().min(1).max(80), displayNameEn: z.string().trim().min(1).max(80), honorific: z.string().trim().max(20), bio: z.string().trim().max(500) });
 const accountSchema = z.object({ section: z.literal("account"), email: z.email(), locale: z.enum(["zh-CN", "en"]), timezone: z.string().min(1).max(60), dateFormat: z.enum(["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy"]) });
 const channelSchema = z.object({ email: z.boolean(), inApp: z.boolean() });
-const notificationsSchema = z.object({ section: z.literal("notifications"), notifications: z.record(z.string(), channelSchema), quietHoursStart: z.string().nullable(), quietHoursEnd: z.string().nullable() });
+const securityChannelSchema = channelSchema.refine((channels) => channels.email || channels.inApp, { message: "SECURITY_NOTIFICATION_REQUIRED" });
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/).nullable();
+const notificationsSchema = z.object({
+  section: z.literal("notifications"),
+  notifications: z.object({ tasks: channelSchema, relationship: channelSchema, sales: channelSchema, security: securityChannelSchema }),
+  quietHoursStart: timeSchema,
+  quietHoursEnd: timeSchema,
+});
 const schema = z.discriminatedUnion("section", [profileSchema, accountSchema, notificationsSchema]);
 
 function failure(error: unknown) {
@@ -25,7 +32,16 @@ async function get() {
 async function patch(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return NextResponse.json({
+      code: issue?.message === "SECURITY_NOTIFICATION_REQUIRED" ? issue.message : "INVALID_INPUT",
+      field: String(issue?.path.at(-1) ?? "form"),
+    }, { status: 400 });
+  }
+  if (parsed.data.section === "notifications" && ((parsed.data.quietHoursStart === null) !== (parsed.data.quietHoursEnd === null))) {
+    return NextResponse.json({ code: "INVALID_INPUT", field: "quietHours" }, { status: 400 });
+  }
   const user = await requireApiUser();
   try {
     if (parsed.data.section === "profile") await updateProfile(user.id, parsed.data);

@@ -821,6 +821,63 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(version, /2\.3\.0/);
 });
 
+test("closes the v2.3.0 supplemental settings and browser audit", async () => {
+  const [settingsRoute, settingsRepository, mfaRoute, settingsPage, firstLogin, browserQa, audit, plan] = await Promise.all([
+    readFile(new URL("../app/api/settings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/settings-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/mfa/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/first-login-security.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-chromium-1228.cjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/SUPPLEMENTAL_AUDIT_2026-07-24_V2.3.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/SUPPLEMENTAL_REMEDIATION_PLAN_2026-07-24_V2.3.0.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(settingsRoute, /SECURITY_NOTIFICATION_REQUIRED/);
+  assert.match(settingsRepository, /normalizeNotificationPreferences/);
+  assert.match(settingsRepository, /!normalized\.security\.email && !normalized\.security\.inApp/);
+  assert.match(settingsPage, /security-notification-policy/);
+  assert.match(settingsPage, /setAvatar\(""\)/);
+  assert.match(mfaRoute, /staleFactors/);
+  assert.match(mfaRoute, /factor\.status === "verified" && isMfaRequiredRole/);
+  assert.match(mfaRoute, /deleteFactor\(factor\.id, token\)\.catch/);
+  assert.match(settingsPage, /settings\.mfaSetupCancelled/);
+  for (const source of [settingsPage, firstLogin]) assert.match(source, /result\.challenge\?\.id/);
+  for (const route of ["/forgot-password", "/reset-password", "/settings/account", "/settings/notifications", "/settings/privacy", "/admin/users", "/admin/security"]) {
+    assert.match(browserQa, new RegExp(route.replaceAll("/", "\\/")));
+  }
+  assert.match(browserQa, /The final security notification channel/);
+  assert.match(audit, /确认 5 项补充问题/);
+  assert.match(plan, /完整验收与最终复核/);
+});
+
+test("provides a bounded one-command atomic production deployment", async () => {
+  const [packageJson, deploy, webService, workerService, guide] = await Promise.all([
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/deploy-production.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm-workers.service", import.meta.url), "utf8"),
+    readFile(new URL("../docs/DEPLOYMENT.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageJson, /"deploy:production"/);
+  assert.match(deploy, /DEPLOY_TOTAL_TIMEOUT_SECONDS/);
+  assert.match(deploy, /value > 3600/);
+  assert.match(deploy, /git", \["pull", "--ff-only"/);
+  assert.match(deploy, /worktree", "add", "--detach"/);
+  assert.match(deploy, /production database migration/);
+  assert.match(deploy, /await pointCurrent\(releaseDir\)/);
+  assert.match(deploy, /await rollback\(error\)/);
+  assert.match(deploy, /AbortSignal\.timeout/);
+  assert.match(deploy, /terminate\(child\)/);
+  for (const unit of [webService, workerService]) {
+    assert.match(unit, /TimeoutStartSec=/);
+    assert.match(unit, /TimeoutStopSec=/);
+    assert.match(unit, /KillMode=mixed/);
+  }
+  assert.match(guide, /npm run deploy:production/);
+  assert.match(guide, /900 秒/);
+  assert.match(guide, /不能配置成无限期/);
+});
+
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
   const [
     ui,

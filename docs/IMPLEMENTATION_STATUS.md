@@ -1,6 +1,6 @@
 # Implementation status — v2.3.0 release candidate
 
-Status date: 2026-07-23
+Status date: 2026-07-24
 
 ## Outcome
 
@@ -11,6 +11,10 @@ policy, avatar validation, typography/contrast and browser-QA cleanup findings. 
 smoke and the pinned Chromium 1228 matrix pass. The source release candidate is ready for controlled
 deployment; production activation still requires real provider credentials, worker heartbeats,
 backup/migration procedure and hosted readiness.
+
+The July 24 supplemental pass additionally enforces an always-on security-notification channel,
+cleans and rolls back incomplete MFA enrollment, removes stale avatar previews, expands auth/settings/
+admin browser coverage, and supplies a bounded atomic `npm run deploy:production` workflow.
 
 Implemented scope:
 
@@ -45,7 +49,7 @@ Implemented scope:
 | TypeScript | Pass |
 | ESLint | Pass |
 | Production build | Pass |
-| Node source contracts | 27/27 pass |
+| Node source contracts | 29/29 pass |
 | npm dependency audit | Pass, 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
 | v0.9 and v1.0 HTTP/security smoke | Pass |
@@ -57,9 +61,9 @@ Implemented scope:
 | Core worker cycle | Pass; 6/6 repaired plus 1/1 freshly queued calendar deliveries reached the local validation sink |
 | v1.1 authenticated smoke | Pass |
 | Real device-auth smoke | Pass, including session-only refresh rotation and private cache policy |
-| Pinned Chromium matrix | Pass, 43/43 page/viewports, 0 errors/warnings, identities cleaned 3/3 |
+| Pinned Chromium matrix | Pass, 57/57 page/viewports, 0 errors/warnings, identities cleaned 3/3; targeted admin-security fix 2/2, cleaned 1/1 |
 | Browser evidence | Chromium 149.0.7827.55 from `ms-playwright/chromium-1228`; `playwright-core` 1.61.1 |
-| Dedicated-server deploy | Not performed; production credentials and hosted readiness remain external |
+| Dedicated-server deploy | Bounded atomic script and systemd units ready; actual production activation not performed because credentials and hosted readiness remain external |
 
 ## Current blockers
 
@@ -78,5 +82,6 @@ External providers remain disabled until real credentials, explicit enablement, 
 approval and scheduler heartbeats are supplied. The product does not present simulated provider,
 AI, delivery or worker state as real.
 
-The final omission review is recorded in
-[FINAL_REAUDIT_2026-07-23_V2.3.0.md](FINAL_REAUDIT_2026-07-23_V2.3.0.md).
+The final omission reviews are recorded in
+[FINAL_REAUDIT_2026-07-23_V2.3.0.md](FINAL_REAUDIT_2026-07-23_V2.3.0.md) and
+[FINAL_SUPPLEMENTAL_REAUDIT_2026-07-24_V2.3.0.md](FINAL_SUPPLEMENTAL_REAUDIT_2026-07-24_V2.3.0.md).
