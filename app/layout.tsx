@@ -18,7 +18,15 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: baseUrl,
     title: { default: "Lumina Education CRM", template: "%s · Lumina CRM" },
     description,
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: {
+      icon: [
+        { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+        { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+        { url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" },
+      ],
+      shortcut: "/favicon-32x32.png",
+      apple: [{ url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" }],
+    },
     openGraph: {
       title: "Lumina Education CRM",
       description,

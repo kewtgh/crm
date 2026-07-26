@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.5.0 部署指引
+# Lumina Education CRM v2.5.1 部署指引
 
 ## 1. 发布前提
 
@@ -7,11 +7,11 @@
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
 - 数据库必须按顺序应用到 `202607260053`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限或 `053` 的企业目录与连接器验证凭证。
 
-当前工作树是 v2.5.0 release candidate。`053`、schema lint 与完整数据库行为套件已经
+当前工作树是 v2.5.1 release candidate。`053`、schema lint 与完整数据库行为套件已经
 在隔离本地环境通过；本轮完整门禁证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.5.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.5.1`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
