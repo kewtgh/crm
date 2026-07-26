@@ -61,3 +61,43 @@ jobs:
       - name: Audit dependencies
         timeout-minutes: 3
         run: npm audit --audit-level=moderate
+
+  database:
+    name: Migration, schema lint, and pgTAP
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+      DO_NOT_TRACK: "1"
+      SUPABASE_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: npm ci --no-audit --no-fund
+
+      - name: Start pinned local database stack
+        timeout-minutes: 10
+        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+
+      - name: Lint the migrated schema
+        timeout-minutes: 3
+        run: npx supabase db lint --local --level warning
+
+      - name: Run pgTAP database contracts
+        timeout-minutes: 6
+        run: npx supabase test db --local
+
+      - name: Stop local database stack
+        if: always()
+        timeout-minutes: 3
+        run: npx supabase stop --no-backup

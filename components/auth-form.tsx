@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -50,11 +50,18 @@ function PasswordField({ error }: { error?: string }) {
   );
 }
 
-export function AuthForm() {
+export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?: boolean; initialErrorCode?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [ssoPending, setSsoPending] = useState(false);
+  const identifierRef = useRef<HTMLInputElement>(null);
+  const ssoErrorKeys: Record<string, string> = {
+    SSO_STATE_INVALID: "auth.sso.stateInvalid",
+    SSO_STAFF_ACCESS_DENIED: "auth.sso.staffAccess",
+    SSO_UNAVAILABLE: "auth.sso.unavailable",
+  };
+  const [formError, setFormError] = useState(initialErrorCode ? t(ssoErrorKeys[initialErrorCode] ?? "auth.sso.failed") : "");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
@@ -117,6 +124,50 @@ export function AuthForm() {
     }
   }
 
+  async function beginSso() {
+    setFormError("");
+    setFieldErrors({});
+    const identifier = identifierRef.current?.value.trim() ?? "";
+    if (!identifier.includes("@")) {
+      setFieldErrors({ identifier: t("auth.sso.emailRequired") });
+      return;
+    }
+    if (!turnstileToken) {
+      setFieldErrors({ turnstile: t("auth.error.turnstileRequired") });
+      return;
+    }
+    setSsoPending(true);
+    try {
+      const response = await fetchWithTimeout("/api/auth/sso", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: identifier, turnstileToken }),
+      }, 15_000);
+      const result = await response.json() as { url?: string; code?: string };
+      if (!response.ok || !result.url) {
+        const errorKeys: Record<string, string> = {
+          INVALID_SSO_EMAIL: "auth.sso.emailRequired",
+          SSO_DOMAIN_NOT_ALLOWED: "auth.sso.domainNotAllowed",
+          SSO_NOT_CONFIGURED: "auth.sso.unavailable",
+          SSO_PROVIDER_REJECTED: "auth.sso.failed",
+          TOO_MANY_ATTEMPTS: "auth.error.tooManyAttempts",
+          TURNSTILE_REQUIRED: "auth.error.turnstileRequired",
+          TURNSTILE_FAILED: "auth.error.turnstileFailed",
+          TURNSTILE_UNAVAILABLE: "auth.error.turnstileUnavailable",
+        };
+        setFormError(t(errorKeys[result.code ?? ""] ?? "auth.sso.failed"));
+        setTurnstileResetKey((value) => value + 1);
+        return;
+      }
+      window.location.assign(result.url);
+    } catch (error) {
+      setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.sso.unavailable"));
+      setTurnstileResetKey((value) => value + 1);
+    } finally {
+      setSsoPending(false);
+    }
+  }
+
   return (
     <form className="auth-form" method="post" action="/api/auth/login" onSubmit={submit} noValidate>
       <div className="auth-form-heading">
@@ -136,6 +187,7 @@ export function AuthForm() {
           id="identifier"
           name="identifier"
           type="text"
+          ref={identifierRef}
           autoComplete="username"
           required
           aria-invalid={Boolean(fieldErrors.identifier)}
@@ -167,6 +219,15 @@ export function AuthForm() {
         {t("auth.login.submit")}
         {!pending && <ArrowRight size={18} />}
       </button>
+
+      {ssoEnabled && <div className="enterprise-sso-entry">
+        <span>{t("auth.sso.or")}</span>
+        <button className="secondary-button" type="button" disabled={pending || ssoPending} onClick={() => void beginSso()}>
+          {ssoPending ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
+          {t("auth.sso.submit")}
+        </button>
+        <small>{t("auth.sso.help")}</small>
+      </div>}
 
     </form>
   );

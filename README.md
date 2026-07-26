@@ -1,12 +1,20 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.4.0**
+Current release candidate: **v2.5.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
 
-v2.4.0 closes the July 24 reliability and full-navigation audit. Every standard quality
+v2.5.0 closes the July 26 security, enterprise identity, operations and UX audit. It hardens
+authentication return targets and production configuration validation, memoizes request-local
+staff hydration, adds PII-safe structured observability, bounded Supabase SSO/SCIM foundations,
+a capability-filtered role action center, and receipted connector sandbox validation. Mobile
+operations, finance empty states, settings navigation, business-readable audit events and CI
+database/full-browser gates are included. External SSO, SCIM, telemetry and connectors remain
+disabled until real production configuration is explicitly supplied.
+
+v2.4.0 closed the July 24 reliability and full-navigation audit. Every standard quality
 entry now has total and no-output deadlines, the release gate reports stage heartbeats and
 terminates stuck process trees, and the pinned Chromium suite runs as ten independently bounded
 phases. Runtime Supabase/Auth/Storage calls have request deadlines, API errors no longer expose
@@ -97,12 +105,12 @@ release, applies linked Supabase migrations, atomically switches `/opt/lumina-cr
 systemd services, and checks liveness/readiness. The entire run defaults to a 15-minute hard limit;
 every stage has its own shorter timeout, and a failed cutover restores the previous release.
 
-The gate runs typecheck, lint, production build, 31 Node contracts, dependency audit,
-schema lint, 433 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
+The gate runs typecheck, lint, production build, 35 Node contracts, dependency audit,
+schema lint, 460 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
 When executed, phase evidence is saved below `work/browser-qa-chromium-1228/phases/` and merged
-into `work/browser-qa-chromium-1228/report.json`. The ten-stage matrix covers 75
+into `work/browser-qa-chromium-1228/report.json`. The ten-stage matrix covers 78
 public/authenticated page-and-viewport checks at 1440, 1024 and 375px,
 Chinese/English switching, optional manager AAL2, a support-role permission boundary, hydration,
 console/page/network errors, headings, labels, contrast, text size, overflow, mobile
@@ -115,12 +123,12 @@ application and household lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.4.0 source implementation, remediation, migrations, schema lint, all 433 pgTAP assertions,
-real device-auth smoke and 75-page/viewport Chromium 1228 matrix are complete. A production rollout
+The v2.5.0 source implementation, remediation, migrations, schema lint, all 460 pgTAP assertions,
+real device-auth smoke and 78-page/viewport Chromium 1228 matrix are complete. A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
-[v2.4.0 audit](docs/AUDIT_2026-07-24_V2.4.0.md),
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md),
-[final omission review](docs/FINAL_REAUDIT_2026-07-24_V2.4.0.md),
+[v2.5.0 audit](docs/AUDIT_2026-07-26_V2.5.0.md),
+[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md),
+[final omission review](docs/FINAL_REAUDIT_2026-07-26_V2.5.0.md),
 [implementation status](docs/IMPLEMENTATION_STATUS.md), and
 [deployment guide](docs/DEPLOYMENT.md).

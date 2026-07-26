@@ -4,6 +4,55 @@ import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+test("rejects encoded, backslash, and protocol-relative authentication return targets", async () => {
+  const { safeRelativeReturnTo } = await import("../lib/return-to.ts");
+  assert.equal(safeRelativeReturnTo("/schools?page=2"), "/schools?page=2");
+  assert.equal(safeRelativeReturnTo("//evil.example"), "/dashboard");
+  assert.equal(safeRelativeReturnTo("/\\evil.example"), "/dashboard");
+  assert.equal(safeRelativeReturnTo("/%5cevil.example"), "/dashboard");
+  assert.equal(safeRelativeReturnTo("/%255cevil.example"), "/dashboard");
+});
+
+test("rejects complete but placeholder or internally inconsistent production configuration", async () => {
+  const { inspectCoreRuntimeEnvironment } = await import("../lib/runtime-environment.ts");
+  const placeholderEnvironment = {
+    APP_URL: "https://crm.example.com",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "production-site-key",
+    TURNSTILE_SECRET_KEY: "replace-with-a-production-server-secret",
+    TURNSTILE_EXPECTED_HOSTNAME: "crm.example.com",
+    NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "replace-with-public-anon-key",
+    SUPABASE_SERVICE_ROLE_KEY: "replace-with-server-only-service-role-key",
+    CRM_WORKSPACE_ID: "00000000-0000-4000-8000-000000000001",
+    LOGIN_THROTTLE_HASH_SECRET: "replace-with-an-independent-random-secret",
+    TRUSTED_DEVICE_HASH_SECRET: "replace-with-an-independent-random-secret",
+  };
+  const placeholderResult = inspectCoreRuntimeEnvironment(placeholderEnvironment);
+  assert.equal(placeholderResult.valid, false);
+  assert.ok(placeholderResult.missing.includes("NEXT_PUBLIC_SUPABASE_URL"));
+  const hostnameMismatch = inspectCoreRuntimeEnvironment({
+    ...placeholderEnvironment,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAabcdefghijklmnopqrstuvwxyz",
+    TURNSTILE_SECRET_KEY: "turnstile-secret-value-0123456789abcdef",
+    NEXT_PUBLIC_SUPABASE_URL: "https://project-ref.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key-value-that-is-not-a-placeholder",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-value-that-is-not-placeholder",
+    LOGIN_THROTTLE_HASH_SECRET: "login-secret-value-0123456789abcdef",
+    TRUSTED_DEVICE_HASH_SECRET: "device-secret-value-0123456789abcdef",
+    TURNSTILE_EXPECTED_HOSTNAME: "other.example.com",
+  });
+  assert.equal(hostnameMismatch.valid, false);
+  assert.ok(hostnameMismatch.missing.includes("TURNSTILE_EXPECTED_HOSTNAME"));
+});
+
+test("reports incomplete runtime configuration without throwing", async () => {
+  const runtimeEnvironmentModule = await import(new URL("../lib/runtime-environment.ts", import.meta.url).href);
+  const status = runtimeEnvironmentModule.inspectWorkerRuntimeEnvironment({});
+  assert.equal(status.valid, false);
+  assert.ok(status.missing.includes("APP_URL"));
+  assert.ok(status.missing.includes("NEXT_PUBLIC_SUPABASE_URL"));
+});
+
 test("replaces the disposable starter with Lumina CRM", async () => {
   const [page, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
@@ -24,6 +73,7 @@ test("keeps authentication failures local to their forms", async () => {
   ]);
   assert.match(authForm, /role="alert"/);
   assert.match(authForm, /fieldErrors/);
+  assert.match(authForm, /identifierRef/);
   assert.match(authForm, /auth\.staffOnly/);
   assert.doesNotMatch(authForm, /register/i);
   assert.match(authForm, /TurnstileWidget/);
@@ -97,7 +147,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.4\.0"/);
+  assert.match(packageJson, /"version": "2\.5\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -113,7 +163,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.4\.0"/);
+  assert.match(packageJson, /"version": "2\.5\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -521,7 +571,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.4\.0/);
+  assert.match(version, /2\.5\.0/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -556,7 +606,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.4\.0"/);
+  assert.match(packageJson, /"version": "2\.5\.0"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -665,7 +715,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.4\.0/);
+  assert.match(version,/2\.5\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -699,7 +749,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.4\.0"/);
+  assert.match(packageJson,/"version": "2\.5\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -737,7 +787,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.4\.0/);
+  assert.match(version,/2\.5\.0/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -900,7 +950,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
   assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.4\.0/);
+  assert.match(version, /2\.5\.0/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -1012,4 +1062,91 @@ test("defines every static CSS custom property or supplies a fallback", async ()
     .filter((match) => !definitions.has(match[1]) && !match[2].includes(","))
     .map((match) => match[1]);
   assert.deepEqual([...new Set(unresolved)], []);
+});
+
+test("closes the v2.5.0 security, enterprise, operations, and UX audit", async () => {
+  const [
+    packageJson, returnTo, refresh, environment, auth, operationsUi, financeUi,
+    observability, api, sso, ssoStart, ssoCallback, scim, scimUsers, actionCenter,
+    actionCenterUi, integrations, integrationRoute, integrationWorker, scimHttp, migration,
+    pgtap, ci, fullGate, stagedQa, locale, operationsLocale, operationsTypes, auditPresentation, audit, plan,
+  ] = await Promise.all([
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/return-to.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/refresh/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/runtime-environment.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations-center-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/finance-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/observability.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/enterprise-identity.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/sso/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/sso/callback/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/scim.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/scim/v2/Users/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/action-center-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/action-center-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/operations-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/integrations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/process-integration-sync.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../lib/scim-http.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607260053_v250_enterprise_operations.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/tests/v250_enterprise_operations.sql", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/full-release-gate.yml", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-staged.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/v250.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/v120.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/operations-types.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/audit-presentation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageJson, /"version": "2\.5\.0"/);
+  assert.match(returnTo, /containsUnsafePathCharacters/);
+  assert.match(refresh, /safeRelativeReturnTo/);
+  assert.match(environment, /Placeholder values are not allowed/);
+  assert.match(environment, /Security secrets must be independent/);
+  assert.match(auth, /cache\(loadCurrentUser\)/);
+  assert.match(operationsUi, /operations-mobile-tabs/);
+  assert.match(operationsUi, /operations\.validationCurrent/);
+  for (const empty of ["noContracts", "noReceivables", "noPayments", "noRefunds", "noReconciliations"]) assert.match(financeUi, new RegExp(`finance\\.${empty}`));
+  assert.match(observability, /never includes request bodies, query strings/);
+  assert.match(api, /emitObservabilityEvent/);
+  assert.match(sso, /HMAC/);
+  assert.match(ssoStart, /code_challenge_method: "s256"/);
+  assert.match(ssoStart, /configuration\.domains\.includes/);
+  assert.match(ssoCallback, /claimScimSsoIdentity/);
+  assert.match(scim, /difference\|=/);
+  assert.match(scim, /SCIM_USER_DEPROVISIONED/);
+  assert.match(scimUsers, /ListResponse/);
+  assert.match(scimHttp, /invalidFilter/);
+  assert.doesNotMatch(scimHttp, /scimType:code/);
+  assert.match(scim, /Exclude<AppRole,"SUPER_ADMIN"\|"ADMIN">/);
+  assert.match(actionCenter, /hasCapability/);
+  assert.match(actionCenter, /privacyRequests\.manage/);
+  assert.match(actionCenter, /loadReleaseReadiness/);
+  assert.match(actionCenterUi, /action-center-filters/);
+  assert.match(integrations, /CONNECTOR_VALIDATION_REQUIRED/);
+  assert.match(integrationRoute, /operation: z\.literal\("validate"\)/);
+  assert.match(integrationWorker, /connector_validation_receipts/);
+  assert.match(migration, /enterprise_directory_users/);
+  assert.match(migration, /connector_validation_receipts/);
+  assert.match(pgtap, /select plan\(27\)/);
+  assert.match(ci, /supabase test db --local/);
+  assert.match(fullGate, /chromium-1228/);
+  assert.match(stagedQa, /\/action-center/);
+  assert.match(locale, /operations\.validationMissing/);
+  for (const key of ["APPROVALS", "REFUNDS", "IMPORTS", "REMINDERS", "NOTIFICATION_OUTBOX",
+    "CALENDAR_DELIVERIES", "GENERATED_JOBS", "WEBHOOK_INBOX", "INTEGRATION_SYNC",
+    "DATA_QUALITY", "IDENTITY_REPAIR"]) {
+    assert.match(operationsTypes, new RegExp(`"${key}"`));
+    assert.equal(operationsLocale.split(`operations.key.${key}`).length - 1, 2);
+  }
+  assert.match(auditPresentation, /auditLabel/);
+  assert.match(audit, /P1/);
+  assert.match(plan, /最终遗漏复审/);
+  await access(new URL("../app/api/scim/v2/ServiceProviderConfig/route.ts", import.meta.url));
+  await access(new URL("../app/(crm)/action-center/page.tsx", import.meta.url));
 });

@@ -1,0 +1,2 @@
+import { scimEnterpriseSchema, scimUserSchema } from "@/lib/scim";import { requireScim,scimFailure,scimJson } from "@/lib/scim-http";
+export async function GET(request:Request){try{await requireScim(request);return scimJson({schemas:["urn:ietf:params:scim:api:messages:2.0:ListResponse"],totalResults:1,startIndex:1,itemsPerPage:1,Resources:[{schemas:["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],id:"User",name:"User",endpoint:"/Users",schema:scimUserSchema,schemaExtensions:[{schema:scimEnterpriseSchema,required:false}]}]});}catch(error){return scimFailure(error);}}

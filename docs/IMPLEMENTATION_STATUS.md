@@ -1,51 +1,49 @@
-# Implementation status — v2.4.0 release candidate
+# Implementation status — v2.5.0 release candidate
 
-Status date: 2026-07-24
+Status date: 2026-07-26
 
 ## Outcome
 
-The July 20 source audit, July 23 follow-up and July 24 reliability/full-navigation remediation are
-complete. v2.4.0 adds bounded stage and no-output deadlines, process-tree termination, network
-request deadlines, stable API errors, image-signature validation, old-avatar cleanup, full
-navigation QA and responsive/accessibility fixes. Migrations through
-`052`, schema lint, all 433 database assertions, business/HTTP/export/asset suites, real device-auth
-smoke and the pinned Chromium 1228 matrix pass. The source release candidate is ready for controlled
-deployment; production activation still requires real provider credentials, worker heartbeats,
-backup/migration procedure and hosted readiness.
+The July 26 security, architecture, UI/UX and product audit is implemented. All P1/P2/P3 findings
+are closed in source, the four proposed product foundations are present behind explicit runtime
+boundaries, and the clean local database reached migration `202607260053`. The final production
+build, 35 Node contracts, 460 database contracts, every business/HTTP/export/device-auth smoke and
+the pinned Chromium 1228 matrix pass.
 
-The earlier July 24 supplemental pass additionally enforces an always-on security-notification channel,
-cleans and rolls back incomplete MFA enrollment, removes stale avatar previews, expands auth/settings/
-admin browser coverage, and supplies a bounded atomic `npm run deploy:production` workflow.
+Production activation was not performed. Real SSO IdP metadata, SCIM client token, telemetry
+receiver, connector processor credentials, email delivery, scheduler heartbeats, data-processing
+approval, backup rehearsal and hosted readiness remain deployment inputs—not simulated product
+state.
 
-Implemented scope:
+## Implemented scope
 
-- Operations: four core workers plus explicitly enabled Webhook/integration workers, correct
-  email variable contract, stuck-job readiness, integration retry and actionable remediation.
-- Privacy: real ACCESS/EXPORT packages, correction diffs, enforced restriction, deletion
-  anonymisation/legal holds, independent review, execution receipts and a step-based staff UI.
-- Reporting: complete paged exports, expected/exported row counts, SHA-256/query evidence,
-  explicit currency scope and immutable exchange-rate snapshots.
-- Authorization: shared capabilities across navigation, actions, pages and APIs for contracts,
-  opportunities, calendar, tasks, messages, automation and portal decisions.
-- Automation: deterministic triggers/actions, idempotent events, side-effect-free preview,
-  rule versions, execution history and failed-run retry.
-- Growth: campaign attribution, admissions journeys, per-currency pipeline/won values,
-  enrolment/ROI metrics and dashboard links.
-- Guardian portal: verified household recipient, digest-only revocable invitation, explicit
-  consent before data disclosure, idempotent update requests and receipted approved changes.
-- Communications: consent-governed threads, outbound idempotency, manual inbound records,
-  delivery receipts, search and failed-delivery retry.
-- Data quality/connectors: eight configurable rules, ownership and trends, payment connector,
-  replay protection and immutable reconciliation receipts.
-- UX/architecture: mobile search drawer, compact empty states, dedicated v2.2 feature styles,
-  split privacy/new-domain workspaces and a v2.2 Open Graph asset.
-- Security UX: reusable Microsoft Authenticator, Google Authenticator and managed 1Password TOTP
-  guidance; protected QR/secret instructions; one 12–128 character password policy; local avatar
-  validation; operation-local feedback and a 12px operational typography floor.
-- Reliability: every standard check and smoke has a hard deadline and idle deadline; the release
-  gate has a 900-second total budget; Chromium is split into ten independently resumable stages.
-- Runtime boundaries: all application Supabase/Auth/Storage calls are bounded; transient refresh
-  failure preserves the session; browser errors expose stable codes rather than upstream messages.
+- Security/configuration: origin-verified return targets reject slash/backslash/control/encoded
+  bypasses; Zod schemas validate URLs, hostnames, positive integers, token length, placeholder
+  values and secret independence. Incomplete URL configuration now reports readiness failure
+  without throwing.
+- Identity/runtime architecture: current-user hydration is request-memoized while Auth and active
+  membership remain authoritative; the device smoke defaults to the project URL.
+- UI/UX: mobile Operations has five focused sections; finance hides empty pagers and explains empty
+  states; mobile settings navigation is sticky/snap-aware; dynamic operations enums are bilingual;
+  audit events lead with business semantics and put raw action/table names in readable expandable
+  technical details.
+- Maintainability: queue/job/provider enums and audit presentation are extracted into shared static
+  modules; the audit event row is a focused display component.
+- Observability: the API wrapper emits allow-listed request ID, route template, method, status,
+  duration, outcome and stable error code. Optional external delivery has explicit enablement,
+  independent credentials, sampling, a two-second timeout and failure isolation.
+- Enterprise identity: Supabase SSO start/callback uses allowed domains, same-origin mutation,
+  Turnstile, durable login throttling, PKCE and signed short-lived HttpOnly state. SCIM 2.0 supports
+  discovery plus Users list/get/create/replace/patch/deactivate, constant-time bearer comparison,
+  constrained staff roles, staged SSO claim, lifecycle audit and safe errors.
+- Role action center: `/action-center` and its API aggregate real dashboard work, filter by
+  capability, support business-area filters/deep links/empty states and add a dashboard/navigation
+  entry.
+- Connector validation: sandbox validation sends no CRM records, has a hard timeout and allow-listed
+  capabilities, and stores immutable status, latency, response SHA-256, actor and expiry. UI, API
+  and worker sync all require a current successful receipt when integration sync is enabled.
+- Release engineering: PR CI includes clean Supabase migration/schema lint/pgTAP; the separate full
+  gate uses the self-hosted pinned Chromium 1228 environment and retains evidence.
 
 ## Verification record
 
@@ -53,41 +51,38 @@ Implemented scope:
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass |
-| Node source contracts | 31/31 pass |
-| npm dependency audit | Pass, 0 vulnerabilities |
+| Production build | Pass; v2.5.0 routes include SSO, SCIM and action center |
+| Node source contracts | 35/35 pass |
+| Dependency audit | Baseline remains 0 vulnerabilities; dependency tree is unchanged, lockfile diff changes only app version. A fresh external npm advisory query was blocked because external metadata disclosure was not separately authorized. |
 | Phase-two and v0.9 business smoke | Pass |
-| v0.9 and v1.0 HTTP/security smoke | Pass |
-| Export artifact smoke | Pass (CSV/XLSX/PDF) |
+| v0.9 and v1.0 HTTP/security smoke | Pass on final production build |
+| v1.1 authenticated business smoke | Pass |
+| Export artifact smoke | Pass: CSV 137 B, XLSX 3,161 B, PDF 1,645 B with Chinese font embedding |
+| Real device-auth smoke | Pass: Turnstile, username/password, OTP, first password, trusted reuse, session rotation and private cache |
 | Production assets/MIME | Pass, 26 assets |
-| Database migration head actually applied | `202607210052` |
-| Full pgTAP suite | 433/433 pass across 9 files |
-| PostgreSQL schema lint | Pass, 0 findings at `052` |
-| Core worker cycle | Pass; 6/6 repaired plus 1/1 freshly queued calendar deliveries reached the local validation sink |
-| v1.1 authenticated smoke | Pass |
-| Real device-auth smoke | Pass, including session-only refresh rotation and private cache policy |
-| Pinned Chromium matrix | Pass, 75/75 page/viewports across 10 bounded phases in 232 seconds, 0 errors/warnings, identities cleaned 9/9 |
-| Browser evidence | Chromium 149.0.7827.55 from `ms-playwright/chromium-1228`; executable `C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe`; `playwright-core` 1.61.1 |
-| Dedicated-server deploy | Bounded atomic script and systemd units ready; actual production activation not performed because credentials and hosted readiness remain external |
+| Clean migration application | Pass through `202607260053_v250_enterprise_operations` |
+| PostgreSQL schema lint | Pass, 0 findings |
+| Full pgTAP suite | 460/460 pass across 10 files |
+| Pinned Chromium matrix | Pass, 78/78 page/viewports across 10 bounded phases in 195 seconds; 0 errors, 0 warnings; identities cleaned 9/9 |
+| Browser evidence | Chromium 149.0.7827.55, `ms-playwright/chromium-1228`, `playwright-core` 1.61.1, build hash `2ec64ff09a11e7f4fd6fe5320ec368542c83c984dbf2ef9271ff05c869c5c53f` |
 
-## Current blockers
+The merged browser evidence is Git-ignored at
+`work/browser-qa-chromium-1228/report.json`. The exact executable recorded there is
+`C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe`.
+A recoverable pre-rebuild local database dump is retained under the Git-ignored `work/` directory.
 
-Production deployment remains externally gated on dedicated-server secrets, email/Turnstile and any
-enabled connector credentials, systemd timer heartbeats, backup verification and hosted readiness 200.
-The obsolete Sites project binding and high-frequency Actions Worker schedule have been removed.
+## External production gates
 
-## Production continuation sequence
+1. Restore-test and back up the target Supabase project, then apply reviewed migrations through
+   `053`.
+2. Configure real application, Turnstile, email and worker secrets. Enable SSO, SCIM, telemetry or
+   connector sync only after each supplier boundary and its operational owner are approved.
+3. Validate IdP metadata/certificates, SCIM deprovisioning, telemetry ingestion, connector sandbox
+   receipts and scheduler heartbeats in staging.
+4. Deploy the exact commit as an immutable release and require hosted liveness/readiness, core smoke
+   and a production-safe browser sample.
 
-1. Configure real production secrets and schedulers, restore-test the backup, and apply the reviewed
-   migrations to the target Supabase project.
-2. Deploy the exact commit to an immutable server release, then require liveness, hosted readiness
-   and core production smoke.
-
-External providers remain disabled until real credentials, explicit enablement, data-processing
-approval and scheduler heartbeats are supplied. The product does not present simulated provider,
-AI, delivery or worker state as real.
-
-The current audit, executed plan and final omission review are recorded in
-[AUDIT_2026-07-24_V2.4.0.md](AUDIT_2026-07-24_V2.4.0.md),
-[REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md](REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md)
-and [FINAL_REAUDIT_2026-07-24_V2.4.0.md](FINAL_REAUDIT_2026-07-24_V2.4.0.md).
+The audit, executed plan and final omission review are recorded in
+[AUDIT_2026-07-26_V2.5.0.md](AUDIT_2026-07-26_V2.5.0.md),
+[REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md](REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md)
+and [FINAL_REAUDIT_2026-07-26_V2.5.0.md](FINAL_REAUDIT_2026-07-26_V2.5.0.md).

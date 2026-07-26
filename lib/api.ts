@@ -10,6 +10,7 @@ import {
 } from "./auth";
 import { aal2Capabilities, hasCapability, type Capability } from "./capabilities";
 import { SupabaseRequestError } from "./supabase-server";
+import { emitObservabilityEvent, requestOutcome, routeTemplate } from "./observability";
 
 export type ApiErrorBody = {
   code: string;
@@ -121,18 +122,36 @@ export function apiRoute<Context = unknown>(
 ) {
   return async (request: Request, context: Context) => {
     const requestId = requestIdFor(request);
+    const startedAt = performance.now();
+    const route = routeTemplate(new URL(request.url).pathname);
+    const complete = async (response: Response, knownErrorCode?:string) => {
+      let errorCode=knownErrorCode;
+      if(!errorCode&&response.status>=400){const payload=await response.clone().json().catch(()=>({})) as {code?:unknown};if(typeof payload.code==="string"&&/^[A-Z][A-Z0-9_]{2,80}$/.test(payload.code))errorCode=payload.code;}
+      void emitObservabilityEvent({
+        name: "api.request.completed",
+        requestId,
+        method: request.method,
+        route,
+        status: response.status,
+        durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        outcome: requestOutcome(response.status),
+        ...(errorCode?{errorCode}:{}),
+      });
+      return response;
+    };
     try {
       const response = await handler(request, context);
       if (!response.headers.has("cache-control")) response.headers.set("cache-control", "no-store");
       if (response.status >= 300 && response.status < 400) {
         response.headers.set("x-request-id", requestId);
-        return response;
+        return await complete(response);
       }
-      if (!response.ok) return normalizeErrorResponse(response, requestId);
+      if (!response.ok) return await complete(await normalizeErrorResponse(response, requestId));
       response.headers.set("x-request-id", requestId);
-      return response;
+      return await complete(response);
     } catch (error) {
-      return errorResponse(error, requestId, fallbackCode);
+      const errorCode=error instanceof ApiError?error.code:error instanceof SupabaseRequestError?error.code:fallbackCode;
+      return await complete(errorResponse(error, requestId, fallbackCode),errorCode);
     }
   };
 }
