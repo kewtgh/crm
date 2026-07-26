@@ -37,6 +37,8 @@ type PermissionExplanation = {
   status?: string;
 };
 
+type MobileOperationsSection = "overview" | "queues" | "integrations" | "actions" | "access";
+
 export function OperationsCenterPage({
   initialSnapshot,
   initialRetryableJobs,
@@ -86,6 +88,7 @@ export function OperationsCenterPage({
   const [rejecting, setRejecting] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [permission, setPermission] = useState<PermissionExplanation | null>(null);
+  const [mobileSection, setMobileSection] = useState<MobileOperationsSection>("overview");
   const runOperationsLoad=useRemoteSearch();
   const runActionsLoad=useRemoteSearch();
   const runIntegrationsLoad=useRemoteSearch();
@@ -288,6 +291,25 @@ export function OperationsCenterPage({
     }
   };
 
+  const validate = async (provider: IntegrationConnection["provider"]) => {
+    setIntegrationPending(provider);
+    setError("");
+    try {
+      const result = await apiFetch<{ items: IntegrationConnection[] }>("/api/integrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "validate", provider }),
+      });
+      setIntegrations(result.items);
+      setToast(t("operations.validationPassed"));
+    } catch {
+      setError(t("operations.validationFailed"));
+      void refresh();
+    } finally {
+      setIntegrationPending("");
+    }
+  };
+
   const formatDate = (value: string | null) => value
     ? formatPreferredDate(value, { includeTime: true })
     : t("operations.neverRun");
@@ -299,15 +321,26 @@ export function OperationsCenterPage({
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}
 
+    <nav className="operations-mobile-tabs" aria-label={t("operations.mobile.navigation")}>
+      {(["overview", "queues", "integrations", "actions", "access"] as const).map((section) => <button
+        key={section}
+        type="button"
+        className={mobileSection === section ? "active" : ""}
+        aria-current={mobileSection === section ? "page" : undefined}
+        onClick={() => setMobileSection(section)}
+      >{t(`operations.mobile.${section}`)}</button>)}
+    </nav>
+
+    <div className={`operations-mobile-panel ${mobileSection === "overview" ? "mobile-active" : ""}`}>
     <section className="surface operations-section release-readiness">
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.releaseEyebrow")}</p><h2>{t("operations.releaseReadiness")}</h2><p>{t("operations.releaseHelp")}</p></div><StatusBadge tone={readiness?.ready?"green":"red"}>{t(readiness?.ready?"operations.releaseReady":"operations.releaseBlocked")}</StatusBadge></div>
       <div className="operations-insight-grid">
         <InsightCard value={`${readiness?.environment.configured??0}/${readiness?.environment.expected??0}`} label={t("operations.environment")} detail={t(readiness?.environment.core?"operations.coreConfigured":"operations.coreMissing")}/>
         <InsightCard value={String(readiness?.missingWorkers??4)} label={t("operations.missingWorkers")} detail={t((readiness?.staleWorkers??0)>0?"operations.workersUnhealthy":"operations.workersReady")}/>
         <InsightCard value={String(readiness?.failedJobs??0)} label={t("operations.failedJobs")} detail={t((readiness?.stuckJobs??0)>0?"operations.jobsStuck":"operations.jobsReady")}/>
-        <InsightCard value={`${[readiness?.environment.delivery,...(readiness?.environment.webhooksEnabled?[readiness.environment.webhooks]:[]),...(readiness?.environment.integrationsEnabled?[readiness.environment.integrations]:[])].filter(Boolean).length}/${1+(readiness?.environment.webhooksEnabled?1:0)+(readiness?.environment.integrationsEnabled?1:0)}`} label={t("operations.externalServices")} detail={t("operations.externalServicesHelp")}/>
+        <InsightCard value={`${[readiness?.environment.delivery,...(readiness?.environment.webhooksEnabled?[readiness.environment.webhooks]:[]),...(readiness?.environment.integrationsEnabled?[readiness.environment.integrations]:[]),...(readiness?.environment.observabilityEnabled?[readiness.environment.observability]:[]),...(readiness?.environment.ssoEnabled?[readiness.environment.sso]:[]),...(readiness?.environment.scimEnabled?[readiness.environment.scim]:[])].filter(Boolean).length}/${1+(readiness?.environment.webhooksEnabled?1:0)+(readiness?.environment.integrationsEnabled?1:0)+(readiness?.environment.observabilityEnabled?1:0)+(readiness?.environment.ssoEnabled?1:0)+(readiness?.environment.scimEnabled?1:0)}`} label={t("operations.externalServices")} detail={t("operations.externalServicesHelp")}/>
       </div>
-      <div className="release-feature-flags"><StatusBadge tone={readiness?.environment.webhooksEnabled?readiness.environment.webhooks?"green":"red":"gray"}>{t(readiness?.environment.webhooksEnabled?"operations.webhooksEnabled":"operations.webhooksDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.integrationsEnabled?readiness.environment.integrations?"green":"red":"gray"}>{t(readiness?.environment.integrationsEnabled?"operations.integrationsEnabled":"operations.integrationsDisabled")}</StatusBadge><small>{t("operations.optionalWorkerHelp")}</small></div>
+      <div className="release-feature-flags"><StatusBadge tone={readiness?.environment.webhooksEnabled?readiness.environment.webhooks?"green":"red":"gray"}>{t(readiness?.environment.webhooksEnabled?"operations.webhooksEnabled":"operations.webhooksDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.integrationsEnabled?readiness.environment.integrations?"green":"red":"gray"}>{t(readiness?.environment.integrationsEnabled?"operations.integrationsEnabled":"operations.integrationsDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.observabilityEnabled?readiness.environment.observability?"green":"red":"gray"}>{t(readiness?.environment.observabilityEnabled?"operations.observabilityEnabled":"operations.observabilityDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.ssoEnabled?readiness.environment.sso?"green":"red":"gray"}>{t(readiness?.environment.ssoEnabled?"operations.ssoEnabled":"operations.ssoDisabled")}</StatusBadge><StatusBadge tone={readiness?.environment.scimEnabled?readiness.environment.scim?"green":"red":"gray"}>{t(readiness?.environment.scimEnabled?"operations.scimEnabled":"operations.scimDisabled")}</StatusBadge><small>{t("operations.optionalWorkerHelp")}</small></div>
     </section>
 
     <section className="operations-insight-grid" aria-label={t("operations.businessInsights")}>
@@ -317,7 +350,9 @@ export function OperationsCenterPage({
       <InsightCard value={`${insights?.queueSla.attainment ?? 0}%`} label={t("operations.queueAttainment")} detail={t("operations.queueDetail", { pending: insights?.queueSla.pending ?? 0, breached: insights?.queueSla.breached ?? 0 })}/>
       <InsightCard value={`${insights?.nextBestAction.adoptionRate ?? 0}%`} label={t("operations.nbaAdoption")} detail={t("operations.nbaDetail", { accepted: insights?.nextBestAction.accepted ?? 0, rejected: insights?.nextBestAction.rejected ?? 0, completed: insights?.nextBestAction.completed ?? 0 })}/>
     </section>
+    </div>
 
+    <div className={`operations-mobile-panel ${mobileSection === "queues" ? "mobile-active" : ""}`}>
     <section className="surface operations-section">
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.queueEyebrow")}</p><h2>{t("operations.queues")}</h2></div><Database size={20}/></div>
       <div className="operations-queue-grid">{snapshot?.queues.map((queue) => <article key={queue.key}>
@@ -356,8 +391,9 @@ export function OperationsCenterPage({
         />
       </section>
     </div>
+    </div>
 
-    <section className="surface operations-section">
+    <section className={`surface operations-section operations-mobile-panel ${mobileSection === "integrations" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.providerEyebrow")}</p><h2>{t("operations.integrations")}</h2><p>{t("operations.integrationHelp")}</p></div><CloudCog size={20}/></div>
       <div className="integration-grid">{integrations.map((integration) => {
         const draft = integrationDrafts[integration.provider] ?? {
@@ -365,19 +401,20 @@ export function OperationsCenterPage({
           syncDirection: integration.syncDirection,
           accountLabel: integration.externalAccountLabel,
         };
+        const validationCurrent = integration.validation?.status === "SUCCEEDED" && new Date(integration.validation.expiresAt) > new Date();
         return <article key={integration.id}>
-        <span><CloudCog size={20}/></span><div><b>{t(`operations.provider.${integration.provider}`)}</b><small>{integration.externalAccountLabel || t("operations.neverSynced")}</small><small>{integration.lastSyncedAt ? formatDate(integration.lastSyncedAt) : t("operations.neverSynced")}</small>{integration.lastError && <small className="error-text">{integration.lastError}</small>}</div>
+        <span><CloudCog size={20}/></span><div><b>{t(`operations.provider.${integration.provider}`)}</b><small>{integration.externalAccountLabel || t("operations.neverSynced")}</small><small>{integration.lastSyncedAt ? formatDate(integration.lastSyncedAt) : t("operations.neverSynced")}</small><small className={validationCurrent?"good-text":"error-text"}>{integration.validation?t(validationCurrent?"operations.validationCurrent":"operations.validationExpired",{date:formatDate(integration.validation.validatedAt)}):t("operations.validationMissing")}</small>{integration.validation?.capabilities.length?<small>{t("operations.validationCapabilities",{count:integration.validation.capabilities.length})}</small>:null}{integration.lastError && <small className="error-text">{integration.lastError}</small>}</div>
         <StatusBadge tone={integration.status === "CONNECTED" ? "green" : integration.status === "DISCONNECTED" ? "gray" : "amber"}>{t(`operations.status.${integration.status}`)}</StatusBadge>
         <details><summary>{t("operations.configure")}</summary><div className="integration-controls">
           <label className="field"><span>{t("common.status")}</span><select value={draft.status} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, status: event.target.value as IntegrationConnection["status"] } }))}>{(integration.status === "CONNECTED" || integration.status === "DEGRADED" ? ["DISCONNECTED","CONNECTING","CONNECTED","DEGRADED","ACTION_REQUIRED"] : ["DISCONNECTED","CONNECTING","ACTION_REQUIRED"]).map((value) => <option key={value} value={value}>{t(`operations.status.${value}`)}</option>)}</select></label>
           <label className="field"><span>{t("operations.syncDirection")}</span><select value={draft.syncDirection} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, syncDirection: event.target.value as IntegrationConnection["syncDirection"] } }))}>{["NONE","IMPORT_ONLY","EXPORT_ONLY","BIDIRECTIONAL"].map((value) => <option key={value} value={value}>{t(`operations.sync.${value}`)}</option>)}</select></label>
           <label className="field"><span>{t("operations.accountLabel")}</span><input value={draft.accountLabel} maxLength={160} onChange={(event) => setIntegrationDrafts((current) => ({ ...current, [integration.provider]: { ...draft, accountLabel: event.target.value } }))}/></label>
-          <div className="integration-buttons"><button className="secondary-button" type="button" disabled={integrationPending === integration.provider} onClick={() => void configure(integration.provider)}>{t("common.save")}</button><button className="primary-button" type="button" disabled={integrationPending === integration.provider || integration.status !== "CONNECTED" || integration.syncDirection === "NONE"} onClick={() => void sync(integration.provider)}><RefreshCw size={15}/>{t("operations.syncNow")}</button></div>
+          <div className="integration-buttons"><button className="secondary-button" type="button" disabled={integrationPending === integration.provider} onClick={() => void configure(integration.provider)}>{t("common.save")}</button><button className="secondary-button" type="button" disabled={integrationPending === integration.provider || !readiness?.environment.integrationsEnabled || !readiness.environment.integrations} onClick={() => void validate(integration.provider)}><ShieldQuestion size={15}/>{t("operations.validateConnector")}</button><button className="primary-button" type="button" disabled={integrationPending === integration.provider || integration.status !== "CONNECTED" || integration.syncDirection === "NONE" || !validationCurrent} onClick={() => void sync(integration.provider)}><RefreshCw size={15}/>{t("operations.syncNow")}</button></div>
         </div></details>
       </article>})}</div>
     </section>
 
-    <section className="surface operations-section">
+    <section className={`surface operations-section operations-mobile-panel ${mobileSection === "actions" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.rulesEyebrow")}</p><h2>{t("operations.nextActions")}</h2><p>{t("operations.nextActionsHelp")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => void generate()}><Lightbulb size={16}/>{t("operations.generate")}</button></div>
       <InlineMessage type="info">{t(aiProviderConfigured?"ai.providerConfigured":"ai.providerDisabled")}</InlineMessage>
       <div className="next-action-grid">{nextActions.map((item) => <article key={item.id}>
@@ -398,7 +435,7 @@ export function OperationsCenterPage({
       />
     </section>
 
-    <section className="surface operations-section permission-explainer">
+    <section className={`surface operations-section permission-explainer operations-mobile-panel ${mobileSection === "access" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.authorizationEyebrow")}</p><h2>{t("operations.permission")}</h2><p>{t("operations.permissionHelp")}</p></div><ShieldQuestion size={20}/></div>
       <form onSubmit={explain}><label className="field"><span>{t("operations.resourceType")}</span><select name="resourceType">{["ORGANIZATION","CONTACT","OPPORTUNITY","CONTRACT","APPOINTMENT","TASK","QUOTE"].map((value) => <option key={value} value={value}>{t(`operations.resource.${value}`)}</option>)}</select></label><label className="field"><span>{t("operations.resourceId")}</span><input name="resourceId" type="text" pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("operations.action")}</span><select name="action">{["READ","EDIT","DELETE","APPROVE","RETRY"].map((value) => <option key={value} value={value}>{t(`operations.action.${value}`)}</option>)}</select></label><button className="primary-button" type="submit">{t("operations.explain")}</button></form>
       {permission && <InlineMessage type={permission.allowed ? "success" : "warning"}><b>{t(permission.allowed ? "operations.allowed" : "operations.denied")}</b> · {t("operations.reason", { reason: permission.reason ?? "UNKNOWN" })} · {t("operations.mfa", { level: permission.mfaLevel ?? "unknown" })}</InlineMessage>}

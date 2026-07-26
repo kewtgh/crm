@@ -5,6 +5,7 @@ import {
   configureIntegration,
   listIntegrations,
   requestIntegrationSync,
+  validateIntegration,
 } from "@/lib/operations-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 
@@ -18,6 +19,7 @@ const schema = z.discriminatedUnion("operation", [
     accountLabel: z.string().trim().max(160).default(""),
   }),
   z.object({ operation: z.literal("sync"), provider }),
+  z.object({ operation: z.literal("validate"), provider }),
 ]);
 
 async function get() {
@@ -31,12 +33,15 @@ async function post(request: Request) {
   await requireApiAal2();
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_INTEGRATION_OPERATION", 400);
+  let validation;
   if (parsed.data.operation === "configure") {
     await configureIntegration(parsed.data);
-  } else {
+  } else if(parsed.data.operation === "sync") {
     await requestIntegrationSync(parsed.data.provider);
+  } else {
+    validation=await validateIntegration(parsed.data.provider,(await requireApiRole("SUPER_ADMIN","ADMIN")).id);
   }
-  return NextResponse.json({ items: await listIntegrations() });
+  return NextResponse.json({ items: await listIntegrations(),...(validation?{validation}:{}) });
 }
 
 export const GET = apiRoute(get, "INTEGRATIONS_LOAD_FAILED");

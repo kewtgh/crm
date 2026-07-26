@@ -13,8 +13,8 @@ const phases = [
     name: "02-manager-core-a", timeout: 75,
     env: {
       QA_SCOPE: "routes", QA_LABEL: "core-a",
-      QA_ROUTES: "/dashboard,/schools,/people,/calendar,/tasks,/messages,/products",
-      QA_MOBILE_ROUTES: "/dashboard,/calendar,/messages",
+      QA_ROUTES: "/dashboard,/action-center,/schools,/people,/calendar,/tasks,/messages,/products",
+      QA_MOBILE_ROUTES: "/dashboard,/action-center,/calendar,/messages",
       QA_TABLET_ROUTES: "/dashboard",
     },
   },
@@ -56,7 +56,7 @@ const phases = [
     name: "07-admin", timeout: 75,
     env: {
       QA_SCOPE: "routes", QA_LABEL: "admin", QA_ROLE: "SUPER_ADMIN",
-      QA_ROUTES: "/admin,/admin/approvals,/admin/operations,/admin/users,/admin/security",
+      QA_ROUTES: "/action-center,/admin,/admin/approvals,/admin/operations,/admin/users,/admin/security",
       QA_MOBILE_ROUTES: "/admin,/admin/approvals,/admin/operations,/admin/users,/admin/security",
     },
   },

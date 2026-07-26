@@ -3,14 +3,11 @@ import { cookies } from "next/headers";
 import { authCookieNames, userFromSupabase } from "@/lib/auth";
 import { clearAuthSessionCookies, setAuthSessionCookies } from "@/lib/auth-session";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
-
-function safeReturnTo(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
-}
+import { safeRelativeReturnTo } from "@/lib/return-to";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const returnTo = safeReturnTo(requestUrl.searchParams.get("returnTo"));
+  const returnTo = safeRelativeReturnTo(requestUrl.searchParams.get("returnTo"));
   const jsonMode = requestUrl.searchParams.get("mode") === "json"
     || request.headers.get("accept")?.includes("application/json");
   const cookieStore = await cookies();

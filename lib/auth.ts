@@ -4,6 +4,7 @@ import { hasCapability, type Capability } from "./capabilities";
 import { fetchWithTimeout } from "./fetch-timeout";
 import { APP_ROLES, type AppRole } from "./roles";
 import type { AppUser } from "./user";
+import { cache } from "react";
 
 export type { AppRole } from "./roles";
 export type { AppUser } from "./user";
@@ -113,7 +114,7 @@ export async function hydrateStaffUser(baseUser: AppUser, accessToken: string) {
   return baseUser;
 }
 
-export async function getCurrentUser(): Promise<AppUser | null> {
+async function loadCurrentUser(): Promise<AppUser | null> {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(authCookieNames.access)?.value;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -136,6 +137,11 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     return null;
   }
 }
+
+// React cache is request-scoped for Server Component rendering. It prevents nested
+// layouts and pages from repeating Auth/profile/membership hydration while keeping
+// every new request independently verified.
+export const getCurrentUser = cache(loadCurrentUser);
 
 export async function requireUser() {
   const user = await getCurrentUser();

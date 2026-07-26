@@ -1,8 +1,16 @@
-import { supabaseAdminJson, supabaseJson, supabaseRequest } from "./supabase-server";
+import { supabaseAdminJson, supabaseJson, supabaseRequest, SupabaseRequestError } from "./supabase-server";
 import { inspectWorkerRuntimeEnvironment, type WorkerKey } from "./runtime-environment";
+import { fetchWithTimeout } from "./fetch-timeout";
+import type {
+  IntegrationProvider,
+  IntegrationStatus,
+  IntegrationSyncDirection,
+  OperationQueueKey,
+  RetryableJobType,
+} from "./operations-types";
 
 export type QueueMetric = {
-  key: string;
+  key: OperationQueueKey;
   pending: number;
   failed: number;
   stuck: number;
@@ -38,8 +46,14 @@ export type ReleaseReadiness={
     delivery:boolean;
     webhooks:boolean;
     integrations:boolean;
+    observability:boolean;
+    sso:boolean;
+    scim:boolean;
     webhooksEnabled:boolean;
     integrationsEnabled:boolean;
+    observabilityEnabled:boolean;
+    ssoEnabled:boolean;
+    scimEnabled:boolean;
     enabledWorkers:WorkerKey[];
     configured:number;
     expected:number;
@@ -48,7 +62,7 @@ export type ReleaseReadiness={
 };
 export type RetryableJob = {
   id: string;
-  type: "NOTIFICATION_OUTBOX" | "CALENDAR_DELIVERIES" | "GENERATED_JOBS" | "REMINDERS" | "WEBHOOK_INBOX" | "INTEGRATION_SYNC" | "IDENTITY_REPAIR";
+  type: RetryableJobType;
   label: string;
   status: string;
   error: string;
@@ -56,13 +70,14 @@ export type RetryableJob = {
 };
 export type IntegrationConnection = {
   id: string;
-  provider: "MICROSOFT_365" | "GOOGLE_CALENDAR" | "EMAIL" | "E_SIGNATURE" | "ACCOUNTING" | "PAYMENT";
-  status: "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "DEGRADED" | "ACTION_REQUIRED";
-  syncDirection: "NONE" | "IMPORT_ONLY" | "EXPORT_ONLY" | "BIDIRECTIONAL";
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
+  syncDirection: IntegrationSyncDirection;
   externalAccountLabel: string;
   cursorValue: string | null;
   lastSyncedAt: string | null;
   lastError: string | null;
+  validation: {status:"SUCCEEDED"|"FAILED";validatedAt:string;expiresAt:string;capabilities:string[];errorCode:string|null}|null;
 };
 export type NextBestAction = {
   id: string;
@@ -159,9 +174,11 @@ export async function listRetryableJobs(page = 1, pageSize = 10): Promise<PagedR
 }
 
 export async function listIntegrations(): Promise<IntegrationConnection[]> {
-  const rows = await supabaseJson<Array<Record<string, unknown>>>(
+  const workspaceId=process.env.CRM_WORKSPACE_ID;
+  const [rows,receipts] = await Promise.all([supabaseJson<Array<Record<string, unknown>>>(
     "/rest/v1/integration_connections?select=id,provider,status,sync_direction,external_account_label,cursor_value,last_synced_at,last_error&order=provider",
-  );
+  ),workspaceId?supabaseAdminJson<Array<Record<string,unknown>>>(`/rest/v1/connector_validation_receipts?select=provider,status,validated_at,expires_at,capabilities,error_code&workspace_id=eq.${workspaceId}&order=validated_at.desc&limit=100`):Promise.resolve([])]);
+  const validationByProvider=new Map<string,Record<string,unknown>>();for(const receipt of receipts){const key=String(receipt.provider);if(!validationByProvider.has(key))validationByProvider.set(key,receipt);}
   return rows.map((row) => ({
     id: String(row.id),
     provider: row.provider as IntegrationConnection["provider"],
@@ -171,6 +188,7 @@ export async function listIntegrations(): Promise<IntegrationConnection[]> {
     cursorValue: row.cursor_value ? String(row.cursor_value) : null,
     lastSyncedAt: row.last_synced_at ? String(row.last_synced_at) : null,
     lastError: row.last_error ? String(row.last_error) : null,
+    validation:(()=>{const receipt=validationByProvider.get(String(row.provider));return receipt?{status:receipt.status as "SUCCEEDED"|"FAILED",validatedAt:String(receipt.validated_at),expiresAt:String(receipt.expires_at),capabilities:Array.isArray(receipt.capabilities)?receipt.capabilities.map(String):[],errorCode:receipt.error_code?String(receipt.error_code):null}:null;})(),
   }));
 }
 
@@ -327,10 +345,26 @@ export async function configureIntegration(input: {
 }
 
 export async function requestIntegrationSync(provider: IntegrationConnection["provider"]) {
+  if (/^(1|true|yes|on)$/i.test(process.env.INTEGRATION_SYNC_ENABLED?.trim()??"")) {
+    const workspaceId=process.env.CRM_WORKSPACE_ID;
+    if(!workspaceId)throw new SupabaseRequestError(503,"WORKSPACE_NOT_CONFIGURED","Workspace is not configured");
+    const receipts=await supabaseAdminJson<Array<{expires_at:string}>>(`/rest/v1/connector_validation_receipts?select=expires_at&workspace_id=eq.${workspaceId}&provider=eq.${provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`);
+    if(!receipts[0])throw new SupabaseRequestError(409,"CONNECTOR_VALIDATION_REQUIRED","A current successful connector validation is required");
+  }
   return supabaseJson<Record<string, unknown>>("/rest/v1/rpc/request_integration_sync", {
     method: "POST",
     body: JSON.stringify({ target_provider: provider }),
   });
+}
+
+function hex(bytes:Uint8Array){return Array.from(bytes,byte=>byte.toString(16).padStart(2,"0")).join("");}
+export async function validateIntegration(provider:IntegrationConnection["provider"],actorId:string){
+  const environment=inspectWorkerRuntimeEnvironment();const workspaceId=process.env.CRM_WORKSPACE_ID;const endpoint=process.env.INTEGRATION_SYNC_PROCESSOR_URL?.trim();const token=process.env.INTEGRATION_SYNC_PROCESSOR_TOKEN?.trim();
+  if(!environment.integrationsEnabled||!environment.integrations||!workspaceId||!endpoint||!token)throw new SupabaseRequestError(503,"CONNECTOR_VALIDATION_NOT_CONFIGURED","Connector validation is not configured");
+  const startedAt=performance.now();let status:"SUCCEEDED"|"FAILED"="FAILED";let digest:string|null=null;let capabilities:string[]=[];let errorCode:string|null="CONNECTOR_VALIDATION_FAILED";
+  try{const response=await fetchWithTimeout(endpoint,{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({operation:"validate",provider,requestId:crypto.randomUUID()})},8_000);const payload=await response.json().catch(()=>({})) as {status?:string;capabilities?:unknown};if(!response.ok||payload.status!=="READY"||!Array.isArray(payload.capabilities))throw new Error("CONNECTOR_NOT_READY");capabilities=[...new Set(payload.capabilities.filter((item):item is string=>typeof item==="string"&&/^[A-Za-z0-9._:-]{1,80}$/.test(item)))].sort();const canonical=JSON.stringify({provider,status:"READY",capabilities});digest=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(canonical))));status="SUCCEEDED";errorCode=null;}catch(error){errorCode=error instanceof Error&&/^[A-Z0-9_]{3,80}$/.test(error.message)?error.message:"CONNECTOR_VALIDATION_FAILED";}
+  const expiresAt=new Date(Date.now()+24*60*60*1_000).toISOString();const durationMs=Math.min(60_000,Math.max(0,Math.round(performance.now()-startedAt)));await supabaseAdminJson("/rest/v1/connector_validation_receipts",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:workspaceId,provider,status,response_digest:digest,capabilities,error_code:errorCode,duration_ms:durationMs,validated_by:actorId,expires_at:expiresAt})});
+  if(status!=="SUCCEEDED")throw new SupabaseRequestError(502,errorCode??"CONNECTOR_VALIDATION_FAILED","Connector validation failed");return{status,capabilities,expiresAt,responseDigest:digest};
 }
 
 export async function loadBusinessInsights() {

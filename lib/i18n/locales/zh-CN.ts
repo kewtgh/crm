@@ -9,6 +9,7 @@ import { zhOperationsV09 } from "./operations-v09";
 import { zhV120 } from "./v120";
 import { zhV200 } from "./v200";
 import { zhV220 } from "./v220";
+import { zhV250 } from "./v250";
 
 export const zhCN: Messages = {
   "pipeline.currencyScope":"币种范围",
@@ -22,6 +23,7 @@ export const zhCN: Messages = {
   ...zhV120,
   ...zhV200,
   ...zhV220,
+  ...zhV250,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.english": "English",
@@ -159,6 +161,15 @@ export const zhCN: Messages = {
   "auth.login.title": "欢迎回来",
   "auth.login.subtitle": "登录工作人员工作区，继续管理客户组织、联系人与销售流程。",
   "auth.login.submit": "安全登录",
+  "auth.sso.or": "或使用企业身份",
+  "auth.sso.submit": "使用企业 SSO 登录",
+  "auth.sso.help": "请输入公司邮箱；身份验证由已配置的企业身份提供商完成。",
+  "auth.sso.emailRequired": "企业 SSO 需要有效的公司邮箱。",
+  "auth.sso.domainNotAllowed": "此邮箱域名未启用企业 SSO。",
+  "auth.sso.stateInvalid": "企业登录状态已过期或无效，请重新开始。",
+  "auth.sso.staffAccess": "企业身份已验证，但此账号尚未配置为可用的 CRM 员工。",
+  "auth.sso.unavailable": "企业身份服务暂时不可用，请稍后重试。",
+  "auth.sso.failed": "无法开始企业登录，请联系管理员检查 SSO 配置。",
   "auth.staffOnly": "仅限公司员工",
   "auth.staffOnlyHelp": "账号仅由管理员在后台创建；客户与外部合作方不在此注册。",
   "auth.email": "邮箱",

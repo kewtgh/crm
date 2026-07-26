@@ -14,6 +14,7 @@ import {
   GraduationCap,
   HelpCircle,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Menu,
   MessageSquareText,
@@ -48,6 +49,7 @@ type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge
 const navigation: { titleKey: string; items: NavItem[] }[] = [
   { titleKey: "nav.dashboard", items: [
     { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { labelKey: "nav.actionCenter", href: "/action-center", icon: ListChecks },
     { labelKey: "nav.schedule", icon: CalendarRange, children: [
       { labelKey: "nav.calendar", href: "/calendar" },
     { labelKey: "nav.tasks", href: "/tasks" },

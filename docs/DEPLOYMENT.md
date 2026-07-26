@@ -1,17 +1,17 @@
-# Lumina Education CRM v2.4.0 部署指引
+# Lumina Education CRM v2.5.0 部署指引
 
 ## 1. 发布前提
 
 - Node.js 24.x；开发、CI 与服务器统一使用 `.nvmrc` 固定的 `24.18.0`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
-- 数据库必须按顺序应用到 `202607210052`，且不得跳过 `050` 的隐私导出修复或 `052` 的 Worker 最小读取权限。
+- 数据库必须按顺序应用到 `202607260053`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限或 `053` 的企业目录与连接器验证凭证。
 
-当前工作树是 v2.4.0 release candidate。`050/051`、schema lint 与完整数据库行为套件已经
+当前工作树是 v2.5.0 release candidate。`053`、schema lint 与完整数据库行为套件已经
 在隔离本地环境通过；本轮完整门禁证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.4.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.5.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -34,6 +34,25 @@ TRUSTED_DEVICE_HASH_SECRET=different-independent-random-secret-at-least-32-bytes
 Worker 由对应 enable flag 显式启用；未启用的可选 Worker 不参与 readiness，启用后缺凭据、
 心跳过期或队列不健康必须阻断发布。支付、会计、电子签和 AI 均不得用测试值伪装已连接。
 
+企业与可观测性边界必须分别显式启用：
+
+```dotenv
+SSO_ENABLED=false
+SSO_ALLOWED_DOMAINS=staff.example.com
+SCIM_ENABLED=false
+SCIM_BEARER_TOKEN=independent-random-token-at-least-32-bytes
+OBSERVABILITY_ENABLED=false
+OBSERVABILITY_WEBHOOK_URL=https://telemetry.example.net/lumina/events
+OBSERVABILITY_WEBHOOK_TOKEN=independent-random-token-at-least-32-bytes
+OBSERVABILITY_SAMPLE_RATE=1
+```
+
+正式 SSO 需要先在 Supabase Auth 配置并验证 SAML IdP；应用只负责同源、允许域、Turnstile、
+限流、PKCE、活跃 membership 与 MFA 路径。SCIM token 只交给受信任的企业目录服务，SCIM
+仅可预配受限销售员工角色，不能授予 `ADMIN` / `SUPER_ADMIN` 或创建客户账号。遥测接收器
+只能接收允许列表中的 request ID、路由模板、方法、状态、时延、结果与稳定错误码，不得接收
+查询串、Cookie、请求体、账号标识或 CRM 业务内容。
+
 `NEXT_PUBLIC_*` 只能保存公开值。service role、Turnstile secret、限流/可信设备 HMAC、邮件及
 连接器 token 不得进入浏览器、提交、构建日志或客户端 bundle。初始化后删除 `ADMIN_PASSWORD`。
 
@@ -44,7 +63,7 @@ Worker 由对应 enable flag 显式启用；未启用的可选 Worker 不参与 
 3. 配置正式 APP URL、密码重置回调、SMTP 和显示六位 `{{ .Token }}` 的 OTP 模板。
 4. 管理员必须 TOTP/AAL2；普通员工可选 MFA，否则在新设备完成邮箱 OTP。
 5. 确认 `crm-avatars` 与 `crm-exports` 为 private。
-6. 按文件名顺序应用全部迁移到 `202607210052`：
+6. 按文件名顺序应用全部迁移到 `202607260053`：
 
 ```bash
 npx supabase db push --linked
@@ -55,7 +74,8 @@ npx supabase test db --linked
 `043–045` 修正 Worker readiness；`044/049/050` 完成隐私执行和导出凭证；`046` 完成多币种
 导出；`048` 建立新业务域；`051` 补齐自动化预览/重试、门户同意、通信幂等、质量规则、增长
 绩效与连接器对账；`052` 修复日历与隐私导出 Worker 通过 PostgREST 读取来源记录所需的最小
-`service_role` 权限。最终数据库测试总数应为 433，任一失败都不得部署应用。
+`service_role` 权限；`053` 增加受限企业目录、SSO profile 兼容和不可变连接器 sandbox
+验证凭证。最终数据库测试总数应为 460，任一失败都不得部署应用。
 
 首次初始化运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、
 `must_change_password=true` 与 username，随后删除临时密码。首次登录必须改密并配置 TOTP。
@@ -67,7 +87,7 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、31 条 Node 契约、schema lint、433 条
+门禁必须包含：typecheck、ESLint、production build、35 条 Node 契约、schema lint、460 条
 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
@@ -112,6 +132,10 @@ npm run workers:process
 签名包、重放窗口和原子幂等摄取。连接器对账必须写不可变 receipt；相同事件 ID 若内容不同
 应明确失败。
 
+集成同步正式启用后，管理员必须先执行不含 CRM 记录的 sandbox 验证。处理器只返回稳定
+`READY` 状态和受限 capability 列表；应用保存状态、耗时、响应 SHA-256、执行者与 24 小时
+有效期。没有当前成功凭证时，UI、API 和 Worker 都不得手工或后台排队同步。
+
 ## 6. 健康、监控与备份
 
 - `GET /api/health`：liveness 与版本。
@@ -130,6 +154,8 @@ npm run workers:process
 - 多币种报表不混加；10,001+ 行导出完整或明确失败，并有行数与 SHA-256。
 - 自动化预览无副作用，失败可重试；门户授权前不泄露家庭数据；通信重试重新检查同意。
 - 数据质量八类规则可配置和分配；连接器状态、重放保护和对账 receipt 可核验。
+- SSO 未配置时登录页不显示企业入口；SCIM 未启用时所有端点拒绝访问；行动中心只展示当前
+  capability 范围内的真实工作。
 - readiness 为 200，所有启用 Worker 有新鲜成功心跳。
 - 1440/1024/375 无横向溢出、未命名控件、焦点丢失、低于 12px 正文或错误吞没。
 

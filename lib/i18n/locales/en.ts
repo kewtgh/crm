@@ -9,6 +9,7 @@ import { enOperationsV09 } from "./operations-v09";
 import { enV120 } from "./v120";
 import { enV200 } from "./v200";
 import { enV220 } from "./v220";
+import { enV250 } from "./v250";
 
 export const en: Messages = {
   "pipeline.currencyScope":"Currency scope",
@@ -22,6 +23,7 @@ export const en: Messages = {
   ...enV120,
   ...enV200,
   ...enV220,
+  ...enV250,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.english": "English",
@@ -159,6 +161,15 @@ export const en: Messages = {
   "auth.login.title": "Welcome back",
   "auth.login.subtitle": "Sign in to the staff workspace to manage customer organizations, contacts, and sales workflows.",
   "auth.login.submit": "Sign in securely",
+  "auth.sso.or": "Or use enterprise identity",
+  "auth.sso.submit": "Sign in with enterprise SSO",
+  "auth.sso.help": "Enter your company email. Authentication is completed by the configured enterprise identity provider.",
+  "auth.sso.emailRequired": "Enterprise SSO requires a valid company email.",
+  "auth.sso.domainNotAllowed": "Enterprise SSO is not enabled for this email domain.",
+  "auth.sso.stateInvalid": "The enterprise sign-in state expired or is invalid. Start again.",
+  "auth.sso.staffAccess": "The enterprise identity was verified, but this account is not provisioned as active CRM staff.",
+  "auth.sso.unavailable": "The enterprise identity service is temporarily unavailable. Try again later.",
+  "auth.sso.failed": "Enterprise sign-in could not start. Ask an administrator to check SSO configuration.",
   "auth.staffOnly": "Company staff only",
   "auth.staffOnlyHelp": "Accounts are created only by an administrator. Customers and external partners do not register here.",
   "auth.email": "Email",

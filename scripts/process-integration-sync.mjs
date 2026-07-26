@@ -38,6 +38,9 @@ try {
   let completed = 0;
   for (const job of jobs) {
     try {
+      const validationResponse = await fetch(`${baseUrl}/rest/v1/connector_validation_receipts?select=id&workspace_id=eq.${job.workspace_id}&provider=eq.${job.provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`, { headers, signal: AbortSignal.timeout(10_000) });
+      const validations = await validationResponse.json().catch(() => []);
+      if (!validationResponse.ok || !validations.length) throw new Error("CONNECTOR_VALIDATION_REQUIRED");
       const response = await fetch(process.env.INTEGRATION_SYNC_PROCESSOR_URL, {
         method: "POST",
         headers: {

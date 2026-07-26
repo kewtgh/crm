@@ -7,7 +7,7 @@ const executable = process.env.PLAYWRIGHT_CHROMIUM_1228_PATH
 const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH
   || "playwright-core";
 const { chromium } = require(playwrightPath);
-const base = (process.env.AUTH_SMOKE_BASE_URL || "http://localhost:3210").replace(/\/$/, "");
+const base = (process.env.AUTH_SMOKE_BASE_URL || process.env.APP_URL || "http://localhost:3200").replace(/\/$/, "");
 const supabase = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const mailpit = process.env.AUTH_SMOKE_MAILPIT_URL || "http://127.0.0.1:56324";
