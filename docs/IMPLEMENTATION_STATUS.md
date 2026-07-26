@@ -1,4 +1,4 @@
-# Implementation status — v2.5.0 release candidate
+# Implementation status — v2.5.1 release candidate
 
 Status date: 2026-07-26
 
@@ -7,7 +7,7 @@ Status date: 2026-07-26
 The July 26 security, architecture, UI/UX and product audit is implemented. All P1/P2/P3 findings
 are closed in source, the four proposed product foundations are present behind explicit runtime
 boundaries, and the clean local database reached migration `202607260053`. The final production
-build, 35 Node contracts, 460 database contracts, every business/HTTP/export/device-auth smoke and
+build, 36 Node contracts, 460 database contracts, every business/HTTP/export/device-auth smoke and
 the pinned Chromium 1228 matrix pass.
 
 Production activation was not performed. Real SSO IdP metadata, SCIM client token, telemetry
@@ -51,20 +51,20 @@ state.
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.5.0 routes include SSO, SCIM and action center |
-| Node source contracts | 35/35 pass |
+| Production build | Pass; v2.5.1 routes include SSO, SCIM, action center and official Weiai branding |
+| Node source contracts | 36/36 pass |
 | Dependency audit | Baseline remains 0 vulnerabilities; dependency tree is unchanged, lockfile diff changes only app version. A fresh external npm advisory query was blocked because external metadata disclosure was not separately authorized. |
 | Phase-two and v0.9 business smoke | Pass |
 | v0.9 and v1.0 HTTP/security smoke | Pass on final production build |
 | v1.1 authenticated business smoke | Pass |
 | Export artifact smoke | Pass: CSV 137 B, XLSX 3,161 B, PDF 1,645 B with Chinese font embedding |
 | Real device-auth smoke | Pass: Turnstile, username/password, OTP, first password, trusted reuse, session rotation and private cache |
-| Production assets/MIME | Pass, 26 assets |
+| Production assets/MIME | Pass, 25 CSS/JS assets plus the Logo/Favicon PNG set |
 | Clean migration application | Pass through `202607260053_v250_enterprise_operations` |
 | PostgreSQL schema lint | Pass, 0 findings |
 | Full pgTAP suite | 460/460 pass across 10 files |
-| Pinned Chromium matrix | Pass, 78/78 page/viewports across 10 bounded phases in 195 seconds; 0 errors, 0 warnings; identities cleaned 9/9 |
-| Browser evidence | Chromium 149.0.7827.55, `ms-playwright/chromium-1228`, `playwright-core` 1.61.1, build hash `2ec64ff09a11e7f4fd6fe5320ec368542c83c984dbf2ef9271ff05c869c5c53f` |
+| Pinned Chromium matrix | Pass, 78/78 page/viewports across 10 bounded phases in 199 seconds; 0 errors, 0 warnings; identities cleaned 9/9 |
+| Browser evidence | Chromium 149.0.7827.55, `ms-playwright/chromium-1228`, `playwright-core` 1.61.1, build hash `6b207ed94416c6dc0b1cacdb2c15cd922fae2e067a3789b627625e84bd74d636` |
 
 The merged browser evidence is Git-ignored at
 `work/browser-qa-chromium-1228/report.json`. The exact executable recorded there is

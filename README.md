@@ -1,10 +1,14 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.5.0**
+Current release candidate: **v2.5.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.5.1 replaces the application lockup and browser icons with the official transparent
+Weiai Education assets, including high-density navigation/auth branding and 16, 32 and
+192 pixel PNG favicon metadata with a legacy `/favicon.ico` compatibility redirect.
 
 v2.5.0 closes the July 26 security, enterprise identity, operations and UX audit. It hardens
 authentication return targets and production configuration validation, memoizes request-local
@@ -105,7 +109,7 @@ release, applies linked Supabase migrations, atomically switches `/opt/lumina-cr
 systemd services, and checks liveness/readiness. The entire run defaults to a 15-minute hard limit;
 every stage has its own shorter timeout, and a failed cutover restores the previous release.
 
-The gate runs typecheck, lint, production build, 35 Node contracts, dependency audit,
+The gate runs typecheck, lint, production build, 36 Node contracts, dependency audit,
 schema lint, 460 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 

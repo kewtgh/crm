@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -7,7 +8,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  GraduationCap,
   Languages,
   LoaderCircle,
   LockKeyhole,
@@ -238,9 +238,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-page">
       <section className="auth-brand-panel">
-        <Link className="brand-lockup" href="/">
-          <span className="brand-mark"><GraduationCap size={23} /></span>
-          <span><b>{t("brand.short")}</b><small>{t("brand.product")}</small></span>
+        <Link className="brand-lockup" href="/" aria-label={t("brand.name")}>
+          <span className="brand-logo-surface">
+            <Image className="brand-logo" src="/brand/weiai-logo-800x240.png" width={800} height={240} alt={t("brand.name")} priority />
+          </span>
         </Link>
         <div className="auth-brand-copy">
           <p className="eyebrow">{t("auth.brandEyebrow")}</p>

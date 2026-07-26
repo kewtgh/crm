@@ -67,11 +67,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .auth-page { min-height: 100dvh; display: grid; grid-template-columns: minmax(360px, .92fr) minmax(520px, 1.08fr); background: #fff; }
 .auth-brand-panel { position: relative; min-height: 100dvh; overflow: hidden; padding: 44px clamp(38px, 5vw, 78px); color: #fff; background: linear-gradient(145deg, #153e36 0%, #1b5547 55%, #183d35 100%); display: flex; flex-direction: column; }
 .auth-brand-panel:before { content: ""; position: absolute; width: 520px; height: 520px; left: -220px; bottom: -240px; border-radius: 50%; border: 1px solid rgba(255,255,255,.09); box-shadow: 0 0 0 55px rgba(255,255,255,.025), 0 0 0 110px rgba(255,255,255,.018); }
-.brand-lockup { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 11px; width: fit-content; }
-.brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: var(--forest); background: #e8f1ed; }
-.brand-lockup > span:last-child { display: flex; flex-direction: column; line-height: 1.12; }
-.brand-lockup b { font-size: 20px; letter-spacing: -.025em; }
-.brand-lockup small { margin-top: 3px; color: inherit; opacity: .65; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.brand-lockup { position: relative; z-index: 2; display: inline-flex; align-items: center; width: fit-content; }
+.brand-logo-surface { display: flex; align-items: center; padding: 5px 9px; border: 1px solid rgba(255,255,255,.38); border-radius: 12px; background: rgba(255,255,255,.94); box-shadow: 0 5px 18px rgba(10,27,23,.14); }
+.brand-logo { display: block; width: 180px; height: auto; }
 .auth-brand-copy { position: relative; z-index: 2; max-width: 560px; margin: auto 0; padding: 90px 0; }
 .auth-brand-copy .eyebrow { color: #a8d8c7; }
 .auth-brand-copy h2 { max-width: 520px; margin: 15px 0 22px; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(38px, 4.2vw, 64px); font-weight: 500; line-height: 1.15; letter-spacing: -.04em; }
@@ -124,7 +122,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .app-frame { min-height: 100dvh; display: grid; grid-template-columns: 248px minmax(0, 1fr); background: var(--canvas); }
 .sidebar { position: sticky; z-index: 40; top: 0; height: 100dvh; overflow: hidden; padding: 18px 13px 12px; display: flex; flex-direction: column; color: rgba(255,255,255,.78); background: #173b34; transition: width .2s, transform .2s; }
 .sidebar-header { min-height: 54px; padding: 0 7px; display: flex; align-items: center; }
-.brand-lockup.inverse { color: #fff; }.brand-lockup.inverse .brand-mark { width: 36px; height: 36px; border-radius: 10px; }.brand-lockup.inverse b { font-size: 18px; }
+.brand-lockup.inverse .brand-logo-surface { padding: 4px 8px; border-radius: 10px; }.brand-lockup.inverse .brand-logo { width: 154px; }
 .sidebar-nav { overflow-y: auto; overflow-x: hidden; flex: 1; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; padding: 12px 0; }
 .nav-group { margin: 7px 0 17px; }.nav-group > p { margin: 0 11px 7px; color: rgba(255,255,255,.32); font-size: 9px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .nav-link { width: 100%; min-height: 39px; padding: 0 10px; margin: 2px 0; border: 0; border-radius: 8px; display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,.7); background: transparent; font-size: 12px; text-align: left; white-space: nowrap; }

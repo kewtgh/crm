@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -278,9 +279,10 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       {mobileOpen && <button className="mobile-overlay" onClick={closeMobile} aria-label={t("nav.close")} />}
       <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")}>
         <div className="sidebar-header">
-          <Link href="/dashboard" className="brand-lockup inverse" onClick={closeMobile}>
-            <span className="brand-mark"><GraduationCap size={22} /></span>
-            <span className="brand-words"><b>{t("brand.short")}</b><small>{t("brand.product")}</small></span>
+          <Link href="/dashboard" className="brand-lockup inverse" onClick={closeMobile} aria-label={t("brand.name")}>
+            <span className="brand-logo-surface">
+              <Image className="brand-logo" src="/brand/weiai-logo-800x240.png" width={800} height={240} alt={t("brand.name")} priority />
+            </span>
           </Link>
           <button className="mobile-close" type="button" onClick={closeMobile} aria-label={t("nav.close")}><X size={20} /></button>
         </div>
