@@ -150,7 +150,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.8\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.1"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -166,7 +166,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.8\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.1"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -574,7 +574,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.8\.0/);
+  assert.match(version, /2\.8\.1/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -609,7 +609,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.1"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -726,7 +726,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.8\.0/);
+  assert.match(version,/2\.8\.1/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -760,7 +760,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.8\.0"/);
+  assert.match(packageJson,/"version": "2\.8\.1"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -798,7 +798,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.8\.0/);
+  assert.match(version,/2\.8\.1/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -961,7 +961,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
   assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.8\.0/);
+  assert.match(version, /2\.8\.1/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -1010,6 +1010,8 @@ test("provides a persistent, locked and atomic one-command production deployment
   assert.match(packageJson, /"deploy:production:logs"/);
   assert.match(packageJson, /"deploy:production:rollback"/);
   assert.match(controller, /command\("sudo", \["-n", "\/usr\/bin\/systemctl", "start", "--no-block", deployService\]/);
+  assert.match(controller, /--property=ActiveState/);
+  assert.doesNotMatch(controller, /\["is-active", "--quiet", deployService\]/);
   assert.match(controller, /writeExclusiveRequest/);
   assert.match(controller, /LUMINA_PRODUCTION_DEPLOY_DRY_RUN_OK/);
   assert.match(controller, /terminalMarkers/);
@@ -1143,7 +1145,7 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
     readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.1"/);
   assert.match(returnTo, /containsUnsafePathCharacters/);
   assert.match(refresh, /safeRelativeReturnTo/);
   assert.match(environment, /Placeholder values are not allowed/);
@@ -1243,6 +1245,9 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
     settingsRoute,
     settingsRepository,
     shell,
+    shellCss,
+    settingsPage,
+    firstLoginSecurity,
     localeSwitcher,
     i18nProvider,
     ui,
@@ -1264,6 +1269,9 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
     readFile(new URL("../app/api/settings/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/settings-repository.ts", import.meta.url), "utf8"),
     readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/v270.css", import.meta.url), "utf8"),
+    readFile(new URL("../components/settings-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/first-login-security.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/locale-switcher.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/i18n-provider.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/ui.tsx", import.meta.url), "utf8"),
@@ -1289,6 +1297,14 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(shell, /pageCommands/);
   assert.match(shell, /source:\s*"page"/);
   assert.match(shell, /aria-current/);
+  assert.match(shell, /getActiveNavigationHref/);
+  assert.match(shell, /activeHref===child\.href/);
+  assert.match(shellCss, /app-frame\.sidebar-collapsed/);
+  assert.match(shellCss, /sidebar-collapsed \.sidebar\s*\{[^}]*width:\s*76px;[^}]*min-width:\s*0/);
+  assert.match(shellCss, /profile-trigger > span:first-child[^}]+#7250c8[^}]+#322078/s);
+  assert.match(settingsPage, /recoveryCopied \? <Check/);
+  assert.match(settingsPage, /aria-live="polite"/);
+  assert.match(firstLoginSecurity, /copied \? <Check/);
   assert.match(localeSwitcher, /section: "locale"/);
   assert.match(localeSwitcher, /persistFailed/);
   assert.match(i18nProvider, /localStorage\.setItem/);
@@ -1310,5 +1326,5 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(stagedQa, /gitStatusDigest/);
   assert.match(audit, /不受约束的时区/);
   assert.match(plan, /统一命令搜索/);
-  assert.match(version, /2\.8\.0/);
+  assert.match(version, /2\.8\.1/);
 });

@@ -135,6 +135,7 @@ export const en: Messages = {
   "nav.relationshipHealth": "Relationship health",
   "nav.relationshipChange": "Change this week",
   "nav.collapse": "Collapse navigation",
+  "nav.expand": "Expand navigation",
   "nav.profileSettings": "Personal & account settings",
   "nav.support": "Help & support",
   "nav.signOut": "Sign out securely",

@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertPathWithin,
   classifyPersistedDeployment,
+  isSystemdServiceInProgress,
   PRODUCTION_LOCAL_URL,
   PRODUCTION_PROJECT_REF,
   PRODUCTION_PUBLIC_URL,
@@ -80,8 +81,17 @@ function command(commandName, args, { allowFailure = false } = {}) {
   return result;
 }
 
+function deploymentServiceState() {
+  const result = command(
+    "systemctl",
+    ["show", deployService, "--property=ActiveState", "--value", "--no-pager"],
+    { allowFailure: true },
+  );
+  return String(result.stdout ?? "").trim();
+}
+
 function isServiceActive() {
-  return command("systemctl", ["is-active", "--quiet", deployService], { allowFailure: true }).status === 0;
+  return isSystemdServiceInProgress(deploymentServiceState());
 }
 
 function deploymentServiceOutcome() {

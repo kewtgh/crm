@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Download, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
+import { Check, Copy, Download, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage } from "./ui";
 import { MfaAuthenticatorGuide } from "./mfa-authenticator-guide";
@@ -99,8 +99,8 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
 
   const recoveryText = recoveryCodes.join("\n");
   const copyRecoveryCodes = async () => {
-    await navigator.clipboard.writeText(recoveryText);
-    setCopied(true);
+    try { await navigator.clipboard.writeText(recoveryText); setError(""); setCopied(true); }
+    catch { setCopied(false); setError(t("settings.recoveryCopyFailed")); }
   };
   const downloadRecoveryCodes = () => {
     const url = URL.createObjectURL(new Blob([`${t("settings.recoveryDownloadHeading")}\n\n${recoveryText}\n`], { type: "text/plain;charset=utf-8" }));
@@ -114,8 +114,9 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
   if (recoveryCodes.length) return <section className="auth-form recovery-code-reveal" aria-labelledby="recovery-code-title">
     <div className="auth-form-heading"><p className="eyebrow">{t("auth.mfa.recoveryEyebrow")}</p><h1 id="recovery-code-title">{t("auth.mfa.recoveryTitle")}</h1><p>{t("auth.mfa.recoveryDescription")}</p></div>
     <InlineMessage type="warning">{t("auth.mfa.recoveryOnce")}</InlineMessage>
+    {error && <InlineMessage type="error">{error}</InlineMessage>}
     <div className="recovery-code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>
-    <div className="recovery-code-actions"><button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}><Copy size={17}/>{t(copied ? "settings.recoveryCopied" : "settings.copyRecovery")}</button><button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={17}/>{t("settings.downloadRecovery")}</button></div>
+    <div className="recovery-code-actions"><button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}>{copied ? <Check size={17}/> : <Copy size={17}/>}<span aria-live="polite">{t(copied ? "settings.recoveryCopied" : "settings.copyRecovery")}</span></button><button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={17}/>{t("settings.downloadRecovery")}</button></div>
     <button className="primary-button auth-submit" type="button" onClick={() => { router.push("/dashboard"); router.refresh(); }}><ShieldCheck size={18}/>{t("auth.mfa.recoveryContinue")}</button>
   </section>;
 

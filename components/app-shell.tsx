@@ -46,9 +46,10 @@ import { presentApiError } from "@/lib/api-error-presenter";
 import { AccessibleDrawer } from "./ui";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
+type NavigationGroup = { titleKey: string; items: NavItem[] };
 type GlobalSearchResult = { title: string; detail: string; href: string; source: "page" | "record" };
 
-const navigation: { titleKey: string; items: NavItem[] }[] = [
+const navigation: NavigationGroup[] = [
   { titleKey: "nav.dashboard", items: [
     { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
     { labelKey: "nav.actionCenter", href: "/action-center", icon: ListChecks },
@@ -105,6 +106,19 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
     { labelKey: "nav.privacyRequests", href: "/privacy-requests", icon: ShieldCheck },
   ]},
 ];
+
+function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
+  const hrefs = groups.flatMap((group) => group.items.flatMap((item) => [
+    ...(item.href ? [item.href] : []),
+    ...(item.children ?? []).map((child) => child.href),
+  ]));
+  const matches = hrefs.filter((href) => (
+    pathname === href
+    || pathname.startsWith(`${href}/`)
+    || (href === "/settings/profile" && pathname.startsWith("/settings/"))
+  ));
+  return matches.sort((left, right) => right.length - left.length)[0];
+}
 
 const routeCapabilities: Partial<Record<string, Capability>> = {
   "/students": "education.view",
@@ -171,6 +185,10 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         .filter((item) => !item.children || item.children.length > 0),
     })).filter((group) => group.items.length > 0);
   }, [user.role]);
+  const activeNavigationHref = useMemo(
+    () => getActiveNavigationHref(pathname, visibleNavigation),
+    [pathname, visibleNavigation],
+  );
   const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
   const pageCommands=useMemo<GlobalSearchResult[]>(()=>visibleNavigation.flatMap(group=>group.items.flatMap(item=>{
     const own=item.href?[{title:t(item.labelKey),detail:t("search.type.page"),href:item.href,source:"page" as const}]:[];
@@ -314,7 +332,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         <nav className="sidebar-nav">
           {visibleNavigation.map((group) => <div className="nav-group" key={group.titleKey}>
             <p>{t(group.titleKey)}</p>
-            {group.items.map((item) => <NavEntry key={item.labelKey} item={item} pathname={pathname} expanded={expanded.includes(item.labelKey)} onExpand={() => setExpanded((current) => current.includes(item.labelKey) ? current.filter((value) => value !== item.labelKey) : [...current, item.labelKey])} onNavigate={closeMobile} />)}
+            {group.items.map((item) => <NavEntry key={item.labelKey} item={item} activeHref={activeNavigationHref} expanded={expanded.includes(item.labelKey) || Boolean(item.children?.some((child) => child.href === activeNavigationHref))} onExpand={() => { if (collapsed) setCollapsed(false); setExpanded((current) => current.includes(item.labelKey) ? current.filter((value) => value !== item.labelKey) : [...current, item.labelKey]); }} onNavigate={closeMobile} />)}
           </div>)}
         </nav>
         <div className="sidebar-insight">
@@ -322,7 +340,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
           <div><b>{relationshipHealthUnavailable ? t("nav.relationshipHealthUnavailable") : relationshipHealth.hasData && relationshipHealth.score !== null ? t("nav.relationshipHealthValue", { score: relationshipHealth.score }) : t("nav.relationshipHealthEmpty")}</b><small>{relationshipHealthUnavailable ? t("nav.relationshipHealthUnavailableHelp") : relationshipHealth.hasData && relationshipHealth.weeklyDelta !== null ? t("nav.relationshipChangeValue", { delta: relationshipHealth.weeklyDelta }) : t("nav.relationshipSample", { count: relationshipHealth.sampleSize })}</small></div>
           <ChevronRight size={16} />
         </div>
-        <button className="sidebar-collapse" type="button" onClick={() => setCollapsed((value) => !value)}><PanelLeftClose size={17} /><span>{t("nav.collapse")}</span><small>v{APP_VERSION}</small></button>
+        <button className="sidebar-collapse" type="button" aria-label={t(collapsed ? "nav.expand" : "nav.collapse")} title={t(collapsed ? "nav.expand" : "nav.collapse")} aria-pressed={collapsed} onClick={() => setCollapsed((value) => !value)}><PanelLeftClose size={17} /><span>{t(collapsed ? "nav.expand" : "nav.collapse")}</span><small>v{APP_VERSION}</small></button>
       </aside>
 
       <div className="app-column">
@@ -388,15 +406,15 @@ function GlobalSearchResults({
   </div>;
 }
 
-function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: NavItem; pathname: string; expanded: boolean; onExpand: () => void; onNavigate: () => void }) {
+function NavEntry({ item, activeHref, expanded, onExpand, onNavigate }: { item: NavItem; activeHref?: string; expanded: boolean; onExpand: () => void; onNavigate: () => void }) {
   const { t } = useI18n();
   const Icon = item.icon;
-  const active = item.href ? pathname === item.href || pathname.startsWith(`${item.href}/`) : item.children?.some((child) => pathname === child.href || pathname.startsWith(`${child.href}/`));
+  const active = item.href ? activeHref === item.href : item.children?.some((child) => child.href === activeHref);
   if (item.children) return <div className={`nav-parent ${active ? "active" : ""}`}>
-    <button type="button" className="nav-link" aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
-    {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=pathname===child.href||pathname.startsWith(`${child.href}/`);return <Link className={childActive ? "active" : ""} aria-current={childActive?"page":undefined} href={child.href} key={child.href} onClick={onNavigate}><span>{t(child.labelKey)}</span>{child.badge && <b className="nav-badge">{child.badge}</b>}</Link>;})}</div>}
+    <button type="button" className="nav-link" aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
+    {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=activeHref===child.href;return <Link className={childActive ? "active" : ""} aria-current={childActive?"page":undefined} href={child.href} key={child.href} onClick={onNavigate}><span>{t(child.labelKey)}</span>{child.badge && <b className="nav-badge">{child.badge}</b>}</Link>;})}</div>}
   </div>;
-  return <Link className={`nav-link ${active ? "active" : ""}`} aria-current={active?"page":undefined} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
+  return <Link className={`nav-link ${active ? "active" : ""}`} aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-current={active?"page":undefined} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
 }
 
 function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {

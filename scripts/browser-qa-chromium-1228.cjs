@@ -367,8 +367,24 @@ async function main(){
         }
         await page.keyboard.press("Escape");
         process.stdout.write("[QA] pass centered create-staff dialog\n");
+        const activeAdminLinks=page.locator("#main-navigation .nav-children a.active");
+        if(await activeAdminLinks.count()!==1||await activeAdminLinks.first().getAttribute("href")!=="/admin/users"){
+          report.errors.push({kind:"navigation-active",url:"/admin/users",message:"Admin navigation must highlight only the current child entry"});
+        }
+        const profileBackground=await page.locator(".profile-trigger > span:first-child").evaluate(element=>getComputedStyle(element).backgroundImage);
+        if(!profileBackground.includes("rgb(114, 80, 200)")||!profileBackground.includes("rgb(50, 32, 120)")){
+          report.errors.push({kind:"brand-color",url:"/admin/users",message:`Administrator avatar is not using the Weiai purple palette: ${profileBackground}`});
+        }
+        await page.getByRole("button",{name:"收起导航"}).click();
+        await page.locator(".app-frame.sidebar-collapsed").waitFor({state:"visible",timeout:5_000});
+        const collapsedWidth=await page.locator("#main-navigation").evaluate(element=>element.getBoundingClientRect().width);
+        if(collapsedWidth>80)report.errors.push({kind:"navigation-collapse",url:"/admin/users",message:`Collapsed sidebar remains ${collapsedWidth}px wide`});
+        await page.getByRole("button",{name:"展开导航"}).click();
+        await page.locator(".app-frame.sidebar-collapsed").waitFor({state:"detached",timeout:5_000});
+        process.stdout.write("[QA] pass single-active, collapsible and brand-colored navigation\n");
       }
       if(env.QA_LABEL==="settings"){
+        await context.grantPermissions(["clipboard-read","clipboard-write"],{origin:base});
         await page.setViewportSize({width:1440,height:900});
         await page.goto(`${base}/settings/security`,{waitUntil:"networkidle"});
         await page.getByRole("button",{name:"设置二次验证"}).click();
@@ -389,8 +405,10 @@ async function main(){
           await page.locator(".recovery-code-grid code").first().waitFor({state:"visible",timeout:8_000});
           const recoveryCount=await page.locator(".recovery-code-grid code").count();
           if(recoveryCount!==10)report.errors.push({kind:"mfa",url:"/settings/security",message:`Expected 10 recovery codes after enrollment, received ${recoveryCount}`});
+          await page.getByRole("button",{name:"复制恢复码"}).click();
+          await page.getByRole("button",{name:"恢复码已复制。"}).waitFor({state:"visible",timeout:5_000});
         }
-        process.stdout.write("[QA] pass MFA QR and recovery-code enrollment\n");
+        process.stdout.write("[QA] pass MFA QR, recovery-code enrollment and copy feedback\n");
       }
       await context.close();
     }else if(env.QA_SCOPE==="notification"){

@@ -135,6 +135,7 @@ export const zhCN: Messages = {
   "nav.relationshipHealth": "关系健康度",
   "nav.relationshipChange": "本周变化",
   "nav.collapse": "收起导航",
+  "nav.expand": "展开导航",
   "nav.profileSettings": "个人与账户设置",
   "nav.support": "帮助与支持",
   "nav.signOut": "安全退出",

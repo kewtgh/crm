@@ -130,6 +130,7 @@ function SecuritySettings() {
   const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string; secret?: string }>();
   const [recoveryCodesRemaining, setRecoveryCodesRemaining] = useState(0);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
   const [rotateConfirm, setRotateConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -175,6 +176,7 @@ function SecuritySettings() {
       const result = await apiFetch<{ recoveryCodes?: string[] }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) });
       setEnrollment(undefined);
       setRecoveryCodes(result.recoveryCodes ?? []);
+      setRecoveryCopied(false);
       setRecoveryCodesRemaining(result.recoveryCodes?.length ?? 0);
       setMfaSuccess(t("settings.mfaEnabled"));
       void loadMfa();
@@ -190,6 +192,7 @@ function SecuritySettings() {
     try {
       const result = await apiFetch<{ recoveryCodes?: string[] }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rotateRecovery" }) });
       setRecoveryCodes(result.recoveryCodes ?? []);
+      setRecoveryCopied(false);
       setRecoveryCodesRemaining(result.recoveryCodes?.length ?? 0);
       setMfaSuccess(t("settings.recoveryRotated"));
       setRotateConfirm(false);
@@ -202,8 +205,8 @@ function SecuritySettings() {
 
   const recoveryText = recoveryCodes.join("\n");
   const copyRecoveryCodes = async () => {
-    try { await navigator.clipboard.writeText(recoveryText); setMfaSuccess(t("settings.recoveryCopied")); }
-    catch { setMfaError(t("settings.recoveryCopyFailed")); }
+    try { await navigator.clipboard.writeText(recoveryText); setMfaError(""); setRecoveryCopied(true); setMfaSuccess(t("settings.recoveryCopied")); }
+    catch { setRecoveryCopied(false); setMfaError(t("settings.recoveryCopyFailed")); }
   };
   const downloadRecoveryCodes = () => {
     const url = URL.createObjectURL(new Blob([`${t("settings.recoveryDownloadHeading")}\n\n${recoveryText}\n`], { type: "text/plain;charset=utf-8" }));
@@ -252,7 +255,46 @@ function SecuritySettings() {
 
   const verifiedFactor = factors.find((factor) => factor.status === "verified");
   const administrator = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section><MfaAuthenticatorGuide />{mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}{mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}{enrollment && <form className="settings-subform mfa-setup-panel" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3><div className="mfa-enrollment">{enrollment.qrCode ? <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} /> : <InlineMessage type="error">{t("settings.mfaQrMissing")}</InlineMessage>}{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div><label className="field mfa-code-field"><span>{t("settings.mfaCode")}</span><input className="mfa-code-input" name="code" inputMode="numeric" pattern="[0-9]{6}" placeholder="000000" maxLength={6} autoComplete="one-time-code" required /></label><div className="settings-actions"><button className="secondary-button" type="button" disabled={busy} onClick={() => void cancelEnrollment()}>{t("common.cancel")}</button><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></div></form>}{verifiedFactor && <section className="recovery-section"><div className="recovery-section__heading"><div><h3>{t("settings.recoveryCodes")}</h3><p>{t("settings.recoveryStatus", { count: recoveryCodesRemaining })}</p></div><button className="secondary-button" type="button" disabled={busy} onClick={() => setRotateConfirm(true)}><RefreshCcw size={16}/>{t("settings.regenerateRecovery")}</button></div>{recoveryCodes.length > 0 && <><InlineMessage type="warning">{t("settings.recoveryShownOnce")}</InlineMessage><div className="recovery-code-grid">{recoveryCodes.map(code => <code key={code}>{code}</code>)}</div><div className="recovery-code-actions"><button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}><Copy size={16}/>{t("settings.copyRecovery")}</button><button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={16}/>{t("settings.downloadRecovery")}</button></div></>}</section>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label></div><small className="field-help auth-password-rule">{t("settings.passwordRule")}</small>{passwordError && <InlineMessage type="error">{passwordError}</InlineMessage>}{passwordSuccess && <InlineMessage type="success">{passwordSuccess}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form>{rotateConfirm && <ConfirmDialog title={t("settings.rotateRecoveryTitle")} description={t("settings.rotateRecoveryConfirm")} confirmLabel={t("settings.regenerateRecovery")} pending={busy} onClose={() => setRotateConfirm(false)} onConfirm={() => void rotateRecoveryCodes()}/>}</div>;
+  return <div>
+    <SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} />
+    <section className="mfa-card">
+      <span><ShieldCheck size={25} /></span>
+      <div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div>
+      <StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>
+      {!verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}
+      {verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}
+    </section>
+    <MfaAuthenticatorGuide />
+    {mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}
+    {mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}
+    {enrollment && <form className="settings-subform mfa-setup-panel" onSubmit={verify}>
+      <h3>{t("settings.verifyMfa")}</h3>
+      <div className="mfa-enrollment">{enrollment.qrCode ? <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} /> : <InlineMessage type="error">{t("settings.mfaQrMissing")}</InlineMessage>}{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div>
+      <label className="field mfa-code-field"><span>{t("settings.mfaCode")}</span><input className="mfa-code-input" name="code" inputMode="numeric" pattern="[0-9]{6}" placeholder="000000" maxLength={6} autoComplete="one-time-code" required /></label>
+      <div className="settings-actions"><button className="secondary-button" type="button" disabled={busy} onClick={() => void cancelEnrollment()}>{t("common.cancel")}</button><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></div>
+    </form>}
+    {verifiedFactor && <section className="recovery-section">
+      <div className="recovery-section__heading"><div><h3>{t("settings.recoveryCodes")}</h3><p>{t("settings.recoveryStatus", { count: recoveryCodesRemaining })}</p></div><button className="secondary-button" type="button" disabled={busy} onClick={() => setRotateConfirm(true)}><RefreshCcw size={16}/>{t("settings.regenerateRecovery")}</button></div>
+      {recoveryCodes.length > 0 && <>
+        <InlineMessage type="warning">{t("settings.recoveryShownOnce")}</InlineMessage>
+        <div className="recovery-code-grid">{recoveryCodes.map(code => <code key={code}>{code}</code>)}</div>
+        <div className="recovery-code-actions">
+          <button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}>{recoveryCopied ? <Check size={16}/> : <Copy size={16}/>}<span aria-live="polite">{t(recoveryCopied ? "settings.recoveryCopied" : "settings.copyRecovery")}</span></button>
+          <button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={16}/>{t("settings.downloadRecovery")}</button>
+        </div>
+      </>}
+    </section>}
+    <form onSubmit={changePassword} className="settings-subform">
+      <h3>{t("settings.changePassword")}</h3>
+      <label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label>
+      <div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label></div>
+      <small className="field-help auth-password-rule">{t("settings.passwordRule")}</small>
+      {passwordError && <InlineMessage type="error">{passwordError}</InlineMessage>}
+      {passwordSuccess && <InlineMessage type="success">{passwordSuccess}</InlineMessage>}
+      <div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div>
+    </form>
+    {rotateConfirm && <ConfirmDialog title={t("settings.rotateRecoveryTitle")} description={t("settings.rotateRecoveryConfirm")} confirmLabel={t("settings.regenerateRecovery")} pending={busy} onClose={() => setRotateConfirm(false)} onConfirm={() => void rotateRecoveryCodes()}/>}
+  </div>;
 }
 
 type TrustedDeviceView = { id: string; label: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean };

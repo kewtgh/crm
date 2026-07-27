@@ -13,6 +13,7 @@ import {
   classifyPersistedDeployment,
   cleanupFailedRelease,
   collectSecretValues,
+  isSystemdServiceInProgress,
   makeDeploymentId,
   makeReleaseId,
   parseEnvironmentText,
@@ -312,6 +313,15 @@ test("exclusive request file rejects concurrent deploys and remains recoverable"
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("treats every in-progress systemd oneshot state as running", () => {
+  for (const state of ["activating", "active", "reloading", "deactivating"]) {
+    assert.equal(isSystemdServiceInProgress(state), true, `${state} must remain in progress`);
+  }
+  for (const state of ["inactive", "failed", "dead", ""]) {
+    assert.equal(isSystemdServiceInProgress(state), false, `${state || "empty"} must be terminal`);
   }
 });
 
