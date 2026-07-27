@@ -1,10 +1,17 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.7.0**
+Current release candidate: **v2.8.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.8.0 adds a persistent, one-command production update runner for the dedicated Lumina server.
+It uses an exclusive system lock, explicit remote commit, immutable releases, separated deploy-only
+credentials, bounded build and migration gates, atomic cutover, effective systemd/ProxyAgent and
+loopback validation, strict local/public health checks, protected release retention, auditable status
+and logs, and automatic application rollback. SSH disconnects no longer create an uncertain deployment,
+and least-privilege sudo rules cannot touch Cloudflare Tunnel, HunterAI, Docker or the host.
 
 v2.7.0 completes the July 28 account-security, super-administrator and product-UI release.
 It ships real TOTP QR enrollment, recovery-code generation and rotation, secure password
@@ -115,18 +122,24 @@ Run the complete release gate:
 npm run release:gate
 ```
 
-Deploy an already initialized dedicated production server with one bounded command:
+Deploy an already initialized dedicated production server with one persistent, bounded command:
 
 ```bash
 npm run deploy:production
 ```
 
-The deployment command performs a fast-forward-only Git pull, builds and validates an immutable
-release, applies linked Supabase migrations, atomically switches `/opt/lumina-crm/current`, restarts
-systemd services, and checks liveness/readiness. The entire run defaults to a 15-minute hard limit;
-every stage has its own shorter timeout, and a failed cutover restores the previous release.
+The command queues a unique request in a non-root systemd runner protected by
+`/var/lock/lumina-crm-deploy.lock`. It fetches and fast-forwards to an explicit remote `main` commit,
+builds and validates an immutable release, previews and applies linked Supabase migrations, atomically
+switches `/opt/lumina-crm/current`, verifies the Web/Worker/Timer effective configuration, loopback-only
+port 3200, local readiness and public version, and retains five protected releases. The runner survives
+SSH disconnects; use `npm run deploy:production:status`, `npm run deploy:production:logs`, or
+`npm run deploy:production:rollback`. The entire runner has a 60-minute hard limit with bounded stages,
+and a failed cutover restores and revalidates the previous application release without claiming that
+forward database migrations were reverted. One-time server installation and least-privilege sudo rules
+are documented in the [deployment guide](docs/DEPLOYMENT.md).
 
-The gate runs typecheck, lint, production build, 37 Node contracts, dependency audit,
+The gate runs typecheck, lint, production build, 37 source contracts, 16 deployment unit tests, dependency audit,
 schema lint, 464 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
@@ -145,8 +158,9 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.7.0 source implementation, migration through `202607280055`, production build,
-37 source contracts and 80-page/viewport Chromium 1228 matrix are complete. A production rollout
+The v2.8.0 source implementation, migration through `202607280055`, production build,
+37 source contracts, 16 deployment unit tests and 80-page/viewport Chromium 1228 matrix are complete.
+A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
 [implementation status](docs/IMPLEMENTATION_STATUS.md),

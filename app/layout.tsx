@@ -32,9 +32,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Lumina Education CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/og-v270.png", baseUrl).toString(), width: 1728, height: 910, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/og-v280.png", baseUrl).toString(), width: 1726, height: 911, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v270.png", baseUrl).toString()] },
+    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v280.png", baseUrl).toString()] },
   };
 }
 

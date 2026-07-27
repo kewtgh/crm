@@ -150,7 +150,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.7\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -166,7 +166,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.7\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -574,7 +574,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.7\.0/);
+  assert.match(version, /2\.8\.0/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -609,7 +609,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.7\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.0"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -726,7 +726,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.7\.0/);
+  assert.match(version,/2\.8\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -760,7 +760,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.7\.0"/);
+  assert.match(packageJson,/"version": "2\.8\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -798,7 +798,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.7\.0/);
+  assert.match(version,/2\.8\.0/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -855,7 +855,7 @@ test("closes the v2.2 execution-integrity and business-expansion audit", async (
   assert.match(v220Repository,/retryCommunicationMessage/);
   assert.match(v220Repository,/configureQualityRule/);
   for(const route of ["/automation","/growth","/guardian-portal","/messages"]) assert.match(navigation,new RegExp(route));
-  assert.match(metadata,/og-v270\.png/);
+  assert.match(metadata,/og-v280\.png/);
   assert.match(navigation,/mobileSearchOpen/);
   assert.match(audit,/P0/);
   assert.match(plan,/REL-01/);
@@ -865,7 +865,7 @@ test("closes the v2.2 execution-integrity and business-expansion audit", async (
     "../app/(crm)/guardian-portal/page.tsx",
     "../app/portal/invite/[token]/page.tsx",
   ]) await access(new URL(page,import.meta.url));
-  await access(new URL("../public/og-v270.png",import.meta.url));
+  await access(new URL("../public/og-v280.png",import.meta.url));
 });
 
 test("closes the v2.3.0 dependency, session, API-cache, and environment audit", async () => {
@@ -961,7 +961,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
   assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.7\.0/);
+  assert.match(version, /2\.8\.0/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -993,32 +993,61 @@ test("closes the v2.3.0 supplemental settings and browser audit", async () => {
   assert.match(plan, /完整验收与最终复核/);
 });
 
-test("provides a bounded one-command atomic production deployment", async () => {
-  const [packageJson, deploy, webService, workerService, guide] = await Promise.all([
+test("provides a persistent, locked and atomic one-command production deployment", async () => {
+  const [packageJson, controller, runner, core, webService, workerService, deployService, sudoers, guide] = await Promise.all([
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../scripts/deploy-production.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/deploy-production-runner.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/lib/production-deploy-core.mjs", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm-workers.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm-deploy.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/sudoers/lumina-crm-deploy", import.meta.url), "utf8"),
     readFile(new URL("../docs/DEPLOYMENT.md", import.meta.url), "utf8"),
   ]);
   assert.match(packageJson, /"deploy:production"/);
-  assert.match(deploy, /DEPLOY_TOTAL_TIMEOUT_SECONDS/);
-  assert.match(deploy, /value > 3600/);
-  assert.match(deploy, /git", \["pull", "--ff-only"/);
-  assert.match(deploy, /worktree", "add", "--detach"/);
-  assert.match(deploy, /production database migration/);
-  assert.match(deploy, /await pointCurrent\(releaseDir\)/);
-  assert.match(deploy, /await rollback\(error\)/);
-  assert.match(deploy, /AbortSignal\.timeout/);
-  assert.match(deploy, /terminate\(child\)/);
+  assert.match(packageJson, /"deploy:production:status"/);
+  assert.match(packageJson, /"deploy:production:logs"/);
+  assert.match(packageJson, /"deploy:production:rollback"/);
+  assert.match(controller, /command\("sudo", \["-n", "\/usr\/bin\/systemctl", "start", "--no-block", deployService\]/);
+  assert.match(controller, /writeExclusiveRequest/);
+  assert.match(controller, /LUMINA_PRODUCTION_DEPLOY_DRY_RUN_OK/);
+  assert.match(controller, /terminalMarkers/);
+  assert.match(runner, /git", \["fetch", "--prune", "origin", expectedBranch\]/);
+  assert.match(runner, /git", \["merge", "--ff-only", targetCommit\]/);
+  assert.match(runner, /"worktree", "add", "--detach"/);
+  assert.match(runner, /"db", "push", "--linked", "--dry-run", "--yes"/);
+  assert.match(runner, /"db", "lint", "--linked", "--level", "warning", "--fail-on", "warning"/);
+  assert.match(runner, /fs\.rm\(path\.join\(releaseDir, "supabase", "\.temp"\)/);
+  assert.match(runner, /atomicSwitchCurrent/);
+  assert.match(runner, /rollbackAfterCutover/);
+  assert.match(runner, /waitForWorkerIdle/);
+  assert.match(runner, /LUMINA_PRODUCTION_DEPLOY_OK/);
+  assert.match(runner, /LUMINA_PRODUCTION_ROLLBACK_FAILED/);
+  assert.match(runner, /timedOut/);
+  assert.match(runner, /"--strict-allow-scripts"/);
+  assert.doesNotMatch(runner, /--allow-scripts=/);
+  assert.match(packageJson, /"esbuild@0\.28\.1": true/);
+  assert.match(core, /selectReleasesForCleanup/);
+  assert.match(core, /validateEnvironmentFileMetadata/);
+  assert.match(deployService, /flock --nonblock --exclusive --conflict-exit-code=73 \/var\/lock\/lumina-crm-deploy\.lock/);
+  assert.match(deployService, /User=lumina-crm/);
+  assert.match(deployService, /NODE_OPTIONS=--import=\/opt\/lumina-crm\/runtime-proxy\/register-proxy\.mjs/);
+  assert.match(deployService, /ProtectHome=read-only/);
+  assert.match(deployService, /NPM_CONFIG_CACHE=\/var\/lib\/lumina-crm\/npm-cache/);
+  assert.match(sudoers, /lumina-crm-deploy\.service/);
+  assert.match(sudoers, /lumina-crm\.service/);
+  assert.doesNotMatch(sudoers, /cloudflared|docker|hunterai|v2raya|reboot/i);
   for (const unit of [webService, workerService]) {
     assert.match(unit, /TimeoutStartSec=/);
     assert.match(unit, /TimeoutStopSec=/);
     assert.match(unit, /KillMode=mixed/);
   }
+  assert.match(webService, /--hostname 127\.0\.0\.1/);
   assert.match(guide, /npm run deploy:production/);
-  assert.match(guide, /900 秒/);
-  assert.match(guide, /不能配置成无限期/);
+  assert.match(guide, /npm run deploy:production:status/);
+  assert.match(guide, /SSH/);
+  assert.match(guide, /lumina-crm-deploy\.lock/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
@@ -1114,7 +1143,7 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
     readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.7\.0"/);
+  assert.match(packageJson, /"version": "2\.8\.0"/);
   assert.match(returnTo, /containsUnsafePathCharacters/);
   assert.match(refresh, /safeRelativeReturnTo/);
   assert.match(environment, /Placeholder values are not allowed/);
@@ -1272,7 +1301,7 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(dataTable, /deleteConfirm/);
   assert.match(dashboard, /pendingTaskIds/);
   assert.match(notFound, /notFound\.title/);
-  for (const asset of ["weiai-logo-800x240", "favicon-16x16", "favicon-32x32", "favicon-192x192", "og-v270"]) {
+  for (const asset of ["weiai-logo-800x240", "favicon-16x16", "favicon-32x32", "favicon-192x192", "og-v280"]) {
     assert.match(assetQa, new RegExp(asset));
   }
   assert.match(assetQa, /readUInt32BE/);
@@ -1281,5 +1310,5 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(stagedQa, /gitStatusDigest/);
   assert.match(audit, /不受约束的时区/);
   assert.match(plan, /统一命令搜索/);
-  assert.match(version, /2\.7\.0/);
+  assert.match(version, /2\.8\.0/);
 });

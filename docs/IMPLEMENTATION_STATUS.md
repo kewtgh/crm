@@ -1,10 +1,11 @@
-# Implementation status — v2.7.0 release candidate
+# Implementation status — v2.8.0 release candidate
 
 Status date: 2026-07-28
 
 ## Outcome
 
-The July 28 account-security, super-administrator execution and UI remediation is implemented.
+The July 28 account-security, super-administrator execution and UI remediation is implemented,
+and the dedicated-server production update path is now a persistent one-command workflow.
 TOTP enrollment produces a real QR code and recovery codes, account settings rotate those codes,
 super administrators execute terminal actions without approval, and CRM deletion uses a
 recoverable 30-day recycle bin. Staff provisioning retains one-time emailed passwords and
@@ -31,6 +32,10 @@ readiness remain deployment inputs, not simulated product state.
   communications purposes are release-tested.
 - Runtime: Node 24.18.0 and npm 12.0.1 are pinned across local development, CI and the full release
   gate; non-12 npm installs are rejected by the repository engine policy.
+- Production updates: a non-root systemd runner uses a non-blocking system lock, unique deployment
+  IDs, immutable commit-addressed releases, separated environment files, bounded quality/migration
+  stages, atomic current switching, effective ProxyAgent/loopback checks, persistent logs/status,
+  protected retention and verified application rollback. The sudo allowlist names only Lumina units.
 - Business time: one shared five-timezone contract is used by settings, calendar rendering,
   repositories and workers. Invalid historical values fall back safely; nonexistent DST wall times
   return `INVALID_LOCAL_TIME`; Postgres enforces the same set.
@@ -57,8 +62,9 @@ readiness remain deployment inputs, not simulated product state.
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.7.0 routes and production bundles generated |
+| Production build | Pass; v2.8.0 routes and production bundles generated |
 | Node source contracts | 37/37 pass, including DST gaps, bounded runner and dependency API bridge |
+| Production deployment unit tests | 16/16 pass; lock, env, paths, atomic cutover, interruption recovery, health, systemd, cleanup and dry-run |
 | Dependency audit | Pass; 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
 | PostgreSQL schema lint | Pass, 0 findings |

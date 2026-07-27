@@ -89,7 +89,7 @@ await supabaseStage("pgTAP database suite", ["test", "db", "--local"], 300, 120)
 await npmStage("phase 2 business smoke", ["run", "smoke:phase2:raw"], 180, 90);
 await npmStage("v0.9 business smoke", ["run", "smoke:v09:raw"], 180, 90);
 
-const server = spawn(process.execPath, [npmCli, "run", "start", "--", "--port", "3200"], {
+const server = spawn(process.execPath, [npmCli, "run", "start", "--", "--port", "3200", "--hostname", "127.0.0.1"], {
   env: { ...process.env, APP_URL: appUrl },
   stdio: "inherit",
   detached: process.platform !== "win32",

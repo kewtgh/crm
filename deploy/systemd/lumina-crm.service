@@ -10,7 +10,7 @@ Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/current
 EnvironmentFile=/etc/lumina-crm/production.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/npm run start -- --port 3200
+ExecStart=/usr/bin/npm run start -- --port 3200 --hostname 127.0.0.1
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=90s

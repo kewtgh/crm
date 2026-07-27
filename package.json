@@ -1,11 +1,16 @@
 {
   "name": "lumina-education-crm",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
     "node": ">=24.0.0 <25",
     "npm": ">=12.0.0 <13"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "unrs-resolver@1.12.2": true,
+    "workerd@1.20260714.1": true
   },
   "scripts": {
     "dev": "vinext dev --port 3200",
@@ -13,9 +18,11 @@
     "build:raw": "vinext build",
     "start": "vinext start",
     "test": "node scripts/run-bounded.mjs --label test --timeout-seconds 360 --idle-seconds 120 -- npm run test:raw",
-    "test:raw": "npm run build:raw && node --test --test-isolation=none tests/rendered-html.test.mjs",
+    "test:raw": "npm run build:raw && node --test --test-isolation=none tests/rendered-html.test.mjs tests/production-deploy.test.mjs",
     "test:contracts": "node scripts/run-bounded.mjs --label contracts --timeout-seconds 120 --idle-seconds 60 -- npm run test:contracts:raw",
     "test:contracts:raw": "node --test --test-isolation=none tests/rendered-html.test.mjs",
+    "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
+    "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs",
     "typecheck": "node scripts/run-bounded.mjs --label typecheck --timeout-seconds 120 --idle-seconds 60 -- npm run typecheck:raw",
     "typecheck:raw": "tsc --noEmit",
     "lint": "node scripts/run-bounded.mjs --label lint --timeout-seconds 180 --idle-seconds 90 -- npm run lint:raw",
@@ -48,7 +55,12 @@
     "qa:chromium-1228:staged": "node scripts/browser-qa-staged.mjs",
     "qa:chromium-1228:raw": "node scripts/browser-qa-chromium-1228.cjs",
     "release:gate": "node --env-file-if-exists=.env.local scripts/release-gate.mjs",
-    "deploy:production": "node --env-file-if-exists=/etc/lumina-crm/production.env scripts/deploy-production.mjs",
+    "deploy:production": "node scripts/deploy-production.mjs start",
+    "deploy:production:detach": "node scripts/deploy-production.mjs start --detach",
+    "deploy:production:status": "node scripts/deploy-production.mjs status",
+    "deploy:production:logs": "node scripts/deploy-production.mjs logs",
+    "deploy:production:rollback": "node scripts/deploy-production.mjs rollback",
+    "deploy:production:dry-run": "node scripts/deploy-production.mjs dry-run",
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {
