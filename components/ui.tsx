@@ -184,6 +184,65 @@ export function Toast({ message, onClose }: { message: string; onClose: () => vo
   return <div className="toast" role="status"><span className="toast-check"><Check size={15} /></span><span>{message}</span><button type="button" aria-label={t("common.close")} onClick={onClose}><X size={15} /></button></div>;
 }
 
+export function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  pending = false,
+  tone = "danger",
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  pending?: boolean;
+  tone?: "danger" | "primary";
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const {t}=useI18n();
+  const titleId=useId();
+  const descriptionId=useId();
+  const dialogRef=useRef<HTMLDivElement>(null);
+  const cancelRef=useRef<HTMLButtonElement>(null);
+  const previousFocus=useRef<HTMLElement|null>(null);
+  const closeRef=useRef(onClose);
+  const pendingRef=useRef(pending);
+  useEffect(()=>{closeRef.current=onClose;pendingRef.current=pending;},[onClose,pending]);
+  useEffect(()=>{
+    previousFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    const previousOverflow=document.body.style.overflow;
+    const backgroundModals=Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]')).filter(element=>element!==dialogRef.current);
+    const backgroundState=backgroundModals.map(element=>({element,inert:element.inert,ariaHidden:element.getAttribute("aria-hidden")}));
+    backgroundModals.forEach(element=>{element.inert=true;element.setAttribute("aria-hidden","true");});
+    document.body.style.overflow="hidden";
+    const frame=window.requestAnimationFrame(()=>cancelRef.current?.focus());
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"&&!pendingRef.current){event.preventDefault();event.stopPropagation();closeRef.current();return;}
+      if(event.key!=="Tab"||!dialogRef.current)return;
+      const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]),[tabindex]:not([tabindex='-1'])"));
+      if(!focusable.length){event.preventDefault();return;}
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    };
+    document.addEventListener("keydown",key,true);
+    return()=>{window.cancelAnimationFrame(frame);document.removeEventListener("keydown",key,true);document.body.style.overflow=previousOverflow;backgroundState.forEach(({element,inert,ariaHidden})=>{element.inert=inert;if(ariaHidden===null)element.removeAttribute("aria-hidden");else element.setAttribute("aria-hidden",ariaHidden);});previousFocus.current?.focus();};
+  },[]);
+  return <>
+    <button className="confirm-overlay" type="button" tabIndex={-1} disabled={pending} aria-hidden="true" aria-label={t("common.cancel")} onClick={onClose}/>
+    <div ref={dialogRef} className="confirm-dialog surface" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
+      <div><CircleAlert size={22}/><h2 id={titleId}>{title}</h2></div>
+      <p id={descriptionId}>{description}</p>
+      <div className="drawer-actions">
+        <button ref={cancelRef} className="secondary-button" type="button" disabled={pending} onClick={onClose}>{t("common.cancel")}</button>
+        <button className={tone==="danger"?"danger-button":"primary-button"} type="button" disabled={pending} aria-busy={pending} onClick={onConfirm}>{pending?t("common.processing"):confirmLabel}</button>
+      </div>
+    </div>
+  </>;
+}
+
 export function AccessibleDrawer({
   title,
   eyebrow,

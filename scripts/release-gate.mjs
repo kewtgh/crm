@@ -112,7 +112,7 @@ try {
     { ...process.env, AUTH_SMOKE_BASE_URL: appUrl },
   );
   assertServerRunning(server);
-  await npmStage("staged Chromium 1228 UI QA", ["run", "qa:chromium-1228:staged"], 480, 45);
+  await npmStage("pinned Chromium 1228 UI QA", ["run", "qa:chromium-1228"], 480, 45);
 } finally {
   stopProcessTree(server);
 }

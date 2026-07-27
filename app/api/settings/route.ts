@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { SupabaseRequestError, getAccessToken, supabaseJson } from "@/lib/supabase-server";
-import { loadUserSettings, updateAccount, updateNotifications, updateProfile } from "@/lib/settings-repository";
+import { loadUserSettings, updateAccount, updateLocale, updateNotifications, updateProfile } from "@/lib/settings-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
+import { SUPPORTED_TIMEZONES } from "@/lib/timezone";
 
 const profileSchema = z.object({ section: z.literal("profile"), displayNameZh: z.string().trim().min(1).max(80), displayNameEn: z.string().trim().min(1).max(80), honorific: z.string().trim().max(20), bio: z.string().trim().max(500) });
-const accountSchema = z.object({ section: z.literal("account"), email: z.email(), locale: z.enum(["zh-CN", "en"]), timezone: z.string().min(1).max(60), dateFormat: z.enum(["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy"]) });
+const localeSchema = z.object({ section: z.literal("locale"), locale: z.enum(["zh-CN", "en"]) });
+const accountSchema = z.object({ section: z.literal("account"), email: z.email(), locale: z.enum(["zh-CN", "en"]), timezone: z.enum(SUPPORTED_TIMEZONES), dateFormat: z.enum(["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy"]) });
 const channelSchema = z.object({ email: z.boolean(), inApp: z.boolean() });
 const securityChannelSchema = channelSchema.refine((channels) => channels.email || channels.inApp, { message: "SECURITY_NOTIFICATION_REQUIRED" });
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/).nullable();
@@ -16,7 +18,7 @@ const notificationsSchema = z.object({
   quietHoursStart: timeSchema,
   quietHoursEnd: timeSchema,
 });
-const schema = z.discriminatedUnion("section", [profileSchema, accountSchema, notificationsSchema]);
+const schema = z.discriminatedUnion("section", [profileSchema, localeSchema, accountSchema, notificationsSchema]);
 
 function failure(error: unknown) {
   if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
@@ -45,6 +47,7 @@ async function patch(request: Request) {
   const user = await requireApiUser();
   try {
     if (parsed.data.section === "profile") await updateProfile(user.id, parsed.data);
+    if (parsed.data.section === "locale") await updateLocale(user.id, parsed.data.locale);
     if (parsed.data.section === "account") {
       await updateAccount(user.id, parsed.data);
       if (parsed.data.email.toLowerCase() !== user.email.toLowerCase()) {

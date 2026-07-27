@@ -46,6 +46,7 @@ import { presentApiError } from "@/lib/api-error-presenter";
 import { AccessibleDrawer } from "./ui";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
+type GlobalSearchResult = { title: string; detail: string; href: string; source: "page" | "record" };
 
 const navigation: { titleKey: string; items: NavItem[] }[] = [
   { titleKey: "nav.dashboard", items: [
@@ -129,8 +130,8 @@ const routeCapabilities: Partial<Record<string, Capability>> = {
   "/admin/security": "admin.access",
 };
 
-export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferences, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; children: React.ReactNode }) {
-  const { locale, t } = useI18n();
+export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferences, preferredLocale, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; preferredLocale:UserSettings["locale"]; children: React.ReactNode }) {
+  const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen,setMobileSearchOpen]=useState(false);
@@ -138,7 +139,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ title: string; detail: string; href: string }>>([]);
+  const [recordSearchResults, setRecordSearchResults] = useState<GlobalSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [activeResult, setActiveResult] = useState(-1);
@@ -151,6 +152,12 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const notificationsRef = useRef<HTMLDivElement>(null);
   const notificationsTriggerRef=useRef<HTMLButtonElement>(null);
   const profileTriggerRef=useRef<HTMLButtonElement>(null);
+  const localeSynchronized=useRef(false);
+  useEffect(()=>{
+    if(localeSynchronized.current)return;
+    localeSynchronized.current=true;
+    if(locale!==preferredLocale)void setLocale(preferredLocale);
+  },[locale,preferredLocale,setLocale]);
   const visibleNavigation = useMemo(() => {
     const canVisit = (href?: string) => !href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]);
     const canAllocate = hasCapability(user.role, "performance.manage");
@@ -163,6 +170,20 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     })).filter((group) => group.items.length > 0);
   }, [user.role]);
   const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
+  const pageCommands=useMemo<GlobalSearchResult[]>(()=>visibleNavigation.flatMap(group=>group.items.flatMap(item=>{
+    const own=item.href?[{title:t(item.labelKey),detail:t("search.type.page"),href:item.href,source:"page" as const}]:[];
+    const children=(item.children??[]).map(child=>({title:t(child.labelKey),detail:t("search.type.page"),href:child.href,source:"page" as const}));
+    return[...own,...children];
+  })),[t,visibleNavigation]);
+  const matchingPageCommands=useMemo(()=>{
+    const query=globalSearch.trim().toLocaleLowerCase(locale);
+    if(query.length<2)return[];
+    return pageCommands.filter(item=>`${item.title} ${item.href}`.toLocaleLowerCase(locale).includes(query)).slice(0,6);
+  },[globalSearch,locale,pageCommands]);
+  const searchResults=useMemo(()=>{
+    const hrefs=new Set(matchingPageCommands.map(item=>item.href));
+    return[...matchingPageCommands,...recordSearchResults.filter(item=>!hrefs.has(item.href))].slice(0,12);
+  },[matchingPageCommands,recordSearchResults]);
   useEffect(() => {
     const query = globalSearch.trim();
     if (query.length < 2) return;
@@ -172,17 +193,18 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       setSearchError("");
       try {
         const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-        setSearchResults(result.items
+        setRecordSearchResults(result.items
           .filter((item): item is typeof item & { type: Exclude<typeof item.type, "USER"> } => item.type !== "USER")
           .map((item) => ({
           title: locale === "zh-CN" ? item.labelZh : item.labelEn,
           detail: t(`search.type.${item.type.toLowerCase()}`),
           href: searchHref(item.type,item.value.split(":")[1]??""),
+          source: "record",
           })));
         setActiveResult(-1);
       } catch {
         if (!controller.signal.aborted) {
-          setSearchResults([]);
+          setRecordSearchResults([]);
           setSearchError(t("nav.searchFailed"));
         }
       } finally {
@@ -193,8 +215,9 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   }, [globalSearch, locale, t]);
   const changeSearch = (value: string) => {
     setGlobalSearch(value);
+    setActiveResult(-1);
     if (value.trim().length < 2) {
-      setSearchResults([]);
+      setRecordSearchResults([]);
       setSearchLoading(false);
       setSearchError("");
       setActiveResult(-1);
@@ -213,7 +236,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         setNotificationsOpen(false);
         setMobileSearchOpen(false);
         setGlobalSearch("");
-        setSearchResults([]);
+        setRecordSearchResults([]);
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -222,7 +245,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       if (!notificationsRef.current?.contains(target)) setNotificationsOpen(false);
       if (!searchWrapRef.current?.contains(target)&&!mobileSearchRef.current?.contains(target)) {
         setGlobalSearch("");
-        setSearchResults([]);
+        setRecordSearchResults([]);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -262,7 +285,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       window.location.assign(searchResults[activeResult].href);
     } else if (event.key === "Escape") {
       setGlobalSearch("");
-      setSearchResults([]);
+      setRecordSearchResults([]);
       setMobileSearchOpen(false);
       searchInputRef.current?.blur();
     }
@@ -307,13 +330,11 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
             <button className="mobile-search-trigger" type="button" onClick={()=>setMobileSearchOpen(true)} aria-label={t("nav.globalSearch")}><Search size={20}/><span>{t("nav.globalSearch")}</span></button>
             <div className="global-search-wrap" ref={searchWrapRef}>
               <label className="global-search"><Search size={18} /><input ref={searchInputRef} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length >= 2} aria-controls="global-search-results" aria-activedescendant={activeResult >= 0 ? `global-result-${activeResult}` : undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={(event) => changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>Ctrl/⌘ K</kbd></label>
-              {globalSearch.trim().length >= 2 && <div className="global-results" id="global-search-results" role="listbox" aria-label={t("nav.globalSearch")}>
-                {searchLoading ? <p role="status">{t("nav.searchLoading")}</p> : searchError ? <p role="alert">{searchError}</p> : searchResults.length ? searchResults.map((item, index) => <Link id={`global-result-${index}`} role="option" aria-selected={activeResult === index} className={activeResult === index ? "active" : ""} key={`${item.href}:${item.title}`} href={item.href} onMouseEnter={() => setActiveResult(index)} onClick={() => setGlobalSearch("")}><Search size={15} /><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={15} /></Link>) : <p>{t("nav.noResults")}</p>}
-              </div>}
+              {globalSearch.trim().length >= 2 && <GlobalSearchResults className="global-results" id="global-search-results" itemIdPrefix="global-result" results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>changeSearch("")}/>}
             </div>
           </div>
           <div className="topbar-actions">
-            <LocaleSwitcher compact />
+            <LocaleSwitcher compact persist />
             <Link className="top-icon" href="/help" aria-label={t("nav.help")}><HelpCircle size={19} /></Link>
             <div className="popover-anchor" ref={notificationsRef}>
               <button ref={notificationsTriggerRef} className="top-icon" type="button" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }} aria-label={t("nav.notifications")}><Bell size={19} /></button>
@@ -329,10 +350,40 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         <main id="main-content" tabIndex={-1} className="app-content">{children}</main>
       </div>
     </div>
-    {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={activeResult>=0?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<div className="mobile-global-results" id="mobile-global-search-results" role="listbox" aria-label={t("nav.globalSearch")}>{searchLoading?<p role="status">{t("nav.searchLoading")}</p>:searchError?<p role="alert">{searchError}</p>:searchResults.length?searchResults.map((item,index)=><Link id={`mobile-global-result-${index}`} role="option" aria-selected={activeResult===index} className={activeResult===index?"active":""} key={`${item.href}:${item.title}`} href={item.href} onMouseEnter={()=>setActiveResult(index)} onClick={()=>{setMobileSearchOpen(false);changeSearch("");}}><Search size={16}/><span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={16}/></Link>):<p>{t("nav.noResults")}</p>}</div>}</div></AccessibleDrawer>}
+    {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={activeResult>=0?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<GlobalSearchResults className="mobile-global-results" id="mobile-global-search-results" itemIdPrefix="mobile-global-result" results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>{setMobileSearchOpen(false);changeSearch("");}}/>}</div></AccessibleDrawer>}
     </UserPreferencesProvider>
     </AppUserProvider>
   );
+}
+
+function GlobalSearchResults({
+  className,
+  id,
+  itemIdPrefix,
+  results,
+  activeResult,
+  loading,
+  error,
+  onActive,
+  onChoose,
+}: {
+  className:string;
+  id:string;
+  itemIdPrefix:string;
+  results:GlobalSearchResult[];
+  activeResult:number;
+  loading:boolean;
+  error:string;
+  onActive:(index:number)=>void;
+  onChoose:()=>void;
+}) {
+  const {t}=useI18n();
+  return <div className={className} id={id} role="listbox" aria-label={t("nav.globalSearch")}>
+    {results.map((item,index)=><Link id={`${itemIdPrefix}-${index}`} data-source={item.source} role="option" aria-selected={activeResult===index} className={activeResult===index?"active":""} key={`${item.source}:${item.href}:${item.title}`} href={item.href} onMouseEnter={()=>onActive(index)} onClick={onChoose}>{item.source==="page"?<LayoutDashboard size={16}/>:<Search size={16}/>}<span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={16}/></Link>)}
+    {loading&&<p role="status">{t("nav.searchLoading")}</p>}
+    {error&&<p role="alert">{error}</p>}
+    {!loading&&!error&&!results.length&&<p>{t("nav.noResults")}</p>}
+  </div>;
 }
 
 function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: NavItem; pathname: string; expanded: boolean; onExpand: () => void; onNavigate: () => void }) {
@@ -341,9 +392,9 @@ function NavEntry({ item, pathname, expanded, onExpand, onNavigate }: { item: Na
   const active = item.href ? pathname === item.href || pathname.startsWith(`${item.href}/`) : item.children?.some((child) => pathname === child.href || pathname.startsWith(`${child.href}/`));
   if (item.children) return <div className={`nav-parent ${active ? "active" : ""}`}>
     <button type="button" className="nav-link" aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
-    {expanded && <div className="nav-children">{item.children.map((child) => <Link className={pathname === child.href ? "active" : ""} href={child.href} key={child.href} onClick={onNavigate}><span>{t(child.labelKey)}</span>{child.badge && <b className="nav-badge">{child.badge}</b>}</Link>)}</div>}
+    {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=pathname===child.href||pathname.startsWith(`${child.href}/`);return <Link className={childActive ? "active" : ""} aria-current={childActive?"page":undefined} href={child.href} key={child.href} onClick={onNavigate}><span>{t(child.labelKey)}</span>{child.badge && <b className="nav-badge">{child.badge}</b>}</Link>;})}</div>}
   </div>;
-  return <Link className={`nav-link ${active ? "active" : ""}`} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
+  return <Link className={`nav-link ${active ? "active" : ""}`} aria-current={active?"page":undefined} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
 }
 
 function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {

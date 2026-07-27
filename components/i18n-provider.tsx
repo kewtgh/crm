@@ -21,9 +21,13 @@ export function I18nProvider({ initialLocale, initialMessages, children }: { ini
       :(await import("@/lib/i18n/locales/en")).en;
     setMessages(nextMessages);
     setLocaleState(nextLocale);
-    document.cookie = `lumina-locale=${nextLocale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    try {
+      document.cookie = `lumina-locale=${nextLocale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    } catch {}
     document.documentElement.lang = nextLocale;
-    localStorage.setItem("lumina-locale", nextLocale);
+    try {
+      localStorage.setItem("lumina-locale", nextLocale);
+    } catch {}
   }, []);
   const value = useMemo(() => ({ locale, setLocale, t: (key: string, values?: Record<string, string | number>) => {
     const template=messages[key]??key;

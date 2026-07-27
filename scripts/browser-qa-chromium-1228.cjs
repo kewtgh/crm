@@ -13,8 +13,12 @@ fs.mkdirSync(output,{recursive:true});
 
 function commandValue(command,args){const result=spawnSync(command,args,{encoding:"utf8",timeout:10_000});return result.status===0?result.stdout.trim():"unavailable";}
 function buildHash(){const root=[path.resolve("dist"),path.resolve(".next")].find(candidate=>fs.existsSync(candidate));if(!root)return"unavailable";const files=[];const visit=(directory)=>{for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory())visit(target);else if(entry.isFile())files.push(target);}};visit(root);const hash=crypto.createHash("sha256");for(const file of files.sort()){hash.update(path.relative(root,file).replaceAll("\\","/"));hash.update(fs.readFileSync(file));}return hash.digest("hex");}
+function sourceFingerprint(){const listed=spawnSync("git",["ls-files","--cached","--others","--exclude-standard","-z"],{encoding:"utf8",timeout:10_000});if(listed.status!==0)return"unavailable";const hash=crypto.createHash("sha256");const sourceFiles=listed.stdout.split("\0").filter(Boolean).map(relative=>relative.replaceAll("\\","/")).filter(relative=>!relative.startsWith("docs/")&&!relative.endsWith(".md")).sort();for(const relative of sourceFiles){const file=path.resolve(relative);hash.update(relative);hash.update(fs.existsSync(file)&&fs.statSync(file).isFile()?fs.readFileSync(file):"MISSING");}return hash.digest("hex");}
 const migrationHead=fs.readdirSync(path.resolve("supabase/migrations")).filter(name=>name.endsWith(".sql")).sort().at(-1)?.replace(/\.sql$/,'')||"unavailable";
 const appVersion=JSON.parse(fs.readFileSync(path.resolve("package.json"),"utf8")).version;
+const gitStatus=commandValue("git",["status","--porcelain=v1","--untracked-files=all"]);
+const gitState=gitStatus==="unavailable"?"unavailable":gitStatus?"dirty":"clean";
+if(process.env.CI==="true"&&gitState!=="clean")throw new Error(`CI browser evidence requires a clean worktree (state: ${gitState})`);
 
 function envFile(){
   const values={};
@@ -32,7 +36,7 @@ function envFile(){
 const env={...envFile(),...process.env};
 const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
 const actionTimeoutMs=12_000;
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -231,6 +235,13 @@ async function exerciseV210Workflows(page,scenario){
   await page.setViewportSize({width:1440,height:900});
   await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
   const globalSearch=page.locator(".global-search input");
+  await globalSearch.fill("设置");
+  const pageCommand=page.locator('.global-results a[href="/settings/profile"]');
+  await pageCommand.waitFor({state:"visible",timeout:8_000});
+  if(!(await pageCommand.getAttribute("data-source"))?.includes("page")){
+    throw new Error("Global command search did not identify the settings page command");
+  }
+  await globalSearch.fill("");
   await globalSearch.fill(scenario.householdName);
   const householdResult=page.locator(`.global-results a[href="/households?focus=${scenario.householdId}"]`);
   await householdResult.waitFor({state:"visible",timeout:8_000});
@@ -245,6 +256,16 @@ async function exerciseV210Workflows(page,scenario){
   await householdDrawer.getByLabel("主要联系人").check();
   await householdDrawer.getByRole("button",{name:"保存家庭成员"}).click();
   await householdDrawer.getByText(scenario.parentName).waitFor({state:"visible",timeout:8_000});
+  const removeMemberButton=householdDrawer.getByRole("button",{name:"移除家庭成员"});
+  await removeMemberButton.click();
+  const confirmDialog=page.getByRole("alertdialog");
+  await confirmDialog.waitFor({state:"visible",timeout:5_000});
+  await page.keyboard.press("Escape");
+  await confirmDialog.waitFor({state:"hidden",timeout:5_000});
+  await page.waitForFunction(()=>{
+    const element=document.querySelector('button[aria-label="移除家庭成员"]');
+    return element===document.activeElement&&!element?.closest("[inert],[aria-hidden='true']");
+  },null,{timeout:5_000}).catch(()=>{throw new Error("Destructive confirmation did not restore focus after Escape");});
   await householdDrawer.getByRole("button",{name:"关闭"}).click();
 
   process.stdout.write("Chromium v2.1 workflow: student guardian...\n");
@@ -284,6 +305,17 @@ async function exerciseV210Workflows(page,scenario){
   await leadDrawer.getByRole("button",{name:"转为商机"}).click();
   await leadDrawer.waitFor({state:"hidden",timeout:8_000});
   await page.getByText("线索已转为商机。").waitFor({state:"visible",timeout:8_000});
+
+  process.stdout.write("Chromium v2.6 workflow: cross-device locale preference...\n");
+  await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
+  await page.getByRole("button",{name:"切换语言"}).click();
+  await page.waitForFunction(()=>document.documentElement.lang==="en",null,{timeout:8_000});
+  await page.reload({waitUntil:"networkidle"});
+  if(await page.locator("html").getAttribute("lang")!=="en"){
+    throw new Error("Authenticated locale preference did not survive reload");
+  }
+  await page.getByRole("button",{name:"Switch language"}).click();
+  await page.waitForFunction(()=>document.documentElement.lang==="zh-CN",null,{timeout:8_000});
   process.stdout.write("Chromium v2.1 workflow interactions passed.\n");
 }
 async function main(){

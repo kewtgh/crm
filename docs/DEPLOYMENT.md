@@ -1,17 +1,17 @@
-# Lumina Education CRM v2.5.1 部署指引
+# Lumina Education CRM v2.6.0 部署指引
 
 ## 1. 发布前提
 
 - Node.js 24.x；开发、CI 与服务器统一使用 `.nvmrc` 固定的 `24.18.0`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
-- 数据库必须按顺序应用到 `202607260053`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限或 `053` 的企业目录与连接器验证凭证。
+- 数据库必须按顺序应用到 `202607270054`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证或 `054` 的时区完整性约束。
 
-当前工作树是 v2.5.1 release candidate。`053`、schema lint 与完整数据库行为套件已经
+当前工作树是 v2.6.0 release candidate。`054`、schema lint 与完整数据库行为套件已经
 在隔离本地环境通过；本轮完整门禁证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.5.1`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.6.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -63,7 +63,7 @@ OBSERVABILITY_SAMPLE_RATE=1
 3. 配置正式 APP URL、密码重置回调、SMTP 和显示六位 `{{ .Token }}` 的 OTP 模板。
 4. 管理员必须 TOTP/AAL2；普通员工可选 MFA，否则在新设备完成邮箱 OTP。
 5. 确认 `crm-avatars` 与 `crm-exports` 为 private。
-6. 按文件名顺序应用全部迁移到 `202607260053`：
+6. 按文件名顺序应用全部迁移到 `202607270054`：
 
 ```bash
 npx supabase db push --linked
@@ -75,7 +75,8 @@ npx supabase test db --linked
 导出；`048` 建立新业务域；`051` 补齐自动化预览/重试、门户同意、通信幂等、质量规则、增长
 绩效与连接器对账；`052` 修复日历与隐私导出 Worker 通过 PostgREST 读取来源记录所需的最小
 `service_role` 权限；`053` 增加受限企业目录、SSO profile 兼容和不可变连接器 sandbox
-验证凭证。最终数据库测试总数应为 460，任一失败都不得部署应用。
+验证凭证；`054` 清理历史异常时区并将用户偏好限制在应用实际支持的集合中。最终数据库测试
+总数应为 464，任一失败都不得部署应用。
 
 首次初始化运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、
 `must_change_password=true` 与 username，随后删除临时密码。首次登录必须改密并配置 TOTP。
@@ -87,14 +88,15 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、35 条 Node 契约、schema lint、460 条
+门禁必须包含：typecheck、ESLint、production build、37 条 Node 契约、schema lint、464 条
 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
 
-浏览器证据必须记录 Git SHA、APP_VERSION、migration head、build hash、精确 Chromium
-revision/executable 与 base URL，并覆盖 1440/1024/375、中英文、键盘/焦点、合同、日历、
-消息、设置、运营、自动化、门户及高风险流程。证据保存在
+浏览器证据必须记录 Git SHA、工作树状态/摘要、部署源码指纹、APP_VERSION、migration head、
+build hash、精确 Chromium revision/executable 与 base URL，并覆盖 1440/1024/375、中英文、
+键盘/焦点、页面与记录命令、危险操作确认、跨设备语言偏好、合同、日历、消息、设置、运营、
+自动化、门户及高风险流程。证据保存在
 `work/browser-qa-chromium-1228/phases/`，合并报告为同级 `report.json`。
 
 ### 4.1 分阶段与卡死保护

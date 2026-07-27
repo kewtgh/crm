@@ -15,7 +15,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { AccessibleDrawer, InlineMessage, Pagination, SearchableSelect, Toast } from "@/components/ui";
+import { AccessibleDrawer, ConfirmDialog, InlineMessage, Pagination, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
@@ -70,6 +70,8 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [toast, setToast] = useState("");
   const [formError, setFormError] = useState("");
   const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
+  const [cancelEvent,setCancelEvent]=useState<CalendarEvent|null>(null);
+  const [cancelPending,setCancelPending]=useState(false);
   const runRelatedSearch=useRemoteSearch();
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
@@ -122,7 +124,8 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
     if (persistent) { try{await apiFetch(`/api/calendar/${id}`, { method: "PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"COMPLETE"}) });}catch{setToast(t("calendar.completeFailed")); return;} }
     setDismissed((current) => [...current, id]);
   };
-  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");try{await apiFetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});}catch(caught){setFormError(presentApiError(caught,t,"calendar.deliveryUpdateFailed").message);return;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));};
+  const updateEvent=async(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string)=>{setFormError("");try{await apiFetch(`/api/calendar/${id}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action,date,time})});}catch(caught){setFormError(presentApiError(caught,t,"calendar.deliveryUpdateFailed").message);return false;}if(action==="CANCEL")setEvents(current=>current.filter(item=>item.id!==id));else setEvents(current=>current.map(item=>item.id===id?{...item,date:date!,time:time!,deliveryStatus:"QUEUED"}:item));setReschedule(null);setToast(t(action==="CANCEL"?"calendar.cancelQueued":"calendar.updateQueued"));return true;};
+  const confirmCancellation=async()=>{if(!cancelEvent)return;setCancelPending(true);if(await updateEvent(cancelEvent.id,"CANCEL"))setCancelEvent(null);setCancelPending(false);};
 
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
@@ -146,7 +149,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
         {visibleUpcoming.map((item) => <article className="reminder-item" key={item.id}>
           <span className={`reminder-type ${item.type}`}><BellRing size={17} /></span>
           <div><b>{locale==="en"&&item.titleEn?item.titleEn:item.title}</b><small><CalendarDays size={13} />{item.date} · {item.time}</small><small><Clock3 size={13} />{item.reminder.startsWith("calendar.")?t(item.reminder):eventValueKeys[item.reminder]?t(eventValueKeys[item.reminder]):item.reminder} · {eventValueKeys[item.channel]?t(eventValueKeys[item.channel]):item.channel}</small><small>{t("calendar.deliveryStatus")}: {t(`calendar.delivery.${(item.deliveryStatus??"NONE").toLowerCase()}`)}</small></div>
-          <span className="reminder-actions"><button type="button" aria-label={t("calendar.reschedule")} onClick={()=>setReschedule({id:item.id,date:item.date,time:item.time})}><Pencil size={15}/></button><button type="button" aria-label={t("calendar.cancelEvent")} onClick={()=>void updateEvent(item.id,"CANCEL")}><X size={15}/></button><button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button></span>
+          <span className="reminder-actions"><button type="button" aria-label={t("calendar.reschedule")} onClick={()=>setReschedule({id:item.id,date:item.date,time:item.time})}><Pencil size={15}/></button><button type="button" aria-label={t("calendar.cancelEvent")} onClick={()=>setCancelEvent(item)}><X size={15}/></button><button type="button" aria-label={t("calendar.complete",{title:locale==="en"&&item.titleEn?item.titleEn:item.title})} onClick={() => completeEvent(item.id)}><Check size={16} /></button></span>
           {reschedule?.id===item.id&&<form className="reschedule-form" onSubmit={event=>{event.preventDefault();void updateEvent(item.id,"UPDATE",reschedule.date,reschedule.time);}}><input type="date" value={reschedule.date} onChange={event=>setReschedule({...reschedule,date:event.target.value})} required/><input type="time" value={reschedule.time} onChange={event=>setReschedule({...reschedule,time:event.target.value})} required/><button className="primary-button">{t("calendar.queueUpdate")}</button></form>}
         </article>)}
         {!upcoming.length && <div className="empty-state"><span>{t("calendar.empty")}</span><p>{t("calendar.emptyHelp")}</p></div>}
@@ -168,6 +171,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
           <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit"><CalendarDays size={17} />{t("calendar.save")}</button></div>
         </form>
     </AccessibleDrawer>}
+    {cancelEvent&&<ConfirmDialog title={t("common.confirmAction")} description={t("calendar.cancelConfirm",{title:locale==="en"&&cancelEvent.titleEn?cancelEvent.titleEn:cancelEvent.title})} confirmLabel={t("calendar.cancelEvent")} pending={cancelPending} onClose={()=>setCancelEvent(null)} onConfirm={()=>void confirmCancellation()}/>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;
 }
