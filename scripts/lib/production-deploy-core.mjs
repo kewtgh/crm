@@ -357,6 +357,10 @@ export function classifyPersistedDeployment({ serviceActive, request, latest }) 
   return { state: "IDLE", deploymentId: null };
 }
 
+export function isSystemdServiceInProgress(activeState) {
+  return ["activating", "active", "reloading", "deactivating"].includes(String(activeState ?? "").trim());
+}
+
 export function planInterruptedRecovery({ requestId, prior, currentRelease }) {
   if (!prior || prior.requestId !== requestId || prior.result !== "RUNNING") {
     return { action: "NONE" };

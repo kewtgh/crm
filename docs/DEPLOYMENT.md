@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.8.0 部署指引
+# Lumina Education CRM v2.8.1 部署指引
 
 ## 1. 发布前提
 
@@ -8,11 +8,11 @@
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
 - 数据库必须按顺序应用到 `202607280055`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束或 `055` 的 MFA 恢复码与超级管理员直执/回收站能力。
 
-当前工作树是 v2.8.0 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约、
+当前工作树是 v2.8.1 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约、
 部署单测与固定浏览器完整门禁通过；本轮证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.8.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.8.1`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -90,7 +90,7 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、37 条源码契约、16 条部署单测、
+门禁必须包含：typecheck、ESLint、production build、37 条源码契约、17 条部署单测、
 schema lint、464 条 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
@@ -274,7 +274,7 @@ runner 使用 `/var/lock/lumina-crm-deploy.lock` 的 non-blocking `flock`；同�
 3. 从远端明确 SHA 建立 `<UTC>-<SHA12>` 的 detached immutable worktree；
 4. 用 lockfile、`--strict-allow-scripts` 和 `package.json#allowScripts` 内经审查的精确版本
    allowlist 安装完整依赖，不设置用户级/全局脚本许可；
-5. 执行 typecheck、ESLint、37 条源码契约、16 条部署单测、moderate audit 和 production build；
+5. 执行 typecheck、ESLint、37 条源码契约、17 条部署单测、moderate audit 和 production build；
 6. 对 project ref `ectxevxmcwzvwsjkwnld` 显式 link，先 migration dry-run，再执行
    forward-only push 和 linked schema lint，并在切换前删除 release 内的 Supabase CLI link cache；
 7. 验证 build artifact、Git SHA、package version、`APP_VERSION` 和 npm policy；

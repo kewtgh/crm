@@ -1,6 +1,6 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.8.0**
+Current release candidate: **v2.8.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
@@ -158,7 +158,7 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.8.0 source implementation, migration through `202607280055`, production build,
+The v2.8.1 source implementation, migration through `202607280055`, production build,
 37 source contracts, 16 deployment unit tests and 80-page/viewport Chromium 1228 matrix are complete.
 A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
