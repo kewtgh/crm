@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { access, readFile, readdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { PassThrough } from "node:stream";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
 
 test("rejects encoded, backslash, and protocol-relative authentication return targets", async () => {
   const { safeRelativeReturnTo } = await import("../lib/return-to.ts");
@@ -147,7 +150,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.5\.1"/);
+  assert.match(packageJson, /"version": "2\.6\.0"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -163,7 +166,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.5\.1"/);
+  assert.match(packageJson, /"version": "2\.6\.0"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -558,7 +561,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(modulePage, /dueAt/);
   assert.match(dataTable, /lumina-saved-views/);
   assert.match(dataTable, /onPageSize/);
-  assert.match(preferences, /localDateTimeToUtc/);
+  assert.match(preferences, /zonedLocalDateTimeToUtc/);
   assert.match(remediation, /crm_resource_metrics/);
   assert.match(remediation, /PAYMENT_OVERDUE/);
   assert.match(remediation, /reporting_timezone/);
@@ -571,7 +574,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.5\.1/);
+  assert.match(version, /2\.6\.0/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -606,7 +609,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.5\.1"/);
+  assert.match(packageJson, /"version": "2\.6\.0"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -635,23 +638,31 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
   assert.match(plan, /无输出时限/);
 });
 
-test("the bounded runner terminates a silent child process", () => {
-  const runner = new URL("../scripts/run-bounded.mjs", import.meta.url);
+test("the bounded runner terminates a silent child process", async () => {
+  const { runBounded } = await import("../scripts/lib/bounded-process.mjs");
   const startedAt = Date.now();
-  const result = spawnSync(process.execPath, [
-    fileURLToPath(runner),
-    "--label", "silent-contract",
-    "--timeout-seconds", "3",
-    "--idle-seconds", "1",
-    "--heartbeat-seconds", "1",
-    "--",
-    "node",
-    "-e",
-    "setInterval(() => {}, 1000)",
-  ], { encoding: "utf8", timeout: 7_000, windowsHide: true });
-  assert.notEqual(result.status, 0);
-  assert.ok(Date.now() - startedAt < 6_000, "silent child was not terminated promptly");
-  assert.match(`${result.stdout}\n${result.stderr}`, /produced no output/);
+  let stopped = false;
+  const fakeSpawn = () => {
+    const child = new EventEmitter();
+    child.pid = 424_242;
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    return child;
+  };
+  await assert.rejects(
+    runBounded({
+      command: "silent-contract",
+      timeoutMs: 2_000,
+      idleTimeoutMs: 25,
+      heartbeatMs: 5_000,
+      spawnProcess: fakeSpawn,
+      stopProcess: () => { stopped = true; },
+    }),
+    /produced no output/,
+  );
+  assert.equal(stopped, true);
+  assert.ok(Date.now() - startedAt < 1_000, "silent child was not terminated promptly");
 });
 
 test("closes the v1.2 CRM, resilience, accessibility, and product audit", async () => {
@@ -715,7 +726,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.5\.1/);
+  assert.match(version,/2\.6\.0/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -749,7 +760,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.5\.1"/);
+  assert.match(packageJson,/"version": "2\.6\.0"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -787,7 +798,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.5\.1/);
+  assert.match(version,/2\.6\.0/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -844,7 +855,7 @@ test("closes the v2.2 execution-integrity and business-expansion audit", async (
   assert.match(v220Repository,/retryCommunicationMessage/);
   assert.match(v220Repository,/configureQualityRule/);
   for(const route of ["/automation","/growth","/guardian-portal","/messages"]) assert.match(navigation,new RegExp(route));
-  assert.match(metadata,/og-v220\.png/);
+  assert.match(metadata,/og-v260\.png/);
   assert.match(navigation,/mobileSearchOpen/);
   assert.match(audit,/P0/);
   assert.match(plan,/REL-01/);
@@ -854,7 +865,7 @@ test("closes the v2.2 execution-integrity and business-expansion audit", async (
     "../app/(crm)/guardian-portal/page.tsx",
     "../app/portal/invite/[token]/page.tsx",
   ]) await access(new URL(page,import.meta.url));
-  await access(new URL("../public/og-v220.png",import.meta.url));
+  await access(new URL("../public/og-v260.png",import.meta.url));
 });
 
 test("closes the v2.3.0 dependency, session, API-cache, and environment audit", async () => {
@@ -909,7 +920,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   ]);
   assert.match(packageJson, /"next": "16\.2\.11"/);
   assert.match(packageJson, /"sharp": "0\.35\.3"/);
-  assert.match(packageJson, /"postcss": "8\.5\.14"/);
+  assert.match(packageJson, /"postcss": "8\.5\.23"/);
   assert.match(auth, /persistence: "crm_session_persistent"/);
   assert.match(session, /persistentSessionMaxAge/);
   assert.match(session, /persistent \? \{ \.\.\.base, maxAge:/);
@@ -950,7 +961,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
   assert.match(implementationStatus, /Pinned Chromium matrix \| Pass/);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.5\.1/);
+  assert.match(version, /2\.6\.0/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -1103,7 +1114,7 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
     readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.5\.1"/);
+  assert.match(packageJson, /"version": "2\.6\.0"/);
   assert.match(returnTo, /containsUnsafePathCharacters/);
   assert.match(refresh, /safeRelativeReturnTo/);
   assert.match(environment, /Placeholder values are not allowed/);
@@ -1152,12 +1163,11 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
 });
 
 test("ships the v2.5.1 Weiai brand lockup and responsive favicon set", async () => {
-  const [layout, shell, authForm, legacyFavicon, version, proxy, nextConfig] = await Promise.all([
+  const [layout, shell, authForm, legacyFavicon, proxy, nextConfig] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/favicon.ico/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../lib/version.ts", import.meta.url), "utf8"),
     readFile(new URL("../proxy.ts", import.meta.url), "utf8"),
     readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
   ]);
@@ -1171,10 +1181,105 @@ test("ships the v2.5.1 Weiai brand lockup and responsive favicon set", async () 
   assert.match(shell, /aria-label=\{t\("brand\.name"\)\}/);
   assert.match(authForm, /aria-label=\{t\("brand\.name"\)\}/);
   assert.match(legacyFavicon, /favicon-32x32\.png/);
-  assert.match(version, /2\.5\.1/);
   assert.match(proxy, /secureAppOrigin/);
   assert.match(proxy, /upgrade-insecure-requests/);
   assert.match(proxy, /Strict-Transport-Security/);
   assert.doesNotMatch(nextConfig, /Strict-Transport-Security/);
   await access(new URL("../public/brand/weiai-logo-800x240.png", import.meta.url));
+});
+
+test("closes the v2.6.0 time, preference, command, safety, and release-evidence audit", async () => {
+  const braceExpand = require("brace-expansion");
+  assert.equal(typeof braceExpand, "function");
+  assert.equal(typeof braceExpand.expand, "function");
+  assert.deepEqual(braceExpand("a{b,c}"), ["ab", "ac"]);
+  assert.deepEqual(braceExpand.expand("a{b,c}"), ["ab", "ac"]);
+  const { SUPPORTED_TIMEZONES, zonedLocalDateTimeToUtc } = await import("../lib/timezone.ts");
+  assert.equal(SUPPORTED_TIMEZONES.length, 5);
+  assert.equal(
+    zonedLocalDateTimeToUtc("2026-07-27T10:00", "Asia/Taipei").toISOString(),
+    "2026-07-27T02:00:00.000Z",
+  );
+  assert.throws(
+    () => zonedLocalDateTimeToUtc("2026-03-08T02:30", "America/New_York"),
+    /does not exist/,
+  );
+  assert.throws(
+    () => zonedLocalDateTimeToUtc("2026-03-29T01:30", "Europe/London"),
+    /does not exist/,
+  );
+  const [
+    migration,
+    pgtap,
+    settingsRoute,
+    settingsRepository,
+    shell,
+    localeSwitcher,
+    i18nProvider,
+    ui,
+    education,
+    calendar,
+    portal,
+    dataTable,
+    dashboard,
+    notFound,
+    assetQa,
+    browserQa,
+    stagedQa,
+    audit,
+    plan,
+    version,
+  ] = await Promise.all([
+    readFile(new URL("../supabase/migrations/202607270054_v260_experience_integrity.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/tests/v260_experience_integrity.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/settings-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/app-shell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/locale-switcher.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/i18n-provider.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/v200-workspaces.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/calendar-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/portal-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/data-table.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/dashboard-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/not-found.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/check-production-assets.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-chromium-1228.cjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/browser-qa-staged.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../docs/AUDIT_2026-07-27_V2.6.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-27_V2.6.0.md", import.meta.url), "utf8"),
+    readFile(new URL("../lib/version.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(migration, /user_preferences_timezone_valid/);
+  assert.match(pgtap, /unsupported timezone is rejected/);
+  assert.match(settingsRoute, /z\.enum\(SUPPORTED_TIMEZONES\)/);
+  assert.match(settingsRoute, /z\.literal\("locale"\)/);
+  assert.match(settingsRepository, /normalizeTimezone/);
+  assert.match(settingsRepository, /updateLocale/);
+  assert.match(shell, /pageCommands/);
+  assert.match(shell, /source:\s*"page"/);
+  assert.match(shell, /aria-current/);
+  assert.match(localeSwitcher, /section: "locale"/);
+  assert.match(localeSwitcher, /persistFailed/);
+  assert.match(i18nProvider, /localStorage\.setItem/);
+  assert.match(ui, /role="alertdialog"/);
+  assert.match(ui, /backgroundModals/);
+  assert.doesNotMatch(education, /window\.confirm/);
+  assert.match(education, /ConfirmDialog/);
+  assert.match(calendar, /cancelConfirm/);
+  assert.match(portal, /revokeConfirm/);
+  assert.match(dataTable, /deleteConfirm/);
+  assert.match(dashboard, /pendingTaskIds/);
+  assert.match(notFound, /notFound\.title/);
+  for (const asset of ["weiai-logo-800x240", "favicon-16x16", "favicon-32x32", "favicon-192x192", "og-v260"]) {
+    assert.match(assetQa, new RegExp(asset));
+  }
+  assert.match(assetQa, /readUInt32BE/);
+  assert.match(browserQa, /sourceFingerprint/);
+  assert.match(browserQa, /gitState/);
+  assert.match(stagedQa, /gitStatusDigest/);
+  assert.match(audit, /不受约束的时区/);
+  assert.match(plan, /统一命令搜索/);
+  assert.match(version, /2\.6\.0/);
 });

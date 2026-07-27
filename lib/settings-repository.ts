@@ -1,5 +1,6 @@
 import { supabaseJson } from "./supabase-server";
 import type { AppUser } from "./user";
+import { DEFAULT_TIMEZONE, normalizeTimezone, type SupportedTimezone } from "./timezone";
 
 export type NotificationPreferences = Record<string, { email: boolean; inApp: boolean }>;
 
@@ -11,7 +12,7 @@ export type UserSettings = {
   bio: string;
   avatarPath: string | null;
   locale: "zh-CN" | "en";
-  timezone: string;
+  timezone: SupportedTimezone;
   dateFormat: "yyyy-MM-dd" | "dd/MM/yyyy" | "MM/dd/yyyy";
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
@@ -57,7 +58,7 @@ export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
     bio: preference?.bio ?? "",
     avatarPath: preference?.avatar_path ?? null,
     locale: preference?.locale ?? "zh-CN",
-    timezone: preference?.timezone ?? "Asia/Taipei",
+    timezone: normalizeTimezone(preference?.timezone ?? DEFAULT_TIMEZONE),
     dateFormat: preference?.date_format ?? "yyyy-MM-dd",
     quietHoursStart: preference?.quiet_hours_start ?? null,
     quietHoursEnd: preference?.quiet_hours_end ?? null,
@@ -74,6 +75,10 @@ export async function updateProfile(userId: string, input: Pick<UserSettings, "d
 
 export async function updateAccount(userId: string, input: Pick<UserSettings, "locale" | "timezone" | "dateFormat">) {
   await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale: input.locale, timezone: input.timezone, date_format: input.dateFormat, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
+}
+
+export async function updateLocale(userId: string, locale: UserSettings["locale"]) {
+  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
 }
 
 export async function updateNotifications(userId: string, notifications: NotificationPreferences, quietHoursStart: string | null, quietHoursEnd: string | null) {

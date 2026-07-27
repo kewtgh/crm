@@ -36,6 +36,8 @@ export function runBounded({
   heartbeatMs = 15_000,
   env = process.env,
   cwd = process.cwd(),
+  spawnProcess = spawn,
+  stopProcess = stopProcessTree,
 }) {
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new Error(`${label}: timeoutMs must be positive`);
   if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 1) throw new Error(`${label}: idleTimeoutMs must be positive`);
@@ -43,7 +45,7 @@ export function runBounded({
     const startedAt = Date.now();
     let lastOutputAt = startedAt;
     let settled = false;
-    const child = spawn(command, args, {
+    const child = spawnProcess(command, args, {
       cwd,
       env,
       stdio: ["inherit", "pipe", "pipe"],
@@ -70,7 +72,7 @@ export function runBounded({
     };
     const terminate = (reason) => {
       if (settled) return;
-      stopProcessTree(child);
+      stopProcess(child);
       finish(new Error(
         `${label} ${reason} after ${formatDuration(Date.now() - startedAt)} `
         + `(last child output ${formatDuration(Date.now() - lastOutputAt)} ago)`,

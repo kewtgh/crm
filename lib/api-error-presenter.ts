@@ -7,6 +7,7 @@ const codeKeys: Record<string, string> = {
   ROLE_FORBIDDEN: "permission.denied",
   MFA_REQUIRED: "permission.mfaRequired",
   INVALID_INPUT: "error.invalidInput",
+  INVALID_LOCAL_TIME: "error.invalidLocalTime",
   INVALID_ID: "error.invalidInput",
   REQUEST_TIMEOUT: "error.timeout",
   NETWORK_ERROR: "error.network",

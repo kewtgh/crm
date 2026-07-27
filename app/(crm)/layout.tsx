@@ -17,5 +17,5 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
       .catch(() => ({ value: emptyRelationshipHealth, unavailable: true })),
     loadUserSettings(user),
   ]);
-  return <AppShell user={user} relationshipHealth={relationshipResult.value} relationshipHealthUnavailable={relationshipResult.unavailable} preferences={{timezone:settings.timezone,dateFormat:settings.dateFormat}}>{children}</AppShell>;
+  return <AppShell user={user} relationshipHealth={relationshipResult.value} relationshipHealthUnavailable={relationshipResult.unavailable} preferences={{timezone:settings.timezone,dateFormat:settings.dateFormat}} preferredLocale={settings.locale}>{children}</AppShell>;
 }
