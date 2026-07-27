@@ -35,7 +35,7 @@ const expectedImages=[
   {path:"/favicon-16x16.png",width:16,height:16},
   {path:"/favicon-32x32.png",width:32,height:32},
   {path:"/favicon-192x192.png",width:192,height:192},
-  {path:"/og-v270.png",width:1728,height:910},
+  {path:"/og-v280.png",width:1726,height:911},
 ];
 const combinedHtml=[...htmlByRoute.values()].join("\n");
 for(const asset of expectedImages){

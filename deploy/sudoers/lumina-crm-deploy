@@ -1,0 +1,7 @@
+Cmnd_Alias LUMINA_CRM_DEPLOY_SYSTEMD = \
+  /usr/bin/systemctl start --no-block lumina-crm-deploy.service, \
+  /usr/bin/systemctl restart lumina-crm.service, \
+  /usr/bin/systemctl enable --now lumina-crm-workers.timer, \
+  /usr/bin/systemctl start lumina-crm-workers.service
+
+lumina-crm ALL=(root) NOPASSWD: LUMINA_CRM_DEPLOY_SYSTEMD
