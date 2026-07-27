@@ -48,6 +48,7 @@ const phases = [
     name: "06-settings", timeout: 60,
     env: {
       QA_SCOPE: "routes", QA_LABEL: "settings",
+      QA_ROLE: "SALES_SPECIALIST",
       QA_ROUTES: "/settings/profile,/settings/account,/settings/notifications,/settings/security,/settings/privacy",
       QA_MOBILE_ROUTES: "/settings/notifications,/settings/security,/settings/privacy",
     },
@@ -56,8 +57,8 @@ const phases = [
     name: "07-admin", timeout: 75,
     env: {
       QA_SCOPE: "routes", QA_LABEL: "admin", QA_ROLE: "SUPER_ADMIN",
-      QA_ROUTES: "/action-center,/admin,/admin/approvals,/admin/operations,/admin/users,/admin/security",
-      QA_MOBILE_ROUTES: "/admin,/admin/approvals,/admin/operations,/admin/users,/admin/security",
+      QA_ROUTES: "/action-center,/admin,/admin/approvals,/admin/operations,/admin/users,/admin/recycle-bin,/admin/security",
+      QA_MOBILE_ROUTES: "/admin,/admin/approvals,/admin/operations,/admin/users,/admin/recycle-bin,/admin/security",
     },
   },
   { name: "08-notification", timeout: 45, env: { QA_SCOPE: "notification" } },

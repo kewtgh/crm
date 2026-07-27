@@ -355,6 +355,43 @@ async function main(){
         if(tablet.has(route))await inspect(page,`${label}-1024`,route,{width:1024,height:768});
         if(mobile.has(route))await inspect(page,`${label}-375`,route,{width:375,height:812});
       }
+      if(role==="SUPER_ADMIN"&&routes.includes("/admin/users")){
+        await page.setViewportSize({width:1440,height:900});
+        await page.goto(`${base}/admin/users`,{waitUntil:"networkidle"});
+        await page.getByRole("button",{name:"创建员工账号"}).click();
+        const staffDialog=page.locator("dialog.staff-dialog");
+        await staffDialog.waitFor({state:"visible",timeout:5_000});
+        const box=await staffDialog.boundingBox();
+        if(!box||Math.abs(box.x+box.width/2-720)>3||Math.abs(box.y+box.height/2-450)>3){
+          report.errors.push({kind:"modal-position",url:"/admin/users",message:`Create-staff dialog is not centered: ${JSON.stringify(box)}`});
+        }
+        await page.keyboard.press("Escape");
+        process.stdout.write("[QA] pass centered create-staff dialog\n");
+      }
+      if(env.QA_LABEL==="settings"){
+        await page.setViewportSize({width:1440,height:900});
+        await page.goto(`${base}/settings/security`,{waitUntil:"networkidle"});
+        await page.getByRole("button",{name:"设置二次验证"}).click();
+        const qr=page.locator("img.mfa-qr");
+        await qr.waitFor({state:"visible",timeout:8_000});
+        const qrSource=await qr.getAttribute("src");
+        if(!qrSource?.startsWith("data:image/png;base64,"))report.errors.push({kind:"mfa",url:"/settings/security",message:"MFA enrollment did not render a PNG QR data URL"});
+        const secret=(await page.locator(".mfa-enrollment code").textContent())?.trim();
+        if(!secret)report.errors.push({kind:"mfa",url:"/settings/security",message:"MFA enrollment did not expose the manual secret"});
+        else{
+          const{qaTotp}=await import("./lib/qa-auth.mjs");
+          await page.getByLabel("6 位验证码").fill(qaTotp(secret));
+          const verificationResponse=page.waitForResponse(response=>response.url().includes("/api/settings/mfa")&&response.request().method()==="POST",{timeout:8_000});
+          await page.getByRole("button",{name:"验证并启用 MFA"}).click();
+          const response=await verificationResponse;
+          const payload=await response.json().catch(()=>null);
+          if(!response.ok()||!Array.isArray(payload?.recoveryCodes))throw new Error(`MFA verification did not return recovery codes (${response.status()}: ${JSON.stringify(payload)})`);
+          await page.locator(".recovery-code-grid code").first().waitFor({state:"visible",timeout:8_000});
+          const recoveryCount=await page.locator(".recovery-code-grid code").count();
+          if(recoveryCount!==10)report.errors.push({kind:"mfa",url:"/settings/security",message:`Expected 10 recovery codes after enrollment, received ${recoveryCount}`});
+        }
+        process.stdout.write("[QA] pass MFA QR and recovery-code enrollment\n");
+      }
       await context.close();
     }else if(env.QA_SCOPE==="notification"){
       const identity=await createIdentity("SALES_MANAGER","notification");identities.push(identity);

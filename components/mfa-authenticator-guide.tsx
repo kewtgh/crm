@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, KeyRound, ShieldCheck, Smartphone } from "lucide-react";
+import { KeyRound, ShieldCheck, Smartphone } from "lucide-react";
 import { useId } from "react";
 import { useI18n } from "@/components/i18n-provider";
 
@@ -19,9 +19,9 @@ export function MfaAuthenticatorGuide({ headingLevel = "h3" }: { headingLevel?: 
         </div>
       </div>
       <ul className="mfa-guide__apps">
-        <li><Smartphone aria-hidden="true" size={18} /><span>{t("settings.mfaGuideMicrosoft")}</span></li>
-        <li><Clock3 aria-hidden="true" size={18} /><span>{t("settings.mfaGuideGoogle")}</span></li>
-        <li><KeyRound aria-hidden="true" size={18} /><span>{t("settings.mfaGuideOnePassword")}</span></li>
+        <li><span className="mfa-guide__app-icon microsoft"><Smartphone aria-hidden="true" size={20} /></span><span><b>{t("settings.mfaGuideMicrosoftName")}</b><small>{t("settings.mfaGuideMicrosoftHelp")}</small></span></li>
+        <li><span className="mfa-guide__app-icon google"><span aria-hidden="true">G</span></span><span><b>{t("settings.mfaGuideGoogleName")}</b><small>{t("settings.mfaGuideGoogleHelp")}</small></span></li>
+        <li><span className="mfa-guide__app-icon one-password"><KeyRound aria-hidden="true" size={20} /></span><span><b>{t("settings.mfaGuideOnePasswordName")}</b><small>{t("settings.mfaGuideOnePasswordHelp")}</small></span></li>
       </ul>
       <p className="mfa-guide__policy">{t("settings.mfaGuidePolicy")}</p>
       <p className="mfa-guide__warning">{t("settings.mfaGuideWarning")}</p>

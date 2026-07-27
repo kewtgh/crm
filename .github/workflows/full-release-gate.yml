@@ -36,6 +36,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Use pinned npm 12
+        run: npm install --global npm@12.0.1 && npm --version
+
       - name: Install locked dependencies
         timeout-minutes: 5
         run: npm ci --no-audit --no-fund

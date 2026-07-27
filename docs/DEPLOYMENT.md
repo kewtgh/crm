@@ -1,17 +1,18 @@
-# Lumina Education CRM v2.6.0 部署指引
+# Lumina Education CRM v2.7.0 部署指引
 
 ## 1. 发布前提
 
 - Node.js 24.x；开发、CI 与服务器统一使用 `.nvmrc` 固定的 `24.18.0`。
+- npm 12.x；`package.json`、`engine-strict`、CI 与完整发布门禁固定使用 `12.0.1`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
-- 数据库必须按顺序应用到 `202607270054`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证或 `054` 的时区完整性约束。
+- 数据库必须按顺序应用到 `202607280055`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束或 `055` 的 MFA 恢复码与超级管理员直执/回收站能力。
 
-当前工作树是 v2.6.0 release candidate。`054`、schema lint 与完整数据库行为套件已经
-在隔离本地环境通过；本轮完整门禁证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
+当前工作树是 v2.7.0 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约
+与固定浏览器完整门禁通过；本轮证据见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.6.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.7.0`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 

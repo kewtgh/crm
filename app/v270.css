@@ -1,0 +1,134 @@
+/* v2.7 product polish: Weiai brand, centered modal surfaces, and complete MFA UI. */
+.staff-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  box-shadow: 0 24px 80px rgba(34, 20, 82, .3);
+}
+.staff-dialog::backdrop { background: rgba(31, 18, 70, .58); }
+
+.status-badge.green { color: var(--positive); background: var(--positive-soft); }
+.inline-message.success { color: #256e53; border-color: #c8e8da; background: var(--positive-soft); }
+.toast-check { background: var(--positive); }
+
+.v220-summary-grid.growth-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.settings-layout { grid-template-columns: 230px minmax(0, 880px); }
+.settings-nav > a.active {
+  color: var(--brand-deep);
+  background: linear-gradient(90deg, rgba(91,59,178,.13), rgba(243,107,56,.08));
+  box-shadow: inset 3px 0 var(--brand-accent);
+}
+.mfa-card {
+  padding: 18px;
+  border-color: #d9cff6;
+  grid-template-columns: 48px minmax(0,1fr) auto auto;
+  gap: 14px;
+  background: linear-gradient(120deg,#f5f1ff,#fff8f4);
+}
+.mfa-card > span:first-child { width: 48px; height: 48px; color: var(--brand); }
+.mfa-card b { font-size: 15px; }
+.mfa-card p { margin-top: 4px; font-size: 12px; line-height: 1.6; }
+.mfa-card .secondary-button { min-height: 42px; font-size: 12px; }
+
+.mfa-guide {
+  margin-top: 18px;
+  padding: 20px;
+  border-color: #ddd5f3;
+  border-radius: 16px;
+  background: linear-gradient(145deg,#fbfaff,#fff);
+}
+.mfa-guide__heading { gap: 12px; }
+.mfa-guide__heading > svg { width: 24px; height: 24px; color: var(--brand); }
+.mfa-guide :is(h2,h3) { font-size: 17px; }
+.mfa-guide__heading p { font-size: 13px; }
+.mfa-guide__apps { gap: 12px; }
+.mfa-guide__apps li {
+  min-height: 122px;
+  padding: 14px;
+  border-color: #e3ddf3;
+  border-radius: 13px;
+  align-items: flex-start;
+  gap: 11px;
+  box-shadow: 0 4px 14px rgba(50,32,120,.04);
+}
+.mfa-guide__apps li > span:last-child { min-width: 0; display: grid; gap: 5px; }
+.mfa-guide__apps b { font-size: 13px; line-height: 1.35; }
+.mfa-guide__apps small { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.mfa-guide__app-icon { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; display: grid; place-items: center; }
+.mfa-guide__app-icon.microsoft { color: #fff; background: #4169d8; }
+.mfa-guide__app-icon.google { color: #fff; background: linear-gradient(135deg,#4285f4 0 50%,#ea4335 50%); font-size: 16px; font-weight: 900; }
+.mfa-guide__app-icon.one-password { color: #fff; background: var(--brand); }
+.mfa-guide__policy { margin-top: 16px; }
+
+.mfa-setup-panel { padding-top: 24px; }
+.mfa-enrollment {
+  width: min(100%, 430px);
+  margin: 0 auto 20px;
+  padding: 20px;
+  border-color: #ddd5f3;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(50,32,120,.07);
+}
+.mfa-enrollment .mfa-qr, .mfa-setup-panel .mfa-qr { width: min(260px,100%); height: auto; padding: 8px; border: 1px solid #ebe6f8; border-radius: 12px; background: #fff; }
+.mfa-enrollment small { max-width: 100%; color: var(--muted); text-align: center; line-height: 1.6; }
+.mfa-enrollment code { display: block; margin-top: 5px; padding: 8px 10px; border-radius: 8px; color: var(--brand-deep); background: #f3f0fb; font-size: 13px; letter-spacing: .08em; overflow-wrap: anywhere; }
+.mfa-code-field { width: min(100%, 430px); margin: 0 auto 16px; }
+.mfa-code-input {
+  min-height: 56px !important;
+  padding: 10px 16px !important;
+  color: var(--brand-deep);
+  font-size: 22px !important;
+  font-weight: 800;
+  letter-spacing: .28em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mfa-mode-switch { width: 100%; padding: 8px; border: 0; color: var(--brand); background: transparent; font-weight: 800; text-align: center; }
+
+.recovery-section {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid #ded6f2;
+  border-radius: 14px;
+  background: #faf8ff;
+}
+.recovery-section__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.recovery-section h3 { margin: 0; font-size: 16px; }
+.recovery-section p { margin: 5px 0 0; font-size: 12px; }
+.recovery-section .secondary-button { min-height: 42px; font-size: 12px; }
+.recovery-code-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 16px 0; }
+.recovery-code-grid code { padding: 10px 12px; border: 1px solid #ddd5f3; border-radius: 9px; color: var(--brand-deep); background: #fff; font-size: 14px; font-weight: 800; letter-spacing: .08em; text-align: center; user-select: all; }
+.recovery-code-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.recovery-code-reveal { width: min(620px,100%); }
+.credential-flow { margin: -8px 0 20px; padding: 14px; border: 1px solid #ddd5f3; border-radius: 13px; display: flex; align-items: flex-start; gap: 11px; background: #faf8ff; }
+.credential-flow > span { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--brand); }
+.credential-flow b { font-size: 13px; }
+.credential-flow p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.recycle-bin { overflow: hidden; }
+.recycle-list { display: grid; }
+.recycle-list article { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 20px; border-top: 1px solid var(--line); }
+.recycle-list article > div { min-width: 0; display: grid; gap: 4px; }
+.recycle-list article b { overflow-wrap: anywhere; }
+.recycle-list article small { color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .v220-summary-grid.growth-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .v220-summary-grid.growth-summary-grid { grid-template-columns: 1fr; }
+  .mfa-card { grid-template-columns: 48px minmax(0,1fr); }
+  .mfa-card :is(.status-badge,.secondary-button,.danger-button) { grid-column: 2; justify-self: start; }
+  .mfa-guide__apps, .recovery-code-grid { grid-template-columns: 1fr; }
+  .mfa-guide__apps li { min-height: auto; }
+  .recovery-section__heading { align-items: flex-start; flex-direction: column; }
+  .recovery-section__heading .secondary-button { width: 100%; }
+  .mfa-code-input { font-size: 18px !important; }
+  .recycle-list article { align-items: stretch; flex-direction: column; }
+}

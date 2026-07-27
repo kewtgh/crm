@@ -68,7 +68,7 @@ export type CreateStaffInput = {
 
 function generateTemporaryPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
   const generated = Array.from(bytes, (value) => alphabet[value % alphabet.length]);
   generated[0] = "ABCDEFGHJKLMNPQRSTUVWXYZ"[bytes[0] % 24];
   generated[1] = "abcdefghijkmnopqrstuvwxyz"[bytes[1] % 25];
@@ -137,6 +137,18 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   if (!userId) throw new SupabaseRequestError(502, "CREATE_USER_MISSING", "The identity service did not return the created user");
 
   try {
+    await Promise.all([
+      supabaseAdminRequest("/rest/v1/user_profiles", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ user_id: userId, username, display_name_zh: input.displayNameZh, display_name_en: input.displayNameEn }),
+      }),
+      supabaseAdminRequest("/rest/v1/workspace_memberships", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ workspace_id: workspaceId, user_id: userId, role: input.role, status: "ACTIVE", must_change_password: true }),
+      }),
+    ]);
     if (input.role.startsWith("SALES_")) {
       await supabaseAdminRequest("/rest/v1/sales_team_members", {
         method: "POST",

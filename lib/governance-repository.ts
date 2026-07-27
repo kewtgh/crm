@@ -42,6 +42,20 @@ export async function decideApproval(id:string,decision:"APPROVED"|"REJECTED",co
   return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/decide_approval",{method:"POST",body:JSON.stringify({request_id:id,decision,decision_comment:comment||null})});
 }
 
+export function approvalRecordId(item: unknown) {
+  const record = Array.isArray(item) ? item[0] : item;
+  return record && typeof record === "object" && typeof (record as Record<string, unknown>).id === "string"
+    ? String((record as Record<string, unknown>).id)
+    : null;
+}
+
+export async function executeSuperAdminApproval(id: string) {
+  return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/super_admin_execute_approval", {
+    method: "POST",
+    body: JSON.stringify({ request_id: id }),
+  });
+}
+
 export type PerformanceWorkspace={
   targetId:string|null; managerId:string; target:number; periodStart:string; periodEnd:string; currency:string; status:string;
   members:{id:string;name:string;role:"specialist"|"support";team:string}[];

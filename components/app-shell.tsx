@@ -30,7 +30,7 @@ import {
   X,
 } from "lucide-react";
 import type { AppUser } from "@/lib/user";
-import { ADMIN_ROLES, roleMessageKey } from "@/lib/roles";
+import { roleMessageKey } from "@/lib/roles";
 import { hasCapability, type Capability } from "@/lib/capabilities";
 import { APP_VERSION } from "@/lib/version";
 import { AppUserProvider } from "./app-user-context";
@@ -96,6 +96,7 @@ const navigation: { titleKey: string; items: NavItem[] }[] = [
       { labelKey: "nav.approvals", href: "/admin/approvals" },
       { labelKey: "nav.operationsCenter", href: "/admin/operations" },
       { labelKey: "nav.users", href: "/admin/users" },
+      { labelKey: "nav.recycleBin", href: "/admin/recycle-bin" },
       { labelKey: "nav.security", href: "/admin/security" },
     ]},
   ]},
@@ -127,6 +128,7 @@ const routeCapabilities: Partial<Record<string, Capability>> = {
   "/admin/approvals": "admin.access",
   "/admin/operations": "admin.access",
   "/admin/users": "users.manage",
+  "/admin/recycle-bin": "admin.access",
   "/admin/security": "admin.access",
 };
 
@@ -159,7 +161,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     if(locale!==preferredLocale)void setLocale(preferredLocale);
   },[locale,preferredLocale,setLocale]);
   const visibleNavigation = useMemo(() => {
-    const canVisit = (href?: string) => !href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]);
+    const canVisit = (href?: string) => (!href || href!=="/admin/recycle-bin" || user.role==="SUPER_ADMIN") && (!href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]));
     const canAllocate = hasCapability(user.role, "performance.manage");
     return navigation.map((group) => ({
       ...group,
@@ -420,7 +422,7 @@ function ProfilePopover({ user, close,triggerRef }: { user: AppUser; close: () =
   const onKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{const items=Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role='menuitem']")??[]);if(event.key==="Escape"){event.preventDefault();close();return;}if(event.key==="Tab"){event.preventDefault();restoreFocus.current=false;const next=findAdjacentFocusable(triggerRef.current,menuRef.current,event.shiftKey);close();window.requestAnimationFrame(()=>next?.focus());return;}if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key)||!items.length)return;event.preventDefault();const index=items.indexOf(document.activeElement as HTMLElement);const next=event.key==="Home"?0:event.key==="End"?items.length-1:event.key==="ArrowDown"?(index+1+items.length)%items.length:(index-1+items.length)%items.length;items[next]?.focus();};
   return <div ref={menuRef} onKeyDown={onKeyDown} className="top-popover profile-popover" role="menu"><div className="profile-card" role="none"><span>{user.initials}</span><div><b>{user.displayNameZh} / {user.displayName}</b><small>@{user.username} · {user.email}</small><em>{roleLabel} · {t(user.emailVerified ? "nav.emailVerified" : "nav.emailUnverified")}</em></div></div>
     <Link role="menuitem" href="/settings/profile" onClick={close}><Settings size={17} />{t("nav.profileSettings")}</Link>
-    <Link role="menuitem" href={ADMIN_ROLES.includes(user.role) ? "/admin/security" : "/settings/security"} onClick={close}><ShieldCheck size={17} />{t("nav.security")} <span className={user.mfaEnabled ? "mini-good" : "mini-warning"}>{t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</span></Link>
+    <Link role="menuitem" href="/settings/security" onClick={close}><ShieldCheck size={17} />{t("nav.twoFactorSecurity")} <span className={user.mfaEnabled ? "mini-good" : "mini-warning"}>{t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</span></Link>
     <Link role="menuitem" href="/help" onClick={close}><HelpCircle size={17} />{t("nav.support")}</Link>
     <form action="/api/auth/logout" method="post"><button role="menuitem" type="submit"><LogOut size={17} />{t("nav.signOut")}</button></form>
   </div>;
