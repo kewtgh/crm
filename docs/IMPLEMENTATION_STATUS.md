@@ -1,13 +1,15 @@
-# Implementation status — v2.6.0 release candidate
+# Implementation status — v2.7.0 release candidate
 
-Status date: 2026-07-27
+Status date: 2026-07-28
 
 ## Outcome
 
-The July 27 architecture, business-logic, UI/UX and product audit is implemented. All recorded
-P1/P2/P3 findings are closed in source, the proposed command search, preference sync, safety layer
-and release-evidence features are present, and the isolated local database reached migration
-`202607270054`.
+The July 28 account-security, super-administrator execution and UI remediation is implemented.
+TOTP enrollment produces a real QR code and recovery codes, account settings rotate those codes,
+super administrators execute terminal actions without approval, and CRM deletion uses a
+recoverable 30-day recycle bin. Staff provisioning retains one-time emailed passwords and
+first-login replacement while hardening profile/workspace synchronization. The isolated local
+database reached migration `202607280055`.
 
 Production activation was not performed. Real SSO IdP metadata, SCIM client token, telemetry
 receiver, connector credentials, email delivery, scheduler heartbeats, backup rehearsal and hosted
@@ -15,6 +17,20 @@ readiness remain deployment inputs, not simulated product state.
 
 ## Implemented scope
 
+- Account security: TOTP setup has a real QR image, manual secret, correctly sized input and ten
+  one-time recovery codes. Recovery-code authentication and rotation are available, and password
+  updates use the freshly verified session token.
+- Super administrator: approval-bound operations execute immediately at the terminal authority
+  while retaining audit evidence. Business-record deletion moves into a super-admin-only recycle
+  bin with restore and 30-day expiry/purge behavior.
+- Staff provisioning: administrator creation keeps the generated temporary-password email flow
+  and mandatory first-login change, explicitly synchronizes the profile and workspace membership,
+  and returns actionable configuration/service errors.
+- Product UI: Weiai purple/navy/orange branding, persistent selected navigation, centered modal
+  geometry, a four-column desktop growth summary, localized audit entities and bilingual
+  communications purposes are release-tested.
+- Runtime: Node 24.18.0 and npm 12.0.1 are pinned across local development, CI and the full release
+  gate; non-12 npm installs are rejected by the repository engine policy.
 - Business time: one shared five-timezone contract is used by settings, calendar rendering,
   repositories and workers. Invalid historical values fall back safely; nonexistent DST wall times
   return `INVALID_LOCAL_TIME`; Postgres enforces the same set.
@@ -41,16 +57,16 @@ readiness remain deployment inputs, not simulated product state.
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.6.0 routes and production bundles generated |
+| Production build | Pass; v2.7.0 routes and production bundles generated |
 | Node source contracts | 37/37 pass, including DST gaps, bounded runner and dependency API bridge |
 | Dependency audit | Pass; 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
 | PostgreSQL schema lint | Pass, 0 findings |
 | Full pgTAP suite | 464/464 pass across 11 files |
-| Clean migration application | Pass through `202607270054_v260_experience_integrity` |
+| Local migration application | Pass through `202607280055_mfa_recovery_and_super_admin_execution` |
 | Production assets/MIME | Pass; 26 CSS/JS plus 5 PNG assets, metadata and legacy redirect |
 | HTTP, export and real device-auth smoke | Pass on the final production build |
-| Pinned Chromium matrix | Pass; 78/78 page/viewports, 0 errors, 0 warnings, identities cleaned 9/9 |
+| Pinned Chromium matrix | Pass; 80/80 page/viewports, 0 errors, 0 warnings |
 
 The merged browser evidence is Git-ignored at
 `work/browser-qa-chromium-1228/report.json`. It is authoritative for the final run time, page count,
@@ -58,15 +74,14 @@ errors/warnings, identity cleanup, build hash, source fingerprint, Chromium vers
 executable. Dirty local verification is labeled dirty and is not represented as exact-commit
 verification.
 
-Final browser evidence: Chromium 149.0.7827.55, `playwright-core` 1.61.1, 242 seconds,
-source fingerprint `4a91fb67d9a8182344e570d9195a70831207b9cfb0bcf475895671ee5f422f55`,
-build hash `159397db16c2c82f8883764210cb93621a842ad1d9ef251bb57312535a30a38c`,
-migration `202607270054_v260_experience_integrity`, and Git state `dirty` at HEAD `0214991`.
+Final browser evidence records Chromium 149.0.7827.55, `playwright-core` 1.61.1, migration
+`202607280055_mfa_recovery_and_super_admin_execution`, the exact executable, source fingerprint,
+build hash and working-tree state in the merged report.
 
 ## External production gates
 
 1. Restore-test and back up the target Supabase project, then apply reviewed migrations through
-   `054`.
+   `055`.
 2. Configure real application, Turnstile, email and worker secrets. Enable SSO, SCIM, telemetry or
    connector sync only after each supplier boundary and operational owner is approved.
 3. Validate IdP certificates, SCIM deprovisioning, telemetry ingestion, connector sandbox receipts

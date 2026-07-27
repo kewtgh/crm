@@ -10,6 +10,7 @@ import { zhV120 } from "./v120";
 import { zhV200 } from "./v200";
 import { zhV220 } from "./v220";
 import { zhV250 } from "./v250";
+import { zhV270 } from "./v270";
 
 export const zhCN: Messages = {
   "pipeline.currencyScope":"币种范围",
@@ -24,6 +25,7 @@ export const zhCN: Messages = {
   ...zhV200,
   ...zhV220,
   ...zhV250,
+  ...zhV270,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.persistFailed": "语言已在本设备切换，但未能保存到账号；请稍后重试。",

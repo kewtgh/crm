@@ -4,8 +4,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BellRing, Camera, Check, ChevronRight, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, Save, ShieldCheck, Trash2, UserRound } from "lucide-react";
-import { InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
+import { BellRing, Camera, Check, ChevronRight, Copy, Download, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, RefreshCcw, Save, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { ConfirmDialog, InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
 import { useAppUser } from "@/components/app-user-context";
 import type { AppUser } from "@/lib/user";
 import type { Locale } from "@/lib/i18n";
@@ -127,20 +127,23 @@ function SecuritySettings() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [factors, setFactors] = useState<Factor[]>([]);
-  const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string }>();
+  const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string; secret?: string }>();
+  const [recoveryCodesRemaining, setRecoveryCodesRemaining] = useState(0);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [rotateConfirm, setRotateConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const loadMfa = () => apiFetch<{ factors?: Factor[] }>("/api/settings/mfa")
-    .then((result) => setFactors(result.factors ?? []))
+  const loadMfa = () => apiFetch<{ factors?: Factor[]; recoveryCodesRemaining?: number }>("/api/settings/mfa")
+    .then((result) => { setFactors(result.factors ?? []); setRecoveryCodesRemaining(result.recoveryCodesRemaining ?? 0); })
     .catch(() => setMfaError(t("settings.mfaFailed")));
   useEffect(() => { loadMfa(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enroll = async () => {
     setBusy(true); setMfaError(""); setMfaSuccess("");
     try {
-      const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string } }; challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
+      const result = await apiFetch<{ factor?: { id?: string; totp?: { qr_code?: string; secret?: string } }; challenge?: { id?: string } }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enroll" }) });
       if (!result.factor?.id || !result.challenge?.id) throw new Error();
-      setEnrollment({ factorId: result.factor.id, challengeId: result.challenge.id, qrCode: result.factor.totp?.qr_code ?? "" });
+      setEnrollment({ factorId: result.factor.id, challengeId: result.challenge.id, qrCode: result.factor.totp?.qr_code ?? "", secret: result.factor.totp?.secret });
     } catch {
       setMfaError(t("settings.mfaFailed"));
     } finally {
@@ -169,8 +172,10 @@ function SecuritySettings() {
     const code = String(new FormData(event.currentTarget).get("code"));
     setBusy(true); setMfaError(""); setMfaSuccess("");
     try {
-      await apiFetch("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) });
+      const result = await apiFetch<{ recoveryCodes?: string[] }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: enrollment.factorId, challengeId: enrollment.challengeId, code }) });
       setEnrollment(undefined);
+      setRecoveryCodes(result.recoveryCodes ?? []);
+      setRecoveryCodesRemaining(result.recoveryCodes?.length ?? 0);
       setMfaSuccess(t("settings.mfaEnabled"));
       void loadMfa();
     } catch {
@@ -178,6 +183,31 @@ function SecuritySettings() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const rotateRecoveryCodes = async () => {
+    setBusy(true); setMfaError(""); setMfaSuccess("");
+    try {
+      const result = await apiFetch<{ recoveryCodes?: string[] }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rotateRecovery" }) });
+      setRecoveryCodes(result.recoveryCodes ?? []);
+      setRecoveryCodesRemaining(result.recoveryCodes?.length ?? 0);
+      setMfaSuccess(t("settings.recoveryRotated"));
+      setRotateConfirm(false);
+    } catch {
+      setMfaError(t("settings.recoveryRotateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recoveryText = recoveryCodes.join("\n");
+  const copyRecoveryCodes = async () => {
+    try { await navigator.clipboard.writeText(recoveryText); setMfaSuccess(t("settings.recoveryCopied")); }
+    catch { setMfaError(t("settings.recoveryCopyFailed")); }
+  };
+  const downloadRecoveryCodes = () => {
+    const url = URL.createObjectURL(new Blob([`${t("settings.recoveryDownloadHeading")}\n\n${recoveryText}\n`], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "weiai-crm-recovery-codes.txt"; anchor.click(); URL.revokeObjectURL(url);
   };
 
   const disableMfa = async (factorId: string) => {
@@ -212,7 +242,9 @@ function SecuritySettings() {
       setPasswordSuccess(t("settings.passwordSaved"));
       event.currentTarget.reset();
     } catch (cause) {
-      setPasswordError(t(cause instanceof ApiClientError && cause.code === "CURRENT_PASSWORD_INCORRECT" ? "settings.currentPasswordIncorrect" : "settings.passwordFailed"));
+      const code=cause instanceof ApiClientError?cause.code:"PASSWORD_UPDATE_FAILED";
+      const errorKeys:Record<string,string>={CURRENT_PASSWORD_INCORRECT:"settings.currentPasswordIncorrect",AUTH_RATE_LIMITED:"settings.passwordRateLimited",AUTH_UNAVAILABLE:"settings.passwordServiceUnavailable",SUPABASE_UNAVAILABLE:"settings.passwordServiceUnavailable",UPSTREAM_TIMEOUT:"settings.passwordServiceUnavailable",same_password:"settings.passwordSame",SAME_PASSWORD:"settings.passwordSame",weak_password:"settings.passwordRule",WEAK_PASSWORD:"settings.passwordRule",INVALID_PASSWORD:"settings.passwordRule",reauthentication_needed:"settings.passwordReauthentication",REAUTHENTICATION_NEEDED:"settings.passwordReauthentication"};
+      setPasswordError(t(errorKeys[code]??"settings.passwordFailed"));
     } finally {
       setBusy(false);
     }
@@ -220,7 +252,7 @@ function SecuritySettings() {
 
   const verifiedFactor = factors.find((factor) => factor.status === "verified");
   const administrator = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section><MfaAuthenticatorGuide />{mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}{mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}{enrollment && <form className="settings-subform" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3>{enrollment.qrCode && <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} />}<label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required /></label><div className="settings-actions"><button className="secondary-button" type="button" disabled={busy} onClick={() => void cancelEnrollment()}>{t("common.cancel")}</button><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></div></form>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label></div><small className="field-help auth-password-rule">{t("settings.passwordRule")}</small>{passwordError && <InlineMessage type="error">{passwordError}</InlineMessage>}{passwordSuccess && <InlineMessage type="success">{passwordSuccess}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form></div>;
+  return <div><SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} /><section className="mfa-card"><span><ShieldCheck size={25} /></span><div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div><StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>{!verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}{verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}</section><MfaAuthenticatorGuide />{mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}{mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}{enrollment && <form className="settings-subform mfa-setup-panel" onSubmit={verify}><h3>{t("settings.verifyMfa")}</h3><div className="mfa-enrollment">{enrollment.qrCode ? <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")} /> : <InlineMessage type="error">{t("settings.mfaQrMissing")}</InlineMessage>}{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div><label className="field mfa-code-field"><span>{t("settings.mfaCode")}</span><input className="mfa-code-input" name="code" inputMode="numeric" pattern="[0-9]{6}" placeholder="000000" maxLength={6} autoComplete="one-time-code" required /></label><div className="settings-actions"><button className="secondary-button" type="button" disabled={busy} onClick={() => void cancelEnrollment()}>{t("common.cancel")}</button><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></div></form>}{verifiedFactor && <section className="recovery-section"><div className="recovery-section__heading"><div><h3>{t("settings.recoveryCodes")}</h3><p>{t("settings.recoveryStatus", { count: recoveryCodesRemaining })}</p></div><button className="secondary-button" type="button" disabled={busy} onClick={() => setRotateConfirm(true)}><RefreshCcw size={16}/>{t("settings.regenerateRecovery")}</button></div>{recoveryCodes.length > 0 && <><InlineMessage type="warning">{t("settings.recoveryShownOnce")}</InlineMessage><div className="recovery-code-grid">{recoveryCodes.map(code => <code key={code}>{code}</code>)}</div><div className="recovery-code-actions"><button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}><Copy size={16}/>{t("settings.copyRecovery")}</button><button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={16}/>{t("settings.downloadRecovery")}</button></div></>}</section>}<form onSubmit={changePassword} className="settings-subform"><h3>{t("settings.changePassword")}</h3><label className="field"><span>{t("settings.currentPassword")}</span><input type="password" name="currentPassword" autoComplete="current-password" required /></label><div className="form-grid two-column"><label className="field"><span>{t("settings.newPassword")}</span><input type="password" name="newPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label><label className="field"><span>{t("settings.confirmPassword")}</span><input type="password" name="confirmPassword" autoComplete="new-password" minLength={12} maxLength={128} required /></label></div><small className="field-help auth-password-rule">{t("settings.passwordRule")}</small>{passwordError && <InlineMessage type="error">{passwordError}</InlineMessage>}{passwordSuccess && <InlineMessage type="success">{passwordSuccess}</InlineMessage>}<div className="settings-actions"><span>{t("settings.securitySubmitHelp")}</span><button className="primary-button" type="submit" disabled={busy}><KeyRound size={16} />{t("settings.updatePassword")}</button></div></form>{rotateConfirm && <ConfirmDialog title={t("settings.rotateRecoveryTitle")} description={t("settings.rotateRecoveryConfirm")} confirmLabel={t("settings.regenerateRecovery")} pending={busy} onClose={() => setRotateConfirm(false)} onConfirm={() => void rotateRecoveryCodes()}/>}</div>;
 }
 
 type TrustedDeviceView = { id: string; label: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean };

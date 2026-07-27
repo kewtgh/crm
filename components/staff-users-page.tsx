@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MailPlus, MoreHorizontal, ShieldCheck, UserRoundPlus, X } from "lucide-react";
+import { KeyRound, MailPlus, MoreHorizontal, ShieldCheck, UserRoundPlus, X } from "lucide-react";
 import type { StaffUserRecord } from "@/lib/admin-users-repository";
 import type { AppRole } from "@/lib/roles";
 import { roleMessageKey } from "@/lib/roles";
@@ -89,7 +89,7 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
       await apiFetch("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       event.currentTarget.reset(); onCreated();
     } catch (cause) {
-      const errorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_FAILED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_FAILED", email_exists:"admin.users.error.EMAIL_TAKEN" };
+      const errorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", RECORD_CONFLICT:"admin.users.error.EMAIL_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", SUPABASE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", SUPABASE_UNAVAILABLE:"admin.users.error.SERVICE_UNAVAILABLE", UPSTREAM_TIMEOUT:"admin.users.error.SERVICE_UNAVAILABLE", WORKSPACE_NOT_CONFIGURED:"admin.users.error.WORKSPACE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_FAILED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_FAILED", CREATE_USER_MISSING:"admin.users.error.SERVICE_UNAVAILABLE", STAFF_USER_CREATE_FAILED:"admin.users.error.SERVICE_UNAVAILABLE", email_exists:"admin.users.error.EMAIL_TAKEN" };
       const code = cause instanceof ApiClientError ? cause.code : "";
       const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
       const message = t(errorKeys[code] ?? "admin.users.error.UNKNOWN");
@@ -102,6 +102,7 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
     <form method="dialog" className="dialog-close"><button className="icon-button" aria-label={t("common.close")}><X size={18}/></button></form>
     <form className="staff-invite-form" onSubmit={submit} noValidate>
       <div className="auth-form-heading"><p className="eyebrow">{t("admin.users.createEyebrow")}</p><h2 id="create-staff-title">{t("admin.users.createTitle")}</h2><p>{t("admin.users.createHelp")}</p></div>
+      <div className="credential-flow"><span><KeyRound size={20}/></span><div><b>{t("admin.users.passwordGenerated")}</b><p>{t("admin.users.passwordGeneratedHelp")}</p></div></div>
       <div className="form-grid two-column"><Field name="displayNameZh" label={t("settings.nameZh")} error={fieldError.displayNameZh}/><Field name="displayNameEn" label={t("settings.nameEn")} error={fieldError.displayNameEn}/></div>
       <Field name="username" label={t("admin.users.username")} help={t("admin.users.usernameHelp")} error={fieldError.username}/>
       <Field name="email" label={t("common.email")} type="email" error={fieldError.email}/>

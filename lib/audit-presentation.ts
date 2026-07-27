@@ -27,10 +27,55 @@ const auditWords = {
   },
 } as const satisfies Record<Locale, Record<string, string>>;
 
+const auditEntities = {
+  "zh-CN": {
+    USERPREFERENCES: "用户偏好设置",
+    INTEGRATIONCONNECTIONS: "集成连接",
+    GRADEPROGRESSIONRULES: "年级升学规则",
+    USERPROFILES: "员工个人资料",
+    WORKSPACEMEMBERS: "工作区成员",
+    TRUSTEDDEVICES: "可信设备",
+    APPROVALREQUESTS: "审批记录",
+    CRM_TASKS: "客户任务",
+    ORGANIZATIONS: "客户组织",
+    CONTACTS: "联系人",
+    STUDENTS: "学生",
+    HOUSEHOLDS: "家庭",
+    CONTRACTS: "合同",
+    OPPORTUNITIES: "商机",
+    LEADS: "线索",
+    PRODUCTS: "产品与服务",
+    MFARECOVERYCODES: "二次验证恢复码",
+  },
+  en: {
+    USERPREFERENCES: "User preferences",
+    INTEGRATIONCONNECTIONS: "Integration connections",
+    GRADEPROGRESSIONRULES: "Grade progression rules",
+    USERPROFILES: "Staff profiles",
+    WORKSPACEMEMBERS: "Workspace members",
+    TRUSTEDDEVICES: "Trusted devices",
+    APPROVALREQUESTS: "Approval records",
+    CRM_TASKS: "CRM tasks",
+    ORGANIZATIONS: "Customer organizations",
+    CONTACTS: "Contacts",
+    STUDENTS: "Students",
+    HOUSEHOLDS: "Households",
+    CONTRACTS: "Contracts",
+    OPPORTUNITIES: "Opportunities",
+    LEADS: "Leads",
+    PRODUCTS: "Products and services",
+    MFARECOVERYCODES: "MFA recovery codes",
+  },
+} as const satisfies Record<Locale, Record<string, string>>;
+
 export function auditLabel(value: string, locale: Locale) {
+  const entityKey = value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  const entity = (auditEntities[locale] as Record<string, string>)[entityKey];
+  if (entity) return entity;
   const words = auditWords[locale] as Record<string, string>;
   return value
-    .split("_")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .split(/[_\s-]+/)
     .map((word) => words[word] ?? word.toLocaleLowerCase().replace(/^./, (letter) => letter.toLocaleUpperCase()))
     .join(locale === "zh-CN" ? "" : " ");
 }

@@ -1,12 +1,19 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.6.0**
+Current release candidate: **v2.7.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
 
-v2.6.0 closes the July 27 architecture, business-time and UI/UX audit. It rejects invalid
+v2.7.0 completes the July 28 account-security, super-administrator and product-UI release.
+It ships real TOTP QR enrollment, recovery-code generation and rotation, secure password
+updates, direct terminal execution for super administrators, and a 30-day recoverable CRM
+recycle bin. The Weiai-aligned theme, selected navigation, centered dialogs, responsive growth
+cards, bilingual audit and message-purpose labels, and hardened temporary-password staff
+provisioning are included. Development, CI and release gates are pinned to npm 12.
+
+v2.6.0 closed the July 27 architecture, business-time and UI/UX audit. It rejects invalid
 timezones and nonexistent DST wall times across settings, calendar APIs, workers and Postgres;
 persists signed-in language preferences across devices; combines capability-filtered page
 commands with CRM record search; and standardizes accessible confirmation for destructive
@@ -78,7 +85,8 @@ simulated connection, delivery, worker heartbeat, AI result or security state as
 
 ## Local development
 
-Requirements: Node.js 24.x (`24.18.0` is pinned in `.nvmrc`) and Docker Desktop.
+Requirements: Node.js 24.x (`24.18.0` is pinned in `.nvmrc`), npm 12.x
+(`12.0.1` is pinned in `package.json`), and Docker Desktop.
 
 ```bash
 npm install
@@ -123,7 +131,7 @@ schema lint, 464 pgTAP assertions, business, HTTP and real device-auth smoke sui
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
 When executed, phase evidence is saved below `work/browser-qa-chromium-1228/phases/` and merged
-into `work/browser-qa-chromium-1228/report.json`. The ten-stage matrix covers 78
+into `work/browser-qa-chromium-1228/report.json`. The ten-stage matrix covers 80
 public/authenticated page-and-viewport checks at 1440, 1024 and 375px,
 Chinese/English switching, optional manager AAL2, a support-role permission boundary, hydration,
 console/page/network errors, headings, labels, contrast, text size, overflow, mobile
@@ -137,12 +145,12 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.6.0 source implementation, remediation, migrations, schema lint, all 464 pgTAP assertions,
-real device-auth smoke and 78-page/viewport Chromium 1228 matrix are complete. A production rollout
+The v2.7.0 source implementation, migration through `202607280055`, production build,
+37 source contracts and 80-page/viewport Chromium 1228 matrix are complete. A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
+[implementation status](docs/IMPLEMENTATION_STATUS.md),
+[deployment guide](docs/DEPLOYMENT.md), and the historical
 [v2.6.0 audit](docs/AUDIT_2026-07-27_V2.6.0.md),
 [executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-27_V2.6.0.md),
-[final omission review](docs/FINAL_REAUDIT_2026-07-27_V2.6.0.md),
-[implementation status](docs/IMPLEMENTATION_STATUS.md), and
-[deployment guide](docs/DEPLOYMENT.md).
+[final omission review](docs/FINAL_REAUDIT_2026-07-27_V2.6.0.md).

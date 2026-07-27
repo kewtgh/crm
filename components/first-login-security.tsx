@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
+import { Copy, Download, KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { InlineMessage } from "./ui";
 import { MfaAuthenticatorGuide } from "./mfa-authenticator-guide";
@@ -52,6 +52,9 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
   const [factorId, setFactorId] = useState(""); const [challengeId, setChallengeId] = useState("");
   const [enrollment, setEnrollment] = useState<Enrollment>();
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [useRecovery, setUseRecovery] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,18 +84,48 @@ export function MfaSecurityForm({ mode }: { mode: "setup" | "challenge" }) {
     const code = String(new FormData(event.currentTarget).get("code") ?? "").trim();
     const currentFactorId = enrollment?.factorId ?? factorId; const currentChallengeId = enrollment?.challengeId ?? challengeId;
     try {
-      const result = await apiFetch<{ next?: string }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "verify", factorId: currentFactorId, challengeId: currentChallengeId, code }) });
+      const body = useRecovery
+        ? { action: "recover", code }
+        : { action: "verify", factorId: currentFactorId, challengeId: currentChallengeId, code };
+      const result = await apiFetch<{ next?: string; recoveryCodes?: string[] }>("/api/settings/mfa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (result.recoveryCodes?.length) {
+        setRecoveryCodes(result.recoveryCodes);
+        return;
+      }
       router.push(result.next ?? "/dashboard"); router.refresh();
-    } catch (cause) { setError(t(cause instanceof ApiClientError && cause.code === "NETWORK_ERROR" ? "auth.error.network" : "auth.mfa.invalidCode")); }
+    } catch (cause) { setError(t(cause instanceof ApiClientError && cause.code === "NETWORK_ERROR" ? "auth.error.network" : useRecovery ? "auth.mfa.invalidRecovery" : "auth.mfa.invalidCode")); }
     finally { setPending(false); }
   }
+
+  const recoveryText = recoveryCodes.join("\n");
+  const copyRecoveryCodes = async () => {
+    await navigator.clipboard.writeText(recoveryText);
+    setCopied(true);
+  };
+  const downloadRecoveryCodes = () => {
+    const url = URL.createObjectURL(new Blob([`${t("settings.recoveryDownloadHeading")}\n\n${recoveryText}\n`], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "weiai-crm-recovery-codes.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (recoveryCodes.length) return <section className="auth-form recovery-code-reveal" aria-labelledby="recovery-code-title">
+    <div className="auth-form-heading"><p className="eyebrow">{t("auth.mfa.recoveryEyebrow")}</p><h1 id="recovery-code-title">{t("auth.mfa.recoveryTitle")}</h1><p>{t("auth.mfa.recoveryDescription")}</p></div>
+    <InlineMessage type="warning">{t("auth.mfa.recoveryOnce")}</InlineMessage>
+    <div className="recovery-code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>
+    <div className="recovery-code-actions"><button className="secondary-button" type="button" onClick={() => void copyRecoveryCodes()}><Copy size={17}/>{t(copied ? "settings.recoveryCopied" : "settings.copyRecovery")}</button><button className="secondary-button" type="button" onClick={downloadRecoveryCodes}><Download size={17}/>{t("settings.downloadRecovery")}</button></div>
+    <button className="primary-button auth-submit" type="button" onClick={() => { router.push("/dashboard"); router.refresh(); }}><ShieldCheck size={18}/>{t("auth.mfa.recoveryContinue")}</button>
+  </section>;
 
   const ready = mode === "setup" ? Boolean(enrollment) : Boolean(factorId && challengeId);
   return <form className="auth-form" onSubmit={verify} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("auth.mfa.eyebrow")}</p><h1>{t(mode === "setup" ? "auth.mfa.setupTitle" : "auth.mfa.challengeTitle")}</h1><p>{t(mode === "setup" ? "auth.mfa.setupDescription" : "auth.mfa.challengeDescription")}</p></div>
     {mode === "setup" && <MfaAuthenticatorGuide headingLevel="h2" />}
-    {mode === "setup" && enrollment?.qrCode && <div className="mfa-enrollment"><img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")}/>{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div>}
-    <label className="field"><span>{t("settings.mfaCode")}</span><input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" required disabled={!ready}/></label>
+    {mode === "setup" && enrollment && <div className="mfa-enrollment">{enrollment.qrCode ? <img className="mfa-qr" src={enrollment.qrCode} alt={t("settings.mfaQrAlt")}/> : <InlineMessage type="error">{t("settings.mfaQrMissing")}</InlineMessage>}{enrollment.secret && <small>{t("auth.mfa.manualSecret")} <code>{enrollment.secret}</code></small>}</div>}
+    <label className="field mfa-code-field"><span>{t(useRecovery ? "auth.mfa.recoveryCode" : "settings.mfaCode")}</span><input className="mfa-code-input" name="code" inputMode={useRecovery ? "text" : "numeric"} pattern={useRecovery ? "[A-Za-z0-9-]{12,20}" : "[0-9]{6}"} autoComplete="one-time-code" placeholder={useRecovery ? "XXXX-XXXX-XXXX" : "000000"} maxLength={useRecovery ? 14 : 6} required disabled={!useRecovery && !ready}/></label>
+    {mode === "challenge" && <button className="mfa-mode-switch" type="button" onClick={() => { setUseRecovery((value) => !value); setError(""); }}>{t(useRecovery ? "auth.mfa.useAuthenticator" : "auth.mfa.useRecovery")}</button>}
     {error && <InlineMessage type="error">{error}</InlineMessage>}
     <button className="primary-button auth-submit" type="submit" disabled={pending || !ready}>{pending && <LoaderCircle className="spin" size={18}/>}<ShieldCheck size={18}/>{t("auth.mfa.verify")}</button>
   </form>;

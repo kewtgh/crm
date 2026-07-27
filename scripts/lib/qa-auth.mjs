@@ -25,6 +25,8 @@ function totp(secret, timestamp = Date.now()) {
   return String(binary).padStart(6, "0");
 }
 
+export const qaTotp=totp;
+
 async function jsonRequest(url, anonKey, accessToken, init) {
   const response = await fetch(url, {
     ...init,
