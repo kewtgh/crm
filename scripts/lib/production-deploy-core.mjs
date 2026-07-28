@@ -4,6 +4,7 @@ import { parseEnv } from "node:util";
 export const PRODUCTION_PROJECT_REF = "ectxevxmcwzvwsjkwnld";
 export const PRODUCTION_PUBLIC_URL = "https://crm.ewaya.com";
 export const PRODUCTION_LOCAL_URL = "http://127.0.0.1:3200";
+export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
 export const RELEASE_NAME_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{12}$/;
 export const LEGACY_RELEASE_NAME_PATTERN = /^\d{14}-[0-9a-f]{12}$/;
 export const DEPLOYMENT_ID_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{32}$/;
@@ -397,14 +398,20 @@ export function assertReviewedInstallScriptPolicy(packageJson) {
 
 export function validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson }) {
   const failures = [];
-  if (!serviceUnit.includes("/usr/bin/flock --nonblock --exclusive")) failures.push("deploy service must use a non-blocking file lock");
-  if (!serviceUnit.includes("/var/lock/lumina-crm-deploy.lock")) failures.push("deploy service lock path is missing");
+  const lockCommand = `/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 ${PRODUCTION_DEPLOY_LOCK_PATH}`;
+  if (!serviceUnit.includes(lockCommand)) failures.push("deploy service must lock inside its systemd StateDirectory");
+  if (serviceUnit.includes("/var/lock/") || /^ReadWritePaths=.*\.lock(?:\s|$)/m.test(serviceUnit)) {
+    failures.push("deploy service must not require an individual volatile lock file to exist before namespace setup");
+  }
   if (!serviceUnit.includes("--conflict-exit-code=73")) failures.push("deploy service must expose a distinct lock conflict exit code");
   if (!serviceUnit.includes("User=lumina-crm") || !serviceUnit.includes("Group=lumina-crm")) failures.push("deploy service must run as lumina-crm");
   if (!serviceUnit.includes("LUMINA_HTTPS_PROXY=http://127.0.0.1:20271")) failures.push("deploy runner proxy is missing");
   if (!serviceUnit.includes("NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs")) failures.push("deploy runner preload is missing");
   if (!serviceUnit.includes("StateDirectory=lumina-crm") || !serviceUnit.includes("LogsDirectory=lumina-crm")) {
     failures.push("deploy service persistent state or log directory is missing");
+  }
+  if (!/^ReadWritePaths=.*\/var\/lib\/lumina-crm(?:\s|$)/m.test(serviceUnit)) {
+    failures.push("deploy service StateDirectory must be writable inside its filesystem namespace");
   }
   if (!serviceUnit.includes("ProtectHome=read-only")
     || !serviceUnit.includes("NPM_CONFIG_CACHE=/var/lib/lumina-crm/npm-cache")

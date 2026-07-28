@@ -12,7 +12,7 @@ Environment=LUMINA_HTTPS_PROXY=http://127.0.0.1:20271
 Environment=NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs
 Environment=NPM_CONFIG_CACHE=/var/lib/lumina-crm/npm-cache
 Environment=XDG_CACHE_HOME=/var/lib/lumina-crm/cache
-ExecStart=/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 /var/lock/lumina-crm-deploy.lock /usr/bin/node /opt/lumina-crm/source/scripts/deploy-production-runner.mjs
+ExecStart=/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 /var/lib/lumina-crm/deploy.lock /usr/bin/node /opt/lumina-crm/source/scripts/deploy-production-runner.mjs
 TimeoutStartSec=infinity
 TimeoutStopSec=30s
 KillMode=mixed
@@ -28,4 +28,4 @@ ProtectSystem=strict
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm /var/lock/lumina-crm-deploy.lock
+ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm

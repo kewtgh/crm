@@ -1,4 +1,4 @@
-# Implementation status — v2.8.2 release candidate
+# Implementation status — v2.8.3 release candidate
 
 Status date: 2026-07-28
 
@@ -39,7 +39,9 @@ readiness remain deployment inputs, not simulated product state.
   IDs, immutable commit-addressed releases, separated environment files, bounded quality/migration
   stages, atomic current switching, effective ProxyAgent/loopback checks, persistent logs/status,
   protected retention and verified application rollback. The foreground controller treats systemd
-  oneshot `activating` as running, and the sudo allowlist names only Lumina units.
+  oneshot `activating` as running, and the sudo allowlist names only Lumina units. Its `flock` file
+  lives under the systemd-created `StateDirectory`, so a reboot cannot make namespace setup depend
+  on a missing volatile `/run/lock` file.
 - Shell UX: desktop navigation now genuinely collapses, resolves exactly one longest matching child,
   keeps the active group open, uses the Weiai purple administrator avatar, and gives MFA recovery-code
   copy actions immediate visible and announced feedback.
@@ -69,9 +71,9 @@ readiness remain deployment inputs, not simulated product state.
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.8.2 routes and production bundles generated |
+| Production build | Pass; v2.8.3 routes and production bundles generated |
 | Node source and HTTP contracts | 39/39 pass, including root redirect Host/protocol coverage, login final-hop behavior, DST gaps, bounded runner and dependency API bridge |
-| Production deployment unit tests | 17/17 pass; lock, env, paths, atomic cutover, interruption recovery, oneshot states, health, systemd, cleanup and dry-run |
+| Production deployment unit tests | 17/17 pass; reboot-safe StateDirectory lock, env, paths, atomic cutover, interruption recovery, oneshot states, health, systemd, cleanup and dry-run |
 | Dependency audit | Pass; 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
 | PostgreSQL schema lint | Pass, 0 findings |

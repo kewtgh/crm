@@ -19,6 +19,7 @@ import {
   classifyPersistedDeployment,
   isSystemdServiceInProgress,
   PRODUCTION_LOCAL_URL,
+  PRODUCTION_DEPLOY_LOCK_PATH,
   PRODUCTION_PROJECT_REF,
   PRODUCTION_PUBLIC_URL,
   validateDeployAssetTexts,
@@ -131,7 +132,7 @@ async function waitForAccepted(requestId, timeoutMs = 30_000) {
     if (!isServiceActive() && Date.now() - startedAt >= 2_000) {
       const outcome = deploymentServiceOutcome();
       if (outcome.ExecMainStatus === "73") {
-        throw new Error(`Another production deployment already holds /var/lock/lumina-crm-deploy.lock; request ${requestId} remains recoverable`);
+        throw new Error(`Another production deployment already holds ${PRODUCTION_DEPLOY_LOCK_PATH}; request ${requestId} remains recoverable`);
       }
       throw new Error(`The systemd runner stopped before accepting request ${requestId} (result ${outcome.Result ?? "unknown"}, exit ${outcome.ExecMainStatus ?? "unknown"}); the request remains recoverable`);
     }

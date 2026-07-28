@@ -18,6 +18,7 @@ import {
   makeReleaseId,
   parseEnvironmentText,
   planInterruptedRecovery,
+  PRODUCTION_DEPLOY_LOCK_PATH,
   redactSecrets,
   retryHealth,
   rollbackAfterCutover,
@@ -366,6 +367,18 @@ test("repository dry-run assets keep the lock, least privilege, and loopback bin
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
   assert.equal(validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson }), true);
+  assert.equal(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lib/lumina-crm/deploy.lock");
+  assert.doesNotMatch(serviceUnit, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
+  const rebootFragileUnit = serviceUnit
+    .replaceAll(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lock/lumina-crm-deploy.lock")
+    .replace(
+      "ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm",
+      "ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm /var/lock/lumina-crm-deploy.lock",
+    );
+  assert.throws(
+    () => validateDeployAssetTexts({ serviceUnit: rebootFragileUnit, sudoers, webUnit, runner, packageJson }),
+    /StateDirectory|volatile lock file/,
+  );
   assert.throws(
     () => validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson: { ...packageJson, allowScripts: {} } }),
     /install-script allowlist/,
