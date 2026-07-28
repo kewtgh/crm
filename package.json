@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -18,7 +18,7 @@
     "build:raw": "vinext build",
     "start": "vinext start",
     "test": "node scripts/run-bounded.mjs --label test --timeout-seconds 360 --idle-seconds 120 -- npm run test:raw",
-    "test:raw": "npm run build:raw && node --test --test-isolation=none tests/rendered-html.test.mjs tests/production-deploy.test.mjs",
+    "test:raw": "npm run build:raw && node --test --test-isolation=none tests/rendered-html.test.mjs tests/production-deploy.test.mjs tests/root-redirect.test.mjs",
     "test:contracts": "node scripts/run-bounded.mjs --label contracts --timeout-seconds 120 --idle-seconds 60 -- npm run test:contracts:raw",
     "test:contracts:raw": "node --test --test-isolation=none tests/rendered-html.test.mjs",
     "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
