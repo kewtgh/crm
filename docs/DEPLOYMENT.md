@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.8.2 部署指引
+# Lumina Education CRM v2.8.3 部署指引
 
 ## 1. 发布前提
 
@@ -8,12 +8,12 @@
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
 - 数据库必须按顺序应用到 `202607280055`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束或 `055` 的 MFA 恢复码与超级管理员直执/回收站能力。
 
-当前工作树是 v2.8.2 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约、
+当前工作树是 v2.8.3 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约、
 部署单测与固定浏览器公开页定向门禁通过；完整浏览器矩阵必须在生产激活前重跑。本轮证据见
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.8.2`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.8.3`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -185,7 +185,6 @@ Cloudflare Tunnel 已独立运行，部署流程只管理 `lumina-crm.service`�
 install -d -o lumina-crm -g lumina-crm -m 0750 /opt/lumina-crm/releases
 install -d -o lumina-crm -g lumina-crm -m 0750 /var/lib/lumina-crm/deployments
 install -d -o lumina-crm -g lumina-crm -m 0750 /var/log/lumina-crm/deployments
-install -o lumina-crm -g lumina-crm -m 0640 /dev/null /var/lock/lumina-crm-deploy.lock
 sudo install -m 0644 deploy/systemd/lumina-crm.service /etc/systemd/system/
 sudo install -m 0644 deploy/systemd/lumina-crm-workers.service /etc/systemd/system/
 sudo install -m 0644 deploy/systemd/lumina-crm-workers.timer /etc/systemd/system/
@@ -203,6 +202,18 @@ sudo -u lumina-crm /usr/bin/npm --prefix /opt/lumina-crm/source run deploy:produ
 `daemon-reload`；已有的
 `/etc/systemd/system/lumina-crm.service.d/10-runtime.conf` 和
 `lumina-crm-workers.service.d/10-runtime.conf` 必须保留。安装后验证有效配置：
+
+从 v2.8.2 或更早版本升级时，旧 deploy unit 会因 `/var/lock` 中的具体锁文件在重启后消失而
+以 `226/NAMESPACE` 失败，因此必须先从已核对的 v2.8.3 source 手动安装新 deploy unit：
+
+```bash
+sudo install -m 0644 deploy/systemd/lumina-crm-deploy.service /etc/systemd/system/
+sudo systemctl daemon-reload
+systemctl show lumina-crm-deploy.service -p ExecStart -p ReadWritePaths -p StateDirectory
+```
+
+有效配置必须使用 `/var/lib/lumina-crm/deploy.lock`，且 `ReadWritePaths` 只能列出其已存在的
+父目录，不能再次列出某个具体 `.lock` 文件。无需预创建新锁文件。
 
 ```bash
 systemctl cat lumina-crm.service
@@ -264,8 +275,10 @@ controller 创建唯一 request ID，并让静态 `lumina-crm-deploy.service` �
 只终止日志跟随，不终止 systemd runner；没有静默后台任务。需要主动断开时可用
 `npm run deploy:production:detach`，它只在 runner 已持久接受请求后返回。
 
-runner 使用 `/var/lock/lumina-crm-deploy.lock` 的 non-blocking `flock`；同一时间只允许一个
-部署。锁或 pending request 已存在时明确失败，不通过进程名匹配。
+runner 使用 `/var/lib/lumina-crm/deploy.lock` 的 non-blocking `flock`；同一时间只允许一个
+部署。父目录由 `StateDirectory=lumina-crm` 在 namespace 建立前创建并授权，锁文件由 `flock`
+按需创建，不依赖重启后会清空的 `/var/lock`（即 `/run/lock`）文件。锁或 pending request 已
+存在时明确失败，不通过进程名匹配。
 
 部署阶段为：
 

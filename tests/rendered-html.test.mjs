@@ -152,7 +152,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.8\.2"/);
+  assert.match(packageJson, /"version": "2\.8\.3"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -168,7 +168,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.8\.2"/);
+  assert.match(packageJson, /"version": "2\.8\.3"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -576,7 +576,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.8\.2/);
+  assert.match(version, /2\.8\.3/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -611,7 +611,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.2"/);
+  assert.match(packageJson, /"version": "2\.8\.3"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -728,7 +728,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.8\.2/);
+  assert.match(version,/2\.8\.3/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -762,7 +762,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.8\.2"/);
+  assert.match(packageJson,/"version": "2\.8\.3"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -800,7 +800,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.8\.2/);
+  assert.match(version,/2\.8\.3/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -964,7 +964,7 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(implementationStatus, /Pinned Chromium public stage \| Pass/);
   assert.match(implementationStatus, /full matrix must be rerun before production activation/i);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.8\.2/);
+  assert.match(version, /2\.8\.3/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -1035,7 +1035,8 @@ test("provides a persistent, locked and atomic one-command production deployment
   assert.match(packageJson, /"esbuild@0\.28\.1": true/);
   assert.match(core, /selectReleasesForCleanup/);
   assert.match(core, /validateEnvironmentFileMetadata/);
-  assert.match(deployService, /flock --nonblock --exclusive --conflict-exit-code=73 \/var\/lock\/lumina-crm-deploy\.lock/);
+  assert.match(deployService, /flock --nonblock --exclusive --conflict-exit-code=73 \/var\/lib\/lumina-crm\/deploy\.lock/);
+  assert.doesNotMatch(deployService, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
   assert.match(deployService, /User=lumina-crm/);
   assert.match(deployService, /NODE_OPTIONS=--import=\/opt\/lumina-crm\/runtime-proxy\/register-proxy\.mjs/);
   assert.match(deployService, /ProtectHome=read-only/);
@@ -1052,7 +1053,8 @@ test("provides a persistent, locked and atomic one-command production deployment
   assert.match(guide, /npm run deploy:production/);
   assert.match(guide, /npm run deploy:production:status/);
   assert.match(guide, /SSH/);
-  assert.match(guide, /lumina-crm-deploy\.lock/);
+  assert.match(guide, /\/var\/lib\/lumina-crm\/deploy\.lock/);
+  assert.match(guide, /226\/NAMESPACE/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
@@ -1148,7 +1150,7 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
     readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.2"/);
+  assert.match(packageJson, /"version": "2\.8\.3"/);
   assert.match(returnTo, /containsUnsafePathCharacters/);
   assert.match(refresh, /safeRelativeReturnTo/);
   assert.match(environment, /Placeholder values are not allowed/);
@@ -1329,5 +1331,5 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(stagedQa, /gitStatusDigest/);
   assert.match(audit, /不受约束的时区/);
   assert.match(plan, /统一命令搜索/);
-  assert.match(version, /2\.8\.2/);
+  assert.match(version, /2\.8\.3/);
 });

@@ -1,6 +1,6 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.8.2**
+Current release candidate: **v2.8.3**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
@@ -129,7 +129,8 @@ npm run deploy:production
 ```
 
 The command queues a unique request in a non-root systemd runner protected by
-`/var/lock/lumina-crm-deploy.lock`. It fetches and fast-forwards to an explicit remote `main` commit,
+`/var/lib/lumina-crm/deploy.lock`, created inside the systemd-managed state directory. It fetches and
+fast-forwards to an explicit remote `main` commit,
 builds and validates an immutable release, previews and applies linked Supabase migrations, atomically
 switches `/opt/lumina-crm/current`, verifies the Web/Worker/Timer effective configuration, loopback-only
 port 3200, local readiness and public version, and retains five protected releases. The runner survives
@@ -158,7 +159,7 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.8.2 source implementation, migration through `202607280055`, production build,
+The v2.8.3 source implementation, migration through `202607280055`, production build,
 39 source/HTTP contracts, 17 deployment unit tests and targeted 6-page/viewport Chromium 1228
 public-page QA are complete. The previous full 80-page/viewport matrix remains available as
 historical evidence and must be rerun before production activation.
