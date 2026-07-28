@@ -1,7 +1,7 @@
 import { hasCapability } from "./capabilities";
 import { loadDashboard } from "./dashboard-repository";
 import { loadReleaseReadiness } from "./operations-repository";
-import { supabaseRequest } from "./supabase-server";
+import { databaseRequest } from "./db/gateway";
 import type { AppUser } from "./user";
 
 export type ActionCenterItem={id:string;category:"work"|"sales"|"service"|"governance";priority:"urgent"|"high"|"normal";count:number;titleKey:string;detailKey:string;href:string;source:"live_aggregate"};
@@ -9,8 +9,8 @@ export type ActionCenterSnapshot={generatedAt:string;role:AppUser["role"];items:
 
 async function activePrivacyRequestCount() {
   const statuses = "RECEIVED,IDENTITY_REVIEW,IN_PROGRESS,WAITING_APPROVAL,EXECUTING,EXECUTION_FAILED";
-  const response = await supabaseRequest(
-    `/rest/v1/privacy_requests?select=id&status=in.(${statuses})`,
+  const response = await databaseRequest(
+    `/db/table/privacy_requests?select=id&status=in.(${statuses})`,
     { headers: { Prefer: "count=exact", Range: "0-0" } },
   );
   return Number((response.headers.get("content-range") ?? "*/0").split("/")[1] ?? 0);

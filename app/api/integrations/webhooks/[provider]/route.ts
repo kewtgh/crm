@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiRoute } from "@/lib/api";
-import { supabaseAdminJson } from "@/lib/supabase-server";
+import { databaseSystemJson } from "@/lib/db/gateway";
 
 const providerConfig = {
   "microsoft-365": { provider: "MICROSOFT_365", secret: "WEBHOOK_MICROSOFT_365_SECRET" },
@@ -100,8 +100,8 @@ async function post(request: Request, context: { params: Promise<{ provider: str
   if (!workspaceId || !/^[0-9a-f-]{36}$/i.test(workspaceId)) {
     throw new ApiError("WEBHOOK_WORKSPACE_NOT_CONFIGURED", 503);
   }
-  const ingested = await supabaseAdminJson<{ id: string; duplicate: boolean }>(
-    "/rest/v1/rpc/ingest_webhook_event",
+  const ingested = await databaseSystemJson<{ id: string; duplicate: boolean }>(
+    "/db/rpc/ingest_webhook_event",
     {
     method: "POST",
     body: JSON.stringify({

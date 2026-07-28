@@ -49,7 +49,7 @@ function persistentModule(key: string): ModuleConfig {
   };
 }
 
-// Labels live in the locale dictionaries and rows always come from Supabase.
+// Labels live in the locale dictionaries and rows always come from PostgreSQL.
 // Keeping data out of this configuration prevents acceptance fixtures from
 // silently reappearing when a database request fails.
 export const moduleConfigs: Record<"schools" | "people" | "tasks", ModuleConfig> = {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, parseUuid, requireApiCapability } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { supabaseJson } from "@/lib/supabase-server";
+import { databaseJson } from "@/lib/db/gateway";
 
 const schema = z.object({
   stage: z.enum(["NOT_STARTED", "DISCOVERY", "PROPOSAL", "NEGOTIATION", "COMMITTED", "RENEWED", "LOST"]),
@@ -16,8 +16,8 @@ const schema = z.object({
 async function get(_: Request, routeContext: { params: Promise<{ id: string }> }) {
   await requireApiCapability("contracts.view");
   const { id } = await routeContext.params;
-  const playbookContext = await supabaseJson<Record<string, unknown>>(
-    "/rest/v1/rpc/renewal_playbook_context",
+  const playbookContext = await databaseJson<Record<string, unknown>>(
+    "/db/rpc/renewal_playbook_context",
     { method: "POST", body: JSON.stringify({ target_contract: parseUuid(id) }) },
   );
   return NextResponse.json({ context: playbookContext });
@@ -32,7 +32,7 @@ async function post(request: Request, context: { params: Promise<{ id: string }>
   if (["RENEWED", "LOST"].includes(parsed.data.stage) && !parsed.data.outcome) {
     throw new ApiError("RENEWAL_OUTCOME_REQUIRED", 400);
   }
-  const item = await supabaseJson<Record<string, unknown>>("/rest/v1/rpc/save_renewal_playbook", {
+  const item = await databaseJson<Record<string, unknown>>("/db/rpc/save_renewal_playbook", {
     method: "POST",
     body: JSON.stringify({
       target_contract: parseUuid(id),

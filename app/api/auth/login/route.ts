@@ -1,27 +1,30 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { authCookieNames, hydrateStaffUser, isMfaRequiredRole, nextAuthenticatedPath, userFromSupabase } from "@/lib/auth";
-import { loginSchema } from "@/lib/validation";
-import { checkLoginRateLimit, clearLoginFailures, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
-import { mutationIsTrusted } from "@/lib/request-security";
-import { verifyCaptchaProof } from "@/lib/captcha";
+import { NextResponse } from "next/server";
 import { ApiError, apiRoute } from "@/lib/api";
-import { resolveStaffLoginEmail } from "@/lib/login-identity";
+import { isMfaRequiredRole, nextAuthenticatedPath } from "@/lib/auth";
 import { setAuthSessionCookies } from "@/lib/auth-session";
-import { fetchWithTimeout } from "@/lib/fetch-timeout";
+import {
+  appUserFromIdentity,
+  authenticateAccount,
+  recordLoginEvent,
+} from "@/lib/auth/accounts";
+import { issueEmailToken } from "@/lib/auth/email-tokens";
+import { createSession } from "@/lib/auth/session-store";
+import { verifyCaptchaProof } from "@/lib/captcha";
+import {
+  checkLoginRateLimit,
+  clearLoginFailures,
+  loginThrottleIdentity,
+  recordLoginFailure,
+} from "@/lib/login-rate-limit";
+import { mutationIsTrusted } from "@/lib/request-security";
 import {
   consumeTrustedDevice,
   createPendingDeviceVerification,
   pendingDeviceVerificationMaxAge,
   securityCookieNames,
 } from "@/lib/trusted-devices";
-
-type PasswordResult = {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  user?: Record<string, unknown>;
-};
+import { loginSchema } from "@/lib/validation";
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
@@ -49,71 +52,67 @@ async function post(request: Request) {
       ...(captcha.fallbackReason ? { fallbackReason: captcha.fallbackReason } : {}),
     });
   }
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) {
-    throw new ApiError("AUTH_NOT_CONFIGURED", 503);
-  }
-  const email = await resolveStaffLoginEmail(identifier).catch(() => null);
 
-  const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { apikey: anonKey, "content-type": "application/json" },
-    body: JSON.stringify({ email: email ?? `${crypto.randomUUID()}@invalid.local`, password }),
-  }, 10_000).catch(() => {
-    throw new ApiError("AUTH_UNAVAILABLE", 503);
-  });
-  const result = (await upstream.json()) as PasswordResult;
-  if (!upstream.ok || !email || !result.access_token || !result.refresh_token) {
+  const identity = await authenticateAccount(identifier, password).catch(() => null);
+  if (!identity) {
     await recordLoginFailure(throttleIdentity);
+    await recordLoginEvent({ outcome: "FAILED", reason: "INVALID_CREDENTIALS", request }).catch(() => undefined);
     throw new ApiError("INVALID_CREDENTIALS", 401);
   }
-
-  const baseUser = userFromSupabase(result.user ?? {});
-  const authorizedUser = baseUser ? await hydrateStaffUser(baseUser, result.access_token) : null;
-  if (!authorizedUser) {
-    await recordLoginFailure(throttleIdentity);
-    throw new ApiError("STAFF_ACCESS_DENIED", 403);
-  }
-
   await clearLoginFailures(throttleIdentity);
+  const user = appUserFromIdentity(identity);
 
-  if (isMfaRequiredRole(authorizedUser.role) || authorizedUser.mfaEnabled) {
-    const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setAuthSessionCookies(response, result);
-    if (remember && authorizedUser.aal !== "aal2") {
-      response.cookies.set(securityCookieNames.mfaRemember, "1", {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/api/settings/mfa",
-        maxAge: pendingDeviceVerificationMaxAge,
-      });
-    }
+  if (isMfaRequiredRole(user.role) || user.mfaEnabled) {
+    const session = await createSession({
+      userId: identity.id,
+      passwordVersion: identity.passwordVersion,
+      persistent: remember,
+      request,
+    });
+    const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(user) });
+    setAuthSessionCookies(response, session);
+    await recordLoginEvent({
+      userId: identity.id,
+      sessionId: session.id,
+      outcome: "MFA_REQUIRED",
+      request,
+    }).catch(() => undefined);
     return response;
   }
 
   const cookieStore = await cookies();
   const trustedCookie = cookieStore.get(securityCookieNames.trustedDevice)?.value;
-  if (await consumeTrustedDevice(authorizedUser.id, trustedCookie)) {
-    const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setAuthSessionCookies(response, result);
+  if (await consumeTrustedDevice(identity.id, trustedCookie)) {
+    const session = await createSession({
+      userId: identity.id,
+      passwordVersion: identity.passwordVersion,
+      persistent: remember,
+      request,
+    });
+    const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(user) });
+    setAuthSessionCookies(response, session);
+    await recordLoginEvent({
+      userId: identity.id,
+      sessionId: session.id,
+      outcome: "SUCCESS",
+      reason: "TRUSTED_DEVICE",
+      request,
+    }).catch(() => undefined);
     return response;
   }
 
-  const otpResponse = await fetchWithTimeout(`${supabaseUrl}/auth/v1/otp`, {
-    method: "POST",
-    headers: { apikey: anonKey, "content-type": "application/json" },
-    body: JSON.stringify({ email, create_user: false }),
-  }, 10_000).catch(() => {
+  await issueEmailToken({
+    userId: identity.id,
+    email: identity.email,
+    purpose: "DEVICE_VERIFICATION",
+    payload: { remember },
+  }).catch(() => {
     throw new ApiError("EMAIL_VERIFICATION_UNAVAILABLE", 503);
   });
-  if (!otpResponse.ok) throw new ApiError("EMAIL_VERIFICATION_UNAVAILABLE", 503);
-
   const response = NextResponse.json({ ok: true, next: "/verify-device" });
   response.cookies.set(
     securityCookieNames.pendingDeviceVerification,
-    await createPendingDeviceVerification(authorizedUser.id, remember),
+    await createPendingDeviceVerification(identity.id, remember),
     {
       httpOnly: true,
       sameSite: "lax",
@@ -122,10 +121,12 @@ async function post(request: Request) {
       maxAge: pendingDeviceVerificationMaxAge,
     },
   );
-  response.cookies.delete(authCookieNames.access);
-  response.cookies.delete(authCookieNames.refresh);
-  response.cookies.delete(authCookieNames.persistence);
   if (trustedCookie) response.cookies.delete(securityCookieNames.trustedDevice);
+  await recordLoginEvent({
+    userId: identity.id,
+    outcome: "DEVICE_VERIFICATION_REQUIRED",
+    request,
+  }).catch(() => undefined);
   return response;
 }
 

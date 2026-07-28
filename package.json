@@ -1,17 +1,16 @@
 {
   "name": "lumina-education-crm",
-  "version": "2.9.1",
+  "version": "3.0.0",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
     "node": ">=24.0.0 <25",
     "npm": ">=12.0.0 <13"
   },
-    "allowScripts": {
-    "esbuild@0.27.7": true,
+  "allowScripts": {
+    "argon2@0.45.1": true,
     "esbuild@0.28.1": true,
-    "unrs-resolver@1.12.2": true,
-    "workerd@1.20260714.1": true
+    "unrs-resolver@1.12.2": true
   },
   "scripts": {
     "dev": "vinext dev --port 3200",
@@ -29,6 +28,15 @@
     "lint": "node scripts/run-bounded.mjs --label lint --timeout-seconds 180 --idle-seconds 90 -- npm run lint:raw",
     "lint:raw": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "auth:bootstrap-admin": "node --env-file-if-exists=.env.local scripts/bootstrap-admin.mjs",
+    "db:bootstrap": "node --env-file-if-exists=.env.local scripts/db-bootstrap.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs",
+    "db:migrations:verify": "node scripts/db-verify-migrations.mjs",
+    "db:smoke": "node --env-file-if-exists=.env.local --import tsx scripts/db-integration-smoke.ts",
+    "db:validate": "node --env-file-if-exists=.env.local scripts/db-validate.mjs",
+    "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs",
+    "db:backup:crypto:smoke": "node --env-file-if-exists=.env.local scripts/backup-crypto-smoke.mjs",
+    "db:restore:test": "node --env-file-if-exists=.env.local scripts/db-restore-test.mjs",
+    "ops:disk:check": "node --env-file-if-exists=.env.local scripts/check-disk-space.mjs",
     "reminders:process": "node --env-file-if-exists=.env.local scripts/process-reminders.mjs",
     "outbox:process": "node --env-file-if-exists=.env.local scripts/process-notification-outbox.mjs",
     "calendar-deliveries:process": "node --env-file-if-exists=.env.local scripts/process-calendar-deliveries.mjs",
@@ -52,9 +60,9 @@
     "workers:process": "node --env-file-if-exists=.env.local scripts/process-worker-cycle.mjs",
     "qa:assets": "node scripts/run-bounded.mjs --label production-assets --timeout-seconds 90 --idle-seconds 45 -- npm run qa:assets:raw",
     "qa:assets:raw": "node scripts/check-production-assets.mjs",
-    "qa:server:start": "node scripts/qa-production-server.mjs start",
-    "qa:server:status": "node scripts/qa-production-server.mjs status",
-    "qa:server:stop": "node scripts/qa-production-server.mjs stop",
+    "qa:server:start": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs start",
+    "qa:server:status": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs status",
+    "qa:server:stop": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs stop",
     "qa:chromium-1228": "node scripts/run-bounded.mjs --label chromium-1228-staged --timeout-seconds 480 --idle-seconds 45 -- npm run qa:chromium-1228:staged",
     "qa:chromium-1228:staged": "node scripts/browser-qa-staged.mjs",
     "qa:chromium-1228:raw": "node scripts/browser-qa-chromium-1228.cjs",
@@ -69,14 +77,19 @@
     "env:configure-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-environment.ps1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1097.0",
+    "@aws-sdk/s3-request-presigner": "^3.1097.0",
     "@fontsource/noto-sans-sc": "^5.2.8",
     "@pdf-lib/fontkit": "^1.1.1",
     "@types/qrcode": "^1.5.6",
     "altcha": "^3.2.1",
     "altcha-lib": "^2.3.2",
+    "argon2": "^0.45.1",
+    "kysely": "^0.29.4",
     "lucide-react": "^1.24.0",
     "next": "16.2.11",
     "pdf-lib": "^1.17.1",
+    "pg": "^8.22.0",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -85,9 +98,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.45.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "^8.20.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
@@ -97,19 +110,20 @@
     "eslint-config-next": "16.2.11",
     "playwright-core": "1.61.1",
     "react-server-dom-webpack": "19.2.8",
-    "supabase": "^2.109.1",
     "tailwindcss": "4.2.1",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vinext": "^0.1.8",
     "vite": "8.1.5",
-    "vite-tsconfig-paths": "^6.1.1",
-    "wrangler": "4.112.0"
+    "vite-tsconfig-paths": "^6.1.1"
   },
   "overrides": {
     "brace-expansion": "file:vendor/brace-expansion-compat",
     "postcss": "8.5.23",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "tsx": {
+      "esbuild": "0.28.1"
+    }
   },
   "type": "module"
 }

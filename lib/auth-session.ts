@@ -1,17 +1,15 @@
 import type { NextResponse } from "next/server";
 import { authCookieNames } from "./auth";
+import {
+  csrfCookieName,
+  persistentSessionMaxAge,
+  type AuthenticatedSession,
+} from "./auth/session-store";
 
-export const persistentSessionMaxAge = 60 * 60 * 24 * 30;
-
-type SessionTokens = {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-};
+export { persistentSessionMaxAge };
 
 function cookieBase() {
   return {
-    httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
@@ -20,31 +18,29 @@ function cookieBase() {
 
 export function setAuthSessionCookies(
   response: NextResponse,
-  session: SessionTokens,
+  session: Pick<AuthenticatedSession, "token" | "csrfToken" | "maxAge">,
 ) {
   const base = cookieBase();
-  if (session.access_token) {
-    response.cookies.set(
-      authCookieNames.access,
-      session.access_token,
-      { ...base, maxAge: Number(session.expires_in ?? 3600) },
-    );
-  }
-  if (session.refresh_token) {
-    response.cookies.set(
-      authCookieNames.refresh,
-      session.refresh_token,
-      { ...base, maxAge: persistentSessionMaxAge },
-    );
-  }
+  response.cookies.set(authCookieNames.session, session.token, {
+    ...base,
+    httpOnly: true,
+    maxAge: session.maxAge,
+  });
+  response.cookies.set(csrfCookieName, session.csrfToken, {
+    ...base,
+    httpOnly: false,
+    maxAge: session.maxAge,
+  });
   response.cookies.set(authCookieNames.persistence, "1", {
     ...base,
-    maxAge: persistentSessionMaxAge,
+    httpOnly: true,
+    maxAge: session.maxAge,
   });
 }
 
 export function clearAuthSessionCookies(response: NextResponse) {
-  for (const name of Object.values(authCookieNames)) {
+  for (const name of new Set(Object.values(authCookieNames))) {
     response.cookies.set(name, "", { path: "/", maxAge: 0 });
   }
+  response.cookies.set(csrfCookieName, "", { path: "/", maxAge: 0 });
 }

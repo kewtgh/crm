@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { configuredApplicationOrigin, configuredSupabaseOrigin } from "./lib/application-origin.mjs";
+import { configuredApplicationOrigin, configuredObjectStorageOrigin } from "./lib/application-origin.mjs";
 
 export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
@@ -10,11 +10,7 @@ export function proxy(request: NextRequest) {
   } catch {
     secureAppOrigin = false;
   }
-  const supabaseOrigin = configuredSupabaseOrigin();
-  const supabaseSocketOrigin = supabaseOrigin
-    ? `${supabaseOrigin.startsWith("https:") ? "wss:" : "ws:"}//${new URL(supabaseOrigin).host}`
-    : null;
-  const supabaseConnectSources = [supabaseOrigin, supabaseSocketOrigin].filter(Boolean).join(" ");
+  const objectStorageOrigin = configuredObjectStorageOrigin();
   const policy = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -23,8 +19,8 @@ export function proxy(request: NextRequest) {
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob:${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `connect-src 'self'${supabaseConnectSources ? ` ${supabaseConnectSources}` : ""} https://challenges.cloudflare.com${development ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
+    `img-src 'self' data: blob:${objectStorageOrigin ? ` ${objectStorageOrigin}` : ""}`,
+    `connect-src 'self'${objectStorageOrigin ? ` ${objectStorageOrigin}` : ""} https://challenges.cloudflare.com${development ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
     "frame-src https://challenges.cloudflare.com",
     "font-src 'self' data:",
     ...(secureAppOrigin ? ["upgrade-insecure-requests"] : []),

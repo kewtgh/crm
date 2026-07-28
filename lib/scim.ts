@@ -1,6 +1,7 @@
-import { SupabaseRequestError, supabaseAdminJson, supabaseAdminRequest } from "./supabase-server";
+import { DatabaseRequestError, databaseSystemJson, databaseSystemRequest } from "./db/gateway";
 import type { AppRole } from "./roles";
 import { compensatedScimVersion } from "./scim-compensation.mjs";
+import { withPoolClient } from "./db/pools";
 
 export const scimUserSchema = "urn:ietf:params:scim:schemas:core:2.0:User";
 export const scimEnterpriseSchema = "urn:lumina:params:scim:schemas:extension:2.0:User";
@@ -18,7 +19,7 @@ export type ScimUserInput = {
 };
 
 function enabled(value:string|undefined){return /^(1|true|yes|on)$/i.test(value?.trim()??"");}
-function workspaceId(){const value=process.env.CRM_WORKSPACE_ID?.trim();if(!value||!/^[0-9a-f-]{36}$/i.test(value))throw new SupabaseRequestError(503,"WORKSPACE_NOT_CONFIGURED","Workspace is not configured");return value;}
+function workspaceId(){const value=process.env.CRM_WORKSPACE_ID?.trim();if(!value||!/^[0-9a-f-]{36}$/i.test(value))throw new DatabaseRequestError(503,"WORKSPACE_NOT_CONFIGURED","Workspace is not configured");return value;}
 
 async function digest(value:string){return new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)));}
 export async function authorizeScim(request:Request){
@@ -36,25 +37,67 @@ export function toScimUser(row:ScimDirectoryUser,baseUrl:string){
 
 export async function listScimDirectoryUsers(filter:string|undefined,startIndex:number,count:number){
   const offset=Math.max(0,startIndex-1);const params=new URLSearchParams({select:"*",workspace_id:`eq.${workspaceId()}`,order:"created_at.asc"});
-  const match=filter?.match(/^userName\s+eq\s+"([^"]+)"$/i);if(filter&&!match)throw new SupabaseRequestError(400,"SCIM_FILTER_UNSUPPORTED","Only userName eq filters are supported");if(match)params.set("user_name",`eq.${match[1].toLowerCase()}`);
-  const response=await supabaseAdminRequest(`/rest/v1/enterprise_directory_users?${params}`,{headers:{Prefer:"count=exact",Range:`${offset}-${offset+count-1}`}});const rows=await response.json() as ScimDirectoryUser[];const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??rows.length);return{rows,total};
+  const match=filter?.match(/^userName\s+eq\s+"([^"]+)"$/i);if(filter&&!match)throw new DatabaseRequestError(400,"SCIM_FILTER_UNSUPPORTED","Only userName eq filters are supported");if(match)params.set("user_name",`eq.${match[1].toLowerCase()}`);
+  const response=await databaseSystemRequest(`/db/table/enterprise_directory_users?${params}`,{headers:{Prefer:"count=exact",Range:`${offset}-${offset+count-1}`}});const rows=await response.json() as ScimDirectoryUser[];const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??rows.length);return{rows,total};
 }
 
-export async function getScimDirectoryUser(id:string){const rows=await supabaseAdminJson<ScimDirectoryUser[]>(`/rest/v1/enterprise_directory_users?select=*&workspace_id=eq.${workspaceId()}&id=eq.${id}&limit=1`);if(!rows[0])throw new SupabaseRequestError(404,"SCIM_USER_NOT_FOUND","SCIM user was not found");return rows[0];}
+export async function getScimDirectoryUser(id:string){const rows=await databaseSystemJson<ScimDirectoryUser[]>(`/db/table/enterprise_directory_users?select=*&workspace_id=eq.${workspaceId()}&id=eq.${id}&limit=1`);if(!rows[0])throw new DatabaseRequestError(404,"SCIM_USER_NOT_FOUND","SCIM user was not found");return rows[0];}
 
 export async function createScimDirectoryUser(input:ScimUserInput){
-  const rows=await supabaseAdminJson<ScimDirectoryUser[]>("/rest/v1/enterprise_directory_users",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({workspace_id:workspaceId(),external_id:input.externalId,user_name:input.userName.toLowerCase(),display_name_zh:input.displayNameZh,display_name_en:input.displayNameEn,role:input.role,team:input.team,active:input.active})});
+  const rows=await databaseSystemJson<ScimDirectoryUser[]>("/db/table/enterprise_directory_users",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({workspace_id:workspaceId(),external_id:input.externalId,user_name:input.userName.toLowerCase(),display_name_zh:input.displayNameZh,display_name_en:input.displayNameEn,role:input.role,team:input.team,active:input.active})});
   await recordScimAudit(rows[0],"SCIM_USER_STAGED");return rows[0];
 }
 
 async function applyBoundIdentity(row:ScimDirectoryUser){
   if(!row.auth_user_id)return;
   const status=row.active?"ACTIVE":"SUSPENDED";
-  await supabaseAdminRequest(`/rest/v1/workspace_memberships?workspace_id=eq.${row.workspace_id}&user_id=eq.${row.auth_user_id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({role:row.role,status})});
-  await supabaseAdminRequest(`/rest/v1/user_profiles?user_id=eq.${row.auth_user_id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({display_name_zh:row.display_name_zh,display_name_en:row.display_name_en,updated_at:new Date().toISOString()})});
-  const members=await supabaseAdminJson<Array<{id:string}>>(`/rest/v1/sales_team_members?select=id&workspace_id=eq.${row.workspace_id}&auth_user_id=eq.${row.auth_user_id}&limit=1`);const memberBody={name_zh:row.display_name_zh,name_en:row.display_name_en,role:row.role,team:row.team,active:row.active};
-  if(members[0])await supabaseAdminRequest(`/rest/v1/sales_team_members?id=eq.${members[0].id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(memberBody)});else await supabaseAdminRequest("/rest/v1/sales_team_members",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,auth_user_id:row.auth_user_id,...memberBody})});
-  await supabaseAdminRequest(`/auth/v1/admin/users/${row.auth_user_id}`,{method:"PUT",body:JSON.stringify({app_metadata:{role:row.role,account_status:status,workspace_id:row.workspace_id},user_metadata:{chinese_name:row.display_name_zh,english_name:row.display_name_en},ban_duration:row.active?"none":"876000h"})});
+  await withPoolClient("system",async(client)=>{
+    await client.query("begin");
+    try{
+      const account=await client.query(
+        "update app_auth.accounts set status=$2,updated_at=now() where id=$1",
+        [row.auth_user_id,status],
+      );
+      if(!account.rowCount)throw new DatabaseRequestError(404,"SCIM_IDENTITY_NOT_FOUND","Bound identity was not found");
+      await client.query(
+        `insert into public.workspace_memberships(workspace_id,user_id,role,status,must_change_password)
+         values($1,$2,$3,$4,false)
+         on conflict(workspace_id,user_id) do update set role=excluded.role,status=excluded.status`,
+        [row.workspace_id,row.auth_user_id,row.role,status],
+      );
+      await client.query(
+        `update public.user_profiles
+         set display_name_zh=$2,display_name_en=$3,updated_at=now()
+         where user_id=$1`,
+        [row.auth_user_id,row.display_name_zh,row.display_name_en],
+      );
+      const member=await client.query(
+        `update public.sales_team_members set
+          name_zh=$3,name_en=$4,role=$5,team=$6,active=$7
+         where workspace_id=$1 and auth_user_id=$2`,
+        [row.workspace_id,row.auth_user_id,row.display_name_zh,row.display_name_en,row.role,row.team,row.active],
+      );
+      if(!member.rowCount){
+        await client.query(
+          `insert into public.sales_team_members(
+            workspace_id,auth_user_id,name_zh,name_en,role,team,active
+          ) values($1,$2,$3,$4,$5,$6,$7)`,
+          [row.workspace_id,row.auth_user_id,row.display_name_zh,row.display_name_en,row.role,row.team,row.active],
+        );
+      }
+      if(!row.active){
+        await client.query(
+          `update app_auth.sessions set revoked_at=now(),revoked_reason='SCIM_DEPROVISIONED'
+           where user_id=$1 and revoked_at is null`,
+          [row.auth_user_id],
+        );
+      }
+      await client.query("commit");
+    }catch(error){
+      await client.query("rollback").catch(()=>undefined);
+      throw error;
+    }
+  });
 }
 
 export async function updateScimDirectoryUser(id:string,changes:Partial<ScimUserInput>){
@@ -73,11 +116,11 @@ export async function updateScimDirectoryUser(id:string,changes:Partial<ScimUser
     updated_at:new Date().toISOString(),
     deprovisioned_at:(changes.active??current.active)?null:new Date().toISOString(),
   };
-  const rows=await supabaseAdminJson<ScimDirectoryUser[]>(
-    `/rest/v1/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${current.version}`,
+  const rows=await databaseSystemJson<ScimDirectoryUser[]>(
+    `/db/table/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${current.version}`,
     {method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(next)},
   );
-  if(!rows[0])throw new SupabaseRequestError(409,"SCIM_VERSION_CONFLICT","SCIM user changed concurrently");
+  if(!rows[0])throw new DatabaseRequestError(409,"SCIM_VERSION_CONFLICT","SCIM user changed concurrently");
   try{
     await applyBoundIdentity(rows[0]);
   }catch(error){
@@ -97,20 +140,20 @@ export async function updateScimDirectoryUser(id:string,changes:Partial<ScimUser
     };
     let restored:ScimDirectoryUser[];
     try{
-      restored=await supabaseAdminJson<ScimDirectoryUser[]>(
-        `/rest/v1/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${writtenVersion}`,
+      restored=await databaseSystemJson<ScimDirectoryUser[]>(
+        `/db/table/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${writtenVersion}`,
         {method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(restore)},
       );
     }catch{
-      throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM directory compensation requires repair");
+      throw new DatabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM directory compensation requires repair");
     }
     if(!restored[0]){
-      throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","A newer SCIM version prevented unsafe compensation");
+      throw new DatabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","A newer SCIM version prevented unsafe compensation");
     }
     await recordScimAudit(restored[0],"SCIM_USER_COMPENSATED").catch(()=>undefined);
     if(current.auth_user_id){
       try{await applyBoundIdentity(current);}
-      catch{throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM identity compensation requires repair");}
+      catch{throw new DatabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM identity compensation requires repair");}
     }
     throw error;
   }
@@ -118,13 +161,13 @@ export async function updateScimDirectoryUser(id:string,changes:Partial<ScimUser
   return rows[0];
 }
 
-async function recordScimAudit(row:ScimDirectoryUser|undefined,action:string){if(!row)return;await supabaseAdminRequest("/rest/v1/audit_events",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,actor_id:null,entity_type:"enterprise_directory_user",entity_id:row.id,action,after_data:{externalId:row.external_id,role:row.role,active:row.active,version:row.version}})});}
+async function recordScimAudit(row:ScimDirectoryUser|undefined,action:string){if(!row)return;await databaseSystemRequest("/db/table/audit_events",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,actor_id:null,entity_type:"enterprise_directory_user",entity_id:row.id,action,after_data:{externalId:row.external_id,role:row.role,active:row.active,version:row.version}})});}
 
 export async function claimScimSsoIdentity(payload:Record<string,unknown>){
   if(!enabled(process.env.SCIM_ENABLED))return null;const email=String(payload.email??"").trim().toLowerCase();const userId=String(payload.id??"");if(!email||!userId)return null;
-  const rows=await supabaseAdminJson<ScimDirectoryUser[]>(`/rest/v1/enterprise_directory_users?select=*&workspace_id=eq.${workspaceId()}&user_name=eq.${encodeURIComponent(email)}&active=eq.true&limit=1`);const row=rows[0];if(!row||(row.auth_user_id&&row.auth_user_id!==userId))return null;
-  if(!row.auth_user_id){const bound=await supabaseAdminJson<ScimDirectoryUser[]>(`/rest/v1/enterprise_directory_users?id=eq.${row.id}&auth_user_id=is.null`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({auth_user_id:userId,version:row.version+1,updated_at:new Date().toISOString()})});if(!bound[0])return null;Object.assign(row,bound[0]);}
-  await supabaseAdminRequest("/rest/v1/workspace_memberships",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,user_id:userId,role:row.role,status:"ACTIVE",must_change_password:false})});
-  await supabaseAdminRequest(`/rest/v1/user_profiles?user_id=eq.${userId}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({display_name_zh:row.display_name_zh,display_name_en:row.display_name_en,updated_at:new Date().toISOString()})});
+  const rows=await databaseSystemJson<ScimDirectoryUser[]>(`/db/table/enterprise_directory_users?select=*&workspace_id=eq.${workspaceId()}&user_name=eq.${encodeURIComponent(email)}&active=eq.true&limit=1`);const row=rows[0];if(!row||(row.auth_user_id&&row.auth_user_id!==userId))return null;
+  if(!row.auth_user_id){const bound=await databaseSystemJson<ScimDirectoryUser[]>(`/db/table/enterprise_directory_users?id=eq.${row.id}&auth_user_id=is.null`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({auth_user_id:userId,version:row.version+1,updated_at:new Date().toISOString()})});if(!bound[0])return null;Object.assign(row,bound[0]);}
+  await databaseSystemRequest("/db/table/workspace_memberships",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,user_id:userId,role:row.role,status:"ACTIVE",must_change_password:false})});
+  await databaseSystemRequest(`/db/table/user_profiles?user_id=eq.${userId}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({display_name_zh:row.display_name_zh,display_name_en:row.display_name_en,updated_at:new Date().toISOString()})});
   row.auth_user_id=userId;await applyBoundIdentity(row);await recordScimAudit(row,"SCIM_IDENTITY_CLAIMED");return row;
 }

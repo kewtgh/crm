@@ -3,6 +3,8 @@ const fs=require("node:fs");
 const path=require("node:path");
 const crypto=require("node:crypto");
 const {spawnSync}=require("node:child_process");
+const pg=require("pg");
+const argon2=require("argon2");
 
 const executable=process.env.PLAYWRIGHT_CHROMIUM_1228_PATH||"C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
 const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
@@ -14,7 +16,7 @@ fs.mkdirSync(output,{recursive:true});
 function commandValue(command,args){const result=spawnSync(command,args,{encoding:"utf8",timeout:10_000});return result.status===0?result.stdout.trim():"unavailable";}
 function buildHash(){const root=[path.resolve("dist"),path.resolve(".next")].find(candidate=>fs.existsSync(candidate));if(!root)return"unavailable";const files=[];const visit=(directory)=>{for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const target=path.join(directory,entry.name);if(entry.isDirectory())visit(target);else if(entry.isFile())files.push(target);}};visit(root);const hash=crypto.createHash("sha256");for(const file of files.sort()){hash.update(path.relative(root,file).replaceAll("\\","/"));hash.update(fs.readFileSync(file));}return hash.digest("hex");}
 function sourceFingerprint(){const listed=spawnSync("git",["ls-files","--cached","--others","--exclude-standard","-z"],{encoding:"utf8",timeout:10_000});if(listed.status!==0)return"unavailable";const hash=crypto.createHash("sha256");const sourceFiles=listed.stdout.split("\0").filter(Boolean).map(relative=>relative.replaceAll("\\","/")).filter(relative=>!relative.startsWith("docs/")&&!relative.endsWith(".md")).sort();for(const relative of sourceFiles){const file=path.resolve(relative);hash.update(relative);hash.update(fs.existsSync(file)&&fs.statSync(file).isFile()?fs.readFileSync(file):"MISSING");}return hash.digest("hex");}
-const migrationHead=fs.readdirSync(path.resolve("supabase/migrations")).filter(name=>name.endsWith(".sql")).sort().at(-1)?.replace(/\.sql$/,'')||"unavailable";
+const migrationHead=fs.readdirSync(path.resolve("db/migrations")).filter(name=>name.endsWith(".sql")).sort().at(-1)?.replace(/\.sql$/,'')||"unavailable";
 const appVersion=JSON.parse(fs.readFileSync(path.resolve("package.json"),"utf8")).version;
 const gitStatus=commandValue("git",["status","--porcelain=v1","--untracked-files=all"]);
 const gitState=gitStatus==="unavailable"?"unavailable":gitStatus?"dirty":"clean";
@@ -34,6 +36,18 @@ function envFile(){
   return values;
 }
 const env={...envFile(),...process.env};
+let qaDatabasePromise;
+function qaDatabase(){
+  if(!env.SYSTEM_DATABASE_URL)throw new Error("SYSTEM_DATABASE_URL is required for browser QA");
+  process.env.WORKER_DATABASE_URL=env.SYSTEM_DATABASE_URL;
+  qaDatabasePromise??=import("./lib/worker-database.mjs");
+  return qaDatabasePromise;
+}
+async function qaQuery(text,values=[]){
+  const client=new pg.Client({connectionString:env.SYSTEM_DATABASE_URL});
+  await client.connect();
+  try{return await client.query(text,values);}finally{await client.end();}
+}
 const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
 const actionTimeoutMs=12_000;
 const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
@@ -142,54 +156,68 @@ async function inspect(page,label,route,viewport){
   process.stdout.write(`[QA] pass ${label} ${Date.now()-startedAt}ms\n`);
 }
 async function createIdentity(role,label){
-  const supabase=env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,"");
-  const anon=env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const service=env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!supabase||!anon||!service)throw new Error("Local Supabase QA variables are missing");
+  if(!env.SYSTEM_DATABASE_URL)throw new Error("Local PostgreSQL QA variables are missing");
   const suffix=Date.now().toString(36);
   const email=`chromium-1228-${label}-${suffix}@example.invalid`;
   const password=`Qa!${crypto.randomBytes(18).toString("base64url")}A1`;
-  const headers={apikey:service,authorization:`Bearer ${service}`,"content-type":"application/json"};
-  const createdResponse=await fetch(`${supabase}/auth/v1/admin/users`,{method:"POST",headers,body:JSON.stringify({email,password,email_confirm:true,user_metadata:{username:`qa.${label}.${suffix}`,chinese_name:"浏览器验收",english_name:"Browser QA"},app_metadata:{role,account_status:"ACTIVE"}})});
-  const created=await createdResponse.json();
-  if(!createdResponse.ok||!created.id)throw new Error(`QA user creation failed (${createdResponse.status})`);
+  const created={id:crypto.randomUUID()};
+  const username=`qa.${label}.${suffix}`;
+  const passwordHash=await argon2.hash(password,{type:argon2.argon2id,memoryCost:65536,timeCost:3,parallelism:1});
+  const sessionToken=crypto.randomBytes(32).toString("base64url");
+  const csrfToken=crypto.randomBytes(24).toString("base64url");
+  const client=new pg.Client({connectionString:env.SYSTEM_DATABASE_URL});
+  await client.connect();
+  try{
+    await client.query("begin");
+    await client.query(`insert into app_auth.accounts(id,email,username,status,email_confirmed_at,must_change_password)
+      values($1,$2,$3,'ACTIVE',now(),false)`,[created.id,email,username]);
+    await client.query(`insert into app_auth.password_credentials(user_id,password_hash,parameters)
+      values($1,$2,$3)`,[created.id,passwordHash,{algorithm:"argon2id",memoryCost:65536,timeCost:3,parallelism:1}]);
+    await client.query(`insert into public.user_profiles(user_id,username,display_name_zh,display_name_en)
+      values($1,$2,'浏览器验收','Browser QA')`,[created.id,username]);
+    await client.query(`insert into public.workspace_memberships(workspace_id,user_id,role,status,must_change_password)
+      values($1,$2,$3,'ACTIVE',false)`,[env.CRM_WORKSPACE_ID,created.id,role]);
+    if(role.startsWith("SALES_"))await client.query(`insert into public.sales_team_members(
+      workspace_id,auth_user_id,name_zh,name_en,role,team,active
+    ) values($1,$2,'浏览器验收','Browser QA',$3,'Browser QA',true)`,[env.CRM_WORKSPACE_ID,created.id,role]);
+    await client.query(`insert into app_auth.sessions(
+      user_id,token_hash,csrf_hash,aal,password_version,idle_expires_at,absolute_expires_at
+    ) values($1,$2,$3,$4,1,now()+interval '12 hours',now()+interval '12 hours')`,[
+      created.id,
+      crypto.createHash("sha256").update(sessionToken).digest("hex"),
+      crypto.createHash("sha256").update(csrfToken).digest("hex"),
+      role==="SALES_MANAGER"||role==="SUPER_ADMIN"?"aal2":"aal1",
+    ]);
+    await client.query("commit");
+  }catch(error){await client.query("rollback").catch(()=>undefined);throw error;}
+  finally{await client.end();}
   report.identity.created+=1;
-  await fetch(`${supabase}/rest/v1/workspace_memberships?user_id=eq.${created.id}`,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({must_change_password:false})});
-  const tokenResponse=await fetch(`${supabase}/auth/v1/token?grant_type=password`,{method:"POST",headers:{apikey:anon,"content-type":"application/json"},body:JSON.stringify({email,password})});
-  const token=await tokenResponse.json();
-  if(!tokenResponse.ok||!token.access_token)throw new Error(`QA login failed (${tokenResponse.status})`);
-  if(role==="SALES_MANAGER"||role==="SUPER_ADMIN"){
-    const {elevateQaSessionToAal2}=await import("./lib/qa-auth.mjs");
-    return{id:created.id,supabase,anon,headers,token:await elevateQaSessionToAal2({supabaseUrl:supabase,anonKey:anon,accessToken:token.access_token,friendlyName:`chromium-1228-${suffix}`})};
-  }
-  return{id:created.id,supabase,anon,headers,token};
+  return{id:created.id,token:{access_token:sessionToken,csrf_token:csrfToken},email,password};
 }
 async function serviceJson(identity,path,{method="GET",body,prefer}={}){
-  const response=await fetch(`${identity.supabase}${path}`,{
+  const {workerJson}=await qaDatabase();
+  return workerJson(path,{
     method,
-    headers:{apikey:identity.anon,authorization:`Bearer ${identity.token.access_token}`,"content-type":"application/json",...(prefer?{Prefer:prefer}:{})},
+    headers:prefer?{Prefer:prefer}:undefined,
     body:body===undefined?undefined:JSON.stringify(body),
   });
-  const result=await response.json().catch(()=>null);
-  if(!response.ok)throw new Error(`QA scenario request failed (${method} ${path}: ${response.status})`);
-  return result;
 }
 async function seedV210Scenario(identity){
   const workspaceId="00000000-0000-4000-8000-000000000001";
   const suffix=Date.now().toString(36);
-  const contacts=await serviceJson(identity,"/rest/v1/contacts?select=id,name_zh",{method:"POST",prefer:"return=representation",body:[
+  const contacts=await serviceJson(identity,"/db/table/contacts?select=id,name_zh",{method:"POST",prefer:"return=representation",body:[
     {workspace_id:workspaceId,name_zh:`验收学生${suffix}`,name_en:`QA Student ${suffix}`,contact_type:"STUDENT",status:"ACTIVE",owner_id:identity.id,created_by:identity.id},
     {workspace_id:workspaceId,name_zh:`验收家长${suffix}`,name_en:`QA Parent ${suffix}`,contact_type:"PARENT",status:"ACTIVE",owner_id:identity.id,created_by:identity.id},
   ]});
-  const householdRows=await serviceJson(identity,"/rest/v1/households?select=id,name_zh",{method:"POST",prefer:"return=representation",body:{
+  const householdRows=await serviceJson(identity,"/db/table/households?select=id,name_zh",{method:"POST",prefer:"return=representation",body:{
     workspace_id:workspaceId,name_zh:`验收家庭${suffix}`,name_en:`QA Household ${suffix}`,address:"Taipei",owner_id:identity.id,created_by:identity.id,
   }});
   const household=householdRows[0];
-  const studentRows=await serviceJson(identity,"/rest/v1/students?select=id",{method:"POST",prefer:"return=representation",body:{
+  const studentRows=await serviceJson(identity,"/db/table/students?select=id",{method:"POST",prefer:"return=representation",body:{
     workspace_id:workspaceId,person_id:contacts[0].id,household_id:household.id,student_number:`QA-${suffix}`,
     current_grade:"G5",academic_year:"2025-2026",status:"ACTIVE",owner_id:identity.id,created_by:identity.id,
   }});
-  const leadRows=await serviceJson(identity,"/rest/v1/leads?select=id",{method:"POST",prefer:"return=representation",body:{
+  const leadRows=await serviceJson(identity,"/db/table/leads?select=id",{method:"POST",prefer:"return=representation",body:{
     workspace_id:workspaceId,subject_type:"HOUSEHOLD",household_id:household.id,
     name_zh:`验收家庭线索${suffix}`,name_en:`QA Household Lead ${suffix}`,source:"QA",
     status:"QUALIFIED",qualification_score:90,qualification_note:"Browser acceptance",
@@ -222,11 +250,7 @@ delete from public.contacts where id in(${scenario.contactIds.map(id=>`'${id}'`)
 delete from public.automation_events where actor_id='${identity.id}';
 delete from public.audit_events where actor_id='${identity.id}';
 commit;`;
-  const config=fs.readFileSync(path.resolve("supabase/config.toml"),"utf8");
-  const projectId=config.match(/^project_id\s*=\s*"([a-zA-Z0-9_-]+)"/m)?.[1];
-  if(!projectId)throw new Error("QA cleanup could not resolve the local Supabase project ID");
-  const cleanup=spawnSync("docker",["exec",`supabase_db_${projectId}`,"psql","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres","-c",sql],{encoding:"utf8",timeout:20_000});
-  if(cleanup.status!==0)throw new Error(`QA database cleanup failed: ${(cleanup.stderr||cleanup.stdout).trim().slice(0,300)}`);
+  await qaQuery(sql);
 }
 async function exerciseV210Workflows(page,scenario){
   page.setDefaultTimeout(12_000);
@@ -353,7 +377,7 @@ async function main(){
       if(!["SUPER_ADMIN","ADMIN","SALES_DIRECTOR","SALES_MANAGER","SALES_SPECIALIST","SALES_SUPPORT"].includes(role))throw new Error(`Unsupported QA_ROLE ${role}`);
       const identity=await createIdentity(role,env.QA_LABEL||"routes");identities.push(identity);
       const context=await browser.newContext({locale:"zh-CN"});
-      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      await context.addCookies([{name:"crm_session",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:identity.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
       const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
       const routes=(env.QA_ROUTES||"/dashboard").split(",").filter(Boolean);
       const mobile=new Set((env.QA_MOBILE_ROUTES||"").split(",").filter(Boolean));
@@ -423,7 +447,7 @@ async function main(){
     }else if(env.QA_SCOPE==="notification"){
       const identity=await createIdentity("SALES_MANAGER","notification");identities.push(identity);
       const context=await browser.newContext({locale:"zh-CN"});
-      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      await context.addCookies([{name:"crm_session",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:identity.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
       const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
       await page.goto(`${base}/settings/notifications`,{waitUntil:"networkidle"});
       const securityEmail=page.getByRole("checkbox",{name:"系统与安全 · 邮件"});
@@ -443,7 +467,7 @@ async function main(){
       const identity=await createIdentity("SALES_MANAGER","workflows");identities.push(identity);
       const scenario=await seedV210Scenario(identity);scenarios.set(identity.id,scenario);
       const context=await browser.newContext({locale:"zh-CN"});
-      await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      await context.addCookies([{name:"crm_session",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:identity.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
       const page=await context.newPage();observe(page);page.setDefaultTimeout(actionTimeoutMs);
       await exerciseV210Workflows(page,scenario);
       await page.setViewportSize({width:375,height:812});await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});const menu=page.locator("button.mobile-menu");
@@ -464,7 +488,7 @@ async function main(){
     }else if(env.QA_SCOPE==="support"){
       const support=await createIdentity("SALES_SUPPORT","support-targeted");identities.push(support);
       const supportContext=await browser.newContext({locale:"zh-CN"});
-      await supportContext.addCookies([{name:"crm_access_token",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:support.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      await supportContext.addCookies([{name:"crm_session",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:support.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
       const supportPage=await supportContext.newPage();observe(supportPage);supportPage.setDefaultTimeout(actionTimeoutMs);
       await supportPage.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
       const forbiddenLinks=await supportPage.locator('a[href="/imports"],a[href="/duplicates"],a[href="/data-quality"],a[href^="/admin"]').count();
@@ -476,7 +500,7 @@ async function main(){
     }else if(env.QA_SCOPE==="admin-security"){
       const admin=await createIdentity("SUPER_ADMIN","admin-targeted");identities.push(admin);
       const adminContext=await browser.newContext({locale:"zh-CN"});
-      await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+      await adminContext.addCookies([{name:"crm_session",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:admin.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
       const adminPage=await adminContext.newPage();observe(adminPage);
       adminPage.setDefaultTimeout(actionTimeoutMs);
       await inspect(adminPage,"admin-security-1440","/admin/security",{width:1440,height:900});
@@ -498,7 +522,7 @@ async function main(){
     const identity=await createIdentity("SALES_MANAGER","manager");identities.push(identity);
     const scenario=await seedV210Scenario(identity);scenarios.set(identity.id,scenario);
     const context=await browser.newContext({locale:"zh-CN"});
-    await context.addCookies([{name:"crm_access_token",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:identity.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+    await context.addCookies([{name:"crm_session",value:identity.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:identity.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
     const page=await context.newPage();observe(page);
     page.setDefaultTimeout(actionTimeoutMs);
     const routes=["/dashboard","/schools","/people","/calendar","/tasks","/messages","/products","/finance","/imports","/duplicates","/data-quality","/students","/households","/guardian-portal","/progression","/leads","/growth","/opportunities","/contracts","/sales/performance","/sales/allocation","/analytics/consumption","/automation","/ai","/privacy-requests","/reports","/reports/exports","/reports/marketing","/help","/settings/profile","/settings/account","/settings/notifications","/settings/security","/settings/privacy"];
@@ -549,7 +573,7 @@ async function main(){
     await context.close();
     const admin=await createIdentity("SUPER_ADMIN","admin");identities.push(admin);
     const adminContext=await browser.newContext({locale:"zh-CN"});
-    await adminContext.addCookies([{name:"crm_access_token",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:admin.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+    await adminContext.addCookies([{name:"crm_session",value:admin.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:admin.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
     const adminPage=await adminContext.newPage();observe(adminPage);
     adminPage.setDefaultTimeout(actionTimeoutMs);
     await inspect(adminPage,"admin-operations-1440","/admin/operations",{width:1440,height:900});
@@ -565,7 +589,7 @@ async function main(){
     await adminContext.close();
     const support=await createIdentity("SALES_SUPPORT","support");identities.push(support);
     const supportContext=await browser.newContext({locale:"zh-CN"});
-    await supportContext.addCookies([{name:"crm_access_token",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_refresh_token",value:support.token.refresh_token,url:base,httpOnly:true,sameSite:"Lax"}]);
+    await supportContext.addCookies([{name:"crm_session",value:support.token.access_token,url:base,httpOnly:true,sameSite:"Lax"},{name:"crm_csrf",value:support.token.csrf_token,url:base,httpOnly:false,sameSite:"Lax"}]);
     const supportPage=await supportContext.newPage();observe(supportPage);
     supportPage.setDefaultTimeout(actionTimeoutMs);
     await supportPage.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
@@ -580,9 +604,8 @@ async function main(){
     for(const identity of identities){
       try{
         await cleanupV210Scenario(identity,scenarios.get(identity.id));
-        const response=await fetch(`${identity.supabase}/auth/v1/admin/users/${identity.id}`,{method:"DELETE",headers:identity.headers}).catch(()=>null);
-        if(response?.ok)report.identity.cleaned+=1;
-        else report.errors.push({kind:"cleanup",url:"",message:`QA identity deletion failed (${response?.status??"network"})`});
+        await qaQuery("delete from app_auth.accounts where id=$1",[identity.id]);
+        report.identity.cleaned+=1;
       }catch(error){
         report.errors.push({kind:"cleanup",url:"",message:String(error instanceof Error?error.message:error).slice(0,300)});
       }

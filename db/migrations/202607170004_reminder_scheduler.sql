@@ -1,0 +1,3 @@
+-- Generated from the preserved pre-exit migration history.
+-- Supabase platform primitives were replaced with self-hosted PostgreSQL primitives.
+-- Scheduling is owned by the systemd worker timer.

@@ -11,7 +11,6 @@ for (const key of Object.keys(process.env)) {
 }
 assertProxyFreeEnvironment(process.env, "Release gate environment");
 process.env.DO_NOT_TRACK = "1";
-process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 
 const appUrl = (process.env.APP_URL ?? "http://localhost:3200").replace(/\/$/, "");
 const npmCli = process.env.npm_execpath;
@@ -54,12 +53,6 @@ const npmStage = (label, args, timeoutSeconds, idleSeconds, env) => stage(
   idleSeconds,
   env,
 );
-const supabaseStage = (label, args, timeoutSeconds, idleSeconds) => npmStage(
-  label,
-  ["exec", "--", "supabase", ...args],
-  timeoutSeconds,
-  idleSeconds,
-);
 
 function assertServerRunning(server) {
   if (server.exitCode !== null) {
@@ -93,8 +86,8 @@ await npmStage("typecheck", ["run", "typecheck:raw"], 120, 60);
 await npmStage("lint", ["run", "lint:raw"], 180, 90);
 await npmStage("production build and Node contracts", ["run", "test:raw"], 360, 120);
 await npmStage("dependency audit", ["audit", "--audit-level=moderate"], 120, 60);
-await supabaseStage("Supabase schema lint", ["db", "lint", "--local", "--level", "warning"], 120, 60);
-await supabaseStage("pgTAP database suite", ["test", "db", "--local"], 300, 120);
+await npmStage("PostgreSQL migration manifest", ["run", "db:migrations:verify"], 60, 30);
+await npmStage("PostgreSQL auth and RLS smoke", ["run", "db:smoke"], 120, 60);
 await npmStage("phase 2 business smoke", ["run", "smoke:phase2:raw"], 180, 90);
 await npmStage("v0.9 business smoke", ["run", "smoke:v09:raw"], 180, 90);
 
@@ -128,6 +121,6 @@ try {
 
 process.stdout.write(
   `\nRelease gate passed in ${Math.round((Date.now() - gateStartedAt) / 1_000)}s: `
-  + "types, lint, build, dependency audit, Node, pgTAP, schema lint, smokes, "
+  + "types, lint, build, dependency audit, Node, PostgreSQL migrations/auth/RLS, smokes, "
   + "production assets, and ms-playwright/chromium-1228 UI QA.\n",
 );

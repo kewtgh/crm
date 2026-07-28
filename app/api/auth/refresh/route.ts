@@ -1,73 +1,61 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { authCookieNames, userFromSupabase } from "@/lib/auth";
-import { clearAuthSessionCookies, setAuthSessionCookies } from "@/lib/auth-session";
-import { fetchWithTimeout } from "@/lib/fetch-timeout";
-import { safeRelativeReturnTo } from "@/lib/return-to";
+import { NextResponse } from "next/server";
+import { authCookieNames } from "@/lib/auth";
+import {
+  clearAuthSessionCookies,
+  persistentSessionMaxAge,
+  setAuthSessionCookies,
+} from "@/lib/auth-session";
+import {
+  csrfCookieName,
+  loadSession,
+  rotateSessionToken,
+} from "@/lib/auth/session-store";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
+import { safeRelativeReturnTo } from "@/lib/return-to";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const redirectOrigin = applicationOrigin(request.url);
   const returnTo = safeRelativeReturnTo(requestUrl.searchParams.get("returnTo"));
   const jsonMode = requestUrl.searchParams.get("mode") === "json"
     || request.headers.get("accept")?.includes("application/json");
   const cookieStore = await cookies();
-  const refreshToken = cookieStore.get(authCookieNames.refresh)?.value;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!refreshToken || !supabaseUrl || !anonKey) {
+  const token = cookieStore.get(authCookieNames.session)?.value;
+  const session = await loadSession(token).catch(() => null);
+  if (!session) {
     const response = jsonMode
-      ? NextResponse.json({ code: "AUTH_REQUIRED", error: { code: "AUTH_REQUIRED", message: "AUTH_REQUIRED", requestId: crypto.randomUUID() } }, { status: 401 })
-      : NextResponse.redirect(new URL("/login", redirectOrigin));
-    response.headers.set("cache-control", "no-store");
-    return response;
-  }
-
-  let upstream: Response;
-  try {
-    upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
-      headers: { apikey: anonKey, "content-type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    }, 10_000);
-  } catch {
-    const response = jsonMode
-      ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
-      : NextResponse.redirect(new URL("/login", redirectOrigin));
-    response.headers.set("cache-control", "no-store");
-    return response;
-  }
-
-  try {
-    const result = (await upstream.json()) as Record<string, unknown>;
-    const authorizedUser = userFromSupabase((result.user ?? {}) as Record<string, unknown>);
-    if (upstream.status >= 500) {
-      const response = jsonMode
-        ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
-        : NextResponse.redirect(new URL("/login", redirectOrigin));
-      response.headers.set("cache-control", "no-store");
-      return response;
-    }
-    if (!upstream.ok || !authorizedUser) throw new Error("Session refresh rejected");
-
-    const response = jsonMode
-      ? NextResponse.json({ ok: true })
-      : NextResponse.redirect(new URL(returnTo, redirectOrigin));
-    setAuthSessionCookies(response, {
-      access_token: String(result.access_token),
-      refresh_token: String(result.refresh_token),
-      expires_in: Number(result.expires_in ?? 3600),
-    });
-    response.headers.set("cache-control", "no-store");
-    return response;
-  } catch {
-    const response = jsonMode
-      ? NextResponse.json({ code: "SESSION_REFRESH_FAILED", error: { code: "SESSION_REFRESH_FAILED", message: "SESSION_REFRESH_FAILED", requestId: crypto.randomUUID() } }, { status: 401 })
-      : NextResponse.redirect(new URL("/login", redirectOrigin));
+      ? NextResponse.json({
+          code: "AUTH_REQUIRED",
+          error: { code: "AUTH_REQUIRED", message: "AUTH_REQUIRED", requestId: crypto.randomUUID() },
+        }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", applicationOrigin(request.url)));
     clearAuthSessionCookies(response);
     response.headers.set("cache-control", "no-store");
     return response;
   }
+  const response = jsonMode
+    ? NextResponse.json({ ok: true })
+    : NextResponse.redirect(new URL(returnTo, applicationOrigin(request.url)));
+  const nextToken = await rotateSessionToken(session.token);
+  const csrfToken = cookieStore.get(csrfCookieName)?.value;
+  if (!nextToken || !csrfToken) {
+    const failed = jsonMode
+      ? NextResponse.json({
+          code: "AUTH_REQUIRED",
+          error: { code: "AUTH_REQUIRED", message: "AUTH_REQUIRED", requestId: crypto.randomUUID() },
+        }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", applicationOrigin(request.url)));
+    clearAuthSessionCookies(failed);
+    failed.headers.set("cache-control", "no-store");
+    return failed;
+  }
+  setAuthSessionCookies(response, {
+    token: nextToken,
+    csrfToken,
+    maxAge: cookieStore.get(authCookieNames.persistence)
+      ? persistentSessionMaxAge
+      : 60 * 60 * 12,
+  });
+  response.headers.set("cache-control", "no-store");
+  return response;
 }

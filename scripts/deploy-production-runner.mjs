@@ -37,7 +37,6 @@ import {
   parseSystemdProperties,
   planInterruptedRecovery,
   PRODUCTION_LOCAL_URL,
-  PRODUCTION_PROJECT_REF,
   PRODUCTION_PUBLIC_URL,
   redactSecrets,
   retryHealth,
@@ -305,7 +304,6 @@ function safeBaseEnvironment() {
     XDG_CACHE_HOME: "/var/lib/lumina-crm/cache",
     DO_NOT_TRACK: "1",
     NEXT_TELEMETRY_DISABLED: "1",
-    SUPABASE_TELEMETRY_DISABLED: "1",
     WRANGLER_WRITE_LOGS: "false",
   });
 }
@@ -329,12 +327,35 @@ function loadEnvironments() {
     forbidden: [
       /^(?:PATH|HOME|USER|LOGNAME|SHELL|NODE_OPTIONS|NODE_ENV|CI|TMPDIR|TMP|TEMP|XDG_CACHE_HOME|SSH_AUTH_SOCK)$/i,
       /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY|GIT_PROXY_COMMAND|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
-      /^SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|PROJECT_REF)$/i,
+      /^(?:DATABASE_ADMIN_URL|MIGRATION_DATABASE_URL|CRM_(?:APP|SYSTEM|WORKER|MIGRATOR|BACKUP)_DB_PASSWORD|BACKUP_.+|DISK_.+)$/i,
     ],
   });
   validateEnvironmentKeyPolicy(deploy, {
     label: "deploy.env",
-    allowed: ["SUPABASE_ACCESS_TOKEN", "SUPABASE_DB_PASSWORD", "SUPABASE_PROJECT_REF"],
+    allowed: [
+      "DATABASE_ADMIN_URL",
+      "MIGRATION_DATABASE_URL",
+      "CRM_APP_DB_PASSWORD",
+      "CRM_SYSTEM_DB_PASSWORD",
+      "CRM_WORKER_DB_PASSWORD",
+      "CRM_MIGRATOR_DB_PASSWORD",
+      "CRM_BACKUP_DB_PASSWORD",
+      "BACKUP_DATABASE_URL",
+      "BACKUP_LOCAL_ROOT",
+      "BACKUP_ENCRYPTION_KEY",
+      "BACKUP_RETENTION_DAYS",
+      "BACKUP_S3_ENDPOINT",
+      "BACKUP_S3_REGION",
+      "BACKUP_S3_BUCKET",
+      "BACKUP_S3_ACCESS_KEY_ID",
+      "BACKUP_S3_SECRET_ACCESS_KEY",
+      "BACKUP_NOTIFICATION_WEBHOOK_URL",
+      "BACKUP_NOTIFICATION_WEBHOOK_TOKEN",
+      "DISK_MONITOR_PATHS",
+      "DISK_FREE_PERCENT_THRESHOLD",
+      "DISK_NOTIFICATION_WEBHOOK_URL",
+      "DISK_NOTIFICATION_WEBHOOK_TOKEN",
+    ],
   });
   validateRequiredEnvironment(production, {
     label: "production.env",
@@ -344,25 +365,26 @@ function loadEnvironments() {
       "TURNSTILE_SECRET_KEY",
       "TURNSTILE_EXPECTED_HOSTNAME",
       "ALTCHA_HMAC_SECRET",
-      "NEXT_PUBLIC_SUPABASE_URL",
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      "SUPABASE_SERVICE_ROLE_KEY",
+      "DATABASE_URL",
+      "SYSTEM_DATABASE_URL",
+      "WORKER_DATABASE_URL",
       "CRM_WORKSPACE_ID",
       "LOGIN_THROTTLE_HASH_SECRET",
       "TRUSTED_DEVICE_HASH_SECRET",
+      "TOTP_ENCRYPTION_KEY",
+      "OBJECT_STORAGE_PROVIDER",
+      "OBJECT_STORAGE_SIGNING_SECRET",
       "EMAIL_DELIVERY_WEBHOOK_URL",
       "EMAIL_DELIVERY_WEBHOOK_TOKEN",
     ],
     exact: {
       APP_URL: PRODUCTION_PUBLIC_URL,
       TURNSTILE_EXPECTED_HOSTNAME: "crm.ewaya.com",
-      NEXT_PUBLIC_SUPABASE_URL: `https://${PRODUCTION_PROJECT_REF}.supabase.co`,
     },
   });
   validateRequiredEnvironment(deploy, {
     label: "deploy.env",
-    required: ["SUPABASE_ACCESS_TOKEN", "SUPABASE_DB_PASSWORD", "SUPABASE_PROJECT_REF"],
-    exact: { SUPABASE_PROJECT_REF: PRODUCTION_PROJECT_REF },
+    required: ["MIGRATION_DATABASE_URL"],
   });
   secretValues = collectSecretValues(production, deploy);
   log("INFO", "Validated production.env and deploy.env names, ownership, permissions, and required keys; values are redacted");
@@ -550,7 +572,7 @@ function validateReleaseArtifacts(release, expectedCommit) {
     commit: expectedCommit,
     version: packageJson.version,
     builtAt: new Date().toISOString(),
-    migrationHead: path.basename(readdirSync(path.join(release, "supabase", "migrations"))
+    migrationHead: path.basename(readdirSync(path.join(release, "db", "migrations"))
       .filter((name) => name.endsWith(".sql"))
       .sort()
       .at(-1) ?? ""),
@@ -746,27 +768,18 @@ async function deploy(production, deployEnvironment) {
   });
 
   const databaseEnvironment = migrationEnvironment(deployEnvironment);
-  await runNpm("link explicit production Supabase project", [
-    "exec", "--", "supabase", "link", "--project-ref", PRODUCTION_PROJECT_REF, "--yes",
-  ], { cwd: releaseDir, timeoutMs: limits.migration, env: databaseEnvironment });
-  const linkedRef = readFileSync(path.join(releaseDir, "supabase", ".temp", "project-ref"), "utf8").trim();
-  if (linkedRef !== PRODUCTION_PROJECT_REF) throw new Error("Supabase CLI linked a different project ref");
-  await runNpm("preview production migrations", [
-    "exec", "--", "supabase", "db", "push", "--linked", "--dry-run", "--yes",
+  await runNpm("verify standard PostgreSQL migration manifest", [
+    "run", "db:migrations:verify",
   ], { cwd: releaseDir, timeoutMs: limits.migration, env: databaseEnvironment });
   migrationMayHaveChanged = true;
   persist({ migrationMayHaveChanged });
   log("INFO", "Forward migration execution is starting; failures from this point are reported as possibly database-changing");
   await runNpm("apply forward-only production migrations", [
-    "exec", "--", "supabase", "db", "push", "--linked", "--yes",
+    "run", "db:migrate",
   ], { cwd: releaseDir, timeoutMs: limits.migration, env: databaseEnvironment });
   migrationApplied = true;
   persist({ migrationApplied });
-  await runNpm("lint linked production schema", [
-    "exec", "--", "supabase", "db", "lint", "--linked", "--level", "warning", "--fail-on", "warning",
-  ], { cwd: releaseDir, timeoutMs: limits.migration, env: databaseEnvironment });
-  await fs.rm(path.join(releaseDir, "supabase", ".temp"), { recursive: true, force: true });
-  log("INFO", "Removed Supabase CLI link cache from the release before cutover");
+  log("INFO", "Checksum-verified PostgreSQL migrations completed under the project advisory lock");
 
   const artifacts = validateReleaseArtifacts(releaseDir, targetCommit);
   applicationVersion = artifacts.version;

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Lumina CRM disk space every fifteen minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=1min
+Persistent=true
+Unit=lumina-crm-disk-monitor.service
+
+[Install]
+WantedBy=timers.target

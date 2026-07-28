@@ -1,4 +1,4 @@
-import { supabaseJson } from "./supabase-server";
+import { databaseJson } from "./db/gateway";
 
 export type RecycleEntityKind="ORGANIZATION"|"CONTACT"|"TASK"|"STUDENT"|"HOUSEHOLD";
 export type RecycleBinItem={id:string;kind:RecycleEntityKind;labelZh:string;labelEn:string;deletedAt:string;expiresAt:string};
@@ -17,11 +17,11 @@ const map=(kind:RecycleEntityKind,rows:ArchivedRow[])=>rows.map((row):RecycleBin
 export async function listRecycleBin():Promise<RecycleBinItem[]>{
   const filter="archived_at=not.is.null&order=archived_at.desc&limit=100";
   const [organizations,contacts,tasks,students,households]=await Promise.all([
-    supabaseJson<ArchivedRow[]>(`/rest/v1/organizations?select=id,name_zh,name_en,archived_at&${filter}`),
-    supabaseJson<ArchivedRow[]>(`/rest/v1/contacts?select=id,name_zh,name_en,archived_at&${filter}`),
-    supabaseJson<ArchivedRow[]>(`/rest/v1/crm_tasks?select=id,title_zh,title_en,archived_at&${filter}`),
-    supabaseJson<ArchivedRow[]>(`/rest/v1/students?select=id,student_number,current_grade,archived_at&${filter}`),
-    supabaseJson<ArchivedRow[]>(`/rest/v1/households?select=id,name_zh,name_en,archived_at&${filter}`),
+    databaseJson<ArchivedRow[]>(`/db/table/organizations?select=id,name_zh,name_en,archived_at&${filter}`),
+    databaseJson<ArchivedRow[]>(`/db/table/contacts?select=id,name_zh,name_en,archived_at&${filter}`),
+    databaseJson<ArchivedRow[]>(`/db/table/crm_tasks?select=id,title_zh,title_en,archived_at&${filter}`),
+    databaseJson<ArchivedRow[]>(`/db/table/students?select=id,student_number,current_grade,archived_at&${filter}`),
+    databaseJson<ArchivedRow[]>(`/db/table/households?select=id,name_zh,name_en,archived_at&${filter}`),
   ]);
   return [
     ...map("ORGANIZATION",organizations),...map("CONTACT",contacts),...map("TASK",tasks),

@@ -7,7 +7,7 @@ import {
 } from "@/lib/crm-repository";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 
 const resources=new Set<PersistentResource>(["schools","people","tasks"]);
 const basePatch=z.object({
@@ -41,7 +41,7 @@ function resourceFrom(value:string){
   return resources.has(value as PersistentResource)?value as PersistentResource:null;
 }
 function failure(error:unknown){
-  if(error instanceof SupabaseRequestError){
+  if(error instanceof DatabaseRequestError){
     const detail=`${error.code} ${error.message}`.toLowerCase();
     if(detail.includes("version_conflict"))return NextResponse.json({code:"CRM_VERSION_CONFLICT"},{status:409});
     if(detail.includes("forbidden")||detail.includes("not_assignable"))return NextResponse.json({code:"CRM_UPDATE_FORBIDDEN"},{status:403});

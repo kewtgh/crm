@@ -1,48 +1,50 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const http = require("node:http");
+const pg = require("pg");
+const argon2 = require("argon2");
 
 const executable = process.env.PLAYWRIGHT_CHROMIUM_1228_PATH
   || "C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
-const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH
-  || "playwright-core";
-const { chromium } = require(playwrightPath);
+const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || "playwright-core");
 const base = (process.env.AUTH_SMOKE_BASE_URL || process.env.APP_URL || "http://localhost:3200").replace(/\/$/, "");
-const supabase = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const mailpit = process.env.AUTH_SMOKE_MAILPIT_URL || "http://127.0.0.1:56324";
+const databaseUrl = process.env.SYSTEM_DATABASE_URL;
+const deliveryUrl = new URL(process.env.EMAIL_DELIVERY_WEBHOOK_URL || "http://127.0.0.1:3999/delivery");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function json(response) {
-  return response.json().catch(() => ({}));
-}
-
-async function latestEmailCode(email) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const list = await json(await fetch(`${mailpit}/api/v1/messages`));
-    const message = (list.messages || []).find((item) =>
-      (item.To || item.to || []).some((recipient) =>
-        String(recipient.Address || recipient.address || recipient).toLowerCase() === email.toLowerCase()
-      )
-    );
-    if (message) {
-      const id = message.ID || message.Id || message.id;
-      const detail = await json(await fetch(`${mailpit}/api/v1/message/${encodeURIComponent(id)}`));
-      const source = [detail.Text, detail.HTML, detail.text, detail.html, detail.Subject].filter(Boolean).join(" ");
-      const code = source.match(/\b(\d{6})\b/)?.[1];
-      if (code) return code;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error("Email verification code was not delivered to the local mailbox");
-}
-
-async function waitForTurnstile(page) {
-  await page.waitForSelector(".turnstile-status.verified", { timeout: 25_000 });
+function startDeliveryCapture() {
+  assert(["127.0.0.1", "localhost"].includes(deliveryUrl.hostname), "Auth smoke requires a loopback delivery webhook");
+  const deliveries = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      try { deliveries.push(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch {}
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ id: crypto.randomUUID() }));
+    });
+  });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(Number(deliveryUrl.port || 80), deliveryUrl.hostname, () => resolve({
+      server,
+      async deviceCode(email) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const delivery = deliveries.find((item) =>
+            item.to?.toLowerCase() === email.toLowerCase()
+            && item.template === "device-verification"
+            && /^\d{6}$/.test(item.payload?.code));
+          if (delivery) return delivery.payload.code;
+          await new Promise((wait) => setTimeout(wait, 250));
+        }
+        throw new Error("Device verification code was not delivered");
+      },
+    }));
+  });
 }
 
 async function submitLogin(page, username, password, remember) {
@@ -50,10 +52,9 @@ async function submitLogin(page, username, password, remember) {
   await page.locator('input[name="identifier"]').fill(username);
   await page.locator('input[name="password"]').fill(password);
   if (remember) await page.locator('input[name="remember"]').check();
-  await waitForTurnstile(page);
+  await page.waitForSelector(".turnstile-status.verified", { timeout: 25_000 });
   const loginResponse = page.waitForResponse((response) =>
-    response.url() === `${base}/api/auth/login` && response.request().method() === "POST"
-  );
+    response.url() === `${base}/api/auth/login` && response.request().method() === "POST");
   await page.locator('button[type="submit"]').click();
   const response = await loginResponse;
   if (!response.ok()) {
@@ -64,147 +65,133 @@ async function submitLogin(page, username, password, remember) {
 
 (async () => {
   assert(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(base), "Auth smoke refuses a non-local application");
-  assert(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(supabase), "Auth smoke refuses a non-local Supabase");
-  assert(anon, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
-  assert(service, "SUPABASE_SERVICE_ROLE_KEY is required");
+  assert(databaseUrl, "SYSTEM_DATABASE_URL is required");
   assert(fs.existsSync(executable), "Pinned Chromium executable is missing");
-
+  const capture = await startDeliveryCapture();
   const suffix = Date.now().toString(36);
+  const id = crypto.randomUUID();
   const email = `device-${suffix}@example.invalid`;
   const username = `device.qa.${suffix}`;
-  const temporaryPassword = `Tmp!${crypto.randomBytes(18).toString("base64url")}Aa1`;
-  const permanentPassword = `New!${crypto.randomBytes(18).toString("base64url")}Aa1`;
-  const adminHeaders = {
-    apikey: service,
-    authorization: `Bearer ${service}`,
-    "content-type": "application/json",
-  };
-  let userId;
+  const initialPassword = `Tmp!${crypto.randomBytes(18).toString("base64url")}Aa1`;
+  const changedPassword = `Changed!${crypto.randomBytes(18).toString("base64url")}Aa1`;
+  const passwordHash = await argon2.hash(initialPassword, {
+    type: argon2.argon2id,
+    memoryCost: 65_536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
   let browser;
   try {
-    const createdResponse = await fetch(`${supabase}/auth/v1/admin/users`, {
-      method: "POST",
-      headers: adminHeaders,
-      body: JSON.stringify({
-        email,
-        password: temporaryPassword,
-        email_confirm: true,
-        user_metadata: { username, chinese_name: "设备验收", english_name: "Device QA" },
-        app_metadata: {
-          role: "SALES_SPECIALIST",
-          account_status: "ACTIVE",
-          workspace_id: "00000000-0000-4000-8000-000000000001",
-        },
-      }),
-    });
-    const created = await json(createdResponse);
-    assert(createdResponse.ok && created.id, `Could not create auth-smoke user (${createdResponse.status})`);
-    userId = created.id;
+    await client.query("begin");
+    await client.query(
+      `insert into app_auth.accounts(id,email,username,status,email_confirmed_at,must_change_password)
+       values($1,$2,$3,'ACTIVE',now(),false)`,
+      [id, email, username],
+    );
+    await client.query(
+      `insert into app_auth.password_credentials(user_id,password_hash,parameters)
+       values($1,$2,$3)`,
+      [id, passwordHash, { algorithm: "argon2id", memoryCost: 65_536, timeCost: 3, parallelism: 1 }],
+    );
+    await client.query(
+      `insert into public.user_profiles(user_id,username,display_name_zh,display_name_en)
+       values($1,$2,'设备验收','Device QA')`,
+      [id, username],
+    );
+    await client.query(
+      `insert into public.workspace_memberships(workspace_id,user_id,role,status,must_change_password)
+       values($1,$2,'SALES_SPECIALIST','ACTIVE',false)`,
+      [process.env.CRM_WORKSPACE_ID, id],
+    );
+    await client.query(
+      `insert into public.sales_team_members(
+        workspace_id,auth_user_id,name_zh,name_en,role,team,active
+       ) values($1,$2,'设备验收','Device QA','SALES_SPECIALIST','QA',true)`,
+      [process.env.CRM_WORKSPACE_ID, id],
+    );
+    await client.query("commit");
 
     browser = await chromium.launch({ headless: true, executablePath: executable, args: ["--disable-gpu"] });
     const context = await browser.newContext();
     const page = await context.newPage();
-
-    await submitLogin(page, username, temporaryPassword, true);
+    await submitLogin(page, username, initialPassword, true);
     await page.waitForURL("**/verify-device", { timeout: 15_000 });
-    const code = await latestEmailCode(email);
+    const code = await capture.deviceCode(email);
     await page.locator('input[name="code"]').fill(code);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/change-password", { timeout: 15_000 });
-    await page.locator('input[name="newPassword"]').fill(permanentPassword);
-    await page.locator('input[name="confirmPassword"]').fill(permanentPassword);
     await page.locator('button[type="submit"]').click();
     await page.waitForURL("**/dashboard", { timeout: 15_000 });
 
     const firstCookies = await context.cookies(base);
     const trusted = firstCookies.find((cookie) => cookie.name === "crm_trusted_device");
-    assert(trusted && trusted.httpOnly, "Verified device did not receive an HttpOnly trust cookie");
+    const session = firstCookies.find((cookie) => cookie.name === "crm_session");
+    const csrf = firstCookies.find((cookie) => cookie.name === "crm_csrf");
+    const persistence = firstCookies.find((cookie) => cookie.name === "crm_session_persistent");
+    const minimumExpiry = Date.now() / 1000 + 29 * 24 * 60 * 60;
+    assert(trusted?.httpOnly, "Verified device did not receive an HttpOnly trust cookie");
+    assert(session?.httpOnly && session.expires > minimumExpiry, "Persistent server session cookie is invalid");
+    assert(csrf && !csrf.httpOnly && csrf.expires > minimumExpiry, "CSRF cookie is invalid");
+    assert(persistence?.httpOnly && persistence.expires > minimumExpiry, "Persistence marker is invalid");
 
     await context.clearCookies();
     await context.addCookies([trusted]);
-    await submitLogin(page, username, permanentPassword, false);
+    await submitLogin(page, username, initialPassword, true);
     await page.waitForURL("**/dashboard", { timeout: 15_000 });
-    assert(!page.url().includes("verify-device"), "Trusted device was asked for another email code");
-
-    const sessionCookies = await context.cookies(base);
-    const minimumPersistentExpiry = Date.now() / 1000 + 29 * 24 * 60 * 60;
-    const refreshCookie = sessionCookies.find((item) => item.name === "crm_refresh_token");
-    const persistenceCookie = sessionCookies.find((item) => item.name === "crm_session_persistent");
-    assert(sessionCookies.some((item) => item.name === "crm_access_token" && item.expires > Date.now() / 1000), "Access token cookie is not persistent");
-    assert(refreshCookie?.expires > minimumPersistentExpiry, "Refresh session does not remain available for at least 30 days");
-    assert(persistenceCookie?.expires > minimumPersistentExpiry, "Persistent session marker does not remain available for at least 30 days");
-    const refreshResult = await page.evaluate(async () => {
+    const beforeRotation = (await context.cookies(base)).find((cookie) => cookie.name === "crm_session")?.value;
+    const refresh = await page.evaluate(async () => {
       const response = await fetch("/api/auth/refresh?mode=json", { headers: { accept: "application/json" } });
       return { status: response.status, cacheControl: response.headers.get("cache-control") };
     });
-    assert(refreshResult.status === 200, "Session-only token rotation failed");
-    assert(refreshResult.cacheControl === "no-store", "Auth refresh response can be cached");
-    const rotatedCookies = await context.cookies(base);
-    assert(rotatedCookies.find((item) => item.name === "crm_refresh_token")?.expires > minimumPersistentExpiry, "Token rotation shortened the 30-day refresh session");
-    assert(rotatedCookies.find((item) => item.name === "crm_session_persistent")?.expires > minimumPersistentExpiry, "Token rotation shortened the persistence marker");
+    assert(refresh.status === 200 && refresh.cacheControl === "no-store", "Session rotation endpoint failed");
+    const rotated = await context.cookies(base);
+    assert(rotated.find((cookie) => cookie.name === "crm_session")?.value !== beforeRotation, "Session token was not rotated");
+    assert(rotated.find((cookie) => cookie.name === "crm_session")?.expires > minimumExpiry, "Rotation shortened the persistent session");
 
     const devices = await page.evaluate(async () => {
       const response = await fetch("/api/settings/trusted-devices");
       return { status: response.status, cacheControl: response.headers.get("cache-control"), body: await response.json() };
     });
-    assert(devices.status === 200, "Trusted-device settings API was unavailable");
-    assert(devices.cacheControl === "no-store", "Private API response can be cached");
+    assert(devices.status === 200 && devices.cacheControl === "no-store", "Trusted-device settings response is invalid");
     assert(devices.body.devices?.some((device) => device.current), "Current trusted device was not listed");
 
-    const changedPassword = `Changed!${crypto.randomBytes(18).toString("base64url")}Aa1`;
-    const activeRefreshToken = rotatedCookies.find((item) => item.name === "crm_refresh_token")?.value;
-    assert(activeRefreshToken, "Rotated refresh token was not available for revocation verification");
     const passwordChange = await page.evaluate(async ({ currentPassword, newPassword }) => {
+      const csrfToken = document.cookie.match(/(?:^|; )crm_csrf=([^;]+)/)?.[1] || "";
       const response = await fetch("/api/settings/password", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-csrf-token": decodeURIComponent(csrfToken) },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       return { status: response.status, body: await response.json() };
-    }, { currentPassword: permanentPassword, newPassword: changedPassword });
+    }, { currentPassword: initialPassword, newPassword: changedPassword });
     assert(passwordChange.status === 200, `Password change failed (${passwordChange.status})`);
-    assert(passwordChange.body.reauthenticate === true, "Password change did not require reauthentication");
-    assert(passwordChange.body.sessionsRevoked === true, "Password change did not revoke global sessions");
-    assert(passwordChange.body.trustedDevicesRevoked === true, "Password change did not revoke trusted devices");
-
-    const cookiesAfterPasswordChange = await context.cookies(`${base}/api/settings/mfa`);
-    for (const cookieName of [
-      "crm_access_token",
-      "crm_refresh_token",
-      "crm_session_persistent",
-      "crm_trusted_device",
-      "crm_pending_device_verification",
-      "crm_mfa_remember",
-    ]) {
-      assert(!cookiesAfterPasswordChange.some((cookie) => cookie.name === cookieName), `Password change retained ${cookieName}`);
+    assert(passwordChange.body.sessionsRevoked && passwordChange.body.trustedDevicesRevoked, "Password change did not revoke authentication state");
+    const remainingCookies = await context.cookies(base);
+    for (const name of ["crm_session", "crm_csrf", "crm_session_persistent", "crm_trusted_device"]) {
+      assert(!remainingCookies.some((cookie) => cookie.name === name), `Password change retained ${name}`);
     }
-    const activeDevicesResponse = await fetch(
-      `${supabase}/rest/v1/trusted_login_devices?select=id&user_id=eq.${userId}&revoked_at=is.null`,
-      { headers: adminHeaders },
+    const verification = await client.query(
+      `select
+        credential.password_hash,
+        (select count(*) from app_auth.sessions where user_id=$1 and revoked_at is null) as sessions,
+        (select count(*) from public.trusted_login_devices where user_id=$1 and revoked_at is null) as devices
+       from app_auth.password_credentials credential where credential.user_id=$1`,
+      [id],
     );
-    const activeDevices = await json(activeDevicesResponse);
-    assert(activeDevicesResponse.ok && Array.isArray(activeDevices) && activeDevices.length === 0, "Trusted devices remained active after password change");
-
-    const revokedRefreshResponse = await fetch(`${supabase}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
-      headers: { apikey: anon, "content-type": "application/json" },
-      body: JSON.stringify({ refresh_token: activeRefreshToken }),
-    });
-    assert(!revokedRefreshResponse.ok, "A pre-change refresh token remained usable");
-    const reauthenticationResponse = await fetch(`${supabase}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: { apikey: anon, "content-type": "application/json" },
-      body: JSON.stringify({ email, password: changedPassword }),
-    });
-    assert(reauthenticationResponse.ok, "The changed password could not create a fresh session");
-    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, trusted-device reuse, 30-day rotation, private cache policy, and password-change session/device revocation.");
+    assert(await argon2.verify(verification.rows[0].password_hash, changedPassword), "Changed Argon2id password was not stored");
+    assert(Number(verification.rows[0].sessions) === 0, "Active sessions remained after password change");
+    assert(Number(verification.rows[0].devices) === 0, "Trusted devices remained after password change");
+    process.stdout.write(
+      "Auth device smoke passed: login, email verification, trusted device, 30-day session rotation, CSRF, and global revocation.\n",
+    );
   } finally {
     if (browser) await browser.close();
-    if (userId) {
-      await fetch(`${supabase}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: adminHeaders });
-    }
+    await client.query("delete from public.audit_events where actor_id=$1", [id]).catch(() => undefined);
+    await client.query("delete from app_auth.accounts where id=$1", [id]).catch(() => undefined);
+    await client.end();
+    await new Promise((resolve) => capture.server.close(resolve));
   }
 })().catch((error) => {
-  console.error(error.message);
+  process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
 });

@@ -70,7 +70,7 @@ export function PasswordResetRequestForm() {
 
 export function NewPasswordForm() {
   const { t } = useI18n();
-  const [accessToken, setAccessToken] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -78,12 +78,11 @@ export function NewPasswordForm() {
   const submissionInFlight=useRef(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    const token = params.get("access_token") ?? "";
-    const type = params.get("type");
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token") ?? "";
     window.history.replaceState(null, "", window.location.pathname);
     window.requestAnimationFrame(() => {
-      if (type === "recovery" && token) setAccessToken(token);
+      if (token) setResetToken(token);
       setReady(true);
     });
   }, []);
@@ -99,23 +98,20 @@ export function NewPasswordForm() {
       setError(t("auth.reset.passwordRule")); return;
     }
     if (password !== confirmPassword) { setError(t("auth.reset.mismatch")); return; }
-    if (!accessToken) { setError(t("auth.reset.invalid")); return; }
+    if (!resetToken) { setError(t("auth.reset.invalid")); return; }
     submissionInFlight.current=true;
     let completed=false;
     setPending(true);
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !anonKey) throw new Error("missing configuration");
-      const response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
-        method: "PUT",
-        headers: { apikey: anonKey, authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-        body: JSON.stringify({ password }),
+      const response = await fetchWithTimeout("/api/auth/password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password }),
       }, 15_000);
       if (!response.ok) { setError(t("auth.reset.invalid")); return; }
       completed=true;
       setSuccess(t("auth.reset.updated"));
-      setAccessToken("");
+      setResetToken("");
       event.currentTarget.reset();
     } catch (caught) {
       setError(t(isTimeoutError(caught) ? "auth.error.timeout" : "auth.reset.unavailable"));

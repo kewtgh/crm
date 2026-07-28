@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Lumina CRM PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=lumina-crm-backup.service
+
+[Install]
+WantedBy=timers.target

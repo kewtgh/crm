@@ -1,17 +1,16 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { workerJson } from "./lib/worker-database.mjs";
+import { workerObjectStore } from "./lib/worker-object-store.mjs";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import writeXlsxFile from "write-excel-file/node";
 
-const required=["NEXT_PUBLIC_SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY"];
+const required=["WORKER_DATABASE_URL","OBJECT_STORAGE_PROVIDER"];
 const missing=required.filter(key=>!process.env[key]);
 if(missing.length)throw new Error(`Missing export-worker variables: ${missing.join(", ")}`);
-const base=process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/,"");
-const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-const headers={apikey:key,authorization:`Bearer ${key}`,"content-type":"application/json"};
-const heartbeat=createWorkerHeartbeat(base,key,"GENERATED_JOBS");
+const heartbeat=createWorkerHeartbeat("GENERATED_JOBS");
 const workerId=process.env.WORKER_ID?.trim()||`generated-jobs:${process.pid}:${crypto.randomUUID()}`;
 const exportFormats=new Set(["CSV","XLSX","PDF"]);
 const artifactTypes={
@@ -20,7 +19,7 @@ const artifactTypes={
   PDF:{extension:"pdf",contentType:"application/pdf"},
 };
 
-async function request(path,options={}){const response=await fetch(`${base}${path}`,{...options,headers:{...headers,...options.headers}});const body=await response.json().catch(()=>null);if(!response.ok)throw new Error(`${path} failed (${response.status}: ${body?.code??body?.message??"unknown"})`);return body;}
+async function request(path,options={}){return workerJson(path,options);}
 const csvCell=value=>{const text=String(value??"");const safe=typeof value==="string"&&/^[=+@-]/.test(text)?`'${text}`:text;return`"${safe.replaceAll('"','""')}"`;};
 const csv=rows=>`\uFEFF${rows.map(row=>row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 
@@ -127,19 +126,19 @@ async function artifact(rows,format){
 
 async function contractExport(job){
   const id=String(job.parameters?.objectId??"");
-  const rows=await request(`/rest/v1/contracts?select=contract_number,start_date,end_date,currency,contract_value,status,relationship_level,organizations(name_zh,name_en),products(name_zh,name_en)&id=eq.${encodeURIComponent(id)}&workspace_id=eq.${job.workspace_id}&limit=1`);
+  const rows=await request(`/db/table/contracts?select=contract_number,start_date,end_date,currency,contract_value,status,relationship_level,organizations(name_zh,name_en),products(name_zh,name_en)&id=eq.${encodeURIComponent(id)}&workspace_id=eq.${job.workspace_id}&limit=1`);
   if(!rows[0])throw new Error("Contract not found");const item=rows[0];
   return [["Contract number","Organization (ZH)","Organization (EN)","Product (ZH)","Product (EN)","Start date","End date","Currency","Value","Status","Relationship level"],[item.contract_number,item.organizations?.name_zh,item.organizations?.name_en,item.products?.name_zh,item.products?.name_en,item.start_date,item.end_date,item.currency,item.contract_value,item.status,item.relationship_level]];
 }
 function periodRange(objectId){const match=/^(\d{4}-\d{2}-\d{2})_(month|quarter|year)_/.exec(objectId);if(!match)throw new Error("Invalid performance period");const start=new Date(`${match[1]}T00:00:00Z`);const end=new Date(start);if(match[2]==="month")end.setUTCMonth(end.getUTCMonth()+1);if(match[2]==="quarter")end.setUTCMonth(end.getUTCMonth()+3);if(match[2]==="year")end.setUTCFullYear(end.getUTCFullYear()+1);return{start:match[1],end:end.toISOString().slice(0,10)};}
 async function performanceExport(job){
   const range=periodRange(String(job.parameters?.objectId??""));const ws=job.workspace_id;if(!ws)throw new Error("Export job workspace is missing");
-  const rows=await requestAll("/rest/v1/rpc/performance_export_rows_v220",{method:"POST",body:JSON.stringify({target_workspace:ws,period_from:range.start,period_to:range.end})});
+  const rows=await requestAll("/db/rpc/performance_export_rows_v220",{method:"POST",body:JSON.stringify({target_workspace:ws,period_from:range.start,period_to:range.end})});
   return [["Staff ID","Name (ZH)","Name (EN)","Role","Team","Period start","Period end","Currency","Allocated target","Confirmed performance","Base currency","Exchange rate","Rate source","Rate effective at","Base target","Base actual"],...rows.map(item=>[item.staff_id,item.name_zh,item.name_en,item.staff_role,item.team,item.period_start,item.period_end,item.currency,item.allocated_target,item.confirmed_performance,item.base_currency,item.exchange_rate,item.rate_source,item.rate_effective_at,item.base_target,item.base_actual])];
 }
 async function marketingContactsExport(job){
   const channel=String(job.parameters?.channel??"").toUpperCase();if(!["EMAIL","SMS","PHONE","WECHAT","WHATSAPP"].includes(channel))throw new Error("Invalid marketing channel");
-  const rows=await requestAll(`/rest/v1/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
+  const rows=await requestAll(`/db/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
   return [["Contact ID","Name (ZH)","Name (EN)","Email","Phone","Authorized channel","Consent source","Obtained at","Retention until"],...rows.map(item=>[item.contact_id,item.name_zh,item.name_en,item.email,item.phone,item.channel,item.consent_source,item.obtained_at,item.retention_until])];
 }
 async function requestAll(path,options={}){
@@ -165,17 +164,17 @@ async function privacyExport(job){
   const contactId=String(job.parameters?.contactId??"");
   if(!requestId||!contactId)throw new Error("Privacy export scope is missing");
   const [privacyRequests,contacts,consents,activities,appointments,memberships,guardianRelations,students]=await Promise.all([
-    request(`/rest/v1/privacy_requests?select=id,request_type,request_note,decision_note,created_at,due_at&id=eq.${encodeURIComponent(requestId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
-    request(`/rest/v1/contacts?select=id,name_zh,name_en,contact_type,email,phone,title,status,created_at,updated_at&id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
-    requestAll(`/rest/v1/contact_consents?select=id,channel,purpose,status,source,evidence_note,obtained_at,revoked_at,retention_until,created_at,updated_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
-    requestAll(`/rest/v1/crm_activities?select=id,activity_type,occurred_at,summary_zh,summary_en,next_step_zh,next_step_en,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=occurred_at`),
-    requestAll(`/rest/v1/appointment_attendees?select=id,appointment_id,email,name,consent_confirmed,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
-    requestAll(`/rest/v1/household_members?select=id,household_id,member_role,primary_contact,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
-    requestAll(`/rest/v1/student_guardian_relationships?select=id,student_id,relationship_type,primary_guardian,emergency_contact,legal_authority,created_at&guardian_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
-    requestAll(`/rest/v1/students?select=id,student_number,birth_date,current_grade,academic_year,status,created_at,updated_at&person_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    request(`/db/table/privacy_requests?select=id,request_type,request_note,decision_note,created_at,due_at&id=eq.${encodeURIComponent(requestId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
+    request(`/db/table/contacts?select=id,name_zh,name_en,contact_type,email,phone,title,status,created_at,updated_at&id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
+    requestAll(`/db/table/contact_consents?select=id,channel,purpose,status,source,evidence_note,obtained_at,revoked_at,retention_until,created_at,updated_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/db/table/crm_activities?select=id,activity_type,occurred_at,summary_zh,summary_en,next_step_zh,next_step_en,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=occurred_at`),
+    requestAll(`/db/table/appointment_attendees?select=id,appointment_id,email,name,consent_confirmed,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/db/table/household_members?select=id,household_id,member_role,primary_contact,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/db/table/student_guardian_relationships?select=id,student_id,relationship_type,primary_guardian,emergency_contact,legal_authority,created_at&guardian_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
+    requestAll(`/db/table/students?select=id,student_number,birth_date,current_grade,academic_year,status,created_at,updated_at&person_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
   ]);
   if(!privacyRequests[0]||!contacts[0])throw new Error("Privacy export subject was not found");
-  const academicRecords=students.length?await requestAll(`/rest/v1/student_academic_records?select=id,student_id,curriculum,grade,academic_year,valid_from,valid_to,status,created_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=created_at`):[];
+  const academicRecords=students.length?await requestAll(`/db/table/student_academic_records?select=id,student_id,curriculum,grade,academic_year,valid_from,valid_to,status,created_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=created_at`):[];
   const rows=[["Resource","Record ID","Field","Value"]];
   appendPrivacyRecords(rows,"privacy_request",privacyRequests);
   appendPrivacyRecords(rows,"contact",contacts);
@@ -281,15 +280,15 @@ async function crmExport(job){
   }
   if(resource==="people")params.set("do_not_contact","eq.false");
   params.set("order",`${definition.sort[sort]??definition.sort.primary}.${direction}`);
-  const rows=await requestAll(`/rest/v1/${definition.table}?${params}`);
+  const rows=await requestAll(`/db/table/${definition.table}?${params}`);
   return [definition.header,...rows.map(definition.row)];
 }
-async function setJob(id,status,extra={}){return request(`/rest/v1/generated_jobs?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString(),...extra})});}
-async function expireArtifacts(){const expired=await request(`/rest/v1/generated_jobs?select=id,artifact_path&status=eq.READY&expires_at=lt.${encodeURIComponent(new Date().toISOString())}&limit=50`);for(const job of expired){if(job.artifact_path)await fetch(`${base}/storage/v1/object/crm-exports/${job.artifact_path}`,{method:"DELETE",headers}).catch(()=>undefined);await setJob(job.id,"EXPIRED");}}
+async function setJob(id,status,extra={}){return request(`/db/table/generated_jobs?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString(),...extra})});}
+async function expireArtifacts(){const expired=await request(`/db/table/generated_jobs?select=id,artifact_path&status=eq.READY&expires_at=lt.${encodeURIComponent(new Date().toISOString())}&limit=50`);for(const job of expired){if(job.artifact_path)await workerObjectStore().delete(`exports/${job.artifact_path}`).catch(()=>undefined);await setJob(job.id,"EXPIRED");}}
 
 try{
   await expireArtifacts();
-  const jobs=await request("/rest/v1/rpc/claim_generated_jobs_leased",{
+  const jobs=await request("/db/rpc/claim_generated_jobs_leased",{
     method:"POST",
     body:JSON.stringify({batch_size:Number(process.env.EXPORT_BATCH_SIZE??10),worker_id:workerId,lease_seconds:900}),
   });
@@ -306,11 +305,10 @@ try{
       const content=await artifact(rows,format);
       const type=artifactTypes[format];
       const path=`${job.workspace_id}/${job.id}.${type.extension}`;
-      const upload=await fetch(`${base}/storage/v1/object/crm-exports/${path}`,{method:"POST",headers:{apikey:key,authorization:`Bearer ${key}`,"content-type":type.contentType,"x-upsert":"false"},body:content,signal:AbortSignal.timeout(30_000)});
-      if(!upload.ok)throw new Error(`Storage upload failed (${upload.status})`);
       const expiresAt=new Date(Date.now()+86400000).toISOString();
       const exportedRows=Math.max(0,rows.length-1);
       const artifactSha256=createHash("sha256").update(content).digest("hex");
+      await workerObjectStore().put(`exports/${path}`,content,{contentType:type.contentType,checksum:artifactSha256});
       const currencyScope=job.job_type==="PERFORMANCE_SUMMARY"
         ?[...new Set(rows.slice(1).map(row=>String(row[7]??"")).filter(Boolean))]
         :[];
@@ -319,20 +317,20 @@ try{
         artifact_sha256:artifactSha256,query_snapshot:{...job.parameters,capturedAt:new Date().toISOString()},
         currency_scope:currencyScope,
       });
-      await request("/rest/v1/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});
+      await request("/db/rpc/complete_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,object_path:path,artifact_expires_at:expiresAt})});
       if(job.job_type==="PRIVACY_EXPORT"){
-        await request("/rest/v1/rpc/complete_privacy_export_execution",{method:"POST",body:JSON.stringify({
+        await request("/db/rpc/complete_privacy_export_execution",{method:"POST",body:JSON.stringify({
           target_request:job.privacy_request_id,target_job:job.id,object_path:path,
           artifact_expires_at:expiresAt,exported_rows:exportedRows,
           artifact_sha256:artifactSha256,
         })});
       }
-      await request("/rest/v1/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type,format},source_type:"EXPORT",source_id:job.id})});
+      await request("/db/table/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type,format},source_type:"EXPORT",source_id:job.id})});
       ready+=1;
     }catch(error){
       const failure=String(error instanceof Error?error.message:"Unknown export error").slice(0,500);
-      await request("/rest/v1/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure})});
-      if(job.job_type==="PRIVACY_EXPORT")await request("/rest/v1/rpc/fail_privacy_export_execution",{method:"POST",body:JSON.stringify({target_request:job.privacy_request_id,target_job:job.id,failure})});
+      await request("/db/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure})});
+      if(job.job_type==="PRIVACY_EXPORT")await request("/db/rpc/fail_privacy_export_execution",{method:"POST",body:JSON.stringify({target_request:job.privacy_request_id,target_job:job.id,failure})});
     }
   }
   await heartbeat.success({claimed:jobs.length,ready});

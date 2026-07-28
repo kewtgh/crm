@@ -10,10 +10,18 @@ const productionSecret = z.string().trim().min(32).refine(
   (value) => !placeholderPattern.test(value),
   "Placeholder secrets are not allowed",
 );
-const authKey = z.string().trim().min(20).refine(
-  (value) => !placeholderPattern.test(value),
-  "Placeholder authentication keys are not allowed",
-);
+const databaseUrl = z.string().trim().min(1).refine((value) => {
+  try {
+    const url = new URL(value);
+    return ["postgres:", "postgresql:"].includes(url.protocol)
+      && Boolean(url.hostname)
+      && Boolean(url.username)
+      && Boolean(url.pathname.slice(1))
+      && !placeholderPattern.test(value);
+  } catch {
+    return false;
+  }
+}, "A complete PostgreSQL connection URL is required");
 const hostname = z.string().trim().min(1).refine((value) => {
   try { return new URL(`http://${value}`).hostname === value; } catch { return false; }
 }, "A valid hostname is required");
@@ -39,12 +47,13 @@ export const coreRuntimeEnvironmentSchema = z.object({
   TURNSTILE_SECRET_KEY: productionSecret,
   TURNSTILE_EXPECTED_HOSTNAME: hostname,
   ALTCHA_HMAC_SECRET: productionSecret,
-  NEXT_PUBLIC_SUPABASE_URL: configuredUrl.refine((value) => secureEndpointOrigin(value) !== null, "Supabase URL must be an HTTPS origin (or loopback HTTP in development)"),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: authKey,
-  SUPABASE_SERVICE_ROLE_KEY: authKey,
+  DATABASE_URL: databaseUrl,
+  SYSTEM_DATABASE_URL: databaseUrl,
   CRM_WORKSPACE_ID: z.uuid(),
   LOGIN_THROTTLE_HASH_SECRET: productionSecret,
   TRUSTED_DEVICE_HASH_SECRET: productionSecret,
+  TOTP_ENCRYPTION_KEY: productionSecret,
+  OBJECT_STORAGE_SIGNING_SECRET: productionSecret,
 }).superRefine((value, context) => {
   const appHostname = new URL(value.APP_URL).hostname;
   if (appHostname !== value.TURNSTILE_EXPECTED_HOSTNAME) {
@@ -58,6 +67,8 @@ export const coreRuntimeEnvironmentSchema = z.object({
     ["ALTCHA_HMAC_SECRET", value.ALTCHA_HMAC_SECRET],
     ["LOGIN_THROTTLE_HASH_SECRET", value.LOGIN_THROTTLE_HASH_SECRET],
     ["TRUSTED_DEVICE_HASH_SECRET", value.TRUSTED_DEVICE_HASH_SECRET],
+    ["TOTP_ENCRYPTION_KEY", value.TOTP_ENCRYPTION_KEY],
+    ["OBJECT_STORAGE_SIGNING_SECRET", value.OBJECT_STORAGE_SIGNING_SECRET],
   ] as const;
   secrets.forEach(([key, secret], index) => {
     if (secrets.some(([, candidate], candidateIndex) => candidateIndex < index && candidate === secret)) {
@@ -87,6 +98,7 @@ export type WorkerKey = (typeof WORKER_KEYS)[number];
 const featureEnabled = (value: string | undefined) => /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
 
 const deliveryKeys = [
+  "WORKER_DATABASE_URL",
   "EMAIL_DELIVERY_WEBHOOK_URL",
   "EMAIL_DELIVERY_WEBHOOK_TOKEN",
   "OUTBOX_BATCH_SIZE",
@@ -119,6 +131,7 @@ const ssoKeys = ["SSO_ALLOWED_DOMAINS"] as const;
 const scimKeys = ["SCIM_BEARER_TOKEN"] as const;
 
 const deliveryEnvironmentSchema = z.object({
+  WORKER_DATABASE_URL: databaseUrl,
   EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
   EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
   OUTBOX_BATCH_SIZE: positiveInteger,
@@ -249,7 +262,7 @@ export function requireLoginThrottleSecret(environment: NodeJS.ProcessEnv = proc
     const parsed = productionSecret.safeParse(secret);
     if (!parsed.success) throw new Error("LOGIN_THROTTLE_HASH_SECRET_NOT_CONFIGURED");
   }
-  return secret || environment.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  return secret || "lumina-local-login-throttle-development-key";
 }
 
 export function requireTrustedDeviceSecret(environment: NodeJS.ProcessEnv = process.env) {
@@ -260,6 +273,5 @@ export function requireTrustedDeviceSecret(environment: NodeJS.ProcessEnv = proc
   }
   return secret
     || environment.LOGIN_THROTTLE_HASH_SECRET?.trim()
-    || environment.SUPABASE_SERVICE_ROLE_KEY?.trim()
     || "lumina-local-trusted-device-development-key";
 }

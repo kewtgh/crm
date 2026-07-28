@@ -1,88 +1,128 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import argon2 from "argon2";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import pg from "pg";
 
-const required = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_EMAIL", "ADMIN_PASSWORD"];
-const missing = required.filter((key) => !process.env[key]);
-if (missing.length) {
-  throw new Error(`Missing required one-shot variables: ${missing.join(", ")}`);
-}
+const required = ["SYSTEM_DATABASE_URL", "ADMIN_EMAIL", "ADMIN_PASSWORD", "CRM_WORKSPACE_ID"];
+const missing = required.filter((key) => !process.env[key]?.trim());
+if (missing.length) throw new Error(`Missing required variables: ${missing.join(", ")}`);
 
-const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const email = process.env.ADMIN_EMAIL.trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD;
-if (password.length < 12 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-  throw new Error("ADMIN_PASSWORD must be 12+ characters and include an uppercase letter and a number.");
+const username = (process.env.ADMIN_USERNAME || "lumina.admin").trim().toLowerCase();
+const displayNameZh = process.env.ADMIN_CHINESE_NAME || "系统管理员";
+const displayNameEn = process.env.ADMIN_ENGLISH_NAME || "System Administrator";
+const workspaceId = process.env.CRM_WORKSPACE_ID.trim();
+const rotatePassword = /^(1|true|yes|on)$/i.test(process.env.ADMIN_ROTATE_PASSWORD ?? "");
+const credentialOutputPath = process.env.ADMIN_CREDENTIAL_OUTPUT_PATH?.trim();
+if (credentialOutputPath && !path.isAbsolute(credentialOutputPath)) {
+  throw new Error("ADMIN_CREDENTIAL_OUTPUT_PATH_MUST_BE_ABSOLUTE");
 }
-
-const headers = {
-  apikey: serviceKey,
-  authorization: `Bearer ${serviceKey}`,
-  "content-type": "application/json",
-};
-
-async function request(path, options = {}) {
-  const response = await fetch(`${baseUrl}${path}`, { ...options, headers: { ...headers, ...(options.headers ?? {}) } });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Supabase admin request failed (${response.status}): ${body.msg ?? body.message ?? "unknown error"}`);
-  return body;
-}
-
-const usersResult = await request("/auth/v1/admin/users?per_page=1000");
-const existing = (usersResult.users ?? []).find((user) => String(user.email).toLowerCase() === email);
-const metadata = {
-  username: (process.env.ADMIN_USERNAME || "lumina.admin").trim().toLowerCase(),
-  chinese_name: process.env.ADMIN_CHINESE_NAME || "系统管理员",
-  english_name: process.env.ADMIN_ENGLISH_NAME || "System Administrator",
-  account_status: "ACTIVE",
-  initialized_by: "bootstrap-admin",
-};
-
-let synchronizedUser = existing;
-if (!existing) {
-  synchronizedUser = await request("/auth/v1/admin/users", {
-    method: "POST",
-    body: JSON.stringify({ email, password, email_confirm: true, user_metadata: metadata, app_metadata: { role: "SUPER_ADMIN", account_status: "ACTIVE" } }),
-  });
-  process.stdout.write(`Created and verified Supabase Auth administrator: ${email}\n`);
-} else {
-  const update = { user_metadata: { ...(existing.user_metadata ?? {}), ...metadata }, app_metadata: { ...(existing.app_metadata ?? {}), role: "SUPER_ADMIN", account_status: "ACTIVE" } };
-  if (process.env.ADMIN_ROTATE_PASSWORD === "true") update.password = password;
-  await request(`/auth/v1/admin/users/${existing.id}`, { method: "PUT", body: JSON.stringify(update) });
-  process.stdout.write(`Synchronized existing Supabase Auth administrator: ${email}\n`);
-}
-
-await request("/rest/v1/user_profiles?on_conflict=user_id", {
-  method: "POST",
-  headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-  body: JSON.stringify({ user_id: synchronizedUser.id, username: metadata.username, display_name_zh: metadata.chinese_name, display_name_en: metadata.english_name }),
+const ssl = /^(1|true|yes|on)$/i.test(process.env.DATABASE_SSL ?? "")
+  ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
+  : undefined;
+const client = new pg.Client({
+  connectionString: process.env.SYSTEM_DATABASE_URL,
+  ssl,
+  application_name: "lumina-crm-bootstrap-admin",
 });
 
-if (!existing || process.env.ADMIN_ROTATE_PASSWORD === "true") {
-  await request(`/rest/v1/workspace_memberships?user_id=eq.${synchronizedUser.id}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ must_change_password: true }),
-  });
-}
-
-await mkdir("work", { recursive: true });
-await writeFile(
-  "work/local-admin-credentials.txt",
-  `Lumina CRM local administrator\nEmail: ${email}\nInitial password: ${password}\n\nThis file is ignored by Git. Change the password after the first interactive sign-in.\n`,
-  { encoding: "utf8", mode: 0o600 },
-);
-
+await client.connect();
 try {
-  const envPath = ".env.local";
-  const envFile = await readFile(envPath, "utf8");
-  const cleaned = envFile
-    .split(/\r?\n/)
-    .filter((line) => !line.startsWith("ADMIN_PASSWORD="))
-    .map((line) => line.startsWith("ADMIN_ROTATE_PASSWORD=") ? "ADMIN_ROTATE_PASSWORD=false" : line)
-    .join("\n");
-  await writeFile(envPath, cleaned.endsWith("\n") ? cleaned : `${cleaned}\n`, "utf8");
-} catch {
-  // Hosted/CI environments may not have a writable local env file.
-}
+  await client.query("begin");
+  const existing = await client.query(
+    "select id from app_auth.accounts where email = $1 or username = $2 for update",
+    [email, username],
+  );
+  const id = existing.rows[0]?.id ?? crypto.randomUUID();
+  const createPassword = !existing.rows[0] || rotatePassword;
+  const passwordHash = createPassword
+    ? await argon2.hash(password, {
+        type: argon2.argon2id,
+        memoryCost: 65_536,
+        timeCost: 3,
+        parallelism: 1,
+      })
+    : null;
 
-process.stdout.write("Initialization succeeded. The local ADMIN_PASSWORD entry was removed. Remove the one-shot password from any CI or hosted secret store as well.\n");
+  if (!existing.rows[0]) {
+    await client.query(
+      `insert into app_auth.accounts(
+        id,email,username,status,email_confirmed_at,must_change_password
+      ) values($1,$2,$3,'ACTIVE',now(),true)`,
+      [id, email, username],
+    );
+  } else {
+    await client.query(
+      `update app_auth.accounts set
+        email=$2,username=$3,status='ACTIVE',email_confirmed_at=coalesce(email_confirmed_at,now()),
+        must_change_password=case when $4 then true else must_change_password end,
+        password_version=case when $4 then password_version+1 else password_version end,
+        updated_at=now()
+       where id=$1`,
+      [id, email, username, rotatePassword],
+    );
+  }
+
+  if (passwordHash) {
+    await client.query(
+      `insert into app_auth.password_credentials(user_id,password_hash,parameters)
+       values($1,$2,$3)
+       on conflict(user_id) do update set
+         password_hash=excluded.password_hash,parameters=excluded.parameters,updated_at=now()`,
+      [id, passwordHash, { algorithm: "argon2id", memoryCost: 65_536, timeCost: 3, parallelism: 1 }],
+    );
+  }
+  await client.query(
+    `insert into public.user_profiles(user_id,username,display_name_zh,display_name_en)
+     values($1,$2,$3,$4)
+     on conflict(user_id) do update set
+       username=excluded.username,display_name_zh=excluded.display_name_zh,
+       display_name_en=excluded.display_name_en,updated_at=now()`,
+    [id, username, displayNameZh, displayNameEn],
+  );
+  await client.query(
+    `insert into public.workspace_memberships(
+      workspace_id,user_id,role,status,must_change_password
+    ) values($1,$2,'SUPER_ADMIN','ACTIVE',true)
+    on conflict(workspace_id,user_id) do update set
+      role='SUPER_ADMIN',status='ACTIVE',
+      must_change_password=case when $3 then true else workspace_memberships.must_change_password end`,
+    [workspaceId, id, createPassword],
+  );
+  if (rotatePassword) {
+    await client.query(
+      `update app_auth.sessions set revoked_at=now(),revoked_reason='ADMIN_PASSWORD_ROTATED'
+       where user_id=$1 and revoked_at is null`,
+      [id],
+    );
+  }
+  await client.query(
+    `insert into public.audit_events(
+      workspace_id,actor_id,entity_type,entity_id,action,after_data
+    ) values($1,$2::uuid,'staff_user',$2::uuid::text,$3,$4)`,
+    [
+      workspaceId,
+      id,
+      existing.rows[0] ? "BOOTSTRAP_SYNCHRONIZED" : "BOOTSTRAP_CREATED",
+      { username, role: "SUPER_ADMIN", passwordRotated: createPassword },
+    ],
+  );
+  await client.query("commit");
+  if (createPassword && credentialOutputPath) {
+    await mkdir(path.dirname(credentialOutputPath), { recursive: true, mode: 0o700 });
+    await writeFile(
+      credentialOutputPath,
+      `email=${email}\npassword=${password}\nmust_change_password=true\n`,
+      { encoding: "utf8", mode: 0o600, flag: "w" },
+    );
+  }
+  process.stdout.write(
+    `${existing.rows[0] ? "Synchronized" : "Created"} self-hosted PostgreSQL administrator ${email}\n`,
+  );
+} catch (error) {
+  await client.query("rollback").catch(() => undefined);
+  throw error;
+} finally {
+  await client.end();
+}

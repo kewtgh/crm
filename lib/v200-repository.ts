@@ -1,4 +1,4 @@
-import { supabaseJson, supabaseRequest } from "./supabase-server";
+import { databaseJson, databaseRequest } from "./db/gateway";
 
 type PageOptions = { page?: number; pageSize?: number; query?: string; status?: string };
 export type PageResult<T> = { items: T[]; total: number; page: number; pageSize: number };
@@ -12,7 +12,7 @@ function pageValues(options: PageOptions) {
 
 async function exactPage<T>(path: string, options: PageOptions) {
   const { page, pageSize } = pageValues(options);
-  const response = await supabaseRequest(path, {
+  const response = await databaseRequest(path, {
     headers: { Prefer: "count=exact", Range: `${(page - 1) * pageSize}-${page * pageSize - 1}` },
   });
   const items = await response.json() as T[];
@@ -37,7 +37,7 @@ export async function listHouseholds(options: PageOptions = {}): Promise<PageRes
   const query = options.query?.replace(/[*,()]/g, " ").trim();
   if (query) params.set("or", `(name_zh.ilike.*${query}*,name_en.ilike.*${query}*)`);
   if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
-  const result = await exactPage<HouseholdRow>(`/rest/v1/households?${params}`, options);
+  const result = await exactPage<HouseholdRow>(`/db/table/households?${params}`, options);
   return {
     ...result,
     items: result.items.map((row) => ({
@@ -48,7 +48,7 @@ export async function listHouseholds(options: PageOptions = {}): Promise<PageRes
 }
 
 export async function createHousehold(input: { nameZh: string; nameEn: string; address: string }) {
-  const rows = await supabaseJson<HouseholdRow[]>("/rest/v1/households", {
+  const rows = await databaseJson<HouseholdRow[]>("/db/table/households", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({ name_zh: input.nameZh, name_en: input.nameEn, address: input.address }),
   });
@@ -72,7 +72,7 @@ type StudentPageRow = {
 
 export async function listStudents(options: PageOptions = {}): Promise<PageResult<StudentRecord>> {
   const { page, pageSize } = pageValues(options);
-  const rows = await supabaseJson<StudentPageRow[]>("/rest/v1/rpc/list_students_page", {
+  const rows = await databaseJson<StudentPageRow[]>("/db/rpc/list_students_page", {
     method: "POST",
     body: JSON.stringify({
       search_query: options.query ?? "",
@@ -118,7 +118,7 @@ type StudentDetailRow = StudentRow & {
 };
 
 export async function getStudentDetail(id: string): Promise<StudentDetail | null> {
-  const rows = await supabaseJson<StudentDetailRow[]>(`/rest/v1/students?select=id,person_id,student_number,household_id,current_grade,academic_year,status,updated_at,contacts:contacts!students_person_id_fkey(name_zh,name_en),households:households!students_household_id_fkey(name_zh,name_en),student_academic_records:student_academic_records!student_academic_records_student_id_fkey(id,curriculum,grade,academic_year,valid_from,valid_to,status,organizations:organizations!student_academic_records_school_id_fkey(name_zh,name_en)),student_guardian_relationships:student_guardian_relationships!student_guardian_relationships_student_id_fkey(id,guardian_contact_id,relationship_type,primary_guardian,emergency_contact,legal_authority,contacts:contacts!student_guardian_relationships_guardian_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await databaseJson<StudentDetailRow[]>(`/db/table/students?select=id,person_id,student_number,household_id,current_grade,academic_year,status,updated_at,contacts:contacts!students_person_id_fkey(name_zh,name_en),households:households!students_household_id_fkey(name_zh,name_en),student_academic_records:student_academic_records!student_academic_records_student_id_fkey(id,curriculum,grade,academic_year,valid_from,valid_to,status,organizations:organizations!student_academic_records_school_id_fkey(name_zh,name_en)),student_guardian_relationships:student_guardian_relationships!student_guardian_relationships_student_id_fkey(id,guardian_contact_id,relationship_type,primary_guardian,emergency_contact,legal_authority,contacts:contacts!student_guardian_relationships_guardian_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   if (!row) return null;
   return {
@@ -142,7 +142,7 @@ export async function getStudentDetail(id: string): Promise<StudentDetail | null
 export function updateStudent(input: {
   id: string; expectedUpdatedAt: string; grade: string; academicYear: string; householdId?: string | null; status: string;
 }) {
-  return supabaseJson<StudentRow>("/rest/v1/rpc/update_student_record", {
+  return databaseJson<StudentRow>("/db/rpc/update_student_record", {
     method: "POST", body: JSON.stringify({
       target_student: input.id, expected_updated_at: input.expectedUpdatedAt,
       next_grade: input.grade, next_academic_year: input.academicYear,
@@ -155,7 +155,7 @@ export function addStudentAcademicRecord(input: {
   studentId: string; schoolId?: string | null; curriculum: string; grade: string;
   academicYear: string; validFrom: string; validTo?: string | null; status: string;
 }) {
-  return supabaseJson("/rest/v1/student_academic_records", {
+  return databaseJson("/db/table/student_academic_records", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       student_id: input.studentId, school_id: input.schoolId || null, curriculum: input.curriculum,
@@ -168,7 +168,7 @@ export function addStudentAcademicRecord(input: {
 export async function createStudent(input: {
   personId: string; householdId?: string | null; studentNumber?: string; grade: string; academicYear: string;
 }) {
-  const rows = await supabaseJson<StudentRow[]>("/rest/v1/students", {
+  const rows = await databaseJson<StudentRow[]>("/db/table/students", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       person_id: input.personId, household_id: input.householdId || null,
@@ -189,7 +189,7 @@ type HouseholdDetailRow = Omit<HouseholdRow, "household_members"> & {
 };
 
 export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | null> {
-  const rows = await supabaseJson<HouseholdDetailRow[]>(`/rest/v1/households?select=id,name_zh,name_en,status,address,updated_at,household_members:household_members!household_members_household_id_fkey(id,contact_id,member_role,primary_contact,contacts:contacts!household_members_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await databaseJson<HouseholdDetailRow[]>(`/db/table/households?select=id,name_zh,name_en,status,address,updated_at,household_members:household_members!household_members_household_id_fkey(id,contact_id,member_role,primary_contact,contacts:contacts!household_members_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   if (!row) return null;
   return {
@@ -205,7 +205,7 @@ export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | 
 export function updateHousehold(input: {
   id: string; expectedUpdatedAt: string; nameZh: string; nameEn: string; address: string; status: string;
 }) {
-  return supabaseJson<HouseholdRow>("/rest/v1/rpc/update_household_record", {
+  return databaseJson<HouseholdRow>("/db/rpc/update_household_record", {
     method: "POST", body: JSON.stringify({
       target_household: input.id, expected_updated_at: input.expectedUpdatedAt,
       next_name_zh: input.nameZh, next_name_en: input.nameEn,
@@ -217,7 +217,7 @@ export function updateHousehold(input: {
 export function saveHouseholdMember(input: {
   householdId: string; contactId: string; role: string; primary: boolean;
 }) {
-  return supabaseJson("/rest/v1/rpc/save_household_member", {
+  return databaseJson("/db/rpc/save_household_member", {
     method: "POST",
     body: JSON.stringify({
       target_household: input.householdId,
@@ -229,7 +229,7 @@ export function saveHouseholdMember(input: {
 }
 
 export function removeHouseholdMember(id: string) {
-  return supabaseJson("/rest/v1/rpc/remove_household_member", {
+  return databaseJson("/db/rpc/remove_household_member", {
     method: "POST", body: JSON.stringify({ target_member: id }),
   });
 }
@@ -238,7 +238,7 @@ export function saveStudentGuardian(input: {
   studentId: string; contactId: string; relationship: string;
   primary: boolean; emergency: boolean; legalAuthority: boolean;
 }) {
-  return supabaseJson("/rest/v1/rpc/save_student_guardian", {
+  return databaseJson("/db/rpc/save_student_guardian", {
     method: "POST",
     body: JSON.stringify({
       target_student: input.studentId,
@@ -252,7 +252,7 @@ export function saveStudentGuardian(input: {
 }
 
 export function removeStudentGuardian(id: string) {
-  return supabaseJson("/rest/v1/rpc/remove_student_guardian", {
+  return databaseJson("/db/rpc/remove_student_guardian", {
     method: "POST", body: JSON.stringify({ target_relationship: id }),
   });
 }
@@ -267,7 +267,7 @@ type ProgressionRow = {
 
 export async function listProgressionBatches(options: PageOptions = {}): Promise<PageResult<ProgressionBatchRecord>> {
   const result = await exactPage<ProgressionRow>(
-    "/rest/v1/progression_batches?select=id,from_academic_year,to_academic_year,status,created_at,progression_batch_items:progression_batch_items!progression_batch_items_batch_id_fkey(selected,status)&order=created_at.desc",
+    "/db/table/progression_batches?select=id,from_academic_year,to_academic_year,status,created_at,progression_batch_items:progression_batch_items!progression_batch_items_batch_id_fkey(selected,status)&order=created_at.desc",
     options,
   );
   return {
@@ -282,13 +282,13 @@ export async function listProgressionBatches(options: PageOptions = {}): Promise
 }
 
 export function previewProgression(fromYear: string, toYear: string, requestKey: string) {
-  return supabaseJson<ProgressionRow>("/rest/v1/rpc/preview_student_progression", {
+  return databaseJson<ProgressionRow>("/db/rpc/preview_student_progression", {
     method: "POST", body: JSON.stringify({ from_year: fromYear, to_year: toYear, p_idempotency_key: requestKey }),
   });
 }
 
 export function applyProgression(id: string, requestKey: string) {
-  return supabaseJson<ProgressionRow>("/rest/v1/rpc/apply_student_progression", {
+  return databaseJson<ProgressionRow>("/db/rpc/apply_student_progression", {
     method: "POST", body: JSON.stringify({ target_batch: id, p_idempotency_key: requestKey }),
   });
 }
@@ -306,10 +306,10 @@ type ProgressionItemRow = {
 };
 
 export async function getProgressionBatchDetail(id: string) {
-  const batches = await supabaseJson<ProgressionRow[]>(`/rest/v1/progression_batches?select=id,from_academic_year,to_academic_year,status,created_at,progression_batch_items:progression_batch_items!progression_batch_items_batch_id_fkey(selected,status)&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const batches = await databaseJson<ProgressionRow[]>(`/db/table/progression_batches?select=id,from_academic_year,to_academic_year,status,created_at,progression_batch_items:progression_batch_items!progression_batch_items_batch_id_fkey(selected,status)&id=eq.${encodeURIComponent(id)}&limit=1`);
   const batch = batches[0];
   if (!batch) return null;
-  const rows = await supabaseJson<ProgressionItemRow[]>(`/rest/v1/progression_batch_items?select=id,student_id,from_grade,to_grade,action,selected,status,error_code,reason,students:students!progression_batch_items_student_id_fkey(contacts:contacts!students_person_id_fkey(name_zh,name_en))&batch_id=eq.${encodeURIComponent(id)}&order=status.asc,from_grade.asc`);
+  const rows = await databaseJson<ProgressionItemRow[]>(`/db/table/progression_batch_items?select=id,student_id,from_grade,to_grade,action,selected,status,error_code,reason,students:students!progression_batch_items_student_id_fkey(contacts:contacts!students_person_id_fkey(name_zh,name_en))&batch_id=eq.${encodeURIComponent(id)}&order=status.asc,from_grade.asc`);
   return {
     batch: {
       id: batch.id, fromYear: batch.from_academic_year, toYear: batch.to_academic_year,
@@ -331,7 +331,7 @@ export async function getProgressionBatchDetail(id: string) {
 export function updateProgressionItem(input: {
   id: string; selected: boolean; toGrade: string; action: string; reason: string;
 }) {
-  return supabaseJson("/rest/v1/rpc/update_progression_batch_item", {
+  return databaseJson("/db/rpc/update_progression_batch_item", {
     method: "POST",
     body: JSON.stringify({
       target_item: input.id, item_selected: input.selected,
@@ -341,7 +341,7 @@ export function updateProgressionItem(input: {
 }
 
 export function cancelProgression(id: string) {
-  return supabaseJson("/rest/v1/rpc/cancel_student_progression", {
+  return databaseJson("/db/rpc/cancel_student_progression", {
     method: "POST", body: JSON.stringify({ target_batch: id }),
   });
 }
@@ -354,7 +354,7 @@ type ProgressionRuleRow = {
 };
 
 export async function listProgressionRules() {
-  const rows = await supabaseJson<ProgressionRuleRow[]>("/rest/v1/grade_progression_rules?select=id,from_grade,to_grade,action,active,updated_at&order=active.desc,from_grade.asc&limit=200");
+  const rows = await databaseJson<ProgressionRuleRow[]>("/db/table/grade_progression_rules?select=id,from_grade,to_grade,action,active,updated_at&order=active.desc,from_grade.asc&limit=200");
   return rows.map((row): ProgressionRuleRecord => ({
     id: row.id, fromGrade: row.from_grade, toGrade: row.to_grade,
     action: row.action, active: row.active, updatedAt: row.updated_at,
@@ -364,7 +364,7 @@ export async function listProgressionRules() {
 export function saveProgressionRule(input: {
   id?: string | null; fromGrade: string; toGrade: string; action: string; active: boolean;
 }) {
-  return supabaseJson("/rest/v1/rpc/save_progression_rule", {
+  return databaseJson("/db/rpc/save_progression_rule", {
     method: "POST",
     body: JSON.stringify({
       target_rule: input.id ?? null, source_grade: input.fromGrade,
@@ -390,7 +390,7 @@ export async function listLeads(options: PageOptions = {}): Promise<PageResult<L
   const query = options.query?.replace(/[*,()]/g, " ").trim();
   if (query) params.set("or", `(name_zh.ilike.*${query}*,name_en.ilike.*${query}*)`);
   if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
-  const result = await exactPage<LeadRow>(`/rest/v1/leads?${params}`, options);
+  const result = await exactPage<LeadRow>(`/db/table/leads?${params}`, options);
   return {
     ...result,
     items: result.items.map((row) => ({
@@ -402,7 +402,7 @@ export async function listLeads(options: PageOptions = {}): Promise<PageResult<L
 }
 
 export async function getLead(id: string): Promise<LeadRecord | null> {
-  const rows = await supabaseJson<LeadRow[]>(`/rest/v1/leads?select=id,subject_type,name_zh,name_en,source,status,qualification_score,pipeline_key,updated_at&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await databaseJson<LeadRow[]>(`/db/table/leads?select=id,subject_type,name_zh,name_en,source,status,qualification_score,pipeline_key,updated_at&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   return row ? {
     id: row.id, type: row.subject_type, nameZh: row.name_zh, nameEn: row.name_en,
@@ -415,7 +415,7 @@ export async function createLead(input: {
   type: "SCHOOL" | "HOUSEHOLD"; organizationId?: string | null; householdId?: string | null;
   nameZh: string; nameEn: string; source: string; score: number; note: string;
 }) {
-  const rows = await supabaseJson<LeadRow[]>("/rest/v1/leads", {
+  const rows = await databaseJson<LeadRow[]>("/db/table/leads", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       subject_type: input.type, organization_id: input.organizationId || null, household_id: input.householdId || null,
@@ -431,7 +431,7 @@ export async function createLead(input: {
 export function convertLead(input: {
   id: string; titleZh: string; titleEn: string; amount: number; currency: string; requestKey: string;
 }) {
-  return supabaseJson("/rest/v1/rpc/convert_lead_to_opportunity", {
+  return databaseJson("/db/rpc/convert_lead_to_opportunity", {
     method: "POST", body: JSON.stringify({
       target_lead: input.id, title_zh: input.titleZh, title_en: input.titleEn,
       amount: input.amount, currency: input.currency, p_idempotency_key: input.requestKey,
@@ -482,12 +482,12 @@ export async function listPrivacyRequests(options: PageOptions = {}): Promise<Pa
     order: "created_at.desc",
   });
   if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
-  const result = await exactPage<PrivacyRow>(`/rest/v1/privacy_requests?${params}`, options);
+  const result = await exactPage<PrivacyRow>(`/db/table/privacy_requests?${params}`, options);
   return { ...result, items: result.items.map(privacyRequest) };
 }
 
 export async function createPrivacyRequest(input: { type: string; note: string; contactId?: string | null; changes?: Record<string, string> }) {
-  const rows = await supabaseJson<PrivacyRow[]>("/rest/v1/privacy_requests", {
+  const rows = await databaseJson<PrivacyRow[]>("/db/table/privacy_requests", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({ request_type: input.type, request_note: input.note, requester_contact_id: input.contactId || null, requested_changes: input.changes ?? {} }),
   });
@@ -497,7 +497,7 @@ export async function createPrivacyRequest(input: { type: string; note: string; 
 export async function managePrivacyRequest(input: {
   id: string; status: string; identityStatus: string; decision: string;
 }) {
-  const row = await supabaseJson<PrivacyRow>("/rest/v1/rpc/manage_privacy_request", {
+  const row = await databaseJson<PrivacyRow>("/db/rpc/manage_privacy_request", {
     method: "POST",
     body: JSON.stringify({
       target_request: input.id,
@@ -531,14 +531,14 @@ export async function listSuggestions(options: PageOptions = {}): Promise<PageRe
     ? "&status=in.(ACCEPTED,EDITED,REJECTED,EXPIRED)"
     : options.status === "all" || !options.status ? "" : `&status=eq.${encodeURIComponent(options.status.toUpperCase())}`;
   const result = await exactPage<SuggestionRow>(
-    `/rest/v1/ai_suggestions?select=id,subject_type,recommendation_zh,recommendation_en,evidence,confidence,status,expires_at,created_at${status}&order=created_at.desc`,
+    `/db/table/ai_suggestions?select=id,subject_type,recommendation_zh,recommendation_en,evidence,confidence,status,expires_at,created_at${status}&order=created_at.desc`,
     options,
   );
   return { ...result, items: result.items.map(suggestion) };
 }
 
 export async function generateSuggestions(): Promise<SuggestionRecord[]> {
-  const rows = await supabaseJson<SuggestionRow[]>("/rest/v1/rpc/generate_rule_suggestions", { method: "POST", body: "{}" });
+  const rows = await databaseJson<SuggestionRow[]>("/db/rpc/generate_rule_suggestions", { method: "POST", body: "{}" });
   return rows.map(suggestion);
 }
 
@@ -546,7 +546,7 @@ export function decideSuggestion(input: {
   id: string; decision: "ACCEPTED" | "EDITED" | "REJECTED"; finalZh: string; finalEn: string;
   reason: string; createTask: boolean; requestKey: string;
 }) {
-  return supabaseJson("/rest/v1/rpc/decide_ai_suggestion", {
+  return databaseJson("/db/rpc/decide_ai_suggestion", {
     method: "POST", body: JSON.stringify({
       target_suggestion: input.id, decision_value: input.decision, final_zh: input.finalZh,
       final_en: input.finalEn, decision_reason: input.reason, create_task: input.createTask,

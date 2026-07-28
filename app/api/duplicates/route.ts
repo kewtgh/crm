@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { supabaseJson } from "@/lib/supabase-server";
+import { databaseJson } from "@/lib/db/gateway";
 
 const schema = z.discriminatedUnion("operation", [
   z.object({
@@ -34,13 +34,13 @@ async function post(request: Request) {
     source_record: parsed.data.sourceId,
   };
   if (parsed.data.operation === "preview") {
-    const preview = await supabaseJson<Record<string, unknown>>("/rest/v1/rpc/duplicate_merge_preview", {
+    const preview = await databaseJson<Record<string, unknown>>("/db/rpc/duplicate_merge_preview", {
       method: "POST",
       body: JSON.stringify(payload),
     });
     return NextResponse.json({ preview });
   }
-  const id = await supabaseJson<string>("/rest/v1/rpc/idempotent_merge_duplicate_records", {
+  const id = await databaseJson<string>("/db/rpc/idempotent_merge_duplicate_records", {
     method: "POST",
     body: JSON.stringify({ ...payload, field_choices: parsed.data.fieldChoices,p_request_key:parsed.data.requestKey }),
   });

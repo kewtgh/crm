@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
+import pg from "pg";
 import { releaseVersion } from "./lib/release-version.mjs";
 
 const required = [
   "APP_URL",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SYSTEM_DATABASE_URL",
   "CRM_WORKSPACE_ID",
   "WEBHOOK_EMAIL_SECRET",
 ];
@@ -12,8 +12,6 @@ const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Missing v1.0 HTTP smoke variables: ${missing.join(", ")}`);
 
 const app = process.env.APP_URL.replace(/\/$/, "");
-const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const eventId = `v100-${Date.now()}-${crypto.randomUUID()}`;
 const eventType = "delivery.v100-smoke";
 const rawBody = JSON.stringify({ smoke: true, release: releaseVersion });
@@ -95,12 +93,11 @@ try {
     `v${releaseVersion} HTTP security smoke passed: trusted origin, canonical signature, replay window, header tamper rejection, and event deduplication.\n`,
   );
 } finally {
-  await fetch(
-    `${supabase}/rest/v1/webhook_inbox?provider=eq.EMAIL&event_id=eq.${encodeURIComponent(eventId)}`,
-    {
-      method: "DELETE",
-      headers: { apikey: service, authorization: `Bearer ${service}` },
-      signal: AbortSignal.timeout(10_000),
-    },
+  const client = new pg.Client({ connectionString: process.env.SYSTEM_DATABASE_URL });
+  await client.connect().catch(() => undefined);
+  await client.query(
+    "delete from public.webhook_inbox where provider='EMAIL' and event_id=$1",
+    [eventId],
   ).catch(() => undefined);
+  await client.end().catch(() => undefined);
 }

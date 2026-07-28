@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { approvalRecordId, createApproval, executeSuperAdminApproval, listApprovals } from "@/lib/governance-repository";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
@@ -9,7 +9,7 @@ const schema=z.discriminatedUnion("type",[
   z.object({type:z.enum(["CONTRACT_SIGN","CONTRACT_EXPORT","PERFORMANCE_SUMMARY","PERFORMANCE_ALLOCATION"]),objectType:z.string().min(1).max(80),objectId:z.string().min(1).max(160),reason:z.string().trim().min(3).max(1000)}),
   z.object({type:z.literal("CRM_EXPORT"),resource:z.enum(["schools","people","tasks","students","households","leads","sales","finance"]),query:z.string().max(100).default(""),status:z.string().max(40).default("all"),sort:z.string().max(40).default("primary"),direction:z.enum(["asc","desc"]).default("asc"),format:z.enum(["CSV","XLSX","PDF"]).default("CSV"),reason:z.string().trim().min(3).max(1000)}),
 ]);
-const fail=(error:unknown)=>error instanceof SupabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_FAILED"},{status:500});
+const fail=(error:unknown)=>error instanceof DatabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_FAILED"},{status:500});
 async function get(request:Request){await requireApiUser();const params=new URL(request.url).searchParams;const{page,pageSize}=parsePagination(params,10);try{return NextResponse.json(await listApprovals({query:params.get("q")??"",type:params.get("type")??"all",status:params.get("status")??"pending",page,pageSize}));}catch(error){return fail(error);}}
 async function post(request:Request){if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});const user=await requireApiUser();const parsed=schema.safeParse(await request.json().catch(()=>({})));if(!parsed.success)return NextResponse.json({code:"INVALID_INPUT",field:String(parsed.error.issues[0]?.path[0]??"form")},{status:400});try{const created=await createApproval(parsed.data);if(user.role!=="SUPER_ADMIN")return NextResponse.json({item:created,direct:false},{status:201});const id=approvalRecordId(created);if(!id)return NextResponse.json({code:"APPROVAL_ID_MISSING"},{status:500});const item=await executeSuperAdminApproval(id);return NextResponse.json({item,direct:true});}catch(error){return fail(error);}}
 export const GET=apiRoute(get,"APPROVAL_LOAD_FAILED");

@@ -1,4 +1,4 @@
-import { supabaseJson, supabaseRequest } from "./supabase-server";
+import { databaseJson, databaseRequest } from "./db/gateway";
 
 const RECOVERY_CODE_COUNT = 10;
 
@@ -18,35 +18,33 @@ function createRecoveryCode() {
   return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
 
-export async function replaceMfaRecoveryCodes(userId: string, token: string | null | undefined) {
+export async function replaceMfaRecoveryCodes(userId: string) {
   const codes = Array.from({ length: RECOVERY_CODE_COUNT }, createRecoveryCode);
-  await supabaseRequest(`/rest/v1/mfa_recovery_codes?user_id=eq.${encodeURIComponent(userId)}`, { method: "DELETE" }, token);
+  await databaseRequest(`/db/table/mfa_recovery_codes?user_id=eq.${encodeURIComponent(userId)}`, { method: "DELETE" });
   const codeHashes=await Promise.all(codes.map(code=>hashRecoveryCode(userId,code)));
-  await supabaseRequest("/rest/v1/mfa_recovery_codes", {
+  await databaseRequest("/db/table/mfa_recovery_codes", {
     method: "POST",
     body: JSON.stringify(codes.map((code,index) => ({ user_id: userId, code_hash: codeHashes[index] }))),
     headers: { Prefer: "return=minimal" },
-  }, token);
+  });
   return codes;
 }
 
-export async function countMfaRecoveryCodes(userId: string, token: string | null | undefined) {
-  const rows = await supabaseJson<Array<{ id: string }>>(
-    `/rest/v1/mfa_recovery_codes?select=id&user_id=eq.${encodeURIComponent(userId)}`,
+export async function countMfaRecoveryCodes(userId: string) {
+  const rows = await databaseJson<Array<{ id: string }>>(
+    `/db/table/mfa_recovery_codes?select=id&user_id=eq.${encodeURIComponent(userId)}`,
     {},
-    token,
   );
   return rows.length;
 }
 
-export async function consumeMfaRecoveryCode(userId: string, code: string, token: string | null | undefined) {
-  const rows = await supabaseJson<Array<{ id: string }>>(
-    `/rest/v1/mfa_recovery_codes?select=id&user_id=eq.${encodeURIComponent(userId)}&code_hash=eq.${await hashRecoveryCode(userId, code)}&limit=1`,
+export async function consumeMfaRecoveryCode(userId: string, code: string) {
+  const rows = await databaseJson<Array<{ id: string }>>(
+    `/db/table/mfa_recovery_codes?select=id&user_id=eq.${encodeURIComponent(userId)}&code_hash=eq.${await hashRecoveryCode(userId, code)}&limit=1`,
     {},
-    token,
   );
   const match = rows[0];
   if (!match) return false;
-  await supabaseRequest(`/rest/v1/mfa_recovery_codes?id=eq.${encodeURIComponent(match.id)}&user_id=eq.${encodeURIComponent(userId)}`, { method: "DELETE" }, token);
+  await databaseRequest(`/db/table/mfa_recovery_codes?id=eq.${encodeURIComponent(match.id)}&user_id=eq.${encodeURIComponent(userId)}`, { method: "DELETE" });
   return true;
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { getAccessToken } from "@/lib/supabase-server";
+import { getSessionToken } from "@/lib/db/gateway";
 import {
   listTrustedDevices,
   revokeOtherTrustedDevices,
@@ -18,7 +18,7 @@ const schema = z.discriminatedUnion("scope", [
 
 async function get() {
   await requireApiUser();
-  const accessToken = await getAccessToken();
+  const accessToken = await getSessionToken();
   if (!accessToken) throw new ApiError("AUTH_REQUIRED", 401);
   const cookieStore = await cookies();
   const devices = await listTrustedDevices(
@@ -33,7 +33,7 @@ async function del(request: Request) {
   await requireApiUser();
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_DEVICE_REQUEST", 400);
-  const accessToken = await getAccessToken();
+  const accessToken = await getSessionToken();
   if (!accessToken) throw new ApiError("AUTH_REQUIRED", 401);
   const cookieStore = await cookies();
   const trustedCookie = cookieStore.get(securityCookieNames.trustedDevice)?.value;

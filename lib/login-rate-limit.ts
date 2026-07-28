@@ -1,4 +1,4 @@
-import { supabaseAdminJson } from "./supabase-server";
+import { databaseSystemJson } from "./db/gateway";
 import { requireLoginThrottleSecret } from "./runtime-environment";
 
 type Attempt = { count: number; resetAt: number };
@@ -42,11 +42,11 @@ export async function loginThrottleIdentity(request: Request, email: string): Pr
 }
 
 function hasDurableThrottle() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(process.env.SYSTEM_DATABASE_URL || process.env.DATABASE_URL);
 }
 
 async function durableThrottle(identity: LoginThrottleIdentity, action: "CHECK" | "FAILURE" | "SUCCESS") {
-  const result = await supabaseAdminJson<LoginThrottleResult>("/rest/v1/rpc/apply_login_throttle", {
+  const result = await databaseSystemJson<LoginThrottleResult>("/db/rpc/apply_login_throttle", {
     method: "POST",
     body: JSON.stringify({
       account_hash: identity.accountHash,

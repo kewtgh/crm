@@ -1,6 +1,8 @@
 import type { AppRole } from "./roles";
 import type { AppUser } from "./user";
-import { supabaseAdminJson, supabaseAdminRequest, supabaseJson, SupabaseRequestError } from "./supabase-server";
+import { createAccount } from "./auth/accounts";
+import { withPoolClient } from "./db/pools";
+import { DatabaseRequestError } from "./db/gateway";
 import { applicationOrigin } from "./application-origin.mjs";
 
 export type StaffUserRecord = {
@@ -16,55 +18,128 @@ export type StaffUserRecord = {
 };
 
 type StaffRow = {
-  user_id: string; username: string; display_name_zh: string; display_name_en: string;
-  email: string; role: AppRole; account_status: "ACTIVE" | "SUSPENDED";
-  last_sign_in_at: string | null; mfa_enabled: boolean; total_count: number | string;
+  id: string;
+  username: string;
+  display_name_zh: string;
+  display_name_en: string;
+  email: string;
+  role: AppRole;
+  status: "ACTIVE" | "SUSPENDED";
+  last_sign_in_at: string | null;
+  mfa_enabled: boolean;
+  total_count: number | string;
 };
 
-export async function listStaffUsers(input: { query?: string; page?: number; pageSize?: number }) {
-  const rows = await supabaseJson<StaffRow[]>("/rest/v1/rpc/list_staff_users", {
-    method: "POST",
-    body: JSON.stringify({ search_query: input.query ?? "", page_number: input.page ?? 1, page_size: input.pageSize ?? 20 }),
-  });
+function mapStaff(row: StaffRow): StaffUserRecord {
   return {
-    total: Number(rows[0]?.total_count ?? 0),
-    items: rows.map((row): StaffUserRecord => ({
-      id: row.user_id,
-      username: row.username,
-      displayNameZh: row.display_name_zh,
-      displayNameEn: row.display_name_en,
-      email: row.email,
-      role: row.role,
-      status: row.account_status,
-      lastSignInAt: row.last_sign_in_at,
-      mfaEnabled: row.mfa_enabled,
-    })),
+    id: row.id,
+    username: row.username,
+    displayNameZh: row.display_name_zh,
+    displayNameEn: row.display_name_en,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    lastSignInAt: row.last_sign_in_at,
+    mfaEnabled: row.mfa_enabled,
+  };
+}
+
+function configuredWorkspaceId() {
+  const workspaceId = process.env.CRM_WORKSPACE_ID;
+  if (!workspaceId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId)) {
+    throw new DatabaseRequestError(503, "WORKSPACE_NOT_CONFIGURED", "CRM workspace is not configured");
+  }
+  return workspaceId;
+}
+
+function normalizeWriteError(error: unknown): never {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  if (code === "23505") {
+    throw new DatabaseRequestError(409, "STAFF_IDENTITY_TAKEN", "The username or email is already in use");
+  }
+  throw error;
+}
+
+export async function listStaffUsers(input: { query?: string; page?: number; pageSize?: number }) {
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 20));
+  const query = input.query?.trim() ?? "";
+  const result = await withPoolClient("system", (client) => client.query<StaffRow>(
+    `
+      select
+        account.id,
+        profile.username::text,
+        profile.display_name_zh,
+        profile.display_name_en,
+        account.email::text,
+        membership.role,
+        membership.status,
+        account.last_sign_in_at,
+        exists(
+          select 1 from app_auth.totp_factors factor
+          where factor.user_id = account.id and factor.status = 'VERIFIED'
+        ) as mfa_enabled,
+        count(*) over() as total_count
+      from app_auth.accounts account
+      join public.user_profiles profile on profile.user_id = account.id
+      join public.workspace_memberships membership
+        on membership.user_id = account.id and membership.workspace_id = $1
+      where $2 = ''
+        or profile.username::text ilike '%' || $2 || '%'
+        or profile.display_name_zh ilike '%' || $2 || '%'
+        or profile.display_name_en ilike '%' || $2 || '%'
+        or account.email::text ilike '%' || $2 || '%'
+      order by profile.display_name_en, profile.username
+      offset $3 limit $4
+    `,
+    [configuredWorkspaceId(), query, (page - 1) * pageSize, pageSize],
+  ));
+  return {
+    total: Number(result.rows[0]?.total_count ?? 0),
+    items: result.rows.map(mapStaff),
   };
 }
 
 export async function getStaffUser(userId: string): Promise<StaffUserRecord> {
-  const [identity, profiles, memberships] = await Promise.all([
-    supabaseAdminJson<{ id: string; email?: string; last_sign_in_at?: string | null; factors?: Array<{ status?: string }> }>(`/auth/v1/admin/users/${userId}`),
-    supabaseAdminJson<Array<{ username: string; display_name_zh: string; display_name_en: string }>>(`/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${userId}&limit=1`),
-    supabaseAdminJson<Array<{ role: AppRole; status: "ACTIVE" | "SUSPENDED" }>>(`/rest/v1/workspace_memberships?select=role,status&user_id=eq.${userId}&limit=1`),
-  ]);
-  if (!profiles[0] || !memberships[0]) throw new SupabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
-  return {
-    id: identity.id,
-    username: profiles[0].username,
-    displayNameZh: profiles[0].display_name_zh,
-    displayNameEn: profiles[0].display_name_en,
-    email: identity.email ?? "",
-    role: memberships[0].role,
-    status: memberships[0].status,
-    lastSignInAt: identity.last_sign_in_at ?? null,
-    mfaEnabled: identity.factors?.some((factor) => factor.status === "verified") ?? false,
-  };
+  const result = await withPoolClient("system", (client) => client.query<StaffRow>(
+    `
+      select
+        account.id,
+        profile.username::text,
+        profile.display_name_zh,
+        profile.display_name_en,
+        account.email::text,
+        membership.role,
+        membership.status,
+        account.last_sign_in_at,
+        exists(
+          select 1 from app_auth.totp_factors factor
+          where factor.user_id = account.id and factor.status = 'VERIFIED'
+        ) as mfa_enabled,
+        1 as total_count
+      from app_auth.accounts account
+      join public.user_profiles profile on profile.user_id = account.id
+      join public.workspace_memberships membership
+        on membership.user_id = account.id and membership.workspace_id = $2
+      where account.id = $1
+      limit 1
+    `,
+    [userId, configuredWorkspaceId()],
+  ));
+  if (!result.rows[0]) {
+    throw new DatabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
+  }
+  return mapStaff(result.rows[0]);
 }
 
 export type CreateStaffInput = {
-  username: string; displayNameZh: string; displayNameEn: string; email: string;
-  role: Exclude<AppRole, "SUPER_ADMIN">; team: string; managerMemberId?: string | null;
+  username: string;
+  displayNameZh: string;
+  displayNameEn: string;
+  email: string;
+  role: Exclude<AppRole, "SUPER_ADMIN">;
+  team: string;
+  managerMemberId?: string | null;
 };
 
 function generateTemporaryPassword() {
@@ -78,22 +153,26 @@ function generateTemporaryPassword() {
   return generated.join("");
 }
 
-function configuredWorkspaceId() {
-  const workspaceId = process.env.CRM_WORKSPACE_ID;
-  if (!workspaceId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId)) {
-    throw new SupabaseRequestError(503, "WORKSPACE_NOT_CONFIGURED", "CRM workspace is not configured");
-  }
-  return workspaceId;
-}
-
-async function deliverTemporaryCredentials(input: CreateStaffInput, username: string, temporaryPassword: string) {
+async function deliverTemporaryCredentials(
+  input: CreateStaffInput,
+  username: string,
+  temporaryPassword: string,
+) {
   const endpoint = process.env.EMAIL_DELIVERY_WEBHOOK_URL;
-  if (!endpoint) throw new SupabaseRequestError(503, "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", "Account email delivery is not configured");
+  if (!endpoint) {
+    throw new DatabaseRequestError(
+      503,
+      "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED",
+      "Account email delivery is not configured",
+    );
+  }
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN ? { authorization: `Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` } : {}),
+      ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
+        ? { authorization: `Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` }
+        : {}),
     },
     body: JSON.stringify({
       id: crypto.randomUUID(),
@@ -112,200 +191,222 @@ async function deliverTemporaryCredentials(input: CreateStaffInput, username: st
     cache: "no-store",
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
-  if (!response?.ok) throw new SupabaseRequestError(502, "ACCOUNT_EMAIL_DELIVERY_FAILED", "The account email could not be delivered");
+  if (!response?.ok) {
+    throw new DatabaseRequestError(
+      502,
+      "ACCOUNT_EMAIL_DELIVERY_FAILED",
+      "The account email could not be delivered",
+    );
+  }
 }
 
 export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
-  if (actor.role === "ADMIN" && input.role === "ADMIN") throw new SupabaseRequestError(403, "ROLE_ASSIGNMENT_FORBIDDEN", "Only a super administrator can create an administrator");
-  if (!process.env.EMAIL_DELIVERY_WEBHOOK_URL) throw new SupabaseRequestError(503, "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", "Account email delivery is not configured");
+  if (actor.role === "ADMIN" && input.role === "ADMIN") {
+    throw new DatabaseRequestError(
+      403,
+      "ROLE_ASSIGNMENT_FORBIDDEN",
+      "Only a super administrator can create an administrator",
+    );
+  }
+  if (!process.env.EMAIL_DELIVERY_WEBHOOK_URL) {
+    throw new DatabaseRequestError(
+      503,
+      "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED",
+      "Account email delivery is not configured",
+    );
+  }
   const username = input.username.trim().toLowerCase();
   const workspaceId = configuredWorkspaceId();
-  const matches = await supabaseAdminJson<Array<{ user_id: string }>>(`/rest/v1/user_profiles?select=user_id&username=eq.${encodeURIComponent(username)}&limit=1`);
-  if (matches.length) throw new SupabaseRequestError(409, "USERNAME_TAKEN", "The username is already in use");
-
   const temporaryPassword = generateTemporaryPassword();
-  const created = await supabaseAdminJson<{ id?: string; user?: { id?: string } }>("/auth/v1/admin/users", {
-    method: "POST",
-    body: JSON.stringify({
-      email: input.email.trim().toLowerCase(),
+  let created: { id: string };
+  try {
+    created = await createAccount({
+      email: input.email,
+      username,
       password: temporaryPassword,
-      email_confirm: true,
-      user_metadata: { username, chinese_name: input.displayNameZh, english_name: input.displayNameEn, team: input.team },
-      app_metadata: { role: input.role, account_status: "ACTIVE", workspace_id: workspaceId },
-    }),
-  });
-  const userId = created.id ?? created.user?.id;
-  if (!userId) throw new SupabaseRequestError(502, "CREATE_USER_MISSING", "The identity service did not return the created user");
+      displayNameZh: input.displayNameZh,
+      displayNameEn: input.displayNameEn,
+      workspaceId,
+      role: input.role,
+      mustChangePassword: true,
+      emailVerified: true,
+      team: input.team,
+      managerMemberId: input.managerMemberId,
+    });
+  } catch (error) {
+    normalizeWriteError(error);
+  }
 
   try {
-    await Promise.all([
-      supabaseAdminRequest("/rest/v1/user_profiles", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ user_id: userId, username, display_name_zh: input.displayNameZh, display_name_en: input.displayNameEn }),
-      }),
-      supabaseAdminRequest("/rest/v1/workspace_memberships", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ workspace_id: workspaceId, user_id: userId, role: input.role, status: "ACTIVE", must_change_password: true }),
-      }),
-    ]);
-    if (input.role.startsWith("SALES_")) {
-      await supabaseAdminRequest("/rest/v1/sales_team_members", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({
-          workspace_id: workspaceId,
-          auth_user_id: userId,
-          name_zh: input.displayNameZh,
-          name_en: input.displayNameEn,
-          role: input.role,
-          team: input.team,
-          manager_member_id: input.managerMemberId || null,
-          active: true,
-        }),
-      });
-    }
-    await supabaseAdminRequest("/rest/v1/audit_events", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        workspace_id: workspaceId,
-        actor_id: actor.id,
-        entity_type: "staff_user",
-        entity_id: userId,
-        action: "CREATE",
-        after_data: { username, role: input.role, accountStatus: "ACTIVE" },
-      }),
-    });
     await deliverTemporaryCredentials(input, username, temporaryPassword);
   } catch (error) {
-    let deletionFailed = false;
-    try {
-      await supabaseAdminRequest(`/auth/v1/admin/users/${userId}`, { method: "DELETE" });
-    } catch {
-      deletionFailed = true;
-      // A failed create must never leave a usable identity. If deletion is
-      // temporarily unavailable, fail closed and surface the required cleanup.
-      await supabaseAdminRequest(`/auth/v1/admin/users/${userId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          app_metadata: { role: input.role, account_status: "SUSPENDED", workspace_id: workspaceId },
-          ban_duration: "876000h",
-        }),
-      }).catch(() => undefined);
-    }
-    await supabaseAdminRequest("/rest/v1/audit_events", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ workspace_id: workspaceId, actor_id: actor.id, entity_type: "staff_user", entity_id: userId, action: deletionFailed ? "CREATE_COMPENSATION_REQUIRED" : "CREATE_ROLLED_BACK", after_data: { username, role: input.role } }),
-    }).catch(() => undefined);
-    if (deletionFailed) {
-      throw new SupabaseRequestError(502, "IDENTITY_COMPENSATION_REQUIRED", "Failed staff creation requires identity cleanup");
-    }
+    await withPoolClient("system", async (client) => {
+      await client.query("begin");
+      try {
+        await client.query("delete from app_auth.accounts where id = $1", [created.id]);
+        await client.query(
+          `insert into public.audit_events(
+            workspace_id, actor_id, entity_type, entity_id, action, after_data
+          ) values($1, $2, 'staff_user', $3, 'CREATE_ROLLED_BACK', $4)`,
+          [workspaceId, actor.id, created.id, { username, role: input.role }],
+        );
+        await client.query("commit");
+      } catch (rollbackError) {
+        await client.query("rollback").catch(() => undefined);
+        throw rollbackError;
+      }
+    });
     throw error;
   }
-  return { id: userId };
+
+  await withPoolClient("system", (client) => client.query(
+    `insert into public.audit_events(
+      workspace_id, actor_id, entity_type, entity_id, action, after_data
+    ) values($1, $2, 'staff_user', $3, 'CREATE', $4)`,
+    [workspaceId, actor.id, created.id, { username, role: input.role, accountStatus: "ACTIVE" }],
+  ));
+  return created;
 }
 
 export async function repairStaffIdentity(repairId: string) {
-  const jobs = await supabaseAdminJson<Array<{
-    id: string;
-    target_user_id: string;
-    target_role: AppRole;
-    target_status: "ACTIVE" | "SUSPENDED";
-    status: string;
-  }>>(`/rest/v1/staff_identity_repair_jobs?select=id,target_user_id,target_role,target_status,status&id=eq.${repairId}&status=in.(PENDING,FAILED,DEAD)&limit=1`);
-  const job = jobs[0];
-  if (!job) throw new SupabaseRequestError(404, "IDENTITY_REPAIR_NOT_FOUND", "Identity repair job was not found");
-  await supabaseAdminRequest(`/rest/v1/staff_identity_repair_jobs?id=eq.${job.id}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ status: "PROCESSING", updated_at: new Date().toISOString() }),
+  await withPoolClient("system", async (client) => {
+    await client.query("begin");
+    try {
+      const result = await client.query<{
+        id: string;
+        workspace_id: string;
+        target_user_id: string;
+        target_role: AppRole;
+        target_status: "ACTIVE" | "SUSPENDED";
+      }>(
+        `select id, workspace_id, target_user_id, target_role, target_status
+         from public.staff_identity_repair_jobs
+         where id = $1 and status in ('PENDING', 'FAILED', 'DEAD')
+         for update`,
+        [repairId],
+      );
+      const job = result.rows[0];
+      if (!job) {
+        throw new DatabaseRequestError(
+          404,
+          "IDENTITY_REPAIR_NOT_FOUND",
+          "Identity repair job was not found",
+        );
+      }
+      await client.query(
+        "update app_auth.accounts set status = $2, updated_at = now() where id = $1",
+        [job.target_user_id, job.target_status],
+      );
+      await client.query(
+        `update public.workspace_memberships
+         set role = $3, status = $4
+         where workspace_id = $1 and user_id = $2`,
+        [job.workspace_id, job.target_user_id, job.target_role, job.target_status],
+      );
+      await client.query(
+        `update public.sales_team_members
+         set role = $3, active = ($4 = 'ACTIVE')
+         where workspace_id = $1 and auth_user_id = $2`,
+        [job.workspace_id, job.target_user_id, job.target_role, job.target_status],
+      );
+      await client.query(
+        `update app_auth.sessions
+         set revoked_at = now(), revoked_reason = 'IDENTITY_REPAIRED'
+         where user_id = $1 and revoked_at is null`,
+        [job.target_user_id],
+      );
+      await client.query(
+        `update public.staff_identity_repair_jobs
+         set status = 'COMPLETED', attempts = attempts + 1, last_error = null, updated_at = now()
+         where id = $1`,
+        [job.id],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
   });
-  try {
-    await supabaseAdminRequest(`/auth/v1/admin/users/${job.target_user_id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        app_metadata: {
-          role: job.target_role,
-          account_status: job.target_status,
-          workspace_id: configuredWorkspaceId(),
-        },
-        ban_duration: job.target_status === "SUSPENDED" ? "876000h" : "none",
-      }),
-    });
-    await supabaseAdminJson("/rest/v1/rpc/complete_identity_repair", {
-      method: "POST",
-      body: JSON.stringify({ repair_id: job.id, successful: true, failure: null }),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "IDENTITY_REPAIR_FAILED";
-    await supabaseAdminJson("/rest/v1/rpc/complete_identity_repair", {
-      method: "POST",
-      body: JSON.stringify({ repair_id: job.id, successful: false, failure: message }),
-    }).catch(() => undefined);
-    throw error;
-  }
 }
 
-export async function updateStaffUser(target: StaffUserRecord, input: { status?: "ACTIVE" | "SUSPENDED"; role?: Exclude<AppRole, "SUPER_ADMIN"> }, actor: AppUser) {
-  if (target.id === actor.id && input.status === "SUSPENDED") throw new SupabaseRequestError(400, "SELF_SUSPEND_FORBIDDEN", "You cannot suspend your own account");
-  if ((target.role === "SUPER_ADMIN" || target.role === "ADMIN" || input.role === "ADMIN") && actor.role !== "SUPER_ADMIN") {
-    throw new SupabaseRequestError(403, "ROLE_ASSIGNMENT_FORBIDDEN", "A super administrator is required");
+export async function updateStaffUser(
+  target: StaffUserRecord,
+  input: { status?: "ACTIVE" | "SUSPENDED"; role?: Exclude<AppRole, "SUPER_ADMIN"> },
+  actor: AppUser,
+) {
+  if (target.id === actor.id && input.status === "SUSPENDED") {
+    throw new DatabaseRequestError(
+      400,
+      "SELF_SUSPEND_FORBIDDEN",
+      "You cannot suspend your own account",
+    );
   }
-  if (target.role === "SUPER_ADMIN") throw new SupabaseRequestError(403, "SUPER_ADMIN_PROTECTED", "The bootstrap super administrator is protected");
+  if (
+    (target.role === "SUPER_ADMIN" || target.role === "ADMIN" || input.role === "ADMIN")
+    && actor.role !== "SUPER_ADMIN"
+  ) {
+    throw new DatabaseRequestError(
+      403,
+      "ROLE_ASSIGNMENT_FORBIDDEN",
+      "A super administrator is required",
+    );
+  }
+  if (target.role === "SUPER_ADMIN") {
+    throw new DatabaseRequestError(
+      403,
+      "SUPER_ADMIN_PROTECTED",
+      "The bootstrap super administrator is protected",
+    );
+  }
   const nextRole = input.role ?? target.role;
   const nextStatus = input.status ?? target.status;
-  const change = await supabaseAdminJson<{ id: string }>("/rest/v1/rpc/prepare_staff_identity_change", {
-    method: "POST",
-    body: JSON.stringify({
-      target_user: target.id,
-      new_role: nextRole,
-      new_status: nextStatus,
-      actor_user: actor.id,
-    }),
+  const workspaceId = configuredWorkspaceId();
+
+  await withPoolClient("system", async (client) => {
+    await client.query("begin");
+    try {
+      await client.query(
+        "update app_auth.accounts set status = $2, updated_at = now() where id = $1",
+        [target.id, nextStatus],
+      );
+      const membership = await client.query(
+        `update public.workspace_memberships
+         set role = $3, status = $4
+         where workspace_id = $1 and user_id = $2`,
+        [workspaceId, target.id, nextRole, nextStatus],
+      );
+      if (!membership.rowCount) {
+        throw new DatabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
+      }
+      await client.query(
+        `update public.sales_team_members
+         set role = case when $3 like 'SALES_%' then $3 else role end,
+             active = ($3 like 'SALES_%' and $4 = 'ACTIVE')
+         where workspace_id = $1 and auth_user_id = $2`,
+        [workspaceId, target.id, nextRole, nextStatus],
+      );
+      await client.query(
+        `update app_auth.sessions
+         set revoked_at = now(), revoked_reason = 'STAFF_ACCOUNT_CHANGED'
+         where user_id = $1 and revoked_at is null`,
+        [target.id],
+      );
+      await client.query(
+        `insert into public.audit_events(
+          workspace_id, actor_id, entity_type, entity_id, action, before_data, after_data
+        ) values($1, $2, 'staff_user', $3, 'UPDATE', $4, $5)`,
+        [
+          workspaceId,
+          actor.id,
+          target.id,
+          { role: target.role, status: target.status },
+          { role: nextRole, status: nextStatus },
+        ],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
   });
-  try {
-    await supabaseAdminRequest(`/auth/v1/admin/users/${target.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        app_metadata: { role: nextRole, account_status: nextStatus, workspace_id: configuredWorkspaceId() },
-        ban_duration: nextStatus === "SUSPENDED" ? "876000h" : "none",
-      }),
-    });
-    await supabaseAdminJson("/rest/v1/rpc/complete_staff_identity_change", {
-      method: "POST",
-      body: JSON.stringify({ change_id: change.id }),
-    });
-  } catch (error) {
-    let rollbackFailure = error instanceof Error ? error.message : "IDENTITY_SYNC_FAILED";
-    try {
-      await supabaseAdminRequest(`/auth/v1/admin/users/${target.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          app_metadata: { role: target.role, account_status: target.status, workspace_id: configuredWorkspaceId() },
-          ban_duration: target.status === "SUSPENDED" ? "876000h" : "none",
-        }),
-      });
-    } catch (compensationError) {
-      rollbackFailure = `AUTH_COMPENSATION_FAILED: ${compensationError instanceof Error ? compensationError.message : "UNKNOWN"}`;
-    }
-    let databaseRollbackFailed = false;
-    try {
-      await supabaseAdminJson("/rest/v1/rpc/rollback_staff_identity_change", {
-        method: "POST",
-        body: JSON.stringify({
-          change_id: change.id,
-          failure: rollbackFailure,
-        }),
-      });
-    } catch {
-      databaseRollbackFailed = true;
-    }
-    if (rollbackFailure.startsWith("AUTH_COMPENSATION_FAILED") || databaseRollbackFailed) {
-      throw new SupabaseRequestError(502, "IDENTITY_COMPENSATION_REQUIRED", rollbackFailure);
-    }
-    throw error;
-  }
 }

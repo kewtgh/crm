@@ -1,4 +1,4 @@
-import { supabaseJson } from "./supabase-server";
+import { databaseJson } from "./db/gateway";
 
 export type TaskWorkItem={
   id:string;titleZh:string;titleEn:string;related:string;status:string;priority:string;
@@ -10,7 +10,7 @@ export type TeamCapacity={
 export type TaskWorkspace={canViewTeam:boolean;items:TaskWorkItem[];capacity:TeamCapacity[]};
 
 export async function loadTaskWorkspace(){
-  const raw=await supabaseJson<TaskWorkspace>("/rest/v1/rpc/crm_task_workspace",{method:"POST",body:"{}"});
+  const raw=await databaseJson<TaskWorkspace>("/db/rpc/crm_task_workspace",{method:"POST",body:"{}"});
   return{
     canViewTeam:Boolean(raw.canViewTeam),
     items:(raw.items??[]).map(item=>({...item})),
@@ -18,5 +18,5 @@ export async function loadTaskWorkspace(){
   };
 }
 export async function bulkCompleteTasks(ids:string[],reason:string){
-  return supabaseJson<number>("/rest/v1/rpc/bulk_complete_crm_tasks",{method:"POST",body:JSON.stringify({task_ids:ids,completion_reason:reason})});
+  return databaseJson<number>("/db/rpc/bulk_complete_crm_tasks",{method:"POST",body:JSON.stringify({task_ids:ids,completion_reason:reason})});
 }

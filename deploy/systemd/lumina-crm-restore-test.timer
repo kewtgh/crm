@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Lumina CRM PostgreSQL restore verification monthly
+
+[Timer]
+OnCalendar=Sat *-*-01..07 04:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=lumina-crm-restore-test.service
+
+[Install]
+WantedBy=timers.target

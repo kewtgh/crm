@@ -1,17 +1,20 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { hydrateStaffUser, nextAuthenticatedPath, userFromSupabase } from "@/lib/auth";
+import { nextAuthenticatedPath } from "@/lib/auth";
 import { setAuthSessionCookies } from "@/lib/auth-session";
-import { enterpriseSsoCookie, readEnterpriseSsoState } from "@/lib/enterprise-identity";
+import { appUserFromIdentity, findAccountByIdentifier } from "@/lib/auth/accounts";
+import { createSession } from "@/lib/auth/session-store";
+import {
+  enterpriseSsoConfiguration,
+  enterpriseSsoCookie,
+  readEnterpriseSsoState,
+} from "@/lib/enterprise-identity";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { claimScimSsoIdentity } from "@/lib/scim";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
 
-type PkceResult = { access_token?: string; refresh_token?: string; expires_in?: number; user?: Record<string, unknown> };
-
 function loginRedirect(code: string, requestUrl: string) {
-  const base = applicationOrigin(requestUrl);
-  return new URL(`/login?ssoError=${encodeURIComponent(code)}`, base);
+  return new URL(`/login?ssoError=${encodeURIComponent(code)}`, applicationOrigin(requestUrl));
 }
 
 export async function GET(request: Request) {
@@ -19,37 +22,67 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const state = await readEnterpriseSsoState(cookieStore.get(enterpriseSsoCookie)?.value);
   const code = url.searchParams.get("code");
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const suppliedState = url.searchParams.get("state");
+  const configuration = enterpriseSsoConfiguration();
   let response: NextResponse;
-  if (!state || !code || code.length > 4096 || !supabaseUrl || !anonKey) {
+  if (
+    !configuration.enabled
+    || !state
+    || !code
+    || code.length > 4096
+    || suppliedState !== state.state
+  ) {
     response = NextResponse.redirect(loginRedirect("SSO_STATE_INVALID", request.url));
   } else {
     try {
-      const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
+      const callback = new URL("/api/auth/sso/callback", applicationOrigin(request.url)).toString();
+      const tokenResponse = await fetchWithTimeout(configuration.tokenUrl, {
         method: "POST",
-        headers: { apikey: anonKey, "content-type": "application/json" },
-        body: JSON.stringify({ auth_code: code, code_verifier: state.verifier }),
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "application/json",
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: callback,
+          client_id: configuration.clientId,
+          client_secret: configuration.clientSecret,
+          code_verifier: state.verifier,
+        }),
       }, 10_000);
-      const result = await upstream.json().catch(() => ({})) as PkceResult;
-      const identityPayload = result.user ?? {};
-      const claimed = upstream.ok && result.access_token ? await claimScimSsoIdentity(identityPayload) : null;
-      if (claimed) {
-        identityPayload.app_metadata = { role: claimed.role, account_status: "ACTIVE", workspace_id: claimed.workspace_id };
-        identityPayload.user_metadata = {
-          ...((identityPayload.user_metadata ?? {}) as Record<string,unknown>),
-          chinese_name: claimed.display_name_zh,
-          english_name: claimed.display_name_en,
-        };
-      }
-      const baseUser = upstream.ok && result.access_token ? userFromSupabase(identityPayload) : null;
-      const user = baseUser && result.access_token ? await hydrateStaffUser(baseUser, result.access_token) : null;
-      if (!user || !result.access_token || !result.refresh_token) {
-        response = NextResponse.redirect(loginRedirect("SSO_STAFF_ACCESS_DENIED", request.url));
-      } else {
-        response = NextResponse.redirect(new URL(nextAuthenticatedPath(user), applicationOrigin(request.url)));
-        setAuthSessionCookies(response, result);
-      }
+      const token = await tokenResponse.json().catch(() => ({})) as { access_token?: string };
+      if (!tokenResponse.ok || !token.access_token) throw new Error("SSO_TOKEN_REJECTED");
+      const userInfoResponse = await fetchWithTimeout(configuration.userInfoUrl, {
+        headers: { authorization: `Bearer ${token.access_token}`, accept: "application/json" },
+      }, 10_000);
+      const userInfo = await userInfoResponse.json().catch(() => ({})) as {
+        sub?: string;
+        email?: string;
+        email_verified?: boolean;
+      };
+      const email = userInfo.email?.trim().toLowerCase();
+      if (
+        !userInfoResponse.ok
+        || !userInfo.sub
+        || !email
+        || email !== state.email
+        || userInfo.email_verified === false
+      ) throw new Error("SSO_IDENTITY_REJECTED");
+      let identity = await findAccountByIdentifier(email);
+      if (!identity) throw new Error("SSO_STAFF_ACCESS_DENIED");
+      await claimScimSsoIdentity({ id: identity.id, email }).catch(() => null);
+      identity = await findAccountByIdentifier(email);
+      if (!identity || identity.status !== "ACTIVE") throw new Error("SSO_STAFF_ACCESS_DENIED");
+      const session = await createSession({
+        userId: identity.id,
+        passwordVersion: identity.passwordVersion,
+        persistent: true,
+        request,
+      });
+      const user = appUserFromIdentity(identity);
+      response = NextResponse.redirect(new URL(nextAuthenticatedPath(user), applicationOrigin(request.url)));
+      setAuthSessionCookies(response, session);
     } catch {
       response = NextResponse.redirect(loginRedirect("SSO_UNAVAILABLE", request.url));
     }

@@ -1,4 +1,4 @@
-import { supabaseRequest, supabaseJson } from "./supabase-server";
+import { databaseRequest, databaseJson } from "./db/gateway";
 import type { DataRow, StatusTone } from "./crm-data";
 
 export type PersistentResource = "schools" | "people" | "tasks";
@@ -81,32 +81,32 @@ export async function listCrmRows(resource: PersistentResource, options: { query
   const sortKey = options.sort && options.sort in config.sort ? options.sort as keyof typeof config.sort : "primary";
   params.set("order", `${config.sort[sortKey]}.${options.direction === "desc" ? "desc" : "asc"}`);
   const [response,metrics] = await Promise.all([
-    supabaseRequest(`/rest/v1/${config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
-    supabaseJson<CrmMetrics>("/rest/v1/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
+    databaseRequest(`/db/table/${config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
+    databaseJson<CrmMetrics>("/db/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
   ]);
   const records = await response.json() as Record<string, unknown>[];
   const contentRange = response.headers.get("content-range") ?? "*/0";
-  const ownerIds=[...new Set(records.map(record=>record.owner_id).filter(Boolean).map(String))];const owners=new Map<string,string>();if(ownerIds.length){const profiles=await supabaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/rest/v1/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ownerIds.join(",")})`);profiles.forEach(profile=>owners.set(profile.user_id,`${profile.display_name_zh} / ${profile.display_name_en}`));}
+  const ownerIds=[...new Set(records.map(record=>record.owner_id).filter(Boolean).map(String))];const owners=new Map<string,string>();if(ownerIds.length){const profiles=await databaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ownerIds.join(",")})`);profiles.forEach(profile=>owners.set(profile.user_id,`${profile.display_name_zh} / ${profile.display_name_en}`));}
   return { items: records.map((record) => toRow(resource, record,record.owner_id?owners.get(String(record.owner_id))??"—":"—")), total: Number(contentRange.split("/")[1] ?? records.length), page, pageSize,metrics };
 }
 
 export async function checkCrmDuplicate(resource: PersistentResource, input: { email?: string; phone?: string; nameZh?: string; nameEn?: string }) {
-  return supabaseJson<{ id: string; nameZh: string; nameEn: string; reason: string }[]>("/rest/v1/rpc/crm_duplicate_check", { method: "POST", body: JSON.stringify({ resource, candidate_email: input.email || null, candidate_phone: input.phone || null, candidate_name_zh: input.nameZh || null, candidate_name_en: input.nameEn || null }) });
+  return databaseJson<{ id: string; nameZh: string; nameEn: string; reason: string }[]>("/db/rpc/crm_duplicate_check", { method: "POST", body: JSON.stringify({ resource, candidate_email: input.email || null, candidate_phone: input.phone || null, candidate_name_zh: input.nameZh || null, candidate_name_en: input.nameEn || null }) });
 }
 
 export async function createCrmRecord(resource: PersistentResource, input: Record<string, unknown>,ownerId:string) {
   if(resource==="people"&&input.organizationId){
-    const organizations=await supabaseJson<Array<{id:string}>>(`/rest/v1/organizations?select=id&id=eq.${input.organizationId}&limit=1`);
+    const organizations=await databaseJson<Array<{id:string}>>(`/db/table/organizations?select=id&id=eq.${input.organizationId}&limit=1`);
     if(!organizations.length)throw new Error("RELATED_ORGANIZATION_NOT_FOUND");
   }
   if(resource==="tasks"&&input.relatedId){
     const table=input.relatedType==="CONTACT"?"contacts":"organizations";
-    const related=await supabaseJson<Array<{id:string}>>(`/rest/v1/${table}?select=id&id=eq.${input.relatedId}&limit=1`);
+    const related=await databaseJson<Array<{id:string}>>(`/db/table/${table}?select=id&id=eq.${input.relatedId}&limit=1`);
     if(!related.length)throw new Error("RELATED_RECORD_NOT_FOUND");
   }
   const requestedOwner=String(input.ownerId??ownerId);
   if(resource==="tasks"){
-    const created=await supabaseJson<Record<string,unknown>>("/rest/v1/rpc/create_crm_task",{
+    const created=await databaseJson<Record<string,unknown>>("/db/rpc/create_crm_task",{
       method:"POST",
       body:JSON.stringify({
         task_title_zh:input.nameZh,
@@ -125,7 +125,7 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
     : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type: "CONTACT", status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
       : { title_zh: input.nameZh, title_en: input.nameEn, related_type:input.relatedType,related_id:input.relatedId||null,related_label:input.contact ?? "", status: "TODO", priority: input.priority, due_at: input.dueAt,owner_id:requestedOwner };
   const table = resourceConfig[resource].table;
-  const created = await supabaseJson<Record<string, unknown>[]>(`/rest/v1/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
+  const created = await databaseJson<Record<string, unknown>[]>(`/db/table/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
   return toRow(resource, created[0]);
 }
 
@@ -134,12 +134,12 @@ function entityName(resource:PersistentResource){return resource==="schools"?"OR
 
 export async function loadCrmRecord(resource:PersistentResource,id:string):Promise<CrmRecordDetail>{
   const table=tableFor(resource);
-  const rows=await supabaseJson<Record<string,unknown>[]>(`/rest/v1/${table}?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows=await databaseJson<Record<string,unknown>[]>(`/db/table/${table}?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
   const record=rows[0];
   if(!record)throw new Error("CRM_RECORD_NOT_FOUND");
   const [profiles,history]=await Promise.all([
-    record.owner_id?supabaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/rest/v1/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=eq.${record.owner_id}&limit=1`):Promise.resolve([]),
-    supabaseJson<Array<{action:string;changed_at:string;actor_id:string|null;actor_name:string}>>("/rest/v1/rpc/crm_record_history",{
+    record.owner_id?databaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=eq.${record.owner_id}&limit=1`):Promise.resolve([]),
+    databaseJson<Array<{action:string;changed_at:string;actor_id:string|null;actor_name:string}>>("/db/rpc/crm_record_history",{
       method:"POST",body:JSON.stringify({resource_key:resource,target_id:id,page_size:30}),
     }),
   ]);
@@ -161,7 +161,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
 }
 
 export async function updateCrmRecord(resource:PersistentResource,id:string,expectedUpdatedAt:string,patch:Record<string,unknown>){
-  return supabaseJson<Record<string,unknown>>("/rest/v1/rpc/save_crm_record",{
+  return databaseJson<Record<string,unknown>>("/db/rpc/save_crm_record",{
     method:"POST",
     body:JSON.stringify({resource_key:resource,target_id:id,expected_updated_at:expectedUpdatedAt,patch}),
   });

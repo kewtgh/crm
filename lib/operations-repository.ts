@@ -1,4 +1,4 @@
-import { supabaseAdminJson, supabaseJson, supabaseRequest, SupabaseRequestError } from "./supabase-server";
+import { databaseSystemJson, databaseJson, databaseRequest, DatabaseRequestError } from "./db/gateway";
 import { inspectWorkerRuntimeEnvironment, type WorkerKey } from "./runtime-environment";
 import { fetchWithTimeout } from "./fetch-timeout";
 import type {
@@ -143,7 +143,7 @@ export type BusinessInsights = {
 };
 
 export async function loadOperationalSnapshot() {
-  return supabaseJson<OperationalSnapshot>("/rest/v1/rpc/operational_snapshot", {
+  return databaseJson<OperationalSnapshot>("/db/rpc/operational_snapshot", {
     method: "POST",
     body: "{}",
   });
@@ -154,20 +154,20 @@ export async function loadReleaseReadiness():Promise<ReleaseReadiness>{
   const workspaceId=process.env.CRM_WORKSPACE_ID;
   const missingWorkers=environment.enabledWorkers.length;
   if(!workspaceId||!/^[0-9a-f-]{36}$/i.test(workspaceId))return{ready:false,database:false,staleWorkers:0,missingWorkers,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
-  if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.SUPABASE_SERVICE_ROLE_KEY)return{ready:false,database:false,staleWorkers:0,missingWorkers,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
-  const snapshot=await supabaseAdminJson<Partial<ReleaseReadiness>>("/rest/v1/rpc/service_readiness_snapshot_for_workers",{method:"POST",body:JSON.stringify({target_workspace:workspaceId,enabled_workers:environment.enabledWorkers})});
+  if(!process.env.SYSTEM_DATABASE_URL)return{ready:false,database:false,staleWorkers:0,missingWorkers,failedJobs:0,stuckJobs:0,oldestPendingAt:null,environment};
+  const snapshot=await databaseSystemJson<Partial<ReleaseReadiness>>("/db/rpc/service_readiness_snapshot_for_workers",{method:"POST",body:JSON.stringify({target_workspace:workspaceId,enabled_workers:environment.enabledWorkers})});
   return{ready:snapshot.ready===true&&environment.valid,database:snapshot.database===true,staleWorkers:Number(snapshot.staleWorkers??0),missingWorkers:Number(snapshot.missingWorkers??0),failedJobs:Number(snapshot.failedJobs??0),stuckJobs:Number(snapshot.stuckJobs??0),oldestPendingAt:snapshot.oldestPendingAt??null,environment};
 }
 
 export async function retryOperationalJob(jobType: string, jobId: string) {
-  return supabaseJson<void>("/rest/v1/rpc/retry_operational_job", {
+  return databaseJson<void>("/db/rpc/retry_operational_job", {
     method: "POST",
     body: JSON.stringify({ job_type: jobType, job_id: jobId }),
   });
 }
 
 export async function listRetryableJobs(page = 1, pageSize = 10): Promise<PagedResult<RetryableJob>> {
-  return supabaseJson<PagedResult<RetryableJob>>("/rest/v1/rpc/operational_retryable_jobs_page", {
+  return databaseJson<PagedResult<RetryableJob>>("/db/rpc/operational_retryable_jobs_page", {
     method: "POST",
     body: JSON.stringify({ page_number: page, page_size: pageSize }),
   });
@@ -175,9 +175,9 @@ export async function listRetryableJobs(page = 1, pageSize = 10): Promise<PagedR
 
 export async function listIntegrations(): Promise<IntegrationConnection[]> {
   const workspaceId=process.env.CRM_WORKSPACE_ID;
-  const [rows,receipts] = await Promise.all([supabaseJson<Array<Record<string, unknown>>>(
-    "/rest/v1/integration_connections?select=id,provider,status,sync_direction,external_account_label,cursor_value,last_synced_at,last_error&order=provider",
-  ),workspaceId?supabaseAdminJson<Array<Record<string,unknown>>>(`/rest/v1/connector_validation_receipts?select=provider,status,validated_at,expires_at,capabilities,error_code&workspace_id=eq.${workspaceId}&order=validated_at.desc&limit=100`):Promise.resolve([])]);
+  const [rows,receipts] = await Promise.all([databaseJson<Array<Record<string, unknown>>>(
+    "/db/table/integration_connections?select=id,provider,status,sync_direction,external_account_label,cursor_value,last_synced_at,last_error&order=provider",
+  ),workspaceId?databaseSystemJson<Array<Record<string,unknown>>>(`/db/table/connector_validation_receipts?select=provider,status,validated_at,expires_at,capabilities,error_code&workspace_id=eq.${workspaceId}&order=validated_at.desc&limit=100`):Promise.resolve([])]);
   const validationByProvider=new Map<string,Record<string,unknown>>();for(const receipt of receipts){const key=String(receipt.provider);if(!validationByProvider.has(key))validationByProvider.set(key,receipt);}
   return rows.map((row) => ({
     id: String(row.id),
@@ -193,7 +193,7 @@ export async function listIntegrations(): Promise<IntegrationConnection[]> {
 }
 
 export async function generateNextBestActions(organizationId?: string | null) {
-  return supabaseJson<number>("/rest/v1/rpc/generate_next_best_actions", {
+  return databaseJson<number>("/db/rpc/generate_next_best_actions", {
     method: "POST",
     body: JSON.stringify({ target_organization: organizationId || null }),
   });
@@ -206,8 +206,8 @@ export async function listNextBestActions(
 ): Promise<PagedResult<NextBestAction>> {
   const organizationFilter = organizationId ? `&organization_id=eq.${encodeURIComponent(organizationId)}` : "";
   const start = (page - 1) * pageSize;
-  const response = await supabaseRequest(
-    `/rest/v1/next_best_actions?select=id,organization_id,rule_key,rule_version,priority,title_zh,title_en,rationale_zh,rationale_en,evidence,confidence,status,valid_until,draft_task_id,organizations(name_zh,name_en)&status=eq.SUGGESTED${organizationFilter}&order=priority.desc,valid_until.asc,id.asc`,
+  const response = await databaseRequest(
+    `/db/table/next_best_actions?select=id,organization_id,rule_key,rule_version,priority,title_zh,title_en,rationale_zh,rationale_en,evidence,confidence,status,valid_until,draft_task_id,organizations(name_zh,name_en)&status=eq.SUGGESTED${organizationFilter}&order=priority.desc,valid_until.asc,id.asc`,
     { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } },
   );
   const rows = await response.json() as Array<Record<string, unknown>>;
@@ -237,15 +237,15 @@ export async function listNextBestActions(
 }
 
 export async function decideNextBestAction(id: string, decision: "ACCEPTED" | "REJECTED", reason = "") {
-  return supabaseJson<Record<string, unknown>>("/rest/v1/rpc/decide_next_best_action", {
+  return databaseJson<Record<string, unknown>>("/db/rpc/decide_next_best_action", {
     method: "POST",
     body: JSON.stringify({ target_action: id, decision, reason }),
   });
 }
 
 export async function listProductBundles(): Promise<ProductBundle[]> {
-  const rows = await supabaseJson<Array<Record<string, unknown>>>(
-    "/rest/v1/product_bundles?select=id,code,name_zh,name_en,active,version,effective_from,effective_to,product_bundle_items(product_id,quantity,optional,discount_ceiling,products(name_zh,name_en))&order=code,version.desc",
+  const rows = await databaseJson<Array<Record<string, unknown>>>(
+    "/db/table/product_bundles?select=id,code,name_zh,name_en,active,version,effective_from,effective_to,product_bundle_items(product_id,quantity,optional,discount_ceiling,products(name_zh,name_en))&order=code,version.desc",
   );
   return rows.map((row) => ({
     id: String(row.id),
@@ -276,7 +276,7 @@ export async function createProductBundle(input: {
   nameEn: string;
   items: Array<{ productId: string; quantity: number; optional: boolean; discountCeiling: number }>;
 }) {
-  const row = await supabaseJson<{ id: string }>("/rest/v1/rpc/create_product_bundle", {
+  const row = await databaseJson<{ id: string }>("/db/rpc/create_product_bundle", {
     method: "POST",
     body: JSON.stringify({
       bundle_code: input.code,
@@ -294,8 +294,8 @@ export async function createProductBundle(input: {
 }
 
 export async function listExchangeRates(): Promise<ExchangeRateSnapshot[]> {
-  const rows = await supabaseJson<Array<Record<string, unknown>>>(
-    "/rest/v1/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at,created_at&order=effective_at.desc&limit=100",
+  const rows = await databaseJson<Array<Record<string, unknown>>>(
+    "/db/table/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at,created_at&order=effective_at.desc&limit=100",
   );
   return rows.map((row) => ({
     id: String(row.id),
@@ -315,7 +315,7 @@ export async function recordExchangeRate(input: {
   source: string;
   effectiveAt: string;
 }) {
-  return supabaseJson<Record<string, unknown>>("/rest/v1/rpc/record_exchange_rate_snapshot", {
+  return databaseJson<Record<string, unknown>>("/db/rpc/record_exchange_rate_snapshot", {
     method: "POST",
     body: JSON.stringify({
       base: input.base,
@@ -333,7 +333,7 @@ export async function configureIntegration(input: {
   syncDirection: IntegrationConnection["syncDirection"];
   accountLabel: string;
 }) {
-  return supabaseJson<Record<string, unknown>>("/rest/v1/rpc/configure_integration", {
+  return databaseJson<Record<string, unknown>>("/db/rpc/configure_integration", {
     method: "POST",
     body: JSON.stringify({
       target_provider: input.provider,
@@ -347,11 +347,11 @@ export async function configureIntegration(input: {
 export async function requestIntegrationSync(provider: IntegrationConnection["provider"]) {
   if (/^(1|true|yes|on)$/i.test(process.env.INTEGRATION_SYNC_ENABLED?.trim()??"")) {
     const workspaceId=process.env.CRM_WORKSPACE_ID;
-    if(!workspaceId)throw new SupabaseRequestError(503,"WORKSPACE_NOT_CONFIGURED","Workspace is not configured");
-    const receipts=await supabaseAdminJson<Array<{expires_at:string}>>(`/rest/v1/connector_validation_receipts?select=expires_at&workspace_id=eq.${workspaceId}&provider=eq.${provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`);
-    if(!receipts[0])throw new SupabaseRequestError(409,"CONNECTOR_VALIDATION_REQUIRED","A current successful connector validation is required");
+    if(!workspaceId)throw new DatabaseRequestError(503,"WORKSPACE_NOT_CONFIGURED","Workspace is not configured");
+    const receipts=await databaseSystemJson<Array<{expires_at:string}>>(`/db/table/connector_validation_receipts?select=expires_at&workspace_id=eq.${workspaceId}&provider=eq.${provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`);
+    if(!receipts[0])throw new DatabaseRequestError(409,"CONNECTOR_VALIDATION_REQUIRED","A current successful connector validation is required");
   }
-  return supabaseJson<Record<string, unknown>>("/rest/v1/rpc/request_integration_sync", {
+  return databaseJson<Record<string, unknown>>("/db/rpc/request_integration_sync", {
     method: "POST",
     body: JSON.stringify({ target_provider: provider }),
   });
@@ -360,15 +360,15 @@ export async function requestIntegrationSync(provider: IntegrationConnection["pr
 function hex(bytes:Uint8Array){return Array.from(bytes,byte=>byte.toString(16).padStart(2,"0")).join("");}
 export async function validateIntegration(provider:IntegrationConnection["provider"],actorId:string){
   const environment=inspectWorkerRuntimeEnvironment();const workspaceId=process.env.CRM_WORKSPACE_ID;const endpoint=process.env.INTEGRATION_SYNC_PROCESSOR_URL?.trim();const token=process.env.INTEGRATION_SYNC_PROCESSOR_TOKEN?.trim();
-  if(!environment.integrationsEnabled||!environment.integrations||!workspaceId||!endpoint||!token)throw new SupabaseRequestError(503,"CONNECTOR_VALIDATION_NOT_CONFIGURED","Connector validation is not configured");
+  if(!environment.integrationsEnabled||!environment.integrations||!workspaceId||!endpoint||!token)throw new DatabaseRequestError(503,"CONNECTOR_VALIDATION_NOT_CONFIGURED","Connector validation is not configured");
   const startedAt=performance.now();let status:"SUCCEEDED"|"FAILED"="FAILED";let digest:string|null=null;let capabilities:string[]=[];let errorCode:string|null="CONNECTOR_VALIDATION_FAILED";
   try{const response=await fetchWithTimeout(endpoint,{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({operation:"validate",provider,requestId:crypto.randomUUID()})},8_000);const payload=await response.json().catch(()=>({})) as {status?:string;capabilities?:unknown};if(!response.ok||payload.status!=="READY"||!Array.isArray(payload.capabilities))throw new Error("CONNECTOR_NOT_READY");capabilities=[...new Set(payload.capabilities.filter((item):item is string=>typeof item==="string"&&/^[A-Za-z0-9._:-]{1,80}$/.test(item)))].sort();const canonical=JSON.stringify({provider,status:"READY",capabilities});digest=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(canonical))));status="SUCCEEDED";errorCode=null;}catch(error){errorCode=error instanceof Error&&/^[A-Z0-9_]{3,80}$/.test(error.message)?error.message:"CONNECTOR_VALIDATION_FAILED";}
-  const expiresAt=new Date(Date.now()+24*60*60*1_000).toISOString();const durationMs=Math.min(60_000,Math.max(0,Math.round(performance.now()-startedAt)));await supabaseAdminJson("/rest/v1/connector_validation_receipts",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:workspaceId,provider,status,response_digest:digest,capabilities,error_code:errorCode,duration_ms:durationMs,validated_by:actorId,expires_at:expiresAt})});
-  if(status!=="SUCCEEDED")throw new SupabaseRequestError(502,errorCode??"CONNECTOR_VALIDATION_FAILED","Connector validation failed");return{status,capabilities,expiresAt,responseDigest:digest};
+  const expiresAt=new Date(Date.now()+24*60*60*1_000).toISOString();const durationMs=Math.min(60_000,Math.max(0,Math.round(performance.now()-startedAt)));await databaseSystemJson("/db/table/connector_validation_receipts",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:workspaceId,provider,status,response_digest:digest,capabilities,error_code:errorCode,duration_ms:durationMs,validated_by:actorId,expires_at:expiresAt})});
+  if(status!=="SUCCEEDED")throw new DatabaseRequestError(502,errorCode??"CONNECTOR_VALIDATION_FAILED","Connector validation failed");return{status,capabilities,expiresAt,responseDigest:digest};
 }
 
 export async function loadBusinessInsights() {
-  return supabaseJson<BusinessInsights>("/rest/v1/rpc/business_improvement_snapshot", {
+  return databaseJson<BusinessInsights>("/db/rpc/business_improvement_snapshot", {
     method: "POST",
     body: "{}",
   });
