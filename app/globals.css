@@ -95,7 +95,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .locale-switch-wrap { position:relative; display:inline-flex; }
 .locale-switch-error { position:absolute; z-index:70; top:calc(100% + 7px); right:0; width:max-content; max-width:min(280px,80vw); padding:8px 10px; border:1px solid #edc6c3; border-radius:8px; color:var(--red); background:#fff; box-shadow:var(--shadow-md); }
 .auth-form { width: min(100%, 510px); margin: 0 auto; }
-.turnstile-field { display:grid; gap:7px; margin:18px 0; min-width:0; }.turnstile-field .field-label { font-size:13px; font-weight:650; }.turnstile-container { width:100%; max-width:100%; min-height:65px; overflow:hidden; }.turnstile-container iframe { max-width:100% !important; }
+.captcha-field { display:grid; gap:7px; margin:18px 0; min-width:0; }
+.captcha-field > .field-label { font-size:13px; font-weight:650; }
+.captcha-provider { display:grid; gap:7px; min-width:0; }
+.turnstile-container { width:100%; max-width:100%; min-height:65px; overflow:hidden; }
+.turnstile-container iframe { max-width:100% !important; }
+.altcha-container { width:100%; min-height:70px; }
+.altcha-container altcha-widget { display:block; width:100%; --altcha-max-width:100%; --altcha-border-radius:10px; --altcha-color-primary:#0f766e; }
+.captcha-fallback-notice { padding:9px 11px; border:1px solid #d6b85f; border-radius:9px; color:#725a12; background:#fff9df; font-size:12px; line-height:1.5; }
 .auth-password-rule { display:block; margin:-4px 0 16px; }.mfa-enrollment { display:grid; justify-items:center; gap:10px; margin:0 0 18px; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); overflow-wrap:anywhere; }.mfa-enrollment .mfa-qr { width:min(220px,100%); height:auto; }.mfa-enrollment code { user-select:all; }
 .auth-form-heading { margin-bottom: 28px; }
 .auth-form-heading h1 { margin: 0; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(31px, 3.2vw, 43px); font-weight: 500; letter-spacing: -.035em; }

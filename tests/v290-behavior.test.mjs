@@ -18,6 +18,7 @@ const validEnvironment = {
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "turnstile-site-key-production",
   TURNSTILE_SECRET_KEY: "t".repeat(40),
   TURNSTILE_EXPECTED_HOSTNAME: "crm.example.net",
+  ALTCHA_HMAC_SECRET: "c".repeat(40),
   NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.net",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "a".repeat(40),
   SUPABASE_SERVICE_ROLE_KEY: "s".repeat(40),
