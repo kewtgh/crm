@@ -1,6 +1,15 @@
 import { spawn } from "node:child_process";
 import { boundedSeconds, runBounded, stopProcessTree } from "./lib/bounded-process.mjs";
+import {
+  assertProxyFreeEnvironment,
+  directRuntimeEnvironment,
+} from "./lib/direct-environment.mjs";
 
+const inheritedDirectEnvironment = directRuntimeEnvironment(process.env);
+for (const key of Object.keys(process.env)) {
+  if (!(key in inheritedDirectEnvironment)) delete process.env[key];
+}
+assertProxyFreeEnvironment(process.env, "Release gate environment");
 process.env.DO_NOT_TRACK = "1";
 process.env.SUPABASE_TELEMETRY_DISABLED = "1";
 

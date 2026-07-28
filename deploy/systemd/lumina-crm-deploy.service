@@ -8,10 +8,9 @@ Type=oneshot
 User=lumina-crm
 Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/source
-Environment=LUMINA_HTTPS_PROXY=http://127.0.0.1:20271
-Environment=NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs
 Environment=NPM_CONFIG_CACHE=/var/lib/lumina-crm/npm-cache
 Environment=XDG_CACHE_HOME=/var/lib/lumina-crm/cache
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY RSYNC_PROXY http_proxy https_proxy all_proxy no_proxy ftp_proxy rsync_proxy LUMINA_HTTPS_PROXY NODE_OPTIONS NODE_USE_ENV_PROXY GIT_PROXY_COMMAND NPM_CONFIG_PROXY NPM_CONFIG_HTTPS_PROXY NPM_CONFIG_NOPROXY GLOBAL_AGENT_HTTP_PROXY GLOBAL_AGENT_HTTPS_PROXY GLOBAL_AGENT_NO_PROXY
 ExecStart=/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 /var/lib/lumina-crm/deploy.lock /usr/bin/node /opt/lumina-crm/source/scripts/deploy-production-runner.mjs
 TimeoutStartSec=infinity
 TimeoutStopSec=30s

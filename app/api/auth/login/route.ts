@@ -76,7 +76,7 @@ async function post(request: Request) {
 
   if (isMfaRequiredRole(authorizedUser.role) || authorizedUser.mfaEnabled) {
     const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setAuthSessionCookies(response, result, remember);
+    setAuthSessionCookies(response, result);
     if (remember && authorizedUser.aal !== "aal2") {
       response.cookies.set(securityCookieNames.mfaRemember, "1", {
         httpOnly: true,
@@ -93,7 +93,7 @@ async function post(request: Request) {
   const trustedCookie = cookieStore.get(securityCookieNames.trustedDevice)?.value;
   if (await consumeTrustedDevice(authorizedUser.id, trustedCookie)) {
     const response = NextResponse.json({ ok: true, next: nextAuthenticatedPath(authorizedUser) });
-    setAuthSessionCookies(response, result, remember);
+    setAuthSessionCookies(response, result);
     return response;
   }
 

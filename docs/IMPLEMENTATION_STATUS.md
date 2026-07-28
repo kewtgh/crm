@@ -1,110 +1,90 @@
-# Implementation status — v2.8.3 release candidate
+# Implementation status — v2.8.4 release candidate
 
 Status date: 2026-07-28
 
 ## Outcome
 
-The July 28 account-security, super-administrator execution and UI remediation is implemented,
-and the dedicated-server production update path is now a persistent one-command workflow.
-TOTP enrollment produces a real QR code and recovery codes, account settings rotate those codes,
-super administrators execute terminal actions without approval, and CRM deletion uses a
-recoverable 30-day recycle bin. Staff provisioning retains one-time emailed passwords and
-first-login replacement while hardening profile/workspace synchronization. The isolated local
-database reached migration `202607280055`.
+The repository-complete v2.8.4 remediation is implemented and verified. Every successful password,
+device-verification, MFA and SSO sign-in now retains a refresh session for 30 days; “remember this
+device” controls only device trust. The login page explains that policy and links the requested
+`support@ewaya.comm` address.
 
-Production activation was not performed. Real SSO IdP metadata, SCIM client token, telemetry
-receiver, connector credentials, email delivery, scheduler heartbeats, backup rehearsal and hosted
-readiness remain deployment inputs, not simulated product state.
+Lumina Web, Worker, readiness, build/test/smoke processes and the persistent deployment runner now
+default to direct external connections. Web, Worker and deploy systemd units clear inherited proxy
+variables and have no v2rayA dependency. The only allowed proxy path is temporary
+`core.sshCommand` configuration attached to the single
+`git pull --ff-only origin main`; it preserves the SSH deploy key and never writes Git config.
 
-## Implemented scope
+Readiness independently bounds and reports environment, Supabase Auth, database, Worker and queue
+state. Database failure blocks downstream Worker/queue interpretation instead of fabricating their
+failure. Migration `202607280056_v284_readiness_diagnostics` keeps missing and stale Worker counts
+distinct. The UI text floor is 12px and the fixed Chromium matrix found no responsive,
+accessibility, authentication or business-workflow regression.
 
-- Account security: TOTP setup has a real QR image, manual secret, correctly sized input and ten
-  one-time recovery codes. Recovery-code authentication and rotation are available, and password
-  updates use the freshly verified session token.
-- Super administrator: approval-bound operations execute immediately at the terminal authority
-  while retaining audit evidence. Business-record deletion moves into a super-admin-only recycle
-  bin with restore and 30-day expiry/purge behavior.
-- Staff provisioning: administrator creation keeps the generated temporary-password email flow
-  and mandatory first-login change, explicitly synchronizes the profile and workspace membership,
-  and returns actionable configuration/service errors.
-- Product UI: Weiai purple/navy/orange branding, persistent selected navigation, centered modal
-  geometry, a four-column desktop growth summary, localized audit entities and bilingual
-  communications purposes are release-tested.
-- Runtime: Node 24.18.0 and npm 12.0.1 are pinned across local development, CI and the full release
-  gate; non-12 npm installs are rejected by the repository engine policy.
-- Routing: the root endpoint preserves the existing authenticated/anonymous destination choice
-  while emitting an origin-independent relative `Location`, so an HTTPS proxy cannot be downgraded
-  by Vinext resolving the redirect against its internal HTTP request URL.
-- Production updates: a non-root systemd runner uses a non-blocking system lock, unique deployment
-  IDs, immutable commit-addressed releases, separated environment files, bounded quality/migration
-  stages, atomic current switching, effective ProxyAgent/loopback checks, persistent logs/status,
-  protected retention and verified application rollback. The foreground controller treats systemd
-  oneshot `activating` as running, and the sudo allowlist names only Lumina units. Its `flock` file
-  lives under the systemd-created `StateDirectory`, so a reboot cannot make namespace setup depend
-  on a missing volatile `/run/lock` file.
-- Shell UX: desktop navigation now genuinely collapses, resolves exactly one longest matching child,
-  keeps the active group open, uses the Weiai purple administrator avatar, and gives MFA recovery-code
-  copy actions immediate visible and announced feedback.
-- Business time: one shared five-timezone contract is used by settings, calendar rendering,
-  repositories and workers. Invalid historical values fall back safely; nonexistent DST wall times
-  return `INVALID_LOCAL_TIME`; Postgres enforces the same set.
-- Preferences: authenticated language changes persist through `/api/settings`, reload and another
-  device while public auth/legal pages retain best-effort local preference behavior.
-- Discovery: Ctrl/⌘K combines immediate, localized, capability-filtered page commands with remote
-  CRM records and preserves keyboard/mobile listbox behavior.
-- Safety and accessibility: a reusable `alertdialog` provides focus placement/trap/restore, Escape,
-  scroll lock and inert background. Student/household archive, relationship removal, calendar
-  cancellation, invitation revocation and saved-view deletion use it. Navigation exposes
-  `aria-current`; 404 is bilingual; dashboard task mutation is per-record idempotent in the UI.
-- Release integrity: the bounded-process test is deterministic without relying on sandbox process
-  creation. Browser evidence records Git state/status digest, deployable-source fingerprint, build
-  hash, version, migration and the exact Chromium executable. Staged reports cannot merge across
-  different evidence.
-- Assets and supply chain: production QA fetches Logo, Favicons and OG PNGs and verifies HTML
-  reference, status, MIME, PNG signature and exact dimensions. React/RSC 19.2.8, PostCSS 8.5.23 and
-  secured brace expansion 5.0.8 close current advisories while retaining the compatible
-  Next/React ESLint 9 rule set.
+No production deployment was executed. No v2rayA, HunterAI or unrelated server service was
+modified, stopped or restarted.
 
 ## Verification record
 
 | Gate | Result |
 | --- | --- |
+| Full release gate | Pass in 382 seconds with proxy-free stage environments |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.8.3 routes and production bundles generated |
-| Node source and HTTP contracts | 39/39 pass, including root redirect Host/protocol coverage, login final-hop behavior, DST gaps, bounded runner and dependency API bridge |
-| Production deployment unit tests | 17/17 pass; reboot-safe StateDirectory lock, env, paths, atomic cutover, interruption recovery, oneshot states, health, systemd, cleanup and dry-run |
+| Production build | Pass; v2.8.4 route and production bundles generated without a proxy warning |
+| Node contracts | 60/60: 39 source/component contracts, 19 production-deploy tests and 2 root/login HTTP contracts |
 | Dependency audit | Pass; 0 vulnerabilities |
-| Phase-two and v0.9 business smoke | Pass |
-| PostgreSQL schema lint | Pass, 0 findings |
-| Full pgTAP suite | 464/464 pass across 11 files |
-| Local migration application | Pass through `202607280055_mfa_recovery_and_super_admin_execution` |
-| Production assets/MIME | Pass; 26 CSS/JS plus 5 PNG assets, metadata and legacy redirect |
-| HTTP, export and real device-auth smoke | Pass on the final production build |
-| Pinned Chromium public stage | Pass; 6/6 page/viewports on Chromium 1228, 0 errors, 0 warnings. The full matrix must be rerun before production activation. |
+| Supabase schema lint | Pass; 0 findings |
+| Full pgTAP suite | 468/468 across 12 files |
+| Local migration application | Pass through `202607280056_v284_readiness_diagnostics` |
+| Business and HTTP smoke | Pass: phase two, v0.9, v1.0 security, v1.1, export and real device-auth |
+| Session smoke | Pass; untrusted-device login and refresh rotation retain 30-day refresh/marker cookies |
+| Production assets/MIME | Pass; 26 CSS/JS assets, 5 exact PNG assets, metadata and legacy redirect |
+| Pinned Chromium | Pass; 10 stages, 80 page/viewports, 0 errors, 0 warnings, 9/9 identities cleaned |
 
-The merged browser evidence is Git-ignored at
-`work/browser-qa-chromium-1228/report.json`. It is authoritative for the final run time, page count,
-errors/warnings, identity cleanup, build hash, source fingerprint, Chromium version and exact
-executable. Dirty local verification is labeled dirty and is not represented as exact-commit
-verification.
+The Git-ignored merged browser report is
+`work/browser-qa-chromium-1228/report.json`. It records:
 
-Final browser evidence records Chromium 149.0.7827.55, `playwright-core` 1.61.1, migration
-`202607280055_mfa_recovery_and_super_admin_execution`, the exact executable, source fingerprint,
-build hash and working-tree state in the merged report.
+- runtime `ms-playwright/chromium-1228`;
+- Chromium `149.0.7827.55`;
+- executable
+  `C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe`;
+- `playwright-core` `1.61.1`;
+- application `2.8.4`;
+- migration head `202607280056_v284_readiness_diagnostics`;
+- base URL `http://localhost:3200`;
+- build hash, source fingerprint, Git state and status digest.
+
+The local evidence intentionally records a dirty worktree because it was generated before the
+requested release commit. It proves the exact deployable-source fingerprint under review; CI or
+the pre-production gate must still rerun against the clean committed SHA before production
+activation.
+
+## Preserved boundaries
+
+- Deployment still uses the non-blocking system lock, unique request/state records, immutable
+  commit releases, atomic `current` switch, bounded stages, protected retention, failure cleanup,
+  interruption recovery and verified application rollback.
+- Source must be on `main`, point at the reviewed origin and be clean before and after pull.
+  HEAD and `origin/main` must be the same full SHA. There is no reset, force, rebase, fetch/merge
+  sequence or implicit merge.
+- npm, checks, audit, build, migration, Supabase CLI, Web, Worker and health never receive the
+  GitHub pull proxy. The generic bounded-process layer strips any environment name ending in
+  `PROXY` or `PROXY_COMMAND`, plus `NODE_OPTIONS`.
+- The deployment sudo allowlist remains limited to Lumina units and cannot manage v2rayA,
+  HunterAI, Cloudflare Tunnel, Docker, PostgreSQL or the host.
 
 ## External production gates
 
-1. Restore-test and back up the target Supabase project, then apply reviewed migrations through
-   `055`.
-2. Configure real application, Turnstile, email and worker secrets. Enable SSO, SCIM, telemetry or
-   connector sync only after each supplier boundary and operational owner is approved.
-3. Validate IdP certificates, SCIM deprovisioning, telemetry ingestion, connector sandbox receipts
-   and scheduler heartbeats in staging.
-4. Deploy the exact commit as an immutable release and require hosted liveness/readiness, core smoke
-   and a production-safe browser sample.
+1. Back up and restore-test the target Supabase project, review and apply migrations through `056`.
+2. Install the reviewed v2.8.4 Lumina unit templates and remove only Lumina-owned legacy proxy
+   drop-ins/dependencies; do not alter v2rayA or HunterAI.
+3. Verify production Auth refresh policy permits at least 30 days, real email/Turnstile secrets,
+   scheduler heartbeats and every explicitly enabled integration.
+4. Run the clean-commit release gate, execute the deploy dry-run, then require hosted liveness and
+   structured readiness before any separately authorized production deployment.
 
 The audit, executed plan and final omission review are recorded in
-[AUDIT_2026-07-27_V2.6.0.md](AUDIT_2026-07-27_V2.6.0.md),
-[REMEDIATION_AND_PRODUCT_PLAN_2026-07-27_V2.6.0.md](REMEDIATION_AND_PRODUCT_PLAN_2026-07-27_V2.6.0.md)
-and [FINAL_REAUDIT_2026-07-27_V2.6.0.md](FINAL_REAUDIT_2026-07-27_V2.6.0.md).
+[AUDIT_2026-07-28_V2.8.4.md](AUDIT_2026-07-28_V2.8.4.md),
+[REMEDIATION_AND_PRODUCT_PLAN_2026-07-28_V2.8.4.md](REMEDIATION_AND_PRODUCT_PLAN_2026-07-28_V2.8.4.md)
+and [FINAL_REAUDIT_2026-07-28_V2.8.4.md](FINAL_REAUDIT_2026-07-28_V2.8.4.md).

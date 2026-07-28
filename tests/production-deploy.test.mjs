@@ -7,12 +7,16 @@ import {
   assertHealthPayload,
   assertLoopbackListener,
   assertPathWithin,
+  assertProxyFreeEnvironment,
   assertReleasePath,
   assertSystemdRuntime,
   atomicSwitchCurrent,
   classifyPersistedDeployment,
   cleanupFailedRelease,
   collectSecretValues,
+  directRuntimeEnvironment,
+  GITHUB_PULL_PROXY_URL,
+  githubPullArguments,
   isSystemdServiceInProgress,
   makeDeploymentId,
   makeReleaseId,
@@ -92,6 +96,52 @@ test("validates environment names and secure file modes without echoing values",
       { label: "deploy.env", allowed: ["SUPABASE_ACCESS_TOKEN"] },
     ),
     /NODE_OPTIONS/,
+  );
+});
+
+test("keeps every non-Git deployment stage free of proxy environment", () => {
+  const direct = directRuntimeEnvironment({
+    PATH: "/usr/bin",
+    HOME: "/var/lib/lumina-crm",
+    HTTP_PROXY: "http://127.0.0.1:20271",
+    https_proxy: "http://127.0.0.1:10808",
+    FTP_PROXY: "http://127.0.0.1:20271",
+    GLOBAL_AGENT_HTTP_PROXY: "http://proxy.invalid",
+    NO_PROXY: "127.0.0.1",
+    LUMINA_HTTPS_PROXY: "http://proxy.invalid",
+    NODE_OPTIONS: "--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs",
+    NODE_ENV: "production",
+  });
+  assert.deepEqual(direct, {
+    PATH: "/usr/bin",
+    HOME: "/var/lib/lumina-crm",
+    NODE_ENV: "production",
+  });
+  assert.equal(assertProxyFreeEnvironment(direct, "test stage"), true);
+  assert.throws(
+    () => assertProxyFreeEnvironment({ HTTPS_PROXY: "http://127.0.0.1:20271" }, "test stage"),
+    /HTTPS_PROXY/,
+  );
+  assert.throws(
+    () => assertProxyFreeEnvironment({ THIRD_PARTY_PROXY: "http://proxy.invalid" }, "test stage"),
+    /THIRD_PARTY_PROXY/,
+  );
+  assert.throws(
+    () => assertProxyFreeEnvironment({ NODE_OPTIONS: "--import=register-proxy.mjs" }, "test stage"),
+    /NODE_OPTIONS/,
+  );
+});
+
+test("uses the loopback proxy only as temporary configuration on GitHub pull", () => {
+  const args = githubPullArguments();
+  assert.deepEqual(args.slice(-4), ["pull", "--ff-only", "origin", "main"]);
+  assert.equal(args[0], "-c");
+  assert.match(args[1], /^core\.sshCommand=\/usr\/bin\/ssh /);
+  assert.match(args[1], /\/usr\/bin\/nc -X connect -x 127\.0\.0\.1:20271/);
+  assert.equal(GITHUB_PULL_PROXY_URL, "http://127.0.0.1:20271");
+  assert.throws(
+    () => githubPullArguments({ proxyUrl: "http://proxy.example:8080" }),
+    /loopback/,
   );
 });
 
@@ -216,6 +266,28 @@ test("retries health and requires strict production readiness", async () => {
     ...healthy,
     configuration: { expected: 12, configured: 11, missing: [] },
   }, "2.8.0", { readiness: true }), /only 11/);
+  let failureClock = 0;
+  await assert.rejects(
+    () => retryHealth({
+      fetchImpl: async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          failureReasons: [
+            { component: "auth", code: "AUTH_HEALTH_TIMEOUT" },
+            { component: "database", code: "DATABASE_READINESS_RPC_ERROR" },
+          ],
+        }),
+      }),
+      url: "http://127.0.0.1:3200/api/health?mode=ready",
+      expectedVersion: "2.8.0",
+      readiness: true,
+      timeoutMs: 1,
+      now: () => failureClock,
+      sleep: async (milliseconds) => { failureClock += milliseconds; },
+    }),
+    /auth:AUTH_HEALTH_TIMEOUT.*database:DATABASE_READINESS_RPC_ERROR/,
+  );
 });
 
 test("requires port 3200 to listen only on IPv4 loopback", () => {
@@ -224,8 +296,8 @@ test("requires port 3200 to listen only on IPv4 loopback", () => {
   assert.throws(() => assertLoopbackListener("LISTEN 0 511 [::]:3200 [::]:*"), /non-loopback/);
 });
 
-test("requires effective systemd hostname, proxy preload, worker result, and timer state", () => {
-  const environment = "LUMINA_HTTPS_PROXY=http://127.0.0.1:20271 NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs";
+test("requires effective systemd hostname, direct runtime, worker result, and timer state", () => {
+  const environment = "NODE_ENV=production";
   const input = {
     web: {
       ActiveState: "active",
@@ -244,8 +316,12 @@ test("requires effective systemd hostname, proxy preload, worker result, and tim
   }), /127\.0\.0\.1/);
   assert.throws(() => assertSystemdRuntime({
     ...input,
-    worker: { ...input.worker, Environment: "" },
-  }), /ProxyAgent preload|LUMINA_HTTPS_PROXY/);
+    worker: { ...input.worker, Environment: "HTTPS_PROXY=http://127.0.0.1:20271" },
+  }), /must not contain proxy/);
+  assert.throws(() => assertSystemdRuntime({
+    ...input,
+    web: { ...input.web, Environment: "THIRD_PARTY_PROXY=http://proxy.invalid" },
+  }), /must not contain proxy/);
   assert.throws(() => assertSystemdRuntime({
     ...input,
     timer: { ...input.timer, SubState: "elapsed" },
@@ -369,6 +445,8 @@ test("repository dry-run assets keep the lock, least privilege, and loopback bin
   assert.equal(validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson }), true);
   assert.equal(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lib/lumina-crm/deploy.lock");
   assert.doesNotMatch(serviceUnit, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
+  assert.doesNotMatch(serviceUnit, /^Environment=LUMINA_HTTPS_PROXY|register-proxy|127\.0\.0\.1:20271|127\.0\.0\.1:10808/m);
+  assert.match(serviceUnit, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
   const rebootFragileUnit = serviceUnit
     .replaceAll(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lock/lumina-crm-deploy.lock")
     .replace(

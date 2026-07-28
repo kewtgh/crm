@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.8.3 部署指引
+# Lumina Education CRM v2.8.4 部署指引
 
 ## 1. 发布前提
 
@@ -6,14 +6,14 @@
 - npm 12.x；`package.json`、`engine-strict`、CI 与完整发布门禁固定使用 `12.0.1`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
 - 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
-- 数据库必须按顺序应用到 `202607280055`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束或 `055` 的 MFA 恢复码与超级管理员直执/回收站能力。
+- 数据库必须按顺序应用到 `202607280056`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束、`055` 的 MFA 恢复码与超级管理员直执/回收站能力或 `056` 的 readiness 诊断修复。
 
-当前工作树是 v2.8.3 release candidate。`055` 已在隔离本地环境应用，生产构建、源码契约、
-部署单测与固定浏览器公开页定向门禁通过；完整浏览器矩阵必须在生产激活前重跑。本轮证据见
+当前工作树是 v2.8.4 release candidate。生产构建、源码契约、部署单测与固定浏览器门禁
+必须全部通过；完整浏览器矩阵必须在生产激活前重跑。本轮证据见
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)。
 
 本地 CRM 使用 `http://localhost:3200`，本地 Supabase 使用 56321–56324。
-`GET /api/health` 必须返回 `version=2.8.3`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
+`GET /api/health` 必须返回 `version=2.8.4`。本地开发密钥、Mailpit 与 Studio 禁止暴露到公网。
 
 ## 2. 环境变量
 
@@ -65,7 +65,7 @@ OBSERVABILITY_SAMPLE_RATE=1
 3. 配置正式 APP URL、密码重置回调、SMTP 和显示六位 `{{ .Token }}` 的 OTP 模板。
 4. 管理员必须 TOTP/AAL2；普通员工可选 MFA，否则在新设备完成邮箱 OTP。
 5. 确认 `crm-avatars` 与 `crm-exports` 为 private。
-6. 按文件名顺序应用全部迁移到 `202607280055`：
+6. 按文件名顺序应用全部迁移到 `202607280056`：
 
 ```bash
 npx supabase db push --linked
@@ -77,12 +77,15 @@ npx supabase db lint --linked --level warning
 绩效与连接器对账；`052` 修复日历与隐私导出 Worker 通过 PostgREST 读取来源记录所需的最小
 `service_role` 权限；`053` 增加受限企业目录、SSO profile 兼容和不可变连接器 sandbox
 验证凭证；`054` 清理历史异常时区并将用户偏好限制在应用实际支持的集合中；`055` 增加 MFA
-恢复码、超级管理员直执和 30 天回收站。最终数据库测试总数应为 464，任一失败都不得部署
+恢复码、超级管理员直执和 30 天回收站；`056` 将 missing/stale Worker 分开计数。最终数据库
+测试总数应为 468，任一失败都不得部署
 应用。pgTAP 必须先在隔离数据库或 CI 完整运行；生产更新只执行明确 project ref 的
 forward-only push、dry-run 与 linked schema lint，不在生产库运行 destructive reset。
 
 首次初始化运行 `npm run auth:bootstrap-admin`，确认 `SUPER_ADMIN` membership、
 `must_change_password=true` 与 username，随后删除临时密码。首次登录必须改密并配置 TOTP。
+Supabase Auth 的 refresh token inactivity/time-box 策略必须允许至少 30 天；应用的 HttpOnly
+refresh cookie、SSO、MFA 与 rotation 均按 30 天保存，“记住设备”只控制设备信任。
 
 ## 4. 构建与发布门
 
@@ -91,8 +94,9 @@ npm ci
 npm run release:gate
 ```
 
-门禁必须包含：typecheck、ESLint、production build、37 条源码契约、17 条部署单测、
-schema lint、464 条 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
+门禁必须包含：typecheck、ESLint、production build、60 条 Node 契约（39 条源码/组件、
+19 条部署单测和 2 条 redirect/login HTTP 契约）、
+schema lint、468 条 pgTAP、dependency audit、业务/HTTP/export/device-auth smoke、生产资源 MIME，以及已安装
 `ms-playwright/chromium-1228` 的真实 UI/权限/无障碍矩阵。Smoke 会写入并清理隔离数据，
 只能对专用环境执行。
 
@@ -145,7 +149,8 @@ npm run workers:process
 
 - `GET /api/health`：liveness 与版本。
 - `GET /api/health?mode=ready`：Auth、数据库、环境、队列 SLA、stuck/failed job，以及启用的
-  Worker/连接器；不健康时返回 503 和可执行修复建议。
+  Worker/连接器；每次 Supabase 探测上限 10 秒，不健康时返回 503、组件级
+  `ok`/`failed`/`blocked` 状态、稳定原因码和可执行修复建议。
 - 告警覆盖 5xx、限流、RLS 拒绝、审批/隐私执行失败、失败与卡死任务、最老积压、心跳过期、
   邮件/Webhook 失败和存储容量。
 - 启用 PITR 或每日备份，并定期恢复验证 Auth、RLS、合同、付款、隐私、审计与私有文件。
@@ -167,7 +172,7 @@ npm run workers:process
 ## 8. 专用服务器发布
 
 生产更新固定从 `git@github.com:kewtgh/crm.git` 的远端 `main` 部署明确 commit。干净 source
-checkout 只负责 fetch/fast-forward 和建立 worktree；每个 release 在
+checkout 只执行一次 fast-forward pull 和建立 worktree；每个 release 在
 `/opt/lumina-crm/releases/<UTC>-<commit>` 中安装、检查、构建和迁移，完成前不会改动
 `/opt/lumina-crm/current`。`current` 始终以同文件系统 rename 原子切换。
 
@@ -178,7 +183,8 @@ Cloudflare Tunnel 已独立运行，部署流程只管理 `lumina-crm.service`�
 ### 8.1 首次服务器初始化
 
 首次部署负责创建运行用户、source checkout、首个可运行 release、`current` symlink、环境
-文件、runtime ProxyAgent drop-in 和 Cloudflare Tunnel；这些工作已经在当前生产服务器完成。
+文件和 Cloudflare Tunnel；这些工作已经在当前生产服务器完成。v2.8.4 不再使用 runtime
+ProxyAgent。
 下面的一次性安装只为已有服务器增加持久化更新 runner。以 root 执行，并逐项检查目标路径：
 
 ```bash
@@ -193,23 +199,27 @@ sudo install -o root -g root -m 0440 deploy/sudoers/lumina-crm-deploy /etc/sudoe
 sudo visudo -cf /etc/sudoers.d/lumina-crm-deploy
 sudo install -o root -g lumina-crm -m 0640 deploy/deploy.env.example /etc/lumina-crm/deploy.env
 sudoedit /etc/lumina-crm/deploy.env
+test -x /usr/bin/nc
 sudo systemctl daemon-reload
 sudo systemctl enable lumina-crm.service lumina-crm-workers.timer
 sudo -u lumina-crm /usr/bin/npm --prefix /opt/lumina-crm/source run deploy:production:dry-run
 ```
 
-不要在每次应用更新时重新安装 unit。需要明确升级仓库 unit 模板时才替换 base unit 并
-`daemon-reload`；已有的
-`/etc/systemd/system/lumina-crm.service.d/10-runtime.conf` 和
-`lumina-crm-workers.service.d/10-runtime.conf` 必须保留。安装后验证有效配置：
+不要在每次应用更新时重新安装 unit。v2.8.4 是一次明确的 unit 架构升级：替换三个 Lumina
+base unit，并检查 Lumina 自己的 drop-in。若
+`/etc/systemd/system/lumina-crm.service.d/10-runtime.conf`、
+`lumina-crm-workers.service.d/10-runtime.conf` 或 deploy drop-in 只用于
+`LUMINA_HTTPS_PROXY`、代理 `NODE_OPTIONS`、`Requires=v2raya`/`After=v2raya`，应先备份，
+再只从这些 Lumina drop-in 删除对应行或删除该纯代理 drop-in。不要编辑、停止、重启或禁用
+v2rayA，也不要改 HunterAI 的 unit/environment。
 
 从 v2.8.2 或更早版本升级时，旧 deploy unit 会因 `/var/lock` 中的具体锁文件在重启后消失而
-以 `226/NAMESPACE` 失败，因此必须先从已核对的 v2.8.3 source 手动安装新 deploy unit：
+以 `226/NAMESPACE` 失败，因此必须先从已核对的 v2.8.4 source 手动安装新 deploy unit：
 
 ```bash
 sudo install -m 0644 deploy/systemd/lumina-crm-deploy.service /etc/systemd/system/
 sudo systemctl daemon-reload
-systemctl show lumina-crm-deploy.service -p ExecStart -p ReadWritePaths -p StateDirectory
+systemctl show lumina-crm-deploy.service -p ExecStart -p ReadWritePaths -p StateDirectory -p Environment
 ```
 
 有效配置必须使用 `/var/lib/lumina-crm/deploy.lock`，且 `ReadWritePaths` 只能列出其已存在的
@@ -220,18 +230,22 @@ systemctl cat lumina-crm.service
 systemctl cat lumina-crm-workers.service
 systemctl show lumina-crm.service -p ExecStart -p Environment
 systemctl show lumina-crm-workers.service -p Environment
+systemctl show lumina-crm.service lumina-crm-workers.service lumina-crm-deploy.service -p Requires -p After
 ```
 
 Web 的有效 `ExecStart` 必须含
-`npm run start -- --port 3200 --hostname 127.0.0.1`；Web 和 Worker 的有效 Environment
-必须含 `LUMINA_HTTPS_PROXY=http://127.0.0.1:20271` 与
-`NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs`。
+`npm run start -- --port 3200 --hostname 127.0.0.1`。三个 Lumina unit 的有效 Environment
+不得含 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`FTP_PROXY`、
+`GLOBAL_AGENT_*_PROXY` 或其他 `*PROXY`/`*PROXY_COMMAND`，
+`LUMINA_HTTPS_PROXY`、代理 preload `NODE_OPTIONS` 或 `NODE_USE_ENV_PROXY`；有效
+`Requires`/`After` 不得含 v2rayA。停止 v2rayA 不是验收步骤；只需证明 Lumina 重启不依赖它。
 
 deploy unit 将 home 设为只读，以便 Git SSH 读取部署用户既有 key/known_hosts，但不能修改
 home；npm 与 XDG 缓存固定写入 `/var/lib/lumina-crm/npm-cache` 和
 `/var/lib/lumina-crm/cache`。GitHub deploy key 与 `known_hosts` 必须在一次性初始化时以
 `lumina-crm` 完成非交互验证，不能只存在于调用者的临时 SSH agent。不要改成全局 npm cache，
-也不要为部署开放任意 home 写权限。
+也不要为部署开放任意 home 写权限。`/usr/bin/nc` 只为该次 SSH Git pull 通过本机 HTTP
+CONNECT 代理；不用于其他命令。
 
 `/usr/bin/node` 必须为 Node.js 24.x，`/usr/bin/npm` 必须为 npm 12.x。source、npm、测试、
 构建和 release 均由 `lumina-crm` 执行；sudoers 只允许启动持久化 runner、重启 Lumina Web、
@@ -283,12 +297,15 @@ runner 使用 `/var/lib/lumina-crm/deploy.lock` 的 non-blocking `flock`；同�
 部署阶段为：
 
 1. 校验 Linux、非 root、固定目录、Node/npm、环境文件、现有 release、systemd 和 loopback；
-2. 拒绝任何 tracked/untracked 修改、错误分支或错误 origin，fetch 远端 `main` 并只做
-   `merge --ff-only`，不提交、rebase、force reset；
+2. 拒绝任何 tracked/untracked 修改、错误分支或错误 origin。有效更新是
+   `git pull --ff-only origin main`；只有这次命令用临时 `-c core.sshCommand=...` 经
+   `127.0.0.1:20271` 连接 GitHub，随后核对 HEAD、`origin/main` 和工作区清洁度。不执行
+   `git config`，不写 global/local 配置，不提交、merge、rebase 或 force/reset；
 3. 从远端明确 SHA 建立 `<UTC>-<SHA12>` 的 detached immutable worktree；
 4. 用 lockfile、`--strict-allow-scripts` 和 `package.json#allowScripts` 内经审查的精确版本
    allowlist 安装完整依赖，不设置用户级/全局脚本许可；
-5. 执行 typecheck、ESLint、37 条源码契约、17 条部署单测、moderate audit 和 production build；
+5. 执行 typecheck、ESLint、60 条 Node 契约（39 源码/组件、19 部署、2 HTTP）、
+   moderate audit 和 production build；
 6. 对 project ref `ectxevxmcwzvwsjkwnld` 显式 link，先 migration dry-run，再执行
    forward-only push 和 linked schema lint，并在切换前删除 release 内的 Supabase CLI link cache；
 7. 验证 build artifact、Git SHA、package version、`APP_VERSION` 和 npm policy；
@@ -296,14 +313,17 @@ runner 使用 `/var/lib/lumina-crm/deploy.lock` 的 non-blocking `flock`；同�
    如旧 Worker 周期仍在执行，会先有界等待其自然结束，再启动新 release 的验证周期；
 9. 验证有效 systemd/drop-in、Web active/running/enabled、Worker result、
    Timer active/waiting/enabled 和端口只监听 `127.0.0.1:3200`；
-10. 重试本地 liveness、完整 readiness 与公网 liveness，要求 HTTP 200、版本匹配、五项
+10. 重试本地 liveness、完整 readiness 与公网 liveness；readiness 单次 HTTP 上限 15 秒，
+    要求 HTTP 200、版本匹配、五项
     readiness 全部健康、无 stale/missing worker、failed/stuck job 或缺失配置；
 11. 成功后保留最近 5 个 release，并始终保护 current、上一可用和正在构建的 release；
 12. 输出 deployment ID、前后 commit、版本、release path、结果及
     `LUMINA_PRODUCTION_DEPLOY_OK`。
 
 production runner 的整体硬上限为 60 分钟；Git 3 分钟、安装/检查/构建/迁移各最多 10 分钟、
-systemd 2 分钟、本地 liveness 90 秒、readiness 与公网 health 各 3 分钟。每阶段有 UTC 日志
+systemd 2 分钟、本地 liveness 90 秒、readiness 与公网 health 各 3 分钟。除 Git pull 的
+命令级临时配置外，runner、npm、检查、构建、迁移、Supabase CLI 和 health 均使用无代理环境。
+每阶段有 UTC 日志
 和 15 秒心跳；超时会终止当前进程组并进入同一失败恢复逻辑，不能通过环境变量放宽为无限等待。
 
 生产 runner 不重复浏览器、业务 smoke 或 pgTAP：这些高成本/会写数据的检查已由目标 commit
@@ -346,7 +366,7 @@ npm run deploy:production:dry-run
 
 切换后的 systemd、本地或公网健康检查失败时，runner 原子恢复上一 release，重启 Web、保持
 Timer enabled、运行并验证 Worker，再次检查上一版本的本地 liveness/readiness、公网 health、
-ProxyAgent 和 loopback。结果分别使用：
+直连运行环境和 loopback。结果分别使用：
 
 ```text
 LUMINA_PRODUCTION_DEPLOY_FAILED

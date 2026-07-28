@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     || request.headers.get("accept")?.includes("application/json");
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(authCookieNames.refresh)?.value;
-  const persistent = cookieStore.get(authCookieNames.persistence)?.value === "1";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -58,7 +57,7 @@ export async function GET(request: Request) {
       access_token: String(result.access_token),
       refresh_token: String(result.refresh_token),
       expires_in: Number(result.expires_in ?? 3600),
-    }, persistent);
+    });
     response.headers.set("cache-control", "no-store");
     return response;
   } catch {

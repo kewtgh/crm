@@ -1,14 +1,22 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.8.3**
+Current release candidate: **v2.8.4**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
 
-v2.8.0 adds a persistent, one-command production update runner for the dedicated Lumina server.
+v2.8.4 makes every successful password, device, MFA and SSO session persistent for at least
+30 days while keeping trusted-device consent separate. It removes ProxyAgent/v2rayA from Web,
+Worker, readiness and deploy-runner runtime: only the single GitHub
+`git pull --ff-only origin main` receives temporary command-level proxy configuration. Readiness
+now gives Auth, database, Worker and queue independent bounded diagnostics, missing and stale
+workers are counted separately, the login support address is actionable, and all visible CRM text
+uses the 12px accessibility floor.
+
+v2.8.0 added a persistent, one-command production update runner for the dedicated Lumina server.
 It uses an exclusive system lock, explicit remote commit, immutable releases, separated deploy-only
-credentials, bounded build and migration gates, atomic cutover, effective systemd/ProxyAgent and
+credentials, bounded build and migration gates, atomic cutover, effective direct-runtime systemd and
 loopback validation, strict local/public health checks, protected release retention, auditable status
 and logs, and automatic application rollback. SSH disconnects no longer create an uncertain deployment,
 and least-privilege sudo rules cannot touch Cloudflare Tunnel, HunterAI, Docker or the host.
@@ -49,8 +57,8 @@ upstream messages, avatars are signature-validated with old-object cleanup, and 
 responsive matrix closes typography, contrast and mobile overflow defects.
 
 v2.3.0 closed the July 23 security audit: it upgrades vulnerable framework and
-transitive dependencies, preserves the user's session-only versus 30-day sign-in
-choice across token rotation, prevents caching of private API responses, and aligns
+transitive dependencies, introduced durable session rotation (standardized to at least 30 days
+for every sign-in in v2.8.4), prevents caching of private API responses, and aligns
 the local environment generator with every optional provider boundary. It also adds
 reusable MFA authenticator guidance, unifies every password-change path, validates
 avatars before upload, and closes the remaining small-text and contrast regressions.
@@ -129,8 +137,8 @@ npm run deploy:production
 ```
 
 The command queues a unique request in a non-root systemd runner protected by
-`/var/lib/lumina-crm/deploy.lock`, created inside the systemd-managed state directory. It fetches and
-fast-forwards to an explicit remote `main` commit,
+`/var/lib/lumina-crm/deploy.lock`, created inside the systemd-managed state directory. It runs one
+temporarily proxied `git pull --ff-only origin main` and verifies the resulting explicit commit,
 builds and validates an immutable release, previews and applies linked Supabase migrations, atomically
 switches `/opt/lumina-crm/current`, verifies the Web/Worker/Timer effective configuration, loopback-only
 port 3200, local readiness and public version, and retains five protected releases. The runner survives
@@ -140,8 +148,9 @@ and a failed cutover restores and revalidates the previous application release w
 forward database migrations were reverted. One-time server installation and least-privilege sudo rules
 are documented in the [deployment guide](docs/DEPLOYMENT.md).
 
-The gate runs typecheck, lint, production build, 37 source contracts, 16 deployment unit tests, dependency audit,
-schema lint, 464 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
+The gate runs typecheck, lint, production build, 60 Node contracts (39 source/component,
+19 deployment and 2 redirect/login HTTP tests), dependency audit,
+schema lint, 468 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
 
 When executed, phase evidence is saved below `work/browser-qa-chromium-1228/phases/` and merged
@@ -159,15 +168,15 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.8.3 source implementation, migration through `202607280055`, production build,
-39 source/HTTP contracts, 17 deployment unit tests and targeted 6-page/viewport Chromium 1228
-public-page QA are complete. The previous full 80-page/viewport matrix remains available as
-historical evidence and must be rerun before production activation.
+The v2.8.4 source implementation and migration through `202607280056` are complete. The full
+80-page/viewport Chromium 1228 matrix passed locally with zero errors or warnings; current evidence
+and externally gated production steps are recorded in the implementation status. A clean-commit
+gate must still pass before production activation.
 A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
 [implementation status](docs/IMPLEMENTATION_STATUS.md),
 [deployment guide](docs/DEPLOYMENT.md), and the historical
-[v2.6.0 audit](docs/AUDIT_2026-07-27_V2.6.0.md),
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-27_V2.6.0.md),
-[final omission review](docs/FINAL_REAUDIT_2026-07-27_V2.6.0.md).
+[v2.8.4 audit](docs/AUDIT_2026-07-28_V2.8.4.md) and
+[integrated remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-28_V2.8.4.md), plus the
+[final omission review](docs/FINAL_REAUDIT_2026-07-28_V2.8.4.md).

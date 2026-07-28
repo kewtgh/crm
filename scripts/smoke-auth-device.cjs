@@ -125,11 +125,12 @@ async function submitLogin(page, username, password, remember) {
     assert(!page.url().includes("verify-device"), "Trusted device was asked for another email code");
 
     const sessionCookies = await context.cookies(base);
-    for (const name of ["crm_access_token", "crm_refresh_token"]) {
-      const cookie = sessionCookies.find((item) => item.name === name);
-      assert(cookie && cookie.expires === -1, `${name} ignored the session-only sign-in choice`);
-    }
-    assert(!sessionCookies.some((cookie) => cookie.name === "crm_session_persistent"), "Session-only sign-in received a persistence marker");
+    const minimumPersistentExpiry = Date.now() / 1000 + 29 * 24 * 60 * 60;
+    const refreshCookie = sessionCookies.find((item) => item.name === "crm_refresh_token");
+    const persistenceCookie = sessionCookies.find((item) => item.name === "crm_session_persistent");
+    assert(sessionCookies.some((item) => item.name === "crm_access_token" && item.expires > Date.now() / 1000), "Access token cookie is not persistent");
+    assert(refreshCookie?.expires > minimumPersistentExpiry, "Refresh session does not remain available for at least 30 days");
+    assert(persistenceCookie?.expires > minimumPersistentExpiry, "Persistent session marker does not remain available for at least 30 days");
     const refreshResult = await page.evaluate(async () => {
       const response = await fetch("/api/auth/refresh?mode=json", { headers: { accept: "application/json" } });
       return { status: response.status, cacheControl: response.headers.get("cache-control") };
@@ -137,11 +138,8 @@ async function submitLogin(page, username, password, remember) {
     assert(refreshResult.status === 200, "Session-only token rotation failed");
     assert(refreshResult.cacheControl === "no-store", "Auth refresh response can be cached");
     const rotatedCookies = await context.cookies(base);
-    for (const name of ["crm_access_token", "crm_refresh_token"]) {
-      const cookie = rotatedCookies.find((item) => item.name === name);
-      assert(cookie && cookie.expires === -1, `${name} became persistent after token rotation`);
-    }
-    assert(!rotatedCookies.some((cookie) => cookie.name === "crm_session_persistent"), "Token rotation created a persistence marker");
+    assert(rotatedCookies.find((item) => item.name === "crm_refresh_token")?.expires > minimumPersistentExpiry, "Token rotation shortened the 30-day refresh session");
+    assert(rotatedCookies.find((item) => item.name === "crm_session_persistent")?.expires > minimumPersistentExpiry, "Token rotation shortened the persistence marker");
 
     const devices = await page.evaluate(async () => {
       const response = await fetch("/api/settings/trusted-devices");
@@ -150,7 +148,7 @@ async function submitLogin(page, username, password, remember) {
     assert(devices.status === 200, "Trusted-device settings API was unavailable");
     assert(devices.cacheControl === "no-store", "Private API response can be cached");
     assert(devices.body.devices?.some((device) => device.current), "Current trusted device was not listed");
-    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, password replacement, trusted-device reuse, session-only rotation, and private API cache policy.");
+    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, password replacement, trusted-device reuse, 30-day session rotation, and private API cache policy.");
   } finally {
     if (browser) await browser.close();
     if (userId) {

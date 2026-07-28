@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         response = NextResponse.redirect(loginRedirect("SSO_STAFF_ACCESS_DENIED"));
       } else {
         response = NextResponse.redirect(new URL(nextAuthenticatedPath(user), process.env.APP_URL ?? url.origin));
-        setAuthSessionCookies(response, result, false);
+        setAuthSessionCookies(response, result);
       }
     } catch {
       response = NextResponse.redirect(loginRedirect("SSO_UNAVAILABLE"));

@@ -78,7 +78,7 @@ async function post(request: Request) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
   };
-  setAuthSessionCookies(response, result, pending.remember);
+  setAuthSessionCookies(response, result);
   response.cookies.delete(securityCookieNames.pendingDeviceVerification);
 
   if (pending.remember && !user.mfaEnabled) {
