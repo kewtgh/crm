@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { isMfaRequiredRole } from "@/lib/auth";
@@ -82,8 +81,7 @@ async function post(request: Request) {
         : undefined;
       const response = NextResponse.json({ ok: true, next: "/dashboard", recoveryCodes });
       const cookieBase = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
-      const remember = (await cookies()).get(securityCookieNames.mfaRemember)?.value === "1";
-      setAuthSessionCookies(response, session, remember);
+      setAuthSessionCookies(response, session);
       await revokeUserTrustedDevices(user.id, "MFA_VERIFIED").catch(() => undefined);
       response.cookies.delete(securityCookieNames.trustedDevice);
       response.cookies.set(securityCookieNames.mfaRemember, "", {

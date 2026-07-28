@@ -21,6 +21,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   assertLoopbackListener,
+  assertProxyFreeEnvironment,
   assertReviewedInstallScriptPolicy,
   assertReleasePath,
   assertSpecificAbsolutePath,
@@ -28,6 +29,8 @@ import {
   atomicSwitchCurrent,
   cleanupFailedRelease,
   collectSecretValues,
+  directRuntimeEnvironment,
+  githubPullArguments,
   makeDeploymentId,
   makeReleaseId,
   parseEnvironmentText,
@@ -64,8 +67,6 @@ const workerService = "lumina-crm-workers.service";
 const workerTimer = "lumina-crm-workers.timer";
 const expectedRepository = "git@github.com:kewtgh/crm.git";
 const expectedBranch = "main";
-const proxyUrl = "http://127.0.0.1:20271";
-const proxyPreload = "/opt/lumina-crm/runtime-proxy/register-proxy.mjs";
 const releaseRetention = 5;
 
 const limits = {
@@ -294,12 +295,11 @@ function runNpm(label, args, options = {}) {
 function safeBaseEnvironment() {
   const allowed = [
     "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TMPDIR", "TMP", "TEMP",
-    "XDG_CACHE_HOME", "NPM_CONFIG_CACHE", "SSH_AUTH_SOCK", "HTTP_PROXY", "HTTPS_PROXY",
-    "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "LUMINA_HTTPS_PROXY", "NODE_OPTIONS",
+    "XDG_CACHE_HOME", "NPM_CONFIG_CACHE", "SSH_AUTH_SOCK",
   ];
   const environment = {};
   for (const key of allowed) if (process.env[key] !== undefined) environment[key] = process.env[key];
-  return {
+  return directRuntimeEnvironment({
     ...environment,
     NPM_CONFIG_CACHE: "/var/lib/lumina-crm/npm-cache",
     XDG_CACHE_HOME: "/var/lib/lumina-crm/cache",
@@ -307,7 +307,7 @@ function safeBaseEnvironment() {
     NEXT_TELEMETRY_DISABLED: "1",
     SUPABASE_TELEMETRY_DISABLED: "1",
     WRANGLER_WRITE_LOGS: "false",
-  };
+  });
 }
 
 function loadEnvironmentFile(file, label) {
@@ -321,16 +321,14 @@ function loadEnvironmentFile(file, label) {
 }
 
 function loadEnvironments() {
-  if (process.env.LUMINA_HTTPS_PROXY !== proxyUrl || process.env.NODE_OPTIONS !== `--import=${proxyPreload}`) {
-    throw new Error("Deployment runner systemd environment is missing the required ProxyAgent configuration");
-  }
+  assertProxyFreeEnvironment(process.env, "Deployment runner systemd environment");
   const production = loadEnvironmentFile(productionEnvPath, "production.env");
   const deploy = loadEnvironmentFile(deployEnvPath, "deploy.env");
   validateEnvironmentKeyPolicy(production, {
     label: "production.env",
     forbidden: [
       /^(?:PATH|HOME|USER|LOGNAME|SHELL|NODE_OPTIONS|NODE_ENV|CI|TMPDIR|TMP|TEMP|XDG_CACHE_HOME|SSH_AUTH_SOCK)$/i,
-      /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
+      /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY|GIT_PROXY_COMMAND|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
       /^SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|PROJECT_REF)$/i,
     ],
   });
@@ -437,8 +435,6 @@ async function verifySystemd({ requireWorkerSuccess = true } = {}) {
     web: parseSystemdProperties(webResult.stdout),
     worker: requireWorkerSuccess ? worker : { ...worker, Result: "success", ExecMainStatus: "0" },
     timer: parseSystemdProperties(timerResult.stdout),
-    proxyUrl,
-    proxyPreload,
   });
   assertLoopbackListener(sockets.stdout, 3200);
 }
@@ -464,6 +460,7 @@ async function verifyHealth(version, { includePublic = true } = {}) {
     expectedVersion: version,
     readiness: true,
     timeoutMs: limits.readiness,
+    requestTimeoutMs: 15_000,
     sleep: interruptedSleep,
     onFailure,
   });
@@ -620,6 +617,7 @@ function validateDeploymentFilesystem({ createReleaseRoot = false } = {}) {
   }
   if (!existsSync(path.join(sourceRoot, ".git"))) throw new Error(`Source checkout is not a Git repository: ${sourceRoot}`);
   if (!existsSync(npmCommand)) throw new Error(`${npmCommand} is missing`);
+  if (!existsSync("/usr/bin/nc")) throw new Error("/usr/bin/nc is required for the one-shot GitHub pull proxy");
   for (const [directory, label] of [
     [deployRoot, "Deployment root"],
     [sourceRoot, "Source checkout"],
@@ -674,14 +672,24 @@ async function deploy(production, deployEnvironment) {
   const remote = await run("verify source remote", "git", ["remote", "get-url", "origin"], { timeoutMs: limits.git });
   if (remote.stdout !== expectedRepository) throw new Error(`origin must be ${expectedRepository}`);
 
-  await run("fetch remote main", "git", ["fetch", "--prune", "origin", expectedBranch], { timeoutMs: limits.git });
-  targetCommit = (await run("resolve fetched target commit", "git", ["rev-parse", `refs/remotes/origin/${expectedBranch}^{commit}`], {
+  await run("fast-forward pull remote main", "git", githubPullArguments({
+    remote: "origin",
+    branch: expectedBranch,
+  }), { timeoutMs: limits.git, env: safeBaseEnvironment() });
+  targetCommit = (await run("resolve pulled target commit", "git", ["rev-parse", "HEAD"], {
     timeoutMs: limits.git,
   })).stdout;
   if (!/^[0-9a-f]{40}$/.test(targetCommit)) throw new Error("Remote main did not resolve to a full commit SHA");
-  await run("fast-forward source branch", "git", ["merge", "--ff-only", targetCommit], { timeoutMs: limits.git });
+  const remoteCommit = (await run("verify remote tracking target", "git", ["rev-parse", `refs/remotes/origin/${expectedBranch}^{commit}`], {
+    timeoutMs: limits.git,
+  })).stdout;
+  if (remoteCommit !== targetCommit) throw new Error("Pulled HEAD does not match origin/main");
   const sourceHead = (await run("verify source target commit", "git", ["rev-parse", "HEAD"], { timeoutMs: limits.git })).stdout;
-  if (sourceHead !== targetCommit) throw new Error("Source checkout does not match the fetched target commit");
+  if (sourceHead !== targetCommit) throw new Error("Source checkout does not match the pulled target commit");
+  const pulledStatus = await run("verify clean source after pull", "git", ["status", "--porcelain=v1", "--untracked-files=normal"], {
+    timeoutMs: limits.git,
+  });
+  if (pulledStatus.stdout) throw new Error("Source checkout became dirty during Git pull");
 
   const releaseId = makeReleaseId(new Date(), targetCommit);
   releaseDir = assertReleasePath(releasesRoot, path.join(releasesRoot, releaseId), "New release");

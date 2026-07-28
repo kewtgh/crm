@@ -1,10 +1,22 @@
 import path from "node:path";
 import { parseEnv } from "node:util";
+import {
+  assertProxyFreeEnvironment,
+  assertProxyFreeSystemdEnvironment,
+  directRuntimeEnvironment,
+} from "./direct-environment.mjs";
+
+export {
+  assertProxyFreeEnvironment,
+  assertProxyFreeSystemdEnvironment,
+  directRuntimeEnvironment,
+};
 
 export const PRODUCTION_PROJECT_REF = "ectxevxmcwzvwsjkwnld";
 export const PRODUCTION_PUBLIC_URL = "https://crm.ewaya.com";
 export const PRODUCTION_LOCAL_URL = "http://127.0.0.1:3200";
 export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
+export const GITHUB_PULL_PROXY_URL = "http://127.0.0.1:20271";
 export const RELEASE_NAME_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{12}$/;
 export const LEGACY_RELEASE_NAME_PATTERN = /^\d{14}-[0-9a-f]{12}$/;
 export const DEPLOYMENT_ID_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{32}$/;
@@ -133,6 +145,22 @@ export function validateEnvironmentKeyPolicy(environment, {
   return true;
 }
 
+export function githubPullArguments({
+  proxyUrl = GITHUB_PULL_PROXY_URL,
+  remote = "origin",
+  branch = "main",
+} = {}) {
+  const parsed = new URL(proxyUrl);
+  if (parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1" || !parsed.port) {
+    throw new Error("The one-shot GitHub proxy must be an explicit IPv4 loopback HTTP URL");
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(remote) || !/^[A-Za-z0-9._/-]+$/.test(branch)) {
+    throw new Error("Git pull remote or branch is invalid");
+  }
+  const sshCommand = `/usr/bin/ssh -o ProxyCommand='/usr/bin/nc -X connect -x ${parsed.hostname}:${parsed.port} %h %p'`;
+  return ["-c", `core.sshCommand=${sshCommand}`, "pull", "--ff-only", remote, branch];
+}
+
 export function collectSecretValues(...environments) {
   return [...new Set(environments.flatMap((environment) => Object.entries(environment ?? {})
     .filter(([key, value]) => SECRET_KEY_PATTERN.test(key) && String(value).length >= 4)
@@ -249,7 +277,18 @@ export async function retryHealth({
         signal: AbortSignal.timeout(Math.max(1, Math.min(requestTimeoutMs, deadline - now()))),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const reasons = Array.isArray(payload.failureReasons)
+          ? payload.failureReasons.flatMap((reason) => {
+              const component = String(reason?.component ?? "");
+              const code = String(reason?.code ?? "");
+              return /^[a-z]+$/.test(component) && /^[A-Z][A-Z0-9_]{2,80}$/.test(code)
+                ? [`${component}:${code}`]
+                : [];
+            })
+          : [];
+        throw new Error(`HTTP ${response.status}${reasons.length ? ` (${reasons.join(", ")})` : ""}`);
+      }
       assertHealthPayload(payload, expectedVersion, { readiness });
       return { attempts, payload };
     } catch (error) {
@@ -275,8 +314,6 @@ export function assertSystemdRuntime({
   web,
   worker,
   timer,
-  proxyUrl = "http://127.0.0.1:20271",
-  proxyPreload = "/opt/lumina-crm/runtime-proxy/register-proxy.mjs",
 }) {
   if (web.ActiveState !== "active" || web.SubState !== "running" || web.UnitFileState !== "enabled") {
     throw new Error("Lumina web service must be active, running, and enabled");
@@ -285,13 +322,7 @@ export function assertSystemdRuntime({
     throw new Error("Lumina web ExecStart must bind port 3200 to 127.0.0.1");
   }
   for (const [label, unit] of [["web", web], ["worker", worker]]) {
-    const environment = unit.Environment ?? "";
-    if (!environment.includes(`LUMINA_HTTPS_PROXY=${proxyUrl}`)) {
-      throw new Error(`Lumina ${label} unit is missing LUMINA_HTTPS_PROXY`);
-    }
-    if (!environment.includes(`NODE_OPTIONS=--import=${proxyPreload}`)) {
-      throw new Error(`Lumina ${label} unit is missing the ProxyAgent preload`);
-    }
+    assertProxyFreeSystemdEnvironment(unit.Environment, `Lumina ${label} unit`);
   }
   if (worker.Result !== "success" || Number(worker.ExecMainStatus) !== 0) {
     throw new Error("Lumina worker cycle did not complete successfully");
@@ -405,8 +436,10 @@ export function validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner
   }
   if (!serviceUnit.includes("--conflict-exit-code=73")) failures.push("deploy service must expose a distinct lock conflict exit code");
   if (!serviceUnit.includes("User=lumina-crm") || !serviceUnit.includes("Group=lumina-crm")) failures.push("deploy service must run as lumina-crm");
-  if (!serviceUnit.includes("LUMINA_HTTPS_PROXY=http://127.0.0.1:20271")) failures.push("deploy runner proxy is missing");
-  if (!serviceUnit.includes("NODE_OPTIONS=--import=/opt/lumina-crm/runtime-proxy/register-proxy.mjs")) failures.push("deploy runner preload is missing");
+  try { assertProxyFreeSystemdEnvironment(serviceUnit, "deploy service"); } catch (error) { failures.push(error.message); }
+  if (!serviceUnit.includes("UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY")) {
+    failures.push("deploy service must explicitly clear inherited proxy environment");
+  }
   if (!serviceUnit.includes("StateDirectory=lumina-crm") || !serviceUnit.includes("LogsDirectory=lumina-crm")) {
     failures.push("deploy service persistent state or log directory is missing");
   }
@@ -419,7 +452,12 @@ export function validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner
     failures.push("deploy service must use read-only SSH home access and dedicated writable caches");
   }
   if (!runner.includes("sensitiveOutput: true")) failures.push("effective systemd environment output must be withheld from deployment logs");
-  if (!runner.includes("directLocalFetch")) failures.push("localhost health checks must bypass the production proxy");
+  if (!runner.includes("directLocalFetch")) failures.push("localhost health checks must stay on the direct loopback transport");
+  if (!runner.includes("githubPullArguments")) failures.push("GitHub pull must use the reviewed one-shot proxy arguments");
+  if (runner.includes('"fetch", "--prune"') || runner.includes('"merge", "--ff-only"')) {
+    failures.push("GitHub update must not use a separate fetch/merge sequence");
+  }
+  if (!runner.includes("directRuntimeEnvironment")) failures.push("deploy child stages must strip proxy environment");
   if (!runner.includes("process.versions.node")) failures.push("deploy runner must enforce Node.js 24.x");
   if (!webUnit.includes("--hostname 127.0.0.1")) failures.push("web unit must bind to 127.0.0.1");
   for (const forbidden of ["cloudflared", "hunterai", "docker", "v2raya", "reboot", "poweroff"]) {

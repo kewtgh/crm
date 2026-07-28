@@ -10,6 +10,7 @@ Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/current
 EnvironmentFile=/etc/lumina-crm/production.env
 Environment=NODE_ENV=production
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY RSYNC_PROXY http_proxy https_proxy all_proxy no_proxy ftp_proxy rsync_proxy LUMINA_HTTPS_PROXY NODE_OPTIONS NODE_USE_ENV_PROXY GIT_PROXY_COMMAND NPM_CONFIG_PROXY NPM_CONFIG_HTTPS_PROXY NPM_CONFIG_NOPROXY GLOBAL_AGENT_HTTP_PROXY GLOBAL_AGENT_HTTPS_PROXY GLOBAL_AGENT_NO_PROXY
 ExecStart=/usr/bin/npm run start -- --port 3200 --hostname 127.0.0.1
 Restart=on-failure
 RestartSec=5s

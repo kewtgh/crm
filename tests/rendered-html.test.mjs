@@ -56,6 +56,108 @@ test("reports incomplete runtime configuration without throwing", async () => {
   assert.ok(status.missing.includes("NEXT_PUBLIC_SUPABASE_URL"));
 });
 
+test("distinguishes Auth, database, Worker, and queue readiness causes", async () => {
+  const { buildReadinessDiagnostics } = await import("../lib/readiness-diagnostics.ts");
+  const healthySnapshot = {
+    database: true,
+    missingWorkers: 0,
+    staleWorkers: 0,
+    failedJobs: 0,
+    stuckJobs: 0,
+  };
+  const authFailure = buildReadinessDiagnostics({
+    environmentValid: true,
+    auth: { ok: false, code: "AUTH_HEALTH_TIMEOUT" },
+    database: { ok: true },
+    snapshot: healthySnapshot,
+  });
+  assert.equal(authFailure.components.auth.code, "AUTH_HEALTH_TIMEOUT");
+  assert.equal(authFailure.components.database.status, "ok");
+  assert.equal(authFailure.components.workers.status, "ok");
+  assert.equal(authFailure.components.queues.status, "ok");
+
+  const databaseFailure = buildReadinessDiagnostics({
+    environmentValid: true,
+    auth: { ok: true },
+    database: { ok: false, code: "DATABASE_READINESS_TIMEOUT" },
+  });
+  assert.equal(databaseFailure.components.database.code, "DATABASE_READINESS_TIMEOUT");
+  assert.equal(databaseFailure.components.workers.status, "blocked");
+  assert.equal(databaseFailure.components.queues.status, "blocked");
+
+  const operationalFailure = buildReadinessDiagnostics({
+    environmentValid: true,
+    auth: { ok: true },
+    database: { ok: true },
+    snapshot: {
+      ...healthySnapshot,
+      missingWorkers: 2,
+      staleWorkers: 1,
+      failedJobs: 3,
+      stuckJobs: 1,
+    },
+  });
+  assert.equal(operationalFailure.components.workers.code, "WORKERS_MISSING_AND_STALE");
+  assert.equal(operationalFailure.components.queues.code, "QUEUES_FAILED_AND_STUCK");
+  assert.equal(operationalFailure.ready, false);
+});
+
+test("closes the v2.8.4 session, readiness, support, and readability audit", async () => {
+  const [
+    session,
+    login,
+    deviceVerification,
+    mfa,
+    sso,
+    refresh,
+    authForm,
+    helpPage,
+    en,
+    zh,
+    health,
+    migration,
+    css,
+    qualityCss,
+  ] = await Promise.all([
+    readFile(new URL("../lib/auth-session.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/device-verification/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/settings/mfa/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/sso/callback/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/refresh/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/auth-form.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/help-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/en.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/i18n/locales/zh-CN.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/health/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607280056_v284_readiness_diagnostics.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/v220-quality.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(session, /persistentSessionMaxAge = 60 \* 60 \* 24 \* 30/);
+  assert.doesNotMatch(session, /persistent:\s*boolean|if \(persistent\)/);
+  for (const source of [login, deviceVerification, mfa, sso]) {
+    assert.match(source, /setAuthSessionCookies\(response, (?:result|session)\)/);
+  }
+  assert.match(refresh, /setAuthSessionCookies\(response, \{/);
+  assert.doesNotMatch(refresh, /get\(authCookieNames\.persistence\)/);
+  assert.match(authForm, /mailto:support@ewaya\.comm/);
+  assert.match(helpPage, /mailto:support@ewaya\.comm/);
+  assert.match(authForm, /auth\.sessionDuration/);
+  for (const locale of [en, zh]) {
+    assert.match(locale, /"auth\.helpEmail": "support@ewaya\.comm"/);
+    assert.match(locale, /"auth\.sessionDuration"/);
+  }
+  assert.match(health, /READINESS_SUPABASE_TIMEOUT_MS = 10_000/);
+  assert.match(health, /Promise\.allSettled/);
+  assert.match(health, /buildReadinessDiagnostics/);
+  assert.match(migration, /combined_stale_workers-missing_workers/);
+  for (const stylesheet of [css, qualityCss]) {
+    assert.doesNotMatch(stylesheet, /font-size:\s*(?:8|9|10|11)px/);
+    assert.doesNotMatch(stylesheet, /font:\s*[^;]*(?<!\d)(?:8|9|10|11)px/);
+  }
+});
+
 test("replaces the disposable starter with Lumina CRM", async () => {
   const [rootRoute, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/route.ts", import.meta.url), "utf8"),
@@ -152,7 +254,7 @@ test("enforces server-owned roles and administrator boundaries", async () => {
   assert.match(adminLayout, /requireRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(loginRoute, /STAFF_ACCESS_DENIED/);
   assert.match(resetRoute, /auth\/v1\/recover/);
-  assert.match(packageJson, /"version": "2\.8\.3"/);
+  assert.match(packageJson, /"version": "2\.8\.4"/);
 });
 
 test("includes calendar scheduling and sales performance workspaces", async () => {
@@ -168,7 +270,7 @@ test("includes calendar scheduling and sales performance workspaces", async () =
   assert.match(sales, /sales\.targetTrend/);
   assert.match(sales, /sales\.funnel/);
   assert.match(navigation, /\/sales\/performance/);
-  assert.match(packageJson, /"version": "2\.8\.3"/);
+  assert.match(packageJson, /"version": "2\.8\.4"/);
 });
 
 test("keeps locale catalogs aligned and renders a persistent language switch", async () => {
@@ -378,7 +480,7 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.match(turnstile, /siteverify/);
   assert.match(turnstile, /idempotency_key/);
   assert.match(auth, /nextAuthenticatedPath/);
-  assert.match(mfaRoute, /setAuthSessionCookies\(response, session, remember\)/);
+  assert.match(mfaRoute, /setAuthSessionCookies\(response, session\)/);
   assert.match(crmLayout, /mfa-challenge/);
   assert.match(firstLoginMigration, /must_change_password/);
   assert.match(firstLoginMigration, /complete_initial_password_change/);
@@ -576,7 +678,7 @@ test("closes the v1.1 post-release audit with exact metrics and guided workflows
   assert.match(operations, /release-readiness/);
   assert.match(audit, /P0/);
   assert.match(plan, /最终反查/);
-  assert.match(version, /2\.8\.3/);
+  assert.match(version, /2\.8\.4/);
 });
 
 test("bounds release checks, upstream requests, and the complete Chromium matrix", async () => {
@@ -611,7 +713,7 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
     readFile(new URL("../docs/AUDIT_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-24_V2.4.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.3"/);
+  assert.match(packageJson, /"version": "2\.8\.4"/);
   for (const script of ["build", "test", "typecheck", "lint", "qa:chromium-1228"]) {
     assert.match(packageJson, new RegExp(`"${script.replaceAll(".", "\\.")}"[^\\n]*run-bounded`));
   }
@@ -622,6 +724,8 @@ test("bounds release checks, upstream requests, and the complete Chromium matrix
   assert.match(boundedProcess, /last child output/);
   assert.match(releaseGate, /RELEASE_GATE_TOTAL_TIMEOUT_SECONDS/);
   assert.match(releaseGate, /gate remaining/);
+  assert.match(releaseGate, /directRuntimeEnvironment\(process\.env\)/);
+  assert.match(boundedProcess, /directRuntimeEnvironment\(env\)/);
   assert.match(supabase, /fetchWithTimeout/);
   assert.match(supabase, /UPSTREAM_TIMEOUT/);
   assert.match(fetchTimeout, /AbortSignal\.any/);
@@ -644,7 +748,9 @@ test("the bounded runner terminates a silent child process", async () => {
   const { runBounded } = await import("../scripts/lib/bounded-process.mjs");
   const startedAt = Date.now();
   let stopped = false;
-  const fakeSpawn = () => {
+  let childEnvironment;
+  const fakeSpawn = (_command, _args, options) => {
+    childEnvironment = options.env;
     const child = new EventEmitter();
     child.pid = 424_242;
     child.stdout = new PassThrough();
@@ -658,12 +764,20 @@ test("the bounded runner terminates a silent child process", async () => {
       timeoutMs: 2_000,
       idleTimeoutMs: 25,
       heartbeatMs: 5_000,
+      env: {
+        PATH: "/usr/bin",
+        HTTPS_PROXY: "http://127.0.0.1:20271",
+        NO_PROXY: "127.0.0.1",
+        NODE_OPTIONS: "--import=register-proxy.mjs",
+        NODE_ENV: "test",
+      },
       spawnProcess: fakeSpawn,
       stopProcess: () => { stopped = true; },
     }),
     /produced no output/,
   );
   assert.equal(stopped, true);
+  assert.deepEqual(childEnvironment, { PATH: "/usr/bin", NODE_ENV: "test" });
   assert.ok(Date.now() - startedAt < 1_000, "silent child was not terminated promptly");
 });
 
@@ -728,7 +842,7 @@ test("closes the v1.2 CRM, resilience, accessibility, and product audit", async 
   assert.match(releaseGate,/npm_execpath/);
   assert.match(audit,/CRM-01/);
   assert.match(plan,/RELEASE-02/);
-  assert.match(version,/2\.8\.3/);
+  assert.match(version,/2\.8\.4/);
 });
 
 test("implements the v2 education, privacy, capability, import/export, and browser QA closure", async () => {
@@ -762,7 +876,7 @@ test("implements the v2 education, privacy, capability, import/export, and brows
   assert.match(browserQa,/ms-playwright\/chromium-1228/);
   assert.match(browserQa,/chromium-1228\/chrome-win64\/chrome\.exe/);
   assert.match(health,/SCHEDULE_WORKERS/);
-  assert.match(packageJson,/"version": "2\.8\.3"/);
+  assert.match(packageJson,/"version": "2\.8\.4"/);
 });
 
 test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", async () => {
@@ -800,7 +914,7 @@ test("closes the v2.1 workflow, tenant-integrity, discovery, and UX audit", asyn
   assert.match(imports,/import-source-file/);
   assert.match(audit,/PROG-01/);
   assert.match(plan,/REVIEW-01/);
-  assert.match(version,/2\.8\.3/);
+  assert.match(version,/2\.8\.4/);
 });
 
 test("closes the v2.2 execution-integrity and business-expansion audit", async () => {
@@ -925,12 +1039,12 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(packageJson, /"postcss": "8\.5\.23"/);
   assert.match(auth, /persistence: "crm_session_persistent"/);
   assert.match(session, /persistentSessionMaxAge/);
-  assert.match(session, /persistent \? \{ \.\.\.base, maxAge:/);
+  assert.match(session, /maxAge: persistentSessionMaxAge/);
+  assert.doesNotMatch(session, /persistent:\s*boolean|if \(persistent\)/);
   for (const source of [login, deviceVerification, mfa, refresh]) {
     assert.match(source, /setAuthSessionCookies/);
   }
-  assert.match(refresh, /authCookieNames\.persistence/);
-  assert.doesNotMatch(refresh, /maxAge:\s*60\s*\*\s*60\s*\*\s*24\s*\*\s*30/);
+  assert.doesNotMatch(refresh, /get\(authCookieNames\.persistence\)/);
   assert.match(logout, /clearAuthSessionCookies/);
   assert.match(password, /authCookieNames\.persistence/);
   assert.match(api, /"cache-control": "no-store"/);
@@ -961,10 +1075,10 @@ test("closes the v2.3.0 dependency, session, API-cache, and environment audit", 
   assert.match(plan, /完整验收/);
   assert.match(finalReview, /43\/43 页面\/视口/);
   assert.match(finalReview, /计划无遗漏、无未完成实现/);
-  assert.match(implementationStatus, /Pinned Chromium public stage \| Pass/);
-  assert.match(implementationStatus, /full matrix must be rerun before production activation/i);
+  assert.match(implementationStatus, /Pinned Chromium \| Pass/);
+  assert.match(implementationStatus, /clean committed SHA before production\s+activation/i);
   assert.doesNotMatch(implementationStatus, /Pending continuation/);
-  assert.match(version, /2\.8\.3/);
+  assert.match(version, /2\.8\.4/);
 });
 
 test("closes the v2.3.0 supplemental settings and browser audit", async () => {
@@ -1018,8 +1132,10 @@ test("provides a persistent, locked and atomic one-command production deployment
   assert.match(controller, /writeExclusiveRequest/);
   assert.match(controller, /LUMINA_PRODUCTION_DEPLOY_DRY_RUN_OK/);
   assert.match(controller, /terminalMarkers/);
-  assert.match(runner, /git", \["fetch", "--prune", "origin", expectedBranch\]/);
-  assert.match(runner, /git", \["merge", "--ff-only", targetCommit\]/);
+  assert.match(runner, /githubPullArguments\(\{/);
+  assert.match(core, /\["-c", `core\.sshCommand=\$\{sshCommand\}`, "pull", "--ff-only", remote, branch\]/);
+  assert.doesNotMatch(runner, /\["fetch", "--prune"|\["merge", "--ff-only"/);
+  assert.doesNotMatch(runner, /"git", \["config"|--global|--local/);
   assert.match(runner, /"worktree", "add", "--detach"/);
   assert.match(runner, /"db", "push", "--linked", "--dry-run", "--yes"/);
   assert.match(runner, /"db", "lint", "--linked", "--level", "warning", "--fail-on", "warning"/);
@@ -1038,7 +1154,8 @@ test("provides a persistent, locked and atomic one-command production deployment
   assert.match(deployService, /flock --nonblock --exclusive --conflict-exit-code=73 \/var\/lib\/lumina-crm\/deploy\.lock/);
   assert.doesNotMatch(deployService, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
   assert.match(deployService, /User=lumina-crm/);
-  assert.match(deployService, /NODE_OPTIONS=--import=\/opt\/lumina-crm\/runtime-proxy\/register-proxy\.mjs/);
+  assert.doesNotMatch(deployService, /^Environment=LUMINA_HTTPS_PROXY|register-proxy|127\.0\.0\.1:20271|127\.0\.0\.1:10808/m);
+  assert.match(deployService, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
   assert.match(deployService, /ProtectHome=read-only/);
   assert.match(deployService, /NPM_CONFIG_CACHE=\/var\/lib\/lumina-crm\/npm-cache/);
   assert.match(sudoers, /lumina-crm-deploy\.service/);
@@ -1048,13 +1165,15 @@ test("provides a persistent, locked and atomic one-command production deployment
     assert.match(unit, /TimeoutStartSec=/);
     assert.match(unit, /TimeoutStopSec=/);
     assert.match(unit, /KillMode=mixed/);
+    assert.match(unit, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
+    assert.doesNotMatch(unit, /^Environment=LUMINA_HTTPS_PROXY|register-proxy|Requires=.*v2raya|After=.*v2raya/im);
   }
   assert.match(webService, /--hostname 127\.0\.0\.1/);
   assert.match(guide, /npm run deploy:production/);
   assert.match(guide, /npm run deploy:production:status/);
   assert.match(guide, /SSH/);
   assert.match(guide, /\/var\/lib\/lumina-crm\/deploy\.lock/);
-  assert.match(guide, /226\/NAMESPACE/);
+  assert.match(guide, /git pull --ff-only origin main/);
 });
 
 test("uses the shared 10/20/50 pagination contract for every growing list", async () => {
@@ -1150,7 +1269,7 @@ test("closes the v2.5.0 security, enterprise, operations, and UX audit", async (
     readFile(new URL("../docs/AUDIT_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-26_V2.5.0.md", import.meta.url), "utf8"),
   ]);
-  assert.match(packageJson, /"version": "2\.8\.3"/);
+  assert.match(packageJson, /"version": "2\.8\.4"/);
   assert.match(returnTo, /containsUnsafePathCharacters/);
   assert.match(refresh, /safeRelativeReturnTo/);
   assert.match(environment, /Placeholder values are not allowed/);
@@ -1331,5 +1450,5 @@ test("closes the v2.6.0 time, preference, command, safety, and release-evidence 
   assert.match(stagedQa, /gitStatusDigest/);
   assert.match(audit, /不受约束的时区/);
   assert.match(plan, /统一命令搜索/);
-  assert.match(version, /2\.8\.3/);
+  assert.match(version, /2\.8\.4/);
 });

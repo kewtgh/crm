@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { directRuntimeEnvironment } from "./direct-environment.mjs";
 
 const MAX_TIMEOUT_SECONDS = 3_600;
 
@@ -47,7 +48,7 @@ export function runBounded({
     let settled = false;
     const child = spawnProcess(command, args, {
       cwd,
-      env,
+      env: directRuntimeEnvironment(env),
       stdio: ["inherit", "pipe", "pipe"],
       detached: process.platform !== "win32",
       windowsHide: true,

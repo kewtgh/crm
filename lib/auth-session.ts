@@ -21,31 +21,26 @@ function cookieBase() {
 export function setAuthSessionCookies(
   response: NextResponse,
   session: SessionTokens,
-  persistent: boolean,
 ) {
   const base = cookieBase();
   if (session.access_token) {
     response.cookies.set(
       authCookieNames.access,
       session.access_token,
-      persistent ? { ...base, maxAge: Number(session.expires_in ?? 3600) } : base,
+      { ...base, maxAge: Number(session.expires_in ?? 3600) },
     );
   }
   if (session.refresh_token) {
     response.cookies.set(
       authCookieNames.refresh,
       session.refresh_token,
-      persistent ? { ...base, maxAge: persistentSessionMaxAge } : base,
+      { ...base, maxAge: persistentSessionMaxAge },
     );
   }
-  if (persistent) {
-    response.cookies.set(authCookieNames.persistence, "1", {
-      ...base,
-      maxAge: persistentSessionMaxAge,
-    });
-  } else {
-    response.cookies.set(authCookieNames.persistence, "", { ...base, maxAge: 0 });
-  }
+  response.cookies.set(authCookieNames.persistence, "1", {
+    ...base,
+    maxAge: persistentSessionMaxAge,
+  });
 }
 
 export function clearAuthSessionCookies(response: NextResponse) {
@@ -53,4 +48,3 @@ export function clearAuthSessionCookies(response: NextResponse) {
     response.cookies.set(name, "", { path: "/", maxAge: 0 });
   }
 }
-

@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
 import { APP_VERSION } from "@/lib/version";
 import { apiRoute } from "@/lib/api";
-import { supabaseAdminJson } from "@/lib/supabase-server";
+import { SupabaseRequestError, supabaseAdminJson } from "@/lib/supabase-server";
 import { inspectWorkerRuntimeEnvironment } from "@/lib/runtime-environment";
+import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
+import {
+  buildReadinessDiagnostics,
+  type ReadinessProbe,
+  type ReadinessSnapshot,
+} from "@/lib/readiness-diagnostics";
 
 export const dynamic = "force-dynamic";
 
-type ServiceReadiness = {
-  ready?: boolean;
-  database?: boolean;
-  staleWorkers?: number;
-  failedJobs?: number;
-  stuckJobs?: number;
-  missingWorkers?: number;
-  oldestPendingAt?: string | null;
-  checkedAt?: string;
-};
+const READINESS_SUPABASE_TIMEOUT_MS = 10_000;
 
 const integrationStatus=(environment:ReturnType<typeof inspectWorkerRuntimeEnvironment>)=>({
   email:{enabled:true,configured:environment.delivery},
@@ -23,6 +20,35 @@ const integrationStatus=(environment:ReturnType<typeof inspectWorkerRuntimeEnvir
   integrationSync:{enabled:environment.integrationsEnabled,configured:environment.integrations},
   externalAi:{enabled:false,configured:false},
 });
+
+function authProbe(result: PromiseSettledResult<Response>): ReadinessProbe {
+  if (result.status === "fulfilled") {
+    return result.value.ok
+      ? { ok: true }
+      : { ok: false, code: "AUTH_HEALTH_HTTP_ERROR", httpStatus: result.value.status };
+  }
+  return {
+    ok: false,
+    code: isTimeoutError(result.reason) ? "AUTH_HEALTH_TIMEOUT" : "AUTH_HEALTH_UNAVAILABLE",
+  };
+}
+
+function databaseProbe(result: PromiseSettledResult<ReadinessSnapshot>): ReadinessProbe {
+  if (result.status === "fulfilled") return { ok: true };
+  if (result.reason instanceof SupabaseRequestError) {
+    return {
+      ok: false,
+      code: result.reason.status === 504 || result.reason.code === "UPSTREAM_TIMEOUT"
+        ? "DATABASE_READINESS_TIMEOUT"
+        : "DATABASE_READINESS_RPC_ERROR",
+      httpStatus: result.reason.status,
+    };
+  }
+  return {
+    ok: false,
+    code: isTimeoutError(result.reason) ? "DATABASE_READINESS_TIMEOUT" : "DATABASE_READINESS_UNAVAILABLE",
+  };
+}
 
 async function get(request: Request) {
   const checkedAt = new Date().toISOString();
@@ -36,12 +62,20 @@ async function get(request: Request) {
   const environment = inspectWorkerRuntimeEnvironment();
   const requiredWorkers=environment.enabledWorkers;
   if (!environment.core || !url || !key || !serviceKey || !workspaceId) {
+    const diagnostics = buildReadinessDiagnostics({
+      environmentValid: false,
+      auth: { ok: false },
+      database: { ok: false },
+    });
     return NextResponse.json({
       code: "SERVICE_NOT_CONFIGURED",
       status: "unavailable",
       version: APP_VERSION,
       checkedAt,
-      checks: { environment: false, auth: false, database: false, workers: false, queues: false },
+      checks: diagnostics.checks,
+      components: diagnostics.components,
+      failureReasons: diagnostics.failureReasons,
+      metrics: diagnostics.metrics,
       configuration: { configured: environment.configured, expected: environment.expected, missing: environment.missing },
       integrations:integrationStatus(environment),
       remediation:[
@@ -52,70 +86,50 @@ async function get(request: Request) {
     }, { status: 503 });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3_000);
-  try {
-    const [authHealth, readiness] = await Promise.all([
-      fetch(`${url}/auth/v1/health`, {
+  const [authResult, readinessResult] = await Promise.allSettled([
+      fetchWithTimeout(`${url}/auth/v1/health`, {
         headers: { apikey: key },
         cache: "no-store",
-        signal: controller.signal,
-      }),
-      supabaseAdminJson<ServiceReadiness>("/rest/v1/rpc/service_readiness_snapshot_for_workers", {
+      }, READINESS_SUPABASE_TIMEOUT_MS),
+      supabaseAdminJson<ReadinessSnapshot>("/rest/v1/rpc/service_readiness_snapshot_for_workers", {
         method: "POST",
         body: JSON.stringify({
           target_workspace: workspaceId,
           enabled_workers: requiredWorkers,
         }),
-        signal: controller.signal,
+        signal: AbortSignal.timeout(READINESS_SUPABASE_TIMEOUT_MS),
       }),
     ]);
-    const ready = environment.valid && authHealth.ok && readiness.database === true && readiness.ready === true;
+    const readiness = readinessResult.status === "fulfilled" ? readinessResult.value : undefined;
+    const diagnostics = buildReadinessDiagnostics({
+      environmentValid: environment.valid,
+      auth: authProbe(authResult),
+      database: databaseProbe(readinessResult),
+      snapshot: readiness,
+    });
+    const ready = diagnostics.ready;
     return NextResponse.json(
       {
         ...(ready ? {} : { code: "SERVICE_NOT_READY" }),
         status: ready ? "ok" : "degraded",
         version: APP_VERSION,
         checkedAt,
-        checks: {
-          environment: environment.valid,
-          auth: authHealth.ok,
-          database: readiness.database === true,
-          workers: Number(readiness.missingWorkers ?? 0) === 0 && Number(readiness.staleWorkers ?? 0) === 0,
-          queues: Number(readiness.failedJobs ?? 0) === 0 && Number(readiness.stuckJobs ?? 0) === 0,
-        },
-        metrics: {
-          staleWorkers: Number(readiness.staleWorkers ?? 0),
-          missingWorkers: Number(readiness.missingWorkers ?? 0),
-          failedJobs: Number(readiness.failedJobs ?? 0),
-          stuckJobs: Number(readiness.stuckJobs ?? 0),
-          oldestPendingAt: readiness.oldestPendingAt ?? null,
-        },
+        checks: diagnostics.checks,
+        components: diagnostics.components,
+        failureReasons: diagnostics.failureReasons,
+        metrics: diagnostics.metrics,
         configuration: { configured: environment.configured, expected: environment.expected, missing: environment.missing },
         integrations:integrationStatus(environment),
         remediation:ready?[]:[
           ...(environment.valid?[]:[{code:"CONFIGURE_RUNTIME",action:"Configure the missing variables for core delivery and explicitly enabled integrations.",missing:environment.missing}]),
-          ...(authHealth.ok?[]:[{code:"RESTORE_AUTH",action:"Verify the production Supabase Auth URL/key and provider health."}]),
-          ...(readiness.database===true?[]:[{code:"VERIFY_DATABASE",action:"Apply pending migrations and verify service_readiness_snapshot with the production workspace."}]),
-          ...(Number(readiness.missingWorkers??0)===0&&Number(readiness.staleWorkers??0)===0?[]:[{code:"RUN_WORKERS",action:"Run npm run workers:process from the protected scheduler until all worker heartbeats are fresh.",workers:requiredWorkers}]),
-          ...(Number(readiness.failedJobs??0)===0&&Number(readiness.stuckJobs??0)===0?[]:[{code:"REPAIR_QUEUES",action:"Review failed/dead jobs in Operations, correct the recorded cause, then use the audited retry action."}]),
+          ...(diagnostics.components.auth.status!=="failed"?[]:[{code:"RESTORE_AUTH",action:"Verify the production Supabase Auth URL/key and provider health.",reason:diagnostics.components.auth.code}]),
+          ...(diagnostics.components.database.status!=="failed"?[]:[{code:"VERIFY_DATABASE",action:"Apply pending migrations and verify service_readiness_snapshot with the production workspace.",reason:diagnostics.components.database.code}]),
+          ...(diagnostics.components.workers.status!=="failed"?[]:[{code:"RUN_WORKERS",action:"Run npm run workers:process from the protected scheduler until all worker heartbeats are fresh.",workers:requiredWorkers,reason:diagnostics.components.workers.code}]),
+          ...(diagnostics.components.queues.status!=="failed"?[]:[{code:"REPAIR_QUEUES",action:"Review failed/dead jobs in Operations, correct the recorded cause, then use the audited retry action.",reason:diagnostics.components.queues.code}]),
         ],
       },
       { status: ready ? 200 : 503 },
     );
-  } catch {
-    return NextResponse.json({
-      code: "DEPENDENCY_UNAVAILABLE",
-      status: "degraded",
-      version: APP_VERSION,
-      checkedAt,
-      checks: { environment: true, auth: false, database: false, workers: false, queues: false },
-      integrations:integrationStatus(environment),
-      remediation:[{code:"DEPENDENCY_RETRY",action:"Verify Supabase reachability, runtime secrets, and database readiness, then retry the readiness check."}],
-    }, { status: 503 });
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export const GET = apiRoute(get, "HEALTH_CHECK_FAILED");
