@@ -190,6 +190,8 @@ export const zhCN: Messages = {
   "auth.remember": "在此设备保持登录",
   "auth.rememberDevice": "记住此设备 30 天",
   "auth.sessionDuration": "登录会话至少保留 30 天；是否信任此设备单独控制。",
+  "auth.security.passwordChanged": "密码已更新，其他会话和可信设备已撤销。请使用新密码重新登录。",
+  "auth.security.passwordChangedReview": "密码已更新并已退出当前设备，但部分远程会话或可信设备未能确认撤销。重新登录后请在“隐私与设备”中复核。",
   "auth.brandEyebrow": "清晰看见每段关系",
   "auth.brandTitle": "让每一段教育关系，都有清晰的下一步。",
   "auth.brandDescription": "客户组织、联系人、销售与运营团队，在同一套可信、克制的工作空间中协同。",

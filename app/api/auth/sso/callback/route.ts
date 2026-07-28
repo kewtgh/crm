@@ -5,11 +5,12 @@ import { setAuthSessionCookies } from "@/lib/auth-session";
 import { enterpriseSsoCookie, readEnterpriseSsoState } from "@/lib/enterprise-identity";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { claimScimSsoIdentity } from "@/lib/scim";
+import { applicationOrigin } from "@/lib/application-origin.mjs";
 
 type PkceResult = { access_token?: string; refresh_token?: string; expires_in?: number; user?: Record<string, unknown> };
 
-function loginRedirect(code: string) {
-  const base = process.env.APP_URL?.replace(/\/$/, "") ?? "http://localhost:3200";
+function loginRedirect(code: string, requestUrl: string) {
+  const base = applicationOrigin(requestUrl);
   return new URL(`/login?ssoError=${encodeURIComponent(code)}`, base);
 }
 
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   let response: NextResponse;
   if (!state || !code || code.length > 4096 || !supabaseUrl || !anonKey) {
-    response = NextResponse.redirect(loginRedirect("SSO_STATE_INVALID"));
+    response = NextResponse.redirect(loginRedirect("SSO_STATE_INVALID", request.url));
   } else {
     try {
       const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
@@ -44,13 +45,13 @@ export async function GET(request: Request) {
       const baseUser = upstream.ok && result.access_token ? userFromSupabase(identityPayload) : null;
       const user = baseUser && result.access_token ? await hydrateStaffUser(baseUser, result.access_token) : null;
       if (!user || !result.access_token || !result.refresh_token) {
-        response = NextResponse.redirect(loginRedirect("SSO_STAFF_ACCESS_DENIED"));
+        response = NextResponse.redirect(loginRedirect("SSO_STAFF_ACCESS_DENIED", request.url));
       } else {
-        response = NextResponse.redirect(new URL(nextAuthenticatedPath(user), process.env.APP_URL ?? url.origin));
+        response = NextResponse.redirect(new URL(nextAuthenticatedPath(user), applicationOrigin(request.url)));
         setAuthSessionCookies(response, result);
       }
     } catch {
-      response = NextResponse.redirect(loginRedirect("SSO_UNAVAILABLE"));
+      response = NextResponse.redirect(loginRedirect("SSO_UNAVAILABLE", request.url));
     }
   }
   response.cookies.set(enterpriseSsoCookie, "", { path: "/api/auth/sso/callback", maxAge: 0 });

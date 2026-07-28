@@ -1,14 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { configuredApplicationOrigin, configuredSupabaseOrigin } from "./lib/application-origin.mjs";
 
 export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const development = process.env.NODE_ENV !== "production";
   let secureAppOrigin = false;
   try {
-    secureAppOrigin = new URL(process.env.APP_URL ?? request.url).protocol === "https:";
+    secureAppOrigin = new URL(configuredApplicationOrigin() ?? request.url).protocol === "https:";
   } catch {
     secureAppOrigin = false;
   }
+  const supabaseOrigin = configuredSupabaseOrigin();
+  const supabaseSocketOrigin = supabaseOrigin
+    ? `${supabaseOrigin.startsWith("https:") ? "wss:" : "ws:"}//${new URL(supabaseOrigin).host}`
+    : null;
+  const supabaseConnectSources = [supabaseOrigin, supabaseSocketOrigin].filter(Boolean).join(" ");
   const policy = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -17,8 +23,8 @@ export function proxy(request: NextRequest) {
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
-    `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com${development ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
+    `img-src 'self' data: blob:${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `connect-src 'self'${supabaseConnectSources ? ` ${supabaseConnectSources}` : ""} https://challenges.cloudflare.com${development ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
     "frame-src https://challenges.cloudflare.com",
     "font-src 'self' data:",
     ...(secureAppOrigin ? ["upgrade-insecure-requests"] : []),

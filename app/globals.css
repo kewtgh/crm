@@ -119,7 +119,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .checkbox-field span { min-width: 0; }.checkbox-field small { display: block; color: var(--muted-2); }.checkbox-field a { color: var(--green); font-weight: 700; }.checkbox-field.compact { align-items: center; }
 .login-extras { margin: 2px 0 18px; display: flex; justify-content: space-between; align-items: center; }.login-extras > a { color: var(--green); font-size: 12px; font-weight: 700; }
 .form-message, .inline-message { margin: 13px 0; padding: 10px 12px; border-radius: 8px; display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
-.form-message.error, .inline-message.error { color: #9b3935; border: 1px solid #f0cbc8; background: var(--red-soft); }.form-message.success, .inline-message.success { color: #256e53; border: 1px solid #c8e8da; background: var(--green-soft); }.inline-message.warning { color: #8f5b19; border: 1px solid #f1d8b5; background: var(--amber-soft); }
+.form-message.error, .inline-message.error { color: #9b3935; border: 1px solid #f0cbc8; background: var(--red-soft); }.form-message.success, .inline-message.success { color: #256e53; border: 1px solid #c8e8da; background: var(--green-soft); }.form-message.warning, .inline-message.warning { color: #8f5b19; border: 1px solid #f1d8b5; background: var(--amber-soft); }
 .auth-submit { width: 100%; margin-top: 18px; }
 .auth-switch { margin: 21px 0 0; color: var(--muted); text-align: center; font-size: 12px; }.auth-switch a { color: var(--green); font-weight: 800; }
 .auth-help { margin: 36px auto 0; color: var(--muted-2); font-size:12px; }

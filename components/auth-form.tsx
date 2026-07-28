@@ -50,11 +50,12 @@ function PasswordField({ error }: { error?: string }) {
   );
 }
 
-export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?: boolean; initialErrorCode?: string }) {
+export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCode }: { ssoEnabled?: boolean; initialErrorCode?: string; initialNoticeCode?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [ssoPending, setSsoPending] = useState(false);
+  const submissionInFlight = useRef(false);
   const identifierRef = useRef<HTMLInputElement>(null);
   const ssoErrorKeys: Record<string, string> = {
     SSO_STATE_INVALID: "auth.sso.stateInvalid",
@@ -62,6 +63,11 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
     SSO_UNAVAILABLE: "auth.sso.unavailable",
   };
   const [formError, setFormError] = useState(initialErrorCode ? t(ssoErrorKeys[initialErrorCode] ?? "auth.sso.failed") : "");
+  const securityNoticeKey = initialNoticeCode === "PASSWORD_CHANGED"
+    ? "auth.security.passwordChanged"
+    : initialNoticeCode === "PASSWORD_CHANGED_REVIEW_SESSIONS"
+      ? "auth.security.passwordChangedReview"
+      : "";
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
@@ -69,12 +75,16 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    let navigationStarted = false;
     setPending(true);
     setFormError("");
     setFieldErrors({});
     if (!turnstileToken) {
       setFieldErrors({ turnstile: t("auth.error.turnstileRequired") });
       setPending(false);
+      submissionInFlight.current = false;
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -114,26 +124,35 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
         }
         return;
       }
+      navigationStarted = true;
       router.push(result.next ?? "/dashboard");
       router.refresh();
     } catch (error) {
       setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.error.network"));
       setTurnstileResetKey((value) => value + 1);
     } finally {
-      setPending(false);
+      if (!navigationStarted) {
+        submissionInFlight.current = false;
+        setPending(false);
+      }
     }
   }
 
   async function beginSso() {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    let navigationStarted = false;
     setFormError("");
     setFieldErrors({});
     const identifier = identifierRef.current?.value.trim() ?? "";
     if (!identifier.includes("@")) {
       setFieldErrors({ identifier: t("auth.sso.emailRequired") });
+      submissionInFlight.current = false;
       return;
     }
     if (!turnstileToken) {
       setFieldErrors({ turnstile: t("auth.error.turnstileRequired") });
+      submissionInFlight.current = false;
       return;
     }
     setSsoPending(true);
@@ -159,12 +178,16 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
         setTurnstileResetKey((value) => value + 1);
         return;
       }
+      navigationStarted = true;
       window.location.assign(result.url);
     } catch (error) {
       setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.sso.unavailable"));
       setTurnstileResetKey((value) => value + 1);
     } finally {
-      setSsoPending(false);
+      if (!navigationStarted) {
+        submissionInFlight.current = false;
+        setSsoPending(false);
+      }
     }
   }
 
@@ -180,6 +203,13 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
         <ShieldCheck size={17} />
         <span><b>{t("auth.staffOnly")}</b><br />{t("auth.staffOnlyHelp")}</span>
       </div>
+
+      {securityNoticeKey && (
+        <div className={`form-message ${initialNoticeCode === "PASSWORD_CHANGED" ? "success" : "warning"}`} role="status">
+          <ShieldCheck size={17} />
+          <span>{t(securityNoticeKey)}</span>
+        </div>
+      )}
 
       <label className="field" htmlFor="identifier">
         <span>{t("auth.identifier")}</span>
@@ -215,7 +245,7 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode }: { ssoEnabled?
         </div>
       )}
 
-      <button className="primary-button auth-submit" type="submit" disabled={pending}>
+      <button className="primary-button auth-submit" type="submit" disabled={pending || ssoPending}>
         {pending && <LoaderCircle className="spin" size={18} />}
         {t("auth.login.submit")}
         {!pending && <ArrowRight size={18} />}

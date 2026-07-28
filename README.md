@@ -1,10 +1,18 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.8.4**
+Current release candidate: **v2.9.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.9.0 closes the July 29 identity-integrity, canonical-origin and navigation audit. Concurrent
+browser requests now share one refresh operation; password changes revoke server sessions and
+trusted devices before forcing a fresh login; SCIM and staff-provisioning compensation fails closed
+without overwriting newer identity state. Production mutations, public links, redirects, metadata
+and CSP all use the validated configured application/Supabase origins. Server-paged list filters,
+sorting, pagination and page size now create reversible browser history, while login, SSO and
+password-recovery controls prevent duplicate submissions.
 
 v2.8.4 makes every successful password, device, MFA and SSO session persistent for at least
 30 days while keeping trusted-device consent separate. It removes ProxyAgent/v2rayA from Web,
@@ -148,7 +156,7 @@ and a failed cutover restores and revalidates the previous application release w
 forward database migrations were reverted. One-time server installation and least-privilege sudo rules
 are documented in the [deployment guide](docs/DEPLOYMENT.md).
 
-The gate runs typecheck, lint, production build, 60 Node contracts (39 source/component,
+The gate runs typecheck, lint, production build, 66 Node contracts (45 source/behavior,
 19 deployment and 2 redirect/login HTTP tests), dependency audit,
 schema lint, 468 pgTAP assertions, business, HTTP and real device-auth smoke suites, static-asset/MIME
 validation, and real UI QA with the pinned `ms-playwright/chromium-1228` runtime.
@@ -168,15 +176,17 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.8.4 source implementation and migration through `202607280056` are complete. The full
-80-page/viewport Chromium 1228 matrix passed locally with zero errors or warnings; current evidence
-and externally gated production steps are recorded in the implementation status. A clean-commit
-gate must still pass before production activation.
+The v2.9.0 source implementation and migration through `202607280056` are complete. Current local
+verification evidence and externally gated production steps are recorded in the implementation
+status. A clean-commit gate must still pass before production activation.
 A production rollout
 to the dedicated server still requires real runtime secrets, a backed-up production Supabase
 migration, hosted email OTP template, systemd timer heartbeats and hosted readiness 200. See the
 [implementation status](docs/IMPLEMENTATION_STATUS.md),
-[deployment guide](docs/DEPLOYMENT.md), and the historical
+[deployment guide](docs/DEPLOYMENT.md), the
+[v2.9.0 audit](docs/AUDIT_2026-07-29_V2.9.0.md),
+[integrated remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V2.9.0.md),
+[final omission review](docs/FINAL_REAUDIT_2026-07-29_V2.9.0.md), and the historical
 [v2.8.4 audit](docs/AUDIT_2026-07-28_V2.8.4.md) and
 [integrated remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-28_V2.8.4.md), plus the
 [final omission review](docs/FINAL_REAUDIT_2026-07-28_V2.8.4.md).

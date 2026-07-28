@@ -1,6 +1,7 @@
 import type { AppRole } from "./roles";
 import type { AppUser } from "./user";
 import { supabaseAdminJson, supabaseAdminRequest, supabaseJson, SupabaseRequestError } from "./supabase-server";
+import { applicationOrigin } from "./application-origin.mjs";
 
 export type StaffUserRecord = {
   id: string;
@@ -101,7 +102,7 @@ async function deliverTemporaryCredentials(input: CreateStaffInput, username: st
       payload: {
         username,
         temporaryPassword,
-        loginUrl: new URL("/login", process.env.APP_URL ?? "http://localhost:3000").toString(),
+        loginUrl: new URL("/login", applicationOrigin()).toString(),
         displayNameZh: input.displayNameZh,
         displayNameEn: input.displayNameEn,
         mustChangePassword: true,
@@ -179,12 +180,29 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
     });
     await deliverTemporaryCredentials(input, username, temporaryPassword);
   } catch (error) {
-    await supabaseAdminRequest(`/auth/v1/admin/users/${userId}`, { method: "DELETE" }).catch(() => undefined);
+    let deletionFailed = false;
+    try {
+      await supabaseAdminRequest(`/auth/v1/admin/users/${userId}`, { method: "DELETE" });
+    } catch {
+      deletionFailed = true;
+      // A failed create must never leave a usable identity. If deletion is
+      // temporarily unavailable, fail closed and surface the required cleanup.
+      await supabaseAdminRequest(`/auth/v1/admin/users/${userId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          app_metadata: { role: input.role, account_status: "SUSPENDED", workspace_id: workspaceId },
+          ban_duration: "876000h",
+        }),
+      }).catch(() => undefined);
+    }
     await supabaseAdminRequest("/rest/v1/audit_events", {
       method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ workspace_id: workspaceId, actor_id: actor.id, entity_type: "staff_user", entity_id: userId, action: "CREATE_ROLLED_BACK", after_data: { username, role: input.role } }),
+      body: JSON.stringify({ workspace_id: workspaceId, actor_id: actor.id, entity_type: "staff_user", entity_id: userId, action: deletionFailed ? "CREATE_COMPENSATION_REQUIRED" : "CREATE_ROLLED_BACK", after_data: { username, role: input.role } }),
     }).catch(() => undefined);
+    if (deletionFailed) {
+      throw new SupabaseRequestError(502, "IDENTITY_COMPENSATION_REQUIRED", "Failed staff creation requires identity cleanup");
+    }
     throw error;
   }
   return { id: userId };

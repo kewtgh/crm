@@ -5,8 +5,8 @@ import { enterpriseSsoConfiguration } from "@/lib/enterprise-identity";
 
 export const generateMetadata = () => localizedPageMetadata("meta.login");
 
-export default async function LoginPage({searchParams}:{searchParams:Promise<{ssoError?:string}>}) {
+export default async function LoginPage({searchParams}:{searchParams:Promise<{ssoError?:string;security?:string}>}) {
   await redirectAuthenticatedUser();
-  const {ssoError}=await searchParams;
-  return <AuthLayout><AuthForm ssoEnabled={enterpriseSsoConfiguration().enabled} initialErrorCode={ssoError} /></AuthLayout>;
+  const {ssoError,security}=await searchParams;
+  return <AuthLayout><AuthForm ssoEnabled={enterpriseSsoConfiguration().enabled} initialErrorCode={ssoError} initialNoticeCode={security} /></AuthLayout>;
 }

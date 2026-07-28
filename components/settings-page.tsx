@@ -133,6 +133,7 @@ function SecuritySettings() {
   const [recoveryCopied, setRecoveryCopied] = useState(false);
   const [rotateConfirm, setRotateConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const passwordChangeInFlight = useRef(false);
 
   const loadMfa = () => apiFetch<{ factors?: Factor[]; recoveryCodesRemaining?: number }>("/api/settings/mfa")
     .then((result) => { setFactors(result.factors ?? []); setRecoveryCodesRemaining(result.recoveryCodesRemaining ?? 0); })
@@ -239,9 +240,18 @@ function SecuritySettings() {
       setPasswordError(t("settings.passwordMismatch"));
       return;
     }
+    if(passwordChangeInFlight.current)return;
+    passwordChangeInFlight.current=true;
+    let navigationStarted=false;
     setBusy(true);
     try {
-      await apiFetch("/api/settings/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword }) });
+      const result=await apiFetch<{reauthenticate?:boolean;sessionsRevoked?:boolean;trustedDevicesRevoked?:boolean}>("/api/settings/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword }) });
+      if(result.reauthenticate){
+        const complete=result.sessionsRevoked&&result.trustedDevicesRevoked;
+        navigationStarted=true;
+        window.location.assign(`/login?security=${complete?"PASSWORD_CHANGED":"PASSWORD_CHANGED_REVIEW_SESSIONS"}`);
+        return;
+      }
       setPasswordSuccess(t("settings.passwordSaved"));
       event.currentTarget.reset();
     } catch (cause) {
@@ -249,7 +259,10 @@ function SecuritySettings() {
       const errorKeys:Record<string,string>={CURRENT_PASSWORD_INCORRECT:"settings.currentPasswordIncorrect",AUTH_RATE_LIMITED:"settings.passwordRateLimited",AUTH_UNAVAILABLE:"settings.passwordServiceUnavailable",SUPABASE_UNAVAILABLE:"settings.passwordServiceUnavailable",UPSTREAM_TIMEOUT:"settings.passwordServiceUnavailable",same_password:"settings.passwordSame",SAME_PASSWORD:"settings.passwordSame",weak_password:"settings.passwordRule",WEAK_PASSWORD:"settings.passwordRule",INVALID_PASSWORD:"settings.passwordRule",reauthentication_needed:"settings.passwordReauthentication",REAUTHENTICATION_NEEDED:"settings.passwordReauthentication"};
       setPasswordError(t(errorKeys[code]??"settings.passwordFailed"));
     } finally {
-      setBusy(false);
+      if(!navigationStarted){
+        passwordChangeInFlight.current=false;
+        setBusy(false);
+      }
     }
   };
 

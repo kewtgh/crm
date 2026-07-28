@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { I18nProvider } from "@/components/i18n-provider";
 import { dictionaries, isLocale, translate } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/page-metadata";
+import { applicationOrigin } from "@/lib/application-origin.mjs";
 import "./globals.css";
 import "./v200.css";
 import "./v220.css";
@@ -12,8 +13,7 @@ import "./v270.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
-  const configuredBase = process.env.APP_URL?.trim();
-  const baseUrl = new URL(configuredBase && /^https?:\/\//.test(configuredBase) ? configuredBase : "http://localhost:3200");
+  const baseUrl = new URL(applicationOrigin("http://localhost:3200"));
   const description = translate(locale, "meta.description");
   return {
     metadataBase: baseUrl,

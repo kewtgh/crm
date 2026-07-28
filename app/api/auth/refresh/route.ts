@@ -4,9 +4,11 @@ import { authCookieNames, userFromSupabase } from "@/lib/auth";
 import { clearAuthSessionCookies, setAuthSessionCookies } from "@/lib/auth-session";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { safeRelativeReturnTo } from "@/lib/return-to";
+import { applicationOrigin } from "@/lib/application-origin.mjs";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const redirectOrigin = applicationOrigin(request.url);
   const returnTo = safeRelativeReturnTo(requestUrl.searchParams.get("returnTo"));
   const jsonMode = requestUrl.searchParams.get("mode") === "json"
     || request.headers.get("accept")?.includes("application/json");
@@ -18,7 +20,7 @@ export async function GET(request: Request) {
   if (!refreshToken || !supabaseUrl || !anonKey) {
     const response = jsonMode
       ? NextResponse.json({ code: "AUTH_REQUIRED", error: { code: "AUTH_REQUIRED", message: "AUTH_REQUIRED", requestId: crypto.randomUUID() } }, { status: 401 })
-      : NextResponse.redirect(new URL("/login", requestUrl));
+      : NextResponse.redirect(new URL("/login", redirectOrigin));
     response.headers.set("cache-control", "no-store");
     return response;
   }
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
   } catch {
     const response = jsonMode
       ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
-      : NextResponse.redirect(new URL("/login", requestUrl));
+      : NextResponse.redirect(new URL("/login", redirectOrigin));
     response.headers.set("cache-control", "no-store");
     return response;
   }
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
     if (upstream.status >= 500) {
       const response = jsonMode
         ? NextResponse.json({ code: "SESSION_REFRESH_UNAVAILABLE", error: { code: "SESSION_REFRESH_UNAVAILABLE", message: "SESSION_REFRESH_UNAVAILABLE", requestId: crypto.randomUUID() } }, { status: 503 })
-        : NextResponse.redirect(new URL("/login", requestUrl));
+        : NextResponse.redirect(new URL("/login", redirectOrigin));
       response.headers.set("cache-control", "no-store");
       return response;
     }
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
 
     const response = jsonMode
       ? NextResponse.json({ ok: true })
-      : NextResponse.redirect(new URL(returnTo, requestUrl));
+      : NextResponse.redirect(new URL(returnTo, redirectOrigin));
     setAuthSessionCookies(response, {
       access_token: String(result.access_token),
       refresh_token: String(result.refresh_token),
@@ -63,7 +65,7 @@ export async function GET(request: Request) {
   } catch {
     const response = jsonMode
       ? NextResponse.json({ code: "SESSION_REFRESH_FAILED", error: { code: "SESSION_REFRESH_FAILED", message: "SESSION_REFRESH_FAILED", requestId: crypto.randomUUID() } }, { status: 401 })
-      : NextResponse.redirect(new URL("/login", requestUrl));
+      : NextResponse.redirect(new URL("/login", redirectOrigin));
     clearAuthSessionCookies(response);
     response.headers.set("cache-control", "no-store");
     return response;
