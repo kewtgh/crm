@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { parsePagedSearchParams, type PagedQueryState } from "@/lib/paged-query";
@@ -22,21 +22,52 @@ export function usePagedResource<T,M>({
   const router=useRouter();
   const pathname=usePathname();
   const searchParams=useSearchParams();
+  const searchParamsKey=searchParams.toString();
+  const lastSeenSearch=useRef(searchParamsKey);
+  const syncingFromHistory=useRef(false);
   const [initialQuery]=useState(()=>parsePagedSearchParams(searchParams));
-  const [query,setQuery]=useState(initialQuery.query);
-  const [page,setPage]=useState(initialQuery.page);
-  const [pageSize,setPageSize]=useState(initialQuery.pageSize);
-  const [status,setStatus]=useState(initialQuery.status);
-  const [sort,setSort]=useState<PagedQueryState["sort"]>(initialQuery.sort);
-  const [direction,setDirection]=useState<PagedQueryState["direction"]>(initialQuery.direction);
+  const [query,setQueryState]=useState(initialQuery.query);
+  const [page,setPageState]=useState(initialQuery.page);
+  const [pageSize,setPageSizeState]=useState(initialQuery.pageSize);
+  const [status,setStatusState]=useState(initialQuery.status);
+  const [sort,setSortState]=useState<PagedQueryState["sort"]>(initialQuery.sort);
+  const [direction,setDirectionState]=useState<PagedQueryState["direction"]>(initialQuery.direction);
   const [items,setItems]=useState(initialItems);
   const [total,setTotal]=useState(initialTotal);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const [retryKey,setRetryKey]=useState(0);
+  const navigationMode=useRef<"replace"|"push">("replace");
+  const setQuery:React.Dispatch<React.SetStateAction<string>>=(value)=>{
+    navigationMode.current="replace";
+    setQueryState(value);
+    setPageState(1);
+  };
+  const withHistory=<Value,>(setter:React.Dispatch<React.SetStateAction<Value>>):React.Dispatch<React.SetStateAction<Value>>=>(value)=>{
+    navigationMode.current="push";
+    setter(value);
+  };
+  const setPage=withHistory(setPageState);
+  const setPageSize=withHistory(setPageSizeState);
+  const setStatus=withHistory(setStatusState);
+  const setSort=withHistory(setSortState);
+  const setDirection=withHistory(setDirectionState);
 
   useEffect(()=>{
-    if(!enabled)return;
+    if(!enabled||searchParamsKey===lastSeenSearch.current)return;
+    lastSeenSearch.current=searchParamsKey;
+    syncingFromHistory.current=true;
+    const restored=parsePagedSearchParams(new URLSearchParams(searchParamsKey));
+    setQueryState(restored.query);
+    setPageState(restored.page);
+    setPageSizeState(restored.pageSize);
+    setStatusState(restored.status);
+    setSortState(restored.sort);
+    setDirectionState(restored.direction);
+  },[enabled,searchParamsKey]);
+
+  useEffect(()=>{
+    if(!enabled||syncingFromHistory.current)return;
     const controller=new AbortController();
     const timer=window.setTimeout(async()=>{
       setLoading(true);
@@ -47,7 +78,7 @@ export function usePagedResource<T,M>({
       try{
         const result=await apiFetch<PageResult<T,M>>(`${endpoint}?${params}`,{signal:controller.signal});
         const pages=Math.max(1,Math.ceil(result.total/pageSize));
-        if(page>pages){setPage(pages);return;}
+        if(page>pages){setPageState(pages);return;}
         setItems(result.items);
         setTotal(result.total);
         onMetrics?.(result.metrics);
@@ -65,6 +96,10 @@ export function usePagedResource<T,M>({
 
   useEffect(()=>{
     if(!enabled)return;
+    if(syncingFromHistory.current){
+      syncingFromHistory.current=false;
+      return;
+    }
     const params=new URLSearchParams(searchParams.toString());
     if(query)params.set("q",query);else params.delete("q");
     if(page>1)params.set("page",String(page));else params.delete("page");
@@ -74,7 +109,12 @@ export function usePagedResource<T,M>({
     if(direction!=="asc")params.set("direction",direction);else params.delete("direction");
     const next=params.toString();
     if(next!==searchParams.toString()){
-      router.replace(next?`${pathname}?${next}`:pathname,{scroll:false});
+      lastSeenSearch.current=next;
+      const shouldPush=navigationMode.current==="push";
+      navigationMode.current="replace";
+      const href=next?`${pathname}?${next}`:pathname;
+      if(shouldPush)router.push(href,{scroll:false});
+      else router.replace(href,{scroll:false});
     }
   },[direction,enabled,page,pageSize,pathname,query,router,searchParams,sort,status]);
 

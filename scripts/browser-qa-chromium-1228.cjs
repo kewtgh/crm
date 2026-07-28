@@ -316,6 +316,15 @@ async function exerciseV210Workflows(page,scenario){
   }
   await page.getByRole("button",{name:"Switch language"}).click();
   await page.waitForFunction(()=>document.documentElement.lang==="zh-CN",null,{timeout:8_000});
+  process.stdout.write("Chromium v2.9 workflow: list history restoration...\n");
+  await page.goto(`${base}/schools`,{waitUntil:"networkidle"});
+  const statusFilter=page.locator(".table-toolbar .compact-select select");
+  await statusFilter.selectOption("UNVERIFIED");
+  await page.waitForURL(url=>url.searchParams.get("status")==="UNVERIFIED",{timeout:8_000});
+  await page.goBack({waitUntil:"domcontentloaded"});
+  await page.waitForFunction(()=>document.querySelector(".table-toolbar .compact-select select")?.value==="all",null,{timeout:8_000});
+  await page.goForward({waitUntil:"domcontentloaded"});
+  await page.waitForFunction(()=>document.querySelector(".table-toolbar .compact-select select")?.value==="UNVERIFIED",null,{timeout:8_000});
   process.stdout.write("Chromium v2.1 workflow interactions passed.\n");
 }
 async function main(){

@@ -1,5 +1,6 @@
 import { SupabaseRequestError, supabaseAdminJson, supabaseAdminRequest } from "./supabase-server";
 import type { AppRole } from "./roles";
+import { compensatedScimVersion } from "./scim-compensation.mjs";
 
 export const scimUserSchema = "urn:ietf:params:scim:schemas:core:2.0:User";
 export const scimEnterpriseSchema = "urn:lumina:params:scim:schemas:extension:2.0:User";
@@ -57,10 +58,64 @@ async function applyBoundIdentity(row:ScimDirectoryUser){
 }
 
 export async function updateScimDirectoryUser(id:string,changes:Partial<ScimUserInput>){
-  const current=await getScimDirectoryUser(id);const next={external_id:changes.externalId??current.external_id,user_name:(changes.userName??current.user_name).toLowerCase(),display_name_zh:changes.displayNameZh??current.display_name_zh,display_name_en:changes.displayNameEn??current.display_name_en,role:changes.role??current.role,team:changes.team??current.team,active:changes.active??current.active,version:current.version+1,updated_at:new Date().toISOString(),deprovisioned_at:(changes.active??current.active)?null:new Date().toISOString()};
-  const rows=await supabaseAdminJson<ScimDirectoryUser[]>(`/rest/v1/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspaceId()}&version=eq.${current.version}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(next)});if(!rows[0])throw new SupabaseRequestError(409,"SCIM_VERSION_CONFLICT","SCIM user changed concurrently");
-  try{await applyBoundIdentity(rows[0]);}catch(error){const restore={external_id:current.external_id,user_name:current.user_name,display_name_zh:current.display_name_zh,display_name_en:current.display_name_en,role:current.role,team:current.team,active:current.active,version:current.version,updated_at:current.updated_at,deprovisioned_at:current.active?null:current.updated_at};await supabaseAdminRequest(`/rest/v1/enterprise_directory_users?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(restore)}).catch(()=>undefined);if(current.auth_user_id)await applyBoundIdentity(current).catch(()=>{throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM identity compensation requires repair");});throw error;}
-  await recordScimAudit(rows[0],rows[0].active?"SCIM_USER_UPDATED":"SCIM_USER_DEPROVISIONED");return rows[0];
+  const current=await getScimDirectoryUser(id);
+  const workspace=workspaceId();
+  const writtenVersion=current.version+1;
+  const next={
+    external_id:changes.externalId??current.external_id,
+    user_name:(changes.userName??current.user_name).toLowerCase(),
+    display_name_zh:changes.displayNameZh??current.display_name_zh,
+    display_name_en:changes.displayNameEn??current.display_name_en,
+    role:changes.role??current.role,
+    team:changes.team??current.team,
+    active:changes.active??current.active,
+    version:writtenVersion,
+    updated_at:new Date().toISOString(),
+    deprovisioned_at:(changes.active??current.active)?null:new Date().toISOString(),
+  };
+  const rows=await supabaseAdminJson<ScimDirectoryUser[]>(
+    `/rest/v1/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${current.version}`,
+    {method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(next)},
+  );
+  if(!rows[0])throw new SupabaseRequestError(409,"SCIM_VERSION_CONFLICT","SCIM user changed concurrently");
+  try{
+    await applyBoundIdentity(rows[0]);
+  }catch(error){
+    const restore={
+      external_id:current.external_id,
+      user_name:current.user_name,
+      display_name_zh:current.display_name_zh,
+      display_name_en:current.display_name_en,
+      role:current.role,
+      team:current.team,
+      active:current.active,
+      // Preserve monotonic versions after compensation. Reusing the previous
+      // version would create an ABA window for writers that read N earlier.
+      version:compensatedScimVersion(writtenVersion),
+      updated_at:current.updated_at,
+      deprovisioned_at:current.active?null:current.updated_at,
+    };
+    let restored:ScimDirectoryUser[];
+    try{
+      restored=await supabaseAdminJson<ScimDirectoryUser[]>(
+        `/rest/v1/enterprise_directory_users?id=eq.${id}&workspace_id=eq.${workspace}&version=eq.${writtenVersion}`,
+        {method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(restore)},
+      );
+    }catch{
+      throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM directory compensation requires repair");
+    }
+    if(!restored[0]){
+      throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","A newer SCIM version prevented unsafe compensation");
+    }
+    await recordScimAudit(restored[0],"SCIM_USER_COMPENSATED").catch(()=>undefined);
+    if(current.auth_user_id){
+      try{await applyBoundIdentity(current);}
+      catch{throw new SupabaseRequestError(502,"IDENTITY_COMPENSATION_REQUIRED","SCIM identity compensation requires repair");}
+    }
+    throw error;
+  }
+  await recordScimAudit(rows[0],rows[0].active?"SCIM_USER_UPDATED":"SCIM_USER_DEPROVISIONED");
+  return rows[0];
 }
 
 async function recordScimAudit(row:ScimDirectoryUser|undefined,action:string){if(!row)return;await supabaseAdminRequest("/rest/v1/audit_events",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:row.workspace_id,actor_id:null,entity_type:"enterprise_directory_user",entity_id:row.id,action,after_data:{externalId:row.external_id,role:row.role,active:row.active,version:row.version}})});}

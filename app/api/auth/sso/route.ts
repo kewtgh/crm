@@ -6,6 +6,7 @@ import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { checkLoginRateLimit, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { applicationOrigin } from "@/lib/application-origin.mjs";
 
 const schema = z.object({ email: z.email().max(320), turnstileToken: z.string().min(1).max(4096) });
 
@@ -30,8 +31,8 @@ async function post(request: Request) {
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const appUrl = process.env.APP_URL?.replace(/\/$/, "");
-  if (!supabaseUrl || !anonKey || !appUrl) throw new ApiError("SSO_NOT_CONFIGURED", 503);
+  const appUrl = applicationOrigin(request.url);
+  if (!supabaseUrl || !anonKey) throw new ApiError("SSO_NOT_CONFIGURED", 503);
   const state = await createEnterpriseSsoState();
   const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/sso`, {
     method: "POST",

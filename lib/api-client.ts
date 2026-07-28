@@ -1,4 +1,5 @@
 import { boundedSignal } from "./fetch-timeout";
+import { createSingleFlight } from "./single-flight.mjs";
 
 export type ApiFailurePayload = {
   code?: string;
@@ -26,15 +27,19 @@ async function payloadFrom(response: Response) {
   return response.json().catch(() => ({})) as Promise<ApiFailurePayload>;
 }
 
-async function refreshSession() {
-  const response = await fetch("/api/auth/refresh?mode=json", {
-    method: "GET",
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(10_000),
-  });
-  return response.ok;
-}
+const refreshSession = createSingleFlight(async () => {
+  try {
+    const response = await fetch("/api/auth/refresh?mode=json", {
+      method: "GET",
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+});
 
 export async function apiFetch<T>(
   input: RequestInfo | URL,
@@ -75,5 +80,13 @@ export async function apiFetch<T>(
   if (response.status === 204) return undefined as T;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) throw new ApiClientError("INVALID_API_RESPONSE", 502);
-  return response.json() as Promise<T>;
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new ApiClientError(
+      "INVALID_API_RESPONSE",
+      502,
+      response.headers.get("x-request-id") ?? undefined,
+    );
+  }
 }

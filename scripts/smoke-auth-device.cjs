@@ -9,6 +9,7 @@ const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH
 const { chromium } = require(playwrightPath);
 const base = (process.env.AUTH_SMOKE_BASE_URL || process.env.APP_URL || "http://localhost:3200").replace(/\/$/, "");
 const supabase = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const mailpit = process.env.AUTH_SMOKE_MAILPIT_URL || "http://127.0.0.1:56324";
 
@@ -64,6 +65,7 @@ async function submitLogin(page, username, password, remember) {
 (async () => {
   assert(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(base), "Auth smoke refuses a non-local application");
   assert(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(supabase), "Auth smoke refuses a non-local Supabase");
+  assert(anon, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required");
   assert(service, "SUPABASE_SERVICE_ROLE_KEY is required");
   assert(fs.existsSync(executable), "Pinned Chromium executable is missing");
 
@@ -148,7 +150,54 @@ async function submitLogin(page, username, password, remember) {
     assert(devices.status === 200, "Trusted-device settings API was unavailable");
     assert(devices.cacheControl === "no-store", "Private API response can be cached");
     assert(devices.body.devices?.some((device) => device.current), "Current trusted device was not listed");
-    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, password replacement, trusted-device reuse, 30-day session rotation, and private API cache policy.");
+
+    const changedPassword = `Changed!${crypto.randomBytes(18).toString("base64url")}Aa1`;
+    const activeRefreshToken = rotatedCookies.find((item) => item.name === "crm_refresh_token")?.value;
+    assert(activeRefreshToken, "Rotated refresh token was not available for revocation verification");
+    const passwordChange = await page.evaluate(async ({ currentPassword, newPassword }) => {
+      const response = await fetch("/api/settings/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      return { status: response.status, body: await response.json() };
+    }, { currentPassword: permanentPassword, newPassword: changedPassword });
+    assert(passwordChange.status === 200, `Password change failed (${passwordChange.status})`);
+    assert(passwordChange.body.reauthenticate === true, "Password change did not require reauthentication");
+    assert(passwordChange.body.sessionsRevoked === true, "Password change did not revoke global sessions");
+    assert(passwordChange.body.trustedDevicesRevoked === true, "Password change did not revoke trusted devices");
+
+    const cookiesAfterPasswordChange = await context.cookies(`${base}/api/settings/mfa`);
+    for (const cookieName of [
+      "crm_access_token",
+      "crm_refresh_token",
+      "crm_session_persistent",
+      "crm_trusted_device",
+      "crm_pending_device_verification",
+      "crm_mfa_remember",
+    ]) {
+      assert(!cookiesAfterPasswordChange.some((cookie) => cookie.name === cookieName), `Password change retained ${cookieName}`);
+    }
+    const activeDevicesResponse = await fetch(
+      `${supabase}/rest/v1/trusted_login_devices?select=id&user_id=eq.${userId}&revoked_at=is.null`,
+      { headers: adminHeaders },
+    );
+    const activeDevices = await json(activeDevicesResponse);
+    assert(activeDevicesResponse.ok && Array.isArray(activeDevices) && activeDevices.length === 0, "Trusted devices remained active after password change");
+
+    const revokedRefreshResponse = await fetch(`${supabase}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { apikey: anon, "content-type": "application/json" },
+      body: JSON.stringify({ refresh_token: activeRefreshToken }),
+    });
+    assert(!revokedRefreshResponse.ok, "A pre-change refresh token remained usable");
+    const reauthenticationResponse = await fetch(`${supabase}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { apikey: anon, "content-type": "application/json" },
+      body: JSON.stringify({ email, password: changedPassword }),
+    });
+    assert(reauthenticationResponse.ok, "The changed password could not create a fresh session");
+    console.log("Auth device smoke passed: Turnstile, username/password, email OTP, trusted-device reuse, 30-day rotation, private cache policy, and password-change session/device revocation.");
   } finally {
     if (browser) await browser.close();
     if (userId) {

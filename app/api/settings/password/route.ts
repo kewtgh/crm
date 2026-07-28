@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
-import {authCookieNames} from "@/lib/auth";
 import { supabaseJson, supabaseRequest, SupabaseRequestError } from "@/lib/supabase-server";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { revokeUserTrustedDevices, securityCookieNames } from "@/lib/trusted-devices";
 import { passwordValueSchema } from "@/lib/validation";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
+import { clearAuthSessionCookies } from "@/lib/auth-session";
 
 const schema = z.object({ currentPassword: z.string().min(1), newPassword: passwordValueSchema });
 
@@ -27,11 +27,22 @@ async function post(request: Request) {
     // Use the freshly password-verified session. Reusing a long-lived page
     // session can be rejected by GoTrue's secure-password-change policy.
     await supabaseJson("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password: parsed.data.newPassword }) }, verificationSession.access_token);
-    const trustedDevicesRevoked=await revokeUserTrustedDevices(user.id, "PASSWORD_CHANGED").then(()=>true).catch(()=>false);
-    const response = NextResponse.json({ ok: true,trustedDevicesRevoked });
-    response.cookies.delete(authCookieNames.refresh);
-    response.cookies.delete(authCookieNames.persistence);
-    response.cookies.delete(securityCookieNames.trustedDevice);
+    const [trustedDeviceResult,sessionResult]=await Promise.allSettled([
+      revokeUserTrustedDevices(user.id, "PASSWORD_CHANGED"),
+      supabaseRequest("/auth/v1/logout?scope=global",{method:"POST"},verificationSession.access_token),
+    ]);
+    const trustedDevicesRevoked=trustedDeviceResult.status==="fulfilled";
+    const sessionsRevoked=sessionResult.status==="fulfilled";
+    const response = NextResponse.json({
+      ok: true,
+      reauthenticate: true,
+      trustedDevicesRevoked,
+      sessionsRevoked,
+    });
+    clearAuthSessionCookies(response);
+    response.cookies.set(securityCookieNames.trustedDevice,"",{path:"/",maxAge:0});
+    response.cookies.set(securityCookieNames.pendingDeviceVerification,"",{path:"/",maxAge:0});
+    response.cookies.set(securityCookieNames.mfaRemember,"",{path:"/api/settings/mfa",maxAge:0});
     return response;
   } catch(error) {
     const code=error instanceof SupabaseRequestError?error.code:"PASSWORD_UPDATE_FAILED";

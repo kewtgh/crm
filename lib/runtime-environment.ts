@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { secureEndpointOrigin } from "./application-origin.mjs";
 
 const placeholderPattern = /replace-with|change-me|example-secret|your-project|your-anon|server-only-service|production-site-key|production-server-secret|public-anon-key|workspace-uuid|independent-random/i;
 const configured = z.string().trim().min(1).refine(
@@ -33,11 +34,11 @@ const configuredUrl = z.url().refine((value) => {
 }, "Placeholder URLs are not allowed");
 
 export const coreRuntimeEnvironmentSchema = z.object({
-  APP_URL: configuredUrl,
+  APP_URL: configuredUrl.refine((value) => secureEndpointOrigin(value) !== null, "APP_URL must be an HTTPS origin (or loopback HTTP in development)"),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: configured,
   TURNSTILE_SECRET_KEY: productionSecret,
   TURNSTILE_EXPECTED_HOSTNAME: hostname,
-  NEXT_PUBLIC_SUPABASE_URL: configuredUrl,
+  NEXT_PUBLIC_SUPABASE_URL: configuredUrl.refine((value) => secureEndpointOrigin(value) !== null, "Supabase URL must be an HTTPS origin (or loopback HTTP in development)"),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: authKey,
   SUPABASE_SERVICE_ROLE_KEY: authKey,
   CRM_WORKSPACE_ID: z.uuid(),

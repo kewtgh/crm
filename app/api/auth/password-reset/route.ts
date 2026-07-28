@@ -6,6 +6,7 @@ import { loginThrottleIdentity } from "@/lib/login-rate-limit";
 import { applyAccountRecoveryRateLimit } from "@/lib/account-recovery-rate-limit";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
+import { applicationOrigin } from "@/lib/application-origin.mjs";
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
@@ -26,7 +27,7 @@ async function post(request: Request) {
     throw new ApiError("AUTH_NOT_CONFIGURED", 503);
   }
 
-  const origin = process.env.APP_URL?.replace(/\/$/, "") ?? new URL(request.url).origin;
+  const origin = applicationOrigin(request.url);
   try {
     const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/recover?redirect_to=${encodeURIComponent(`${origin}/reset-password`)}`, {
       method: "POST",

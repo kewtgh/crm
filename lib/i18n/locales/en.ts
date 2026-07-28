@@ -190,6 +190,8 @@ export const en: Messages = {
   "auth.remember": "Keep me signed in on this device",
   "auth.rememberDevice": "Remember this device for 30 days",
   "auth.sessionDuration": "Your sign-in session stays available for at least 30 days. Device trust is controlled separately.",
+  "auth.security.passwordChanged": "Your password was updated, and other sessions and trusted devices were revoked. Sign in again with the new password.",
+  "auth.security.passwordChangedReview": "Your password was updated and this device was signed out, but some remote sessions or trusted devices could not be confirmed as revoked. Sign in again and review Privacy & devices.",
   "auth.brandEyebrow": "RELATIONSHIPS, CLEARLY SEEN",
   "auth.brandTitle": "Give every education relationship a clear next step.",
   "auth.brandDescription": "Customer organizations, contacts, sales, and operations teams collaborate in one trusted, thoughtful workspace.",
