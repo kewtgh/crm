@@ -1,4 +1,4 @@
-# Implementation status — v2.8.1 release candidate
+# Implementation status — v2.8.2 release candidate
 
 Status date: 2026-07-28
 
@@ -32,6 +32,9 @@ readiness remain deployment inputs, not simulated product state.
   communications purposes are release-tested.
 - Runtime: Node 24.18.0 and npm 12.0.1 are pinned across local development, CI and the full release
   gate; non-12 npm installs are rejected by the repository engine policy.
+- Routing: the root endpoint preserves the existing authenticated/anonymous destination choice
+  while emitting an origin-independent relative `Location`, so an HTTPS proxy cannot be downgraded
+  by Vinext resolving the redirect against its internal HTTP request URL.
 - Production updates: a non-root systemd runner uses a non-blocking system lock, unique deployment
   IDs, immutable commit-addressed releases, separated environment files, bounded quality/migration
   stages, atomic current switching, effective ProxyAgent/loopback checks, persistent logs/status,
@@ -66,8 +69,8 @@ readiness remain deployment inputs, not simulated product state.
 | --- | --- |
 | TypeScript | Pass |
 | ESLint | Pass |
-| Production build | Pass; v2.8.1 routes and production bundles generated |
-| Node source contracts | 37/37 pass, including DST gaps, bounded runner and dependency API bridge |
+| Production build | Pass; v2.8.2 routes and production bundles generated |
+| Node source and HTTP contracts | 39/39 pass, including root redirect Host/protocol coverage, login final-hop behavior, DST gaps, bounded runner and dependency API bridge |
 | Production deployment unit tests | 17/17 pass; lock, env, paths, atomic cutover, interruption recovery, oneshot states, health, systemd, cleanup and dry-run |
 | Dependency audit | Pass; 0 vulnerabilities |
 | Phase-two and v0.9 business smoke | Pass |
@@ -76,7 +79,7 @@ readiness remain deployment inputs, not simulated product state.
 | Local migration application | Pass through `202607280055_mfa_recovery_and_super_admin_execution` |
 | Production assets/MIME | Pass; 26 CSS/JS plus 5 PNG assets, metadata and legacy redirect |
 | HTTP, export and real device-auth smoke | Pass on the final production build |
-| Pinned Chromium matrix | Pass; 80/80 page/viewports, 0 errors, 0 warnings |
+| Pinned Chromium public stage | Pass; 6/6 page/viewports on Chromium 1228, 0 errors, 0 warnings. The full matrix must be rerun before production activation. |
 
 The merged browser evidence is Git-ignored at
 `work/browser-qa-chromium-1228/report.json`. It is authoritative for the final run time, page count,
