@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkCrmDuplicate, createCrmRecord, listCrmRows, type PersistentResource } from "@/lib/crm-repository";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
@@ -35,7 +35,7 @@ const resourceSchemas={
 
 function resolveResource(value: string) { return resources.has(value as PersistentResource) ? value as PersistentResource : null; }
 function failure(error: unknown) {
-  if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code, message: error.message }, { status: error.status });
+  if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code, message: error.message }, { status: error.status });
   return NextResponse.json({ code: "CRM_OPERATION_FAILED" }, { status: 500 });
 }
 

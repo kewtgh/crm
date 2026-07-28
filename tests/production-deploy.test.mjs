@@ -92,8 +92,8 @@ test("validates environment names and secure file modes without echoing values",
   }, { label: "deploy.env", currentUid: 1000, allowedGroupIds: [1000] }), /permissions/);
   assert.throws(
     () => validateEnvironmentKeyPolicy(
-      { SUPABASE_ACCESS_TOKEN: "secret", NODE_OPTIONS: "--inspect" },
-      { label: "deploy.env", allowed: ["SUPABASE_ACCESS_TOKEN"] },
+      { MIGRATION_DATABASE_URL: "postgresql://crm_migrator:secret@127.0.0.1/crm", NODE_OPTIONS: "--inspect" },
+      { label: "deploy.env", allowed: ["MIGRATION_DATABASE_URL"] },
     ),
     /NODE_OPTIONS/,
   );

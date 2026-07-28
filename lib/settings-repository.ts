@@ -1,4 +1,4 @@
-import { supabaseJson } from "./supabase-server";
+import { databaseJson } from "./db/gateway";
 import type { AppUser } from "./user";
 import { DEFAULT_TIMEZONE, normalizeTimezone, type SupportedTimezone } from "./timezone";
 
@@ -45,8 +45,8 @@ export function normalizeNotificationPreferences(input: NotificationPreferences 
 
 export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
   const [profiles, preferences] = await Promise.all([
-    supabaseJson<ProfileRow[]>(`/rest/v1/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${user.id}&limit=1`),
-    supabaseJson<PreferenceRow[]>(`/rest/v1/user_preferences?select=honorific,bio,avatar_path,locale,timezone,date_format,quiet_hours_start,quiet_hours_end,notifications&user_id=eq.${user.id}&limit=1`),
+    databaseJson<ProfileRow[]>(`/db/table/user_profiles?select=username,display_name_zh,display_name_en&user_id=eq.${user.id}&limit=1`),
+    databaseJson<PreferenceRow[]>(`/db/table/user_preferences?select=honorific,bio,avatar_path,locale,timezone,date_format,quiet_hours_start,quiet_hours_end,notifications&user_id=eq.${user.id}&limit=1`),
   ]);
   const profile = profiles[0];
   const preference = preferences[0];
@@ -68,19 +68,19 @@ export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
 
 export async function updateProfile(userId: string, input: Pick<UserSettings, "displayNameZh" | "displayNameEn" | "honorific" | "bio">) {
   await Promise.all([
-    supabaseJson(`/rest/v1/user_profiles?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ display_name_zh: input.displayNameZh, display_name_en: input.displayNameEn, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
-    supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ honorific: input.honorific, bio: input.bio, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
+    databaseJson(`/db/table/user_profiles?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ display_name_zh: input.displayNameZh, display_name_en: input.displayNameEn, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
+    databaseJson(`/db/table/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ honorific: input.honorific, bio: input.bio, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
   ]);
 }
 
 export async function updateAccount(userId: string, input: Pick<UserSettings, "locale" | "timezone" | "dateFormat">) {
-  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale: input.locale, timezone: input.timezone, date_format: input.dateFormat, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
+  await databaseJson(`/db/table/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale: input.locale, timezone: input.timezone, date_format: input.dateFormat, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
 }
 
 export async function updateLocale(userId: string, locale: UserSettings["locale"]) {
-  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
+  await databaseJson(`/db/table/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ locale, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
 }
 
 export async function updateNotifications(userId: string, notifications: NotificationPreferences, quietHoursStart: string | null, quietHoursEnd: string | null) {
-  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ notifications: normalizeNotificationPreferences(notifications), quiet_hours_start: quietHoursStart, quiet_hours_end: quietHoursEnd, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
+  await databaseJson(`/db/table/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ notifications: normalizeNotificationPreferences(notifications), quiet_hours_start: quietHoursStart, quiet_hours_end: quietHoursEnd, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
 }

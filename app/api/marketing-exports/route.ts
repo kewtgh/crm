@@ -2,7 +2,7 @@ import {NextResponse} from "next/server";
 import {z} from "zod";
 import {apiRoute,requireApiRole} from "@/lib/api";
 import {mutationIsTrusted} from "@/lib/request-security";
-import {supabaseJson} from "@/lib/supabase-server";
+import {databaseJson} from "@/lib/db/gateway";
 import {approvalRecordId,executeSuperAdminApproval} from "@/lib/governance-repository";
 const schema=z.object({channel:z.enum(["EMAIL","SMS","PHONE","WECHAT","WHATSAPP"]),reason:z.string().trim().min(3).max(500)});
 async function post(request:Request){
@@ -11,7 +11,7 @@ async function post(request:Request){
   const parsed=schema.safeParse(await request.json().catch(()=>({})));
   if(!parsed.success)return NextResponse.json({code:"INVALID_MARKETING_EXPORT"},{status:400});
   try{
-    const item=await supabaseJson("/rest/v1/rpc/request_marketing_contact_export",{method:"POST",body:JSON.stringify({export_channel:parsed.data.channel,business_reason:parsed.data.reason})});
+    const item=await databaseJson("/db/rpc/request_marketing_contact_export",{method:"POST",body:JSON.stringify({export_channel:parsed.data.channel,business_reason:parsed.data.reason})});
     const approvalId=approvalRecordId(item);
     const direct=user.role==="SUPER_ADMIN";
     const execution=direct&&approvalId?await executeSuperAdminApproval(approvalId):undefined;

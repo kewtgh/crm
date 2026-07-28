@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { searchRelatedRecords } from "@/lib/related-search-repository";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 
 async function get(request: Request) {
   await requireApiUser();
@@ -9,7 +9,7 @@ async function get(request: Request) {
     const query = new URL(request.url).searchParams.get("q") ?? "";
     return NextResponse.json({ items: await searchRelatedRecords(query) });
   } catch (error) {
-    if (error instanceof SupabaseRequestError) return NextResponse.json({ code:error.code }, { status:error.status });
+    if (error instanceof DatabaseRequestError) return NextResponse.json({ code:error.code }, { status:error.status });
     return NextResponse.json({ code:"RELATED_SEARCH_FAILED" }, { status:500 });
   }
 }

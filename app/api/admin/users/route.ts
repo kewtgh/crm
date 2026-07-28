@@ -4,7 +4,7 @@ import { createStaffUser, listStaffUsers } from "@/lib/admin-users-repository";
 import { apiRoute, parsePagination, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { APP_ROLES } from "@/lib/roles";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 
 const createSchema = z.object({
   username: z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z][a-z0-9._-]+$/),
@@ -17,7 +17,7 @@ const createSchema = z.object({
 });
 
 function failure(error: unknown) {
-  if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
+  if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
   return NextResponse.json({ code: "STAFF_USERS_FAILED" }, { status: 500 });
 }
 

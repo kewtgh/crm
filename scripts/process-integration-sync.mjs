@@ -1,32 +1,20 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { workerJson } from "./lib/worker-database.mjs";
 
 const required = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "WORKER_DATABASE_URL",
   "INTEGRATION_SYNC_PROCESSOR_URL",
 ];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Missing integration-sync variables: ${missing.join(", ")}`);
-const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const headers = {
-  apikey: serviceKey,
-  authorization: `Bearer ${serviceKey}`,
-  "content-type": "application/json",
-};
 const workerId = process.env.WORKER_ID?.trim() || `integration-sync:${process.pid}:${crypto.randomUUID()}`;
-const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "INTEGRATION_SYNC");
+const heartbeat = createWorkerHeartbeat("INTEGRATION_SYNC");
 
 async function rpc(name, body) {
-  const response = await fetch(`${baseUrl}/rest/v1/rpc/${name}`, {
+  return workerJson(`/db/rpc/${name}`, {
     method: "POST",
-    headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
   });
-  const result = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${name} failed (${response.status})`);
-  return result;
 }
 
 try {
@@ -38,9 +26,8 @@ try {
   let completed = 0;
   for (const job of jobs) {
     try {
-      const validationResponse = await fetch(`${baseUrl}/rest/v1/connector_validation_receipts?select=id&workspace_id=eq.${job.workspace_id}&provider=eq.${job.provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`, { headers, signal: AbortSignal.timeout(10_000) });
-      const validations = await validationResponse.json().catch(() => []);
-      if (!validationResponse.ok || !validations.length) throw new Error("CONNECTOR_VALIDATION_REQUIRED");
+      const validations = await workerJson(`/db/table/connector_validation_receipts?select=id&workspace_id=eq.${job.workspace_id}&provider=eq.${job.provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`);
+      if (!validations.length) throw new Error("CONNECTOR_VALIDATION_REQUIRED");
       const response = await fetch(process.env.INTEGRATION_SYNC_PROCESSOR_URL, {
         method: "POST",
         headers: {

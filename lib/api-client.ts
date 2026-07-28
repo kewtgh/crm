@@ -41,6 +41,12 @@ const refreshSession = createSingleFlight(async () => {
   }
 });
 
+function csrfToken() {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)crm_csrf=([^;]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
 export async function apiFetch<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -49,9 +55,15 @@ export async function apiFetch<T>(
 ): Promise<T> {
   let response: Response;
   try {
+    const method = (init.method ?? "GET").toUpperCase();
+    const csrf = !["GET", "HEAD", "OPTIONS"].includes(method) ? csrfToken() : undefined;
     response = await fetch(input, {
       ...init,
-      headers: { accept: "application/json", ...init.headers },
+      headers: {
+        accept: "application/json",
+        ...(csrf ? { "x-csrf-token": csrf } : {}),
+        ...init.headers,
+      },
       signal: boundedSignal(init.signal, timeoutMs),
     });
   } catch (error) {

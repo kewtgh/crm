@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
-import { SupabaseRequestError, getAccessToken, supabaseJson } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
+import { issueEmailToken } from "@/lib/auth/email-tokens";
 import { loadUserSettings, updateAccount, updateLocale, updateNotifications, updateProfile } from "@/lib/settings-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { SUPPORTED_TIMEZONES } from "@/lib/timezone";
@@ -21,7 +22,7 @@ const notificationsSchema = z.object({
 const schema = z.discriminatedUnion("section", [profileSchema, localeSchema, accountSchema, notificationsSchema]);
 
 function failure(error: unknown) {
-  if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
+  if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
   return NextResponse.json({ code: "SETTINGS_FAILED" }, { status: 500 });
 }
 
@@ -51,7 +52,12 @@ async function patch(request: Request) {
     if (parsed.data.section === "account") {
       await updateAccount(user.id, parsed.data);
       if (parsed.data.email.toLowerCase() !== user.email.toLowerCase()) {
-        await supabaseJson("/auth/v1/user", { method: "PUT", body: JSON.stringify({ email: parsed.data.email }) }, await getAccessToken());
+        await issueEmailToken({
+          userId: user.id,
+          email: parsed.data.email.toLowerCase(),
+          purpose: "EMAIL_VERIFICATION",
+          payload: { email: parsed.data.email.toLowerCase() },
+        });
       }
     }
     if (parsed.data.section === "notifications") await updateNotifications(user.id, parsed.data.notifications, parsed.data.quietHoursStart, parsed.data.quietHoursEnd);

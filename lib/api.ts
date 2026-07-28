@@ -1,15 +1,12 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  authCookieNames,
-  decodeJwtPayload,
   getCurrentUser,
   type AppRole,
   type AppUser,
 } from "./auth";
 import { aal2Capabilities, hasCapability, type Capability } from "./capabilities";
-import { SupabaseRequestError } from "./supabase-server";
+import { DatabaseRequestError } from "./db/gateway";
 import { emitObservabilityEvent, requestOutcome, routeTemplate } from "./observability";
 
 export type ApiErrorBody = {
@@ -64,7 +61,7 @@ function errorResponse(error: unknown, requestId: string, fallbackCode: string) 
   if (error instanceof ApiError) {
     return apiErrorResponse(error.code, error.status, requestId, error.details, error.headers);
   }
-  if (error instanceof SupabaseRequestError) {
+  if (error instanceof DatabaseRequestError) {
     const status = error.status >= 400 && error.status < 600 ? error.status : 502;
     return apiErrorResponse(error.code, status, requestId);
   }
@@ -150,7 +147,7 @@ export function apiRoute<Context = unknown>(
       response.headers.set("x-request-id", requestId);
       return await complete(response);
     } catch (error) {
-      const errorCode=error instanceof ApiError?error.code:error instanceof SupabaseRequestError?error.code:fallbackCode;
+      const errorCode=error instanceof ApiError?error.code:error instanceof DatabaseRequestError?error.code:fallbackCode;
       return await complete(errorResponse(error, requestId, fallbackCode),errorCode);
     }
   };
@@ -159,11 +156,7 @@ export function apiRoute<Context = unknown>(
 export async function requireApiUser(): Promise<AppUser> {
   const user = await getCurrentUser();
   if (user) return user;
-  const cookieStore = await cookies();
-  throw new ApiError(
-    cookieStore.has(authCookieNames.refresh) ? "SESSION_REFRESH_REQUIRED" : "AUTH_REQUIRED",
-    401,
-  );
+  throw new ApiError("AUTH_REQUIRED", 401);
 }
 
 export async function requireApiRole(...roles: AppRole[]) {
@@ -173,8 +166,8 @@ export async function requireApiRole(...roles: AppRole[]) {
 }
 
 export async function requireApiAal2() {
-  const token = (await cookies()).get(authCookieNames.access)?.value;
-  if (!token || decodeJwtPayload(token).aal !== "aal2") throw new ApiError("MFA_REQUIRED", 403);
+  const user = await getCurrentUser();
+  if (!user || user.aal !== "aal2") throw new ApiError("MFA_REQUIRED", 403);
 }
 
 export async function requireApiCapability(capability: Capability) {

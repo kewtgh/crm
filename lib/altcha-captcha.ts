@@ -8,7 +8,7 @@ import {
 } from "./captcha-types";
 import { loginThrottleIdentity } from "./login-rate-limit";
 import { emitObservabilityEvent } from "./observability";
-import { supabaseAdminJson } from "./supabase-server";
+import { databaseSystemJson } from "./db/gateway";
 
 const CHALLENGE_TTL_MS = 2 * 60 * 1_000;
 const ATTESTATION_TTL_MS = 90 * 1_000;
@@ -44,7 +44,7 @@ export type CaptchaLifecycle = {
 
 export const durableCaptchaLifecycle: CaptchaLifecycle = {
   async issue(challengeId, action, sourceHash, expiresAt) {
-    return supabaseAdminJson<boolean>("/rest/v1/rpc/service_issue_captcha_challenge", {
+    return databaseSystemJson<boolean>("/db/rpc/service_issue_captcha_challenge", {
       method: "POST",
       body: JSON.stringify({
         challenge_identifier: challengeId,
@@ -55,7 +55,7 @@ export const durableCaptchaLifecycle: CaptchaLifecycle = {
     });
   },
   async markVerified(challengeId, action, sourceHash, attestationId, expiresAt) {
-    return supabaseAdminJson<boolean>("/rest/v1/rpc/service_verify_captcha_challenge", {
+    return databaseSystemJson<boolean>("/db/rpc/service_verify_captcha_challenge", {
       method: "POST",
       body: JSON.stringify({
         challenge_identifier: challengeId,
@@ -67,7 +67,7 @@ export const durableCaptchaLifecycle: CaptchaLifecycle = {
     });
   },
   async consume(challengeId, action, sourceHash, attestationId) {
-    return supabaseAdminJson<boolean>("/rest/v1/rpc/service_consume_captcha_attestation", {
+    return databaseSystemJson<boolean>("/db/rpc/service_consume_captcha_attestation", {
       method: "POST",
       body: JSON.stringify({
         challenge_identifier: challengeId,

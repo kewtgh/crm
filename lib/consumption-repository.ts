@@ -1,4 +1,4 @@
-import { supabaseJson } from "./supabase-server";
+import { databaseJson } from "./db/gateway";
 
 export type ConsumptionPeriod = "month" | "quarter" | "year";
 export type ConsumptionResult = {
@@ -23,7 +23,7 @@ type ReportPayload = Omit<ConsumptionResult,"productMix"|"topCustomers"> & {
 };
 
 export async function loadConsumption(period: ConsumptionPeriod, currency?: string): Promise<ConsumptionResult> {
-  const report = await supabaseJson<ReportPayload>("/rest/v1/rpc/consumption_report", {
+  const report = await databaseJson<ReportPayload>("/db/rpc/consumption_report", {
     method:"POST",
     body:JSON.stringify({report_period:period,report_currency:currency || null}),
   });

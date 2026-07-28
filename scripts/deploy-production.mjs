@@ -20,7 +20,6 @@ import {
   isSystemdServiceInProgress,
   PRODUCTION_LOCAL_URL,
   PRODUCTION_DEPLOY_LOCK_PATH,
-  PRODUCTION_PROJECT_REF,
   PRODUCTION_PUBLIC_URL,
   validateDeployAssetTexts,
   validateDirectoryMetadata,
@@ -297,7 +296,7 @@ state root: ${stateRoot}
 log root: ${logRoot}
 local health: ${PRODUCTION_LOCAL_URL}/api/health
 public health: ${PRODUCTION_PUBLIC_URL}/api/health
-Supabase project: ${PRODUCTION_PROJECT_REF}
+Database migrations: project-owned PostgreSQL chain in db/migrations
 No files, services, symlinks, databases, or network resources were changed.
 `);
 }

@@ -1,20 +1,15 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { workerJson, workerQuery } from "./lib/worker-database.mjs";
 
-const required = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "EMAIL_DELIVERY_WEBHOOK_URL"];
+const required = ["WORKER_DATABASE_URL", "EMAIL_DELIVERY_WEBHOOK_URL"];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Missing outbox-worker variables: ${missing.join(", ")}`);
 
-const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const headers = { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, "content-type": "application/json" };
-const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "NOTIFICATION_OUTBOX");
+const heartbeat = createWorkerHeartbeat("NOTIFICATION_OUTBOX");
 const workerId = process.env.WORKER_ID?.trim() || `notification-outbox:${process.pid}:${crypto.randomUUID()}`;
 
 async function rpc(name, body) {
-  const response = await fetch(`${baseUrl}/rest/v1/rpc/${name}`, { method:"POST",headers,body:JSON.stringify(body) });
-  const result = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${name} failed (${response.status})`);
-  return result;
+  return workerJson(`/db/rpc/${name}`, { method:"POST",body:JSON.stringify(body) });
 }
 
 try {
@@ -26,9 +21,11 @@ try {
   let sent = 0;
   for (const job of jobs) {
     try {
-      const identityResponse = await fetch(`${baseUrl}/auth/v1/admin/users/${job.recipient_id}`, { headers });
-      const identity = await identityResponse.json();
-      if (!identityResponse.ok || !identity.email) throw new Error("Recipient email is unavailable");
+      const identity = (await workerQuery(
+        "select email::text from app_auth.accounts where id=$1 and status='ACTIVE'",
+        [job.recipient_id],
+      )).rows[0];
+      if (!identity?.email) throw new Error("Recipient email is unavailable");
       const delivery = await fetch(process.env.EMAIL_DELIVERY_WEBHOOK_URL, {
         method:"POST",
         headers:{ "content-type":"application/json", ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN ? { authorization:`Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` } : {}) },

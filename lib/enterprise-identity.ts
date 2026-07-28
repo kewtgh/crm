@@ -3,7 +3,13 @@ import { requireTrustedDeviceSecret } from "./runtime-environment";
 export const enterpriseSsoCookie = "crm_sso_pkce";
 export const enterpriseSsoMaxAge = 5 * 60;
 
-type SsoState = { verifier: string; issuedAt: number };
+type SsoState = {
+  verifier: string;
+  state: string;
+  nonce: string;
+  email: string;
+  issuedAt: number;
+};
 
 function featureEnabled(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
@@ -35,15 +41,43 @@ export function enterpriseSsoConfiguration(environment: NodeJS.ProcessEnv = proc
     .split(",")
     .map((domain) => domain.trim().toLowerCase())
     .filter((domain) => /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)))];
-  return { enabled: featureEnabled(environment.SSO_ENABLED) && domains.length > 0, domains };
+  const authorizationUrl = environment.SSO_AUTHORIZATION_URL?.trim() ?? "";
+  const tokenUrl = environment.SSO_TOKEN_URL?.trim() ?? "";
+  const userInfoUrl = environment.SSO_USERINFO_URL?.trim() ?? "";
+  const clientId = environment.SSO_CLIENT_ID?.trim() ?? "";
+  const clientSecret = environment.SSO_CLIENT_SECRET?.trim() ?? "";
+  const urls = [authorizationUrl, tokenUrl, userInfoUrl];
+  const validUrls = urls.every((value) => {
+    try { return new URL(value).protocol === "https:"; } catch { return false; }
+  });
+  return {
+    enabled: featureEnabled(environment.SSO_ENABLED)
+      && domains.length > 0
+      && validUrls
+      && Boolean(clientId && clientSecret),
+    domains,
+    authorizationUrl,
+    tokenUrl,
+    userInfoUrl,
+    clientId,
+    clientSecret,
+  };
 }
 
-export async function createEnterpriseSsoState() {
+export async function createEnterpriseSsoState(email: string) {
   const verifier = base64Url(crypto.getRandomValues(new Uint8Array(48)));
-  const encoded = base64Url(new TextEncoder().encode(JSON.stringify({ verifier, issuedAt: Date.now() } satisfies SsoState)));
+  const state = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const nonce = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const encoded = base64Url(new TextEncoder().encode(JSON.stringify({
+    verifier,
+    state,
+    nonce,
+    email: email.trim().toLowerCase(),
+    issuedAt: Date.now(),
+  } satisfies SsoState)));
   const signature = base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", await signingKey(), new TextEncoder().encode(encoded))));
   const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
-  return { cookie: `${encoded}.${signature}`, verifier, challenge };
+  return { cookie: `${encoded}.${signature}`, verifier, challenge, state, nonce };
 }
 
 export async function readEnterpriseSsoState(cookie: string | undefined) {
@@ -62,6 +96,8 @@ export async function readEnterpriseSsoState(cookie: string | undefined) {
   try {
     const state = JSON.parse(new TextDecoder().decode(decodeBase64Url(encoded))) as SsoState;
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(state.verifier)) return null;
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(state.state) || !/^[A-Za-z0-9_-]{32,128}$/.test(state.nonce)) return null;
+    if (!/^[^@\s]+@[^@\s]+$/.test(state.email)) return null;
     if (!Number.isFinite(state.issuedAt) || Date.now() - state.issuedAt > enterpriseSsoMaxAge * 1_000) return null;
     return state;
   } catch { return null; }

@@ -256,7 +256,7 @@ function SecuritySettings() {
       event.currentTarget.reset();
     } catch (cause) {
       const code=cause instanceof ApiClientError?cause.code:"PASSWORD_UPDATE_FAILED";
-      const errorKeys:Record<string,string>={CURRENT_PASSWORD_INCORRECT:"settings.currentPasswordIncorrect",AUTH_RATE_LIMITED:"settings.passwordRateLimited",AUTH_UNAVAILABLE:"settings.passwordServiceUnavailable",SUPABASE_UNAVAILABLE:"settings.passwordServiceUnavailable",UPSTREAM_TIMEOUT:"settings.passwordServiceUnavailable",same_password:"settings.passwordSame",SAME_PASSWORD:"settings.passwordSame",weak_password:"settings.passwordRule",WEAK_PASSWORD:"settings.passwordRule",INVALID_PASSWORD:"settings.passwordRule",reauthentication_needed:"settings.passwordReauthentication",REAUTHENTICATION_NEEDED:"settings.passwordReauthentication"};
+      const errorKeys:Record<string,string>={CURRENT_PASSWORD_INCORRECT:"settings.currentPasswordIncorrect",AUTH_RATE_LIMITED:"settings.passwordRateLimited",AUTH_UNAVAILABLE:"settings.passwordServiceUnavailable",DATABASE_UNAVAILABLE:"settings.passwordServiceUnavailable",UPSTREAM_TIMEOUT:"settings.passwordServiceUnavailable",SAME_PASSWORD:"settings.passwordSame",WEAK_PASSWORD:"settings.passwordRule",INVALID_PASSWORD:"settings.passwordRule",REAUTHENTICATION_NEEDED:"settings.passwordReauthentication"};
       setPasswordError(t(errorKeys[code]??"settings.passwordFailed"));
     } finally {
       if(!navigationStarted){

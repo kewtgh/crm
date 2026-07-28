@@ -12,7 +12,6 @@ export {
   directRuntimeEnvironment,
 };
 
-export const PRODUCTION_PROJECT_REF = "ectxevxmcwzvwsjkwnld";
 export const PRODUCTION_PUBLIC_URL = "https://crm.ewaya.com";
 export const PRODUCTION_LOCAL_URL = "http://127.0.0.1:3200";
 export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
@@ -21,9 +20,9 @@ export const RELEASE_NAME_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{12}$/;
 export const LEGACY_RELEASE_NAME_PATTERN = /^\d{14}-[0-9a-f]{12}$/;
 export const DEPLOYMENT_ID_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{32}$/;
 export const REVIEWED_INSTALL_SCRIPTS = Object.freeze({
+  "argon2@0.45.1": true,
   "esbuild@0.28.1": true,
   "unrs-resolver@1.12.2": true,
-  "workerd@1.20260714.1": true,
 });
 
 const REQUIRED_READINESS_CHECKS = ["environment", "auth", "database", "workers", "queues"];

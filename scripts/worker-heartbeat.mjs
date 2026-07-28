@@ -1,14 +1,9 @@
-export function createWorkerHeartbeat(baseUrl, serviceKey, worker) {
-  const headers = {
-    apikey: serviceKey,
-    authorization: `Bearer ${serviceKey}`,
-    "content-type": "application/json",
-  };
+import { workerJson } from "./lib/worker-database.mjs";
 
+export function createWorkerHeartbeat(worker) {
   async function record(successful, failure = null, details = {}) {
-    const response = await fetch(`${baseUrl}/rest/v1/rpc/record_worker_heartbeat`, {
+    await workerJson("/db/rpc/record_worker_heartbeat", {
       method: "POST",
-      headers,
       body: JSON.stringify({
         worker,
         successful,
@@ -16,7 +11,6 @@ export function createWorkerHeartbeat(baseUrl, serviceKey, worker) {
         details,
       }),
     });
-    if (!response.ok) throw new Error(`Worker heartbeat failed (${response.status})`);
   }
 
   return {

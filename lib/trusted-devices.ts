@@ -1,4 +1,4 @@
-import { supabaseAdminJson, supabaseJson } from "./supabase-server";
+import { databaseSystemJson, databaseJson } from "./db/gateway";
 import { requireTrustedDeviceSecret } from "./runtime-environment";
 
 export const securityCookieNames = {
@@ -121,7 +121,7 @@ export async function consumeTrustedDevice(userId: string, cookieValue?: string 
   const parsed = parseTrustedDeviceCookie(cookieValue);
   if (!parsed) return false;
   try {
-    return await supabaseAdminJson<boolean>("/rest/v1/rpc/service_consume_trusted_login_device", {
+    return await databaseSystemJson<boolean>("/db/rpc/service_consume_trusted_login_device", {
       method: "POST",
       body: JSON.stringify({
         target_device: parsed.id,
@@ -137,7 +137,7 @@ export async function consumeTrustedDevice(userId: string, cookieValue?: string 
 export async function registerTrustedDevice(userId: string, label: string) {
   const id = crypto.randomUUID();
   const token = randomToken();
-  await supabaseAdminJson<string>("/rest/v1/rpc/service_register_trusted_login_device", {
+  await databaseSystemJson<string>("/db/rpc/service_register_trusted_login_device", {
     method: "POST",
     body: JSON.stringify({
       target_device: id,
@@ -151,7 +151,7 @@ export async function registerTrustedDevice(userId: string, label: string) {
 }
 
 export async function revokeUserTrustedDevices(userId: string, reason: string) {
-  return supabaseAdminJson<number>("/rest/v1/rpc/service_revoke_user_trusted_login_devices", {
+  return databaseSystemJson<number>("/db/rpc/service_revoke_user_trusted_login_devices", {
     method: "POST",
     body: JSON.stringify({ target_user: userId, revoke_reason: reason }),
   });
@@ -159,8 +159,8 @@ export async function revokeUserTrustedDevices(userId: string, reason: string) {
 
 export async function listTrustedDevices(accessToken: string, currentCookie?: string | null) {
   const currentId = parseTrustedDeviceCookie(currentCookie)?.id;
-  const rows = await supabaseJson<TrustedDeviceRow[]>(
-    "/rest/v1/rpc/list_current_user_trusted_login_devices",
+  const rows = await databaseJson<TrustedDeviceRow[]>(
+    "/db/rpc/list_current_user_trusted_login_devices",
     { method: "POST", body: "{}" },
     accessToken,
   );
@@ -175,14 +175,14 @@ export async function listTrustedDevices(accessToken: string, currentCookie?: st
 }
 
 export async function revokeTrustedDevice(accessToken: string, id: string) {
-  return supabaseJson<boolean>("/rest/v1/rpc/revoke_current_user_trusted_login_device", {
+  return databaseJson<boolean>("/db/rpc/revoke_current_user_trusted_login_device", {
     method: "POST",
     body: JSON.stringify({ target_device: id }),
   }, accessToken);
 }
 
 export async function revokeOtherTrustedDevices(accessToken: string, currentCookie?: string | null) {
-  return supabaseJson<number>("/rest/v1/rpc/revoke_other_current_user_trusted_login_devices", {
+  return databaseJson<number>("/db/rpc/revoke_other_current_user_trusted_login_devices", {
     method: "POST",
     body: JSON.stringify({ keep_device: parseTrustedDeviceCookie(currentCookie)?.id ?? null }),
   }, accessToken);

@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiRoute } from "@/lib/api";
-import { createEnterpriseSsoState, enterpriseSsoConfiguration, enterpriseSsoCookie, enterpriseSsoMaxAge } from "@/lib/enterprise-identity";
-import { fetchWithTimeout } from "@/lib/fetch-timeout";
-import { checkLoginRateLimit, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
+import {
+  createEnterpriseSsoState,
+  enterpriseSsoConfiguration,
+  enterpriseSsoCookie,
+  enterpriseSsoMaxAge,
+} from "@/lib/enterprise-identity";
+import {
+  checkLoginRateLimit,
+  loginThrottleIdentity,
+  recordLoginFailure,
+} from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { verifyCaptchaProof } from "@/lib/captcha";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
@@ -19,41 +27,29 @@ async function post(request: Request) {
   if (!configuration.domains.includes(domain)) throw new ApiError("SSO_DOMAIN_NOT_ALLOWED", 403);
   const identity = await loginThrottleIdentity(request, email);
   const limit = await checkLoginRateLimit(identity);
-  if (!limit.allowed) throw new ApiError("TOO_MANY_ATTEMPTS", 429, "TOO_MANY_ATTEMPTS", undefined, { "Retry-After": String(limit.retryAfter) });
-  // Password and SSO share one visible login challenge, so both verify the
-  // widget's stable staff_login action while remaining separate server flows.
+  if (!limit.allowed) {
+    throw new ApiError("TOO_MANY_ATTEMPTS", 429, "TOO_MANY_ATTEMPTS", undefined, {
+      "Retry-After": String(limit.retryAfter),
+    });
+  }
   const captcha = await verifyCaptchaProof(parsed.data.captchaProof, request, "staff_login");
   if (!captcha.ok) {
     await recordLoginFailure(identity);
-    throw new ApiError(captcha.code, captcha.status, captcha.code, {
-      field: "captcha",
-      provider: parsed.data.captchaProof.provider,
-      ...(captcha.fallbackReason ? { fallbackReason: captcha.fallbackReason } : {}),
-    });
+    throw new ApiError(captcha.code, captcha.status, captcha.code, { field: "captcha" });
   }
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const appUrl = applicationOrigin(request.url);
-  if (!supabaseUrl || !anonKey) throw new ApiError("SSO_NOT_CONFIGURED", 503);
-  const state = await createEnterpriseSsoState();
-  const upstream = await fetchWithTimeout(`${supabaseUrl}/auth/v1/sso`, {
-    method: "POST",
-    headers: { apikey: anonKey, "content-type": "application/json" },
-    body: JSON.stringify({
-      domain,
-      redirect_to: `${appUrl}/api/auth/sso/callback`,
-      skip_http_redirect: true,
-      code_challenge: state.challenge,
-      code_challenge_method: "s256",
-    }),
-  }, 10_000).catch(() => { throw new ApiError("SSO_UNAVAILABLE", 503); });
-  const result = await upstream.json().catch(() => ({})) as { url?: string };
-  if (!upstream.ok || !result.url) {
-    await recordLoginFailure(identity);
-    throw new ApiError("SSO_PROVIDER_REJECTED", upstream.status >= 500 ? 503 : 403);
-  }
-  const providerUrl = new URL(result.url);
-  if (providerUrl.protocol !== "https:") throw new ApiError("SSO_PROVIDER_REJECTED", 502);
+
+  const state = await createEnterpriseSsoState(email);
+  const callback = new URL("/api/auth/sso/callback", applicationOrigin(request.url)).toString();
+  const providerUrl = new URL(configuration.authorizationUrl);
+  providerUrl.searchParams.set("client_id", configuration.clientId);
+  providerUrl.searchParams.set("redirect_uri", callback);
+  providerUrl.searchParams.set("response_type", "code");
+  providerUrl.searchParams.set("scope", "openid email profile");
+  providerUrl.searchParams.set("state", state.state);
+  providerUrl.searchParams.set("nonce", state.nonce);
+  providerUrl.searchParams.set("code_challenge", state.challenge);
+  providerUrl.searchParams.set("code_challenge_method", "S256");
+  providerUrl.searchParams.set("login_hint", email);
   const response = NextResponse.json({ url: providerUrl.toString() });
   response.cookies.set(enterpriseSsoCookie, state.cookie, {
     httpOnly: true,

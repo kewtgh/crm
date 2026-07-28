@@ -17,8 +17,6 @@ const workers=allWorkers.filter(([worker])=>{
   return true;
 });
 const skipped=allWorkers.filter(([worker])=>!workers.some(([enabled])=>enabled===worker)).map(([worker])=>worker);
-const baseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,"");
-const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
 const failures=[];
 
 function run(script){
@@ -40,8 +38,8 @@ for(const [worker,script] of workers){
   const result=await run(script);
   if(result.code===0)continue;
   failures.push({worker,error:result.error});
-  if(baseUrl&&serviceKey){
-    await createWorkerHeartbeat(baseUrl,serviceKey,worker)
+  if(process.env.WORKER_DATABASE_URL){
+    await createWorkerHeartbeat(worker)
       .failure(result.error,{orchestrated:true})
       .catch(()=>undefined);
   }

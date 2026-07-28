@@ -1,4 +1,4 @@
-import { supabaseJson } from "./supabase-server";
+import { databaseJson } from "./db/gateway";
 
 export type RelationshipHealth = {
   hasData: boolean;
@@ -17,7 +17,7 @@ export const emptyRelationshipHealth: RelationshipHealth = {
 };
 
 export async function loadWorkspaceRelationshipHealth() {
-  return supabaseJson<RelationshipHealth>("/rest/v1/rpc/workspace_relationship_health", {
+  return databaseJson<RelationshipHealth>("/db/rpc/workspace_relationship_health", {
     method: "POST",
     body: "{}",
   });

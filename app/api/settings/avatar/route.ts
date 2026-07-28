@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiRoute, requireApiUser } from "@/lib/api";
-import { getAccessToken, supabaseJson, supabaseRequest } from "@/lib/supabase-server";
+import { databaseJson } from "@/lib/db/gateway";
 import { loadUserSettings } from "@/lib/settings-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { fetchWithTimeout } from "@/lib/fetch-timeout";
+import { objectStore } from "@/lib/storage/object-store";
 
 const allowed = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -21,13 +22,20 @@ function hasImageSignature(type: string, bytes: Uint8Array) {
 }
 
 async function get() {
-  const user=await requireApiUser();
-  try {
-    const settings = await loadUserSettings(user);
-    if (!settings.avatarPath) return new NextResponse(null, { status: 404 });
-    const upstream = await supabaseRequest(`/storage/v1/object/authenticated/crm-avatars/${settings.avatarPath}`, {}, await getAccessToken());
-    return new NextResponse(await upstream.arrayBuffer(), { headers: { "content-type": upstream.headers.get("content-type") ?? "image/jpeg", "cache-control": "private, max-age=300" } });
-  } catch { return new NextResponse(null, { status: 404 }); }
+  const user = await requireApiUser();
+  const settings = await loadUserSettings(user);
+  if (!settings.avatarPath || !settings.avatarPath.startsWith(`${user.id}/`)) {
+    return new NextResponse(null, { status: 404 });
+  }
+  const object = await objectStore().get(`avatars/${settings.avatarPath}`).catch(() => null);
+  if (!object) return new NextResponse(null, { status: 404 });
+  return new NextResponse(Buffer.from(object.body), {
+    headers: {
+      "content-type": object.contentType,
+      "content-length": String(object.contentLength),
+      "cache-control": "private, max-age=300",
+    },
+  });
 }
 
 async function post(request: Request) {
@@ -35,25 +43,39 @@ async function post(request: Request) {
   const user = await requireApiUser();
   const form = await request.formData();
   const file = form.get("avatar");
-  if (!(file instanceof File) || !allowed.has(file.type) || file.size > 5 * 1024 * 1024) return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
-  const body = await file.arrayBuffer();
-  if (!hasImageSignature(file.type, new Uint8Array(body))) {
+  if (!(file instanceof File) || !allowed.has(file.type) || file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!hasImageSignature(file.type, bytes)) {
     return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
   }
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const path = `${user.id}/avatar.${extension}`;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; const token = await getAccessToken();
-  if (!url || !key || !token) return NextResponse.json({ code: "AUTH_NOT_CONFIGURED" }, { status: 503 });
+  const avatarPath = `${user.id}/avatar.${extension}`;
   const previous = await loadUserSettings(user);
-  const upload = await fetchWithTimeout(`${url}/storage/v1/object/crm-avatars/${path}`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${token}`, "content-type": file.type, "x-upsert": "true" }, body, cache: "no-store" })
-    .catch(() => null);
-  if (!upload) return NextResponse.json({ code: "UPSTREAM_TIMEOUT" }, { status: 504 });
-  if (!upload.ok) return NextResponse.json({ code: "AVATAR_UPLOAD_FAILED" }, { status: upload.status });
-  await supabaseJson(`/rest/v1/user_preferences?user_id=eq.${user.id}`, { method: "PATCH", body: JSON.stringify({ avatar_path: path, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } });
-  if (previous.avatarPath && previous.avatarPath !== path && previous.avatarPath.startsWith(`${user.id}/`)) {
-    await supabaseRequest(`/storage/v1/object/crm-avatars/${previous.avatarPath}`, { method: "DELETE" }, token).catch(() => null);
+  await objectStore().put(`avatars/${avatarPath}`, bytes, {
+    contentType: file.type,
+    checksum: createHash("sha256").update(bytes).digest("hex"),
+  });
+  try {
+    await databaseJson(`/db/table/user_preferences?user_id=eq.${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ avatar_path: avatarPath, updated_at: new Date().toISOString() }),
+      headers: { Prefer: "return=minimal" },
+    });
+  } catch (error) {
+    await objectStore().delete(`avatars/${avatarPath}`).catch(() => undefined);
+    throw error;
+  }
+  if (
+    previous.avatarPath
+    && previous.avatarPath !== avatarPath
+    && previous.avatarPath.startsWith(`${user.id}/`)
+  ) {
+    await objectStore().delete(`avatars/${previous.avatarPath}`).catch(() => undefined);
   }
   return NextResponse.json({ ok: true, url: `/api/settings/avatar?v=${Date.now()}` });
 }
-export const GET=apiRoute(get,"AVATAR_LOAD_FAILED");
-export const POST=apiRoute(post,"AVATAR_UPLOAD_FAILED");
+
+export const GET = apiRoute(get, "AVATAR_LOAD_FAILED");
+export const POST = apiRoute(post, "AVATAR_UPLOAD_FAILED");

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, parseUuid, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { supabaseJson } from "@/lib/supabase-server";
+import { databaseJson } from "@/lib/db/gateway";
 
 const schema = z.object({
   contactId: z.uuid().nullable().optional(),
@@ -21,7 +21,7 @@ async function post(request: Request, context: { params: Promise<{ id: string }>
   const { id } = await context.params;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_CUSTOMER_ACTIVITY", 400);
-  const item = await supabaseJson<Record<string, unknown>>("/rest/v1/rpc/record_customer_activity", {
+  const item = await databaseJson<Record<string, unknown>>("/db/rpc/record_customer_activity", {
     method: "POST",
     body: JSON.stringify({
       target_organization: parseUuid(id),

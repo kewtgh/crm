@@ -4,7 +4,7 @@ import { getStaffUser, updateStaffUser } from "@/lib/admin-users-repository";
 import { apiRoute, parseUuid, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { APP_ROLES } from "@/lib/roles";
-import { SupabaseRequestError } from "@/lib/supabase-server";
+import { DatabaseRequestError } from "@/lib/db/gateway";
 
 const schema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
@@ -22,7 +22,7 @@ async function patch(request: Request, context: { params: Promise<{ id: string }
     await updateStaffUser(target, parsed.data, actor);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (error instanceof SupabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
+    if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
     return NextResponse.json({ code: "STAFF_USER_UPDATE_FAILED" }, { status: 500 });
   }
 }

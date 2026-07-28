@@ -1,31 +1,20 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { workerJson } from "./lib/worker-database.mjs";
 
 const required = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "WORKER_DATABASE_URL",
   "WEBHOOK_PROCESSOR_URL",
 ];
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Missing webhook-worker variables: ${missing.join(", ")}`);
-const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const headers = {
-  apikey: serviceKey,
-  authorization: `Bearer ${serviceKey}`,
-  "content-type": "application/json",
-};
-const heartbeat = createWorkerHeartbeat(baseUrl, serviceKey, "WEBHOOK_INBOX");
+const heartbeat = createWorkerHeartbeat("WEBHOOK_INBOX");
 const workerId = process.env.WORKER_ID?.trim() || `webhook-inbox:${process.pid}:${crypto.randomUUID()}`;
 
 async function rpc(name, body) {
-  const response = await fetch(`${baseUrl}/rest/v1/rpc/${name}`, {
+  return workerJson(`/db/rpc/${name}`, {
     method: "POST",
-    headers,
     body: JSON.stringify(body),
   });
-  const result = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${name} failed (${response.status})`);
-  return result;
 }
 
 try {
