@@ -4,7 +4,7 @@ import { authCookieNames, hydrateStaffUser, isMfaRequiredRole, nextAuthenticated
 import { loginSchema } from "@/lib/validation";
 import { checkLoginRateLimit, clearLoginFailures, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { verifyCaptchaProof } from "@/lib/captcha";
 import { ApiError, apiRoute } from "@/lib/api";
 import { resolveStaffLoginEmail } from "@/lib/login-identity";
 import { setAuthSessionCookies } from "@/lib/auth-session";
@@ -32,7 +32,7 @@ async function post(request: Request) {
     });
   }
 
-  const { identifier, password, remember, turnstileToken } = parsed.data;
+  const { identifier, password, remember, captchaProof } = parsed.data;
   const throttleIdentity = await loginThrottleIdentity(request, identifier);
   const limit = await checkLoginRateLimit(throttleIdentity);
   if (!limit.allowed) {
@@ -40,10 +40,14 @@ async function post(request: Request) {
       "Retry-After": String(limit.retryAfter),
     });
   }
-  const turnstile = await verifyTurnstileToken(turnstileToken, request,"staff_login");
-  if (!turnstile.ok) {
+  const captcha = await verifyCaptchaProof(captchaProof, request, "staff_login");
+  if (!captcha.ok) {
     await recordLoginFailure(throttleIdentity);
-    throw new ApiError(turnstile.code, turnstile.code === "TURNSTILE_NOT_CONFIGURED" ? 503 : 400, turnstile.code, { field: "turnstile" });
+    throw new ApiError(captcha.code, captcha.status, captcha.code, {
+      field: "captcha",
+      provider: captchaProof.provider,
+      ...(captcha.fallbackReason ? { fallbackReason: captcha.fallbackReason } : {}),
+    });
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

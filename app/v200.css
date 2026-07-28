@@ -2,10 +2,10 @@
    Kept after the legacy global bundle so the release-tested floors remain deterministic. */
 :where(.app-frame, .auth-page) small { font-size:12px !important; line-height:1.5; }
 .eyebrow, .nav-group > p, .status-badge, .data-table th { font-size:12px; }
-.turnstile-status { min-height:32px; padding:7px 9px; border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:10px; color:#41534e; background:var(--surface-soft); font-size:12px; }
-.turnstile-status.verified { color:#20694e; background:var(--green-soft); }
-.turnstile-status.error { color:#943b37; background:var(--red-soft); }
-.turnstile-status button { min-height:32px; padding:0 10px; border:1px solid currentColor; border-radius:7px; color:inherit; background:transparent; font-weight:750; }
+.turnstile-status,.captcha-status { min-height:32px; padding:7px 9px; border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:10px; color:#41534e; background:var(--surface-soft); font-size:12px; }
+.turnstile-status.verified,.captcha-status.verified { color:#20694e; background:var(--green-soft); }
+.turnstile-status.error,.captcha-status.error { color:#943b37; background:var(--red-soft); }
+.turnstile-status button,.captcha-status button { min-height:32px; padding:0 10px; border:1px solid currentColor; border-radius:7px; color:inherit; background:transparent; font-weight:750; }
 @media(max-width:680px){
   .finance-risk-center { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; gap:0; padding:0; }
   .finance-risk-center > span { min-width:0; min-height:78px; padding:12px !important; border-right:0; border-bottom:1px solid var(--line); justify-content:center; }

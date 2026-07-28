@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useI18n } from "./i18n-provider";
-import { TurnstileWidget } from "./turnstile-widget";
+import { CaptchaWidget } from "./captcha-widget";
+import type { CaptchaFallbackReason, CaptchaProof } from "@/lib/captcha-types";
 import { passwordValueSchema } from "@/lib/validation";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
@@ -13,10 +14,12 @@ export function PasswordResetRequestForm() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [turnstileToken,setTurnstileToken]=useState("");
-  const [turnstileResetKey,setTurnstileResetKey]=useState(0);
+  const [captchaProof,setCaptchaProof]=useState<CaptchaProof|null>(null);
+  const [captchaResetKey,setCaptchaResetKey]=useState(0);
+  const [captchaFallbackSignal,setCaptchaFallbackSignal]=useState(0);
+  const [captchaFallbackReason,setCaptchaFallbackReason]=useState<CaptchaFallbackReason>("service_unavailable");
   const submissionInFlight=useRef(false);
-  const handleTurnstileToken=useCallback((token:string)=>setTurnstileToken(token),[]);
+  const handleCaptchaProof=useCallback((proof:CaptchaProof|null)=>setCaptchaProof(proof),[]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,18 +28,25 @@ export function PasswordResetRequestForm() {
     let completed=false;
     setPending(true); setError(""); setSuccess("");
     const email = String(new FormData(event.currentTarget).get("email") ?? "");
-    if(!turnstileToken){setError(t("auth.error.turnstileRequired"));setPending(false);submissionInFlight.current=false;return;}
+    if(!captchaProof){setError(t("auth.error.captchaRequired"));setPending(false);submissionInFlight.current=false;return;}
     try {
       const response = await fetchWithTimeout("/api/auth/password-reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email,turnstileToken }),
+        body: JSON.stringify({ email,captchaProof }),
       }, 15_000);
-      const result = (await response.json()) as { code?: string };
+      const result = (await response.json()) as { code?: string; error?:{details?:{fallbackReason?:string}} };
       if (!response.ok){
-        const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",AUTH_UNAVAILABLE:"auth.error.unavailable",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",TURNSTILE_REQUIRED:"auth.error.turnstileRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
-        setError(t(keys[result.code??""]??"auth.error.retry"));
-        setTurnstileResetKey(value=>value+1);
+        const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",AUTH_UNAVAILABLE:"auth.error.unavailable",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",CAPTCHA_REQUIRED:"auth.error.captchaRequired",CAPTCHA_INVALID:"auth.error.captchaFailed",CAPTCHA_REPLAYED:"auth.error.captchaExpired",CAPTCHA_NOT_CONFIGURED:"auth.error.captchaUnavailable",TURNSTILE_REQUIRED:"auth.error.captchaRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
+        const fallback=result.error?.details?.fallbackReason;
+        if(fallback==="service_unavailable"||fallback==="not_configured"){
+          setCaptchaProof(null);
+          setCaptchaFallbackReason(fallback);
+          setCaptchaFallbackSignal(value=>value+1);
+          setError(t("auth.captcha.fallback.serverPrompt"));
+        }else setError(t(keys[result.code??""]??"auth.error.retry"));
+        setCaptchaProof(null);
+        setCaptchaResetKey(value=>value+1);
       }
       else {completed=true;setSuccess(t("auth.reset.sent"));}
     } catch (caught) {
@@ -50,7 +60,7 @@ export function PasswordResetRequestForm() {
   return <form className="auth-form" onSubmit={submit} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.accountRecovery")}</p><h1>{t("auth.reset.title")}</h1><p>{t("auth.reset.requestDescription")}</p></div>
     <label className="field"><span>{t("auth.email")}</span><input type="email" name="email" autoComplete="email" required /></label>
-    <TurnstileWidget action="password_recovery" onToken={handleTurnstileToken} resetKey={turnstileResetKey}/>
+    <CaptchaWidget action="password_recovery" onProof={handleCaptchaProof} resetKey={captchaResetKey} fallbackSignal={captchaFallbackSignal} fallbackReason={captchaFallbackReason}/>
     {error && <div className="form-message error" role="alert"><LockKeyhole size={17} /><span>{error}</span></div>}
     {success && <div className="form-message success" role="status"><Check size={17} /><span>{success}</span></div>}
     <button className="primary-button auth-submit" type="submit" disabled={pending || Boolean(success)}>{pending && <LoaderCircle className="spin" size={18} />}{t("auth.reset.send")}</button>

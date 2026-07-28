@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { ApiError, apiRoute } from "@/lib/api";
 import { createEnterpriseSsoState, enterpriseSsoConfiguration, enterpriseSsoCookie, enterpriseSsoMaxAge } from "@/lib/enterprise-identity";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { checkLoginRateLimit, loginThrottleIdentity, recordLoginFailure } from "@/lib/login-rate-limit";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { verifyCaptchaProof } from "@/lib/captcha";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
-
-const schema = z.object({ email: z.email().max(320), turnstileToken: z.string().min(1).max(4096) });
+import { ssoStartSchema } from "@/lib/validation";
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
-  const parsed = schema.safeParse(await request.json().catch(() => ({})));
+  const parsed = ssoStartSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_SSO_EMAIL", 400, "INVALID_SSO_EMAIL", { field: "email" });
   const email = parsed.data.email.trim().toLowerCase();
   const domain = email.split("@")[1] ?? "";
@@ -24,10 +22,14 @@ async function post(request: Request) {
   if (!limit.allowed) throw new ApiError("TOO_MANY_ATTEMPTS", 429, "TOO_MANY_ATTEMPTS", undefined, { "Retry-After": String(limit.retryAfter) });
   // Password and SSO share one visible login challenge, so both verify the
   // widget's stable staff_login action while remaining separate server flows.
-  const turnstile = await verifyTurnstileToken(parsed.data.turnstileToken, request, "staff_login");
-  if (!turnstile.ok) {
+  const captcha = await verifyCaptchaProof(parsed.data.captchaProof, request, "staff_login");
+  if (!captcha.ok) {
     await recordLoginFailure(identity);
-    throw new ApiError(turnstile.code, turnstile.code === "TURNSTILE_NOT_CONFIGURED" ? 503 : 400, turnstile.code, { field: "turnstile" });
+    throw new ApiError(captcha.code, captcha.status, captcha.code, {
+      field: "captcha",
+      provider: parsed.data.captchaProof.provider,
+      ...(captcha.fallbackReason ? { fallbackReason: captcha.fallbackReason } : {}),
+    });
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

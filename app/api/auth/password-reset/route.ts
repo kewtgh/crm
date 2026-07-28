@@ -4,7 +4,7 @@ import { mutationIsTrusted } from "@/lib/request-security";
 import { ApiError, apiRoute } from "@/lib/api";
 import { loginThrottleIdentity } from "@/lib/login-rate-limit";
 import { applyAccountRecoveryRateLimit } from "@/lib/account-recovery-rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { verifyCaptchaProof } from "@/lib/captcha";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
 
@@ -18,8 +18,12 @@ async function post(request: Request) {
   const identity=await loginThrottleIdentity(request,parsed.data.email);
   const limit=await applyAccountRecoveryRateLimit(identity);
   if(!limit.allowed)throw new ApiError("TOO_MANY_ATTEMPTS",429,"TOO_MANY_ATTEMPTS",undefined,{"Retry-After":String(limit.retryAfter)});
-  const turnstile=await verifyTurnstileToken(parsed.data.turnstileToken,request,"password_recovery");
-  if(!turnstile.ok)throw new ApiError(turnstile.code,turnstile.code==="TURNSTILE_NOT_CONFIGURED"?503:400,turnstile.code,{field:"turnstile"});
+  const captcha=await verifyCaptchaProof(parsed.data.captchaProof,request,"password_recovery");
+  if(!captcha.ok)throw new ApiError(captcha.code,captcha.status,captcha.code,{
+    field:"captcha",
+    provider:parsed.data.captchaProof.provider,
+    ...(captcha.fallbackReason?{fallbackReason:captcha.fallbackReason}:{}),
+  });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

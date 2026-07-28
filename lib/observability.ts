@@ -1,6 +1,6 @@
 import { fetchWithTimeout } from "./fetch-timeout";
 
-export type ObservabilityEvent = {
+export type ApiRequestObservabilityEvent = {
   name: "api.request.completed";
   requestId: string;
   method: string;
@@ -10,6 +10,17 @@ export type ObservabilityEvent = {
   outcome: "success" | "redirect" | "client_error" | "server_error";
   errorCode?: string;
 };
+
+export type CaptchaObservabilityEvent = {
+  name: "captcha.verification";
+  provider: "turnstile" | "altcha";
+  action: "staff_login" | "password_recovery";
+  fallbackReason?: string;
+  result: "success" | "invalid" | "expired" | "replayed" | "unavailable" | "not_configured";
+  durationMs: number;
+};
+
+export type ObservabilityEvent = ApiRequestObservabilityEvent | CaptchaObservabilityEvent;
 
 function enabled(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
@@ -30,7 +41,10 @@ export async function emitObservabilityEvent(event: ObservabilityEvent) {
   };
   // This allow-listed envelope never includes request bodies, query strings,
   // cookies, account identifiers, or business-record content.
-  if (event.status >= 500 || Math.random() <= sampleRate()) {
+  const alwaysLog = event.name === "api.request.completed"
+    ? event.status >= 500
+    : event.result !== "success";
+  if (alwaysLog || Math.random() <= sampleRate()) {
     console.info(`[observability] ${JSON.stringify(envelope)}`);
   }
   if (!enabled(process.env.OBSERVABILITY_ENABLED) || Math.random() > sampleRate()) return;
@@ -48,7 +62,7 @@ export async function emitObservabilityEvent(event: ObservabilityEvent) {
   }
 }
 
-export function requestOutcome(status: number): ObservabilityEvent["outcome"] {
+export function requestOutcome(status: number): ApiRequestObservabilityEvent["outcome"] {
   if (status >= 500) return "server_error";
   if (status >= 400) return "client_error";
   if (status >= 300) return "redirect";

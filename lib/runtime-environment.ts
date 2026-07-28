@@ -38,6 +38,7 @@ export const coreRuntimeEnvironmentSchema = z.object({
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: configured,
   TURNSTILE_SECRET_KEY: productionSecret,
   TURNSTILE_EXPECTED_HOSTNAME: hostname,
+  ALTCHA_HMAC_SECRET: productionSecret,
   NEXT_PUBLIC_SUPABASE_URL: configuredUrl.refine((value) => secureEndpointOrigin(value) !== null, "Supabase URL must be an HTTPS origin (or loopback HTTP in development)"),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: authKey,
   SUPABASE_SERVICE_ROLE_KEY: authKey,
@@ -52,6 +53,17 @@ export const coreRuntimeEnvironmentSchema = z.object({
   if (value.LOGIN_THROTTLE_HASH_SECRET === value.TRUSTED_DEVICE_HASH_SECRET) {
     context.addIssue({ code: "custom", path: ["TRUSTED_DEVICE_HASH_SECRET"], message: "Security secrets must be independent" });
   }
+  const secrets = [
+    ["TURNSTILE_SECRET_KEY", value.TURNSTILE_SECRET_KEY],
+    ["ALTCHA_HMAC_SECRET", value.ALTCHA_HMAC_SECRET],
+    ["LOGIN_THROTTLE_HASH_SECRET", value.LOGIN_THROTTLE_HASH_SECRET],
+    ["TRUSTED_DEVICE_HASH_SECRET", value.TRUSTED_DEVICE_HASH_SECRET],
+  ] as const;
+  secrets.forEach(([key, secret], index) => {
+    if (secrets.some(([, candidate], candidateIndex) => candidateIndex < index && candidate === secret)) {
+      context.addIssue({ code: "custom", path: [key], message: "Security secrets must be independent" });
+    }
+  });
 });
 
 export type RuntimeEnvironmentStatus = {

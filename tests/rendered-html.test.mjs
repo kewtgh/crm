@@ -23,6 +23,7 @@ test("rejects complete but placeholder or internally inconsistent production con
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "production-site-key",
     TURNSTILE_SECRET_KEY: "replace-with-a-production-server-secret",
     TURNSTILE_EXPECTED_HOSTNAME: "crm.example.com",
+    ALTCHA_HMAC_SECRET: "replace-with-an-independent-altcha-secret",
     NEXT_PUBLIC_SUPABASE_URL: "https://your-project.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "replace-with-public-anon-key",
     SUPABASE_SERVICE_ROLE_KEY: "replace-with-server-only-service-role-key",
@@ -37,6 +38,7 @@ test("rejects complete but placeholder or internally inconsistent production con
     ...placeholderEnvironment,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAabcdefghijklmnopqrstuvwxyz",
     TURNSTILE_SECRET_KEY: "turnstile-secret-value-0123456789abcdef",
+    ALTCHA_HMAC_SECRET: "altcha-secret-value-0123456789abcdefgh",
     NEXT_PUBLIC_SUPABASE_URL: "https://project-ref.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key-value-that-is-not-a-placeholder",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-value-that-is-not-placeholder",
@@ -183,8 +185,8 @@ test("keeps authentication failures local to their forms", async () => {
   assert.match(authForm, /identifierRef/);
   assert.match(authForm, /auth\.staffOnly/);
   assert.doesNotMatch(authForm, /register/i);
-  assert.match(authForm, /TurnstileWidget/);
-  assert.match(loginRoute, /verifyTurnstileToken/);
+  assert.match(authForm, /CaptchaWidget/);
+  assert.match(loginRoute, /verifyCaptchaProof/);
   assert.match(loginRoute, /INVALID_CREDENTIALS/);
   assert.doesNotMatch(loginRoute, /searchParams|URLSearchParams/);
   await assert.rejects(access(new URL("../app/(auth)/register/page.tsx", import.meta.url)));
@@ -205,7 +207,7 @@ test("implements role-scoped MFA and revocable trusted-device verification", asy
   assert.match(auth, /isMfaRequiredRole\(user\.role\) \|\| user\.mfaEnabled/);
   assert.doesNotMatch(auth, /\["SUPER_ADMIN", "ADMIN", "SALES_DIRECTOR", "SALES_MANAGER"\]/);
   assert.match(login, /resolveStaffLoginEmail\(identifier\)/);
-  assert.match(login, /verifyTurnstileToken/);
+  assert.match(login, /verifyCaptchaProof/);
   assert.match(login, /auth\/v1\/otp/);
   assert.match(login, /consumeTrustedDevice/);
   assert.match(verification, /auth\/v1\/verify/);
@@ -457,17 +459,19 @@ test("completes approved export generation and secure delivery", async () => {
   assert.match(packageJson, /exports:process/);
 });
 
-test("enforces administrator-created accounts, temporary-password replacement, Turnstile, and privileged MFA", async () => {
-  const [staffRepository, staffRoute, loginRoute, turnstile, auth, mfaRoute, crmLayout, firstLoginMigration, mfaMigration, env] = await Promise.all([
+test("enforces administrator-created accounts, temporary-password replacement, captcha providers, and privileged MFA", async () => {
+  const [staffRepository, staffRoute, loginRoute, turnstile, captcha, auth, mfaRoute, crmLayout, firstLoginMigration, mfaMigration, captchaMigration, env] = await Promise.all([
     readFile(new URL("../lib/admin-users-repository.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/users/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/turnstile.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/captcha.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/settings/mfa/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/(crm)/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/202607170017_first_login_security.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/202607170020_privileged_mfa_gate.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/202607290057_captcha_provider_fallback.sql", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
   ]);
   assert.match(staffRepository, /generateTemporaryPassword/);
@@ -476,9 +480,12 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.doesNotMatch(staffRepository, /auth\/v1\/invite/);
   assert.match(staffRepository, /actor\.role === "ADMIN" && input\.role === "ADMIN"/);
   assert.match(staffRoute, /requireApiAal2/);
-  assert.match(loginRoute, /verifyTurnstileToken/);
+  assert.match(loginRoute, /verifyCaptchaProof/);
   assert.match(turnstile, /siteverify/);
   assert.match(turnstile, /idempotency_key/);
+  assert.match(captcha, /consumeAltchaAttestation/);
+  assert.match(captchaMigration, /service_verify_captcha_challenge/);
+  assert.match(captchaMigration, /consumed_at is null/);
   assert.match(auth, /nextAuthenticatedPath/);
   assert.match(mfaRoute, /setAuthSessionCookies\(response, session\)/);
   assert.match(crmLayout, /mfa-challenge/);
@@ -487,6 +494,7 @@ test("enforces administrator-created accounts, temporary-password replacement, T
   assert.match(mfaMigration, /auth\.jwt\(\)->>'aal'/);
   assert.match(env, /NEXT_PUBLIC_TURNSTILE_SITE_KEY/);
   assert.match(env, /TURNSTILE_SECRET_KEY/);
+  assert.match(env, /ALTCHA_HMAC_SECRET/);
 });
 
 test("closes the v0.9.0 audit findings and exposes real operational product foundations", async () => {

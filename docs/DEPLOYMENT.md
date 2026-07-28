@@ -1,12 +1,12 @@
-# Lumina Education CRM v2.8.4 部署指引
+# Lumina Education CRM v2.9.1 部署指引
 
 ## 1. 发布前提
 
 - Node.js 24.x；开发、CI 与服务器统一使用 `.nvmrc` 固定的 `24.18.0`。
 - npm 12.x；`package.json`、`engine-strict`、CI 与完整发布门禁固定使用 `12.0.1`。
 - 独立 Supabase 项目（Auth、Postgres、private Storage）、HTTPS 域名、密钥管理、备份与告警。
-- 正式 Turnstile、邮件投递，以及每个明确启用连接器的独立凭据。
-- 数据库必须按顺序应用到 `202607280056`，且不得跳过 `050` 的隐私导出修复、`052` 的 Worker 最小读取权限、`053` 的企业目录与连接器验证凭证、`054` 的时区完整性约束、`055` 的 MFA 恢复码与超级管理员直执/回收站能力或 `056` 的 readiness 诊断修复。
+- 正式 Turnstile、独立 ALTCHA HMAC 密钥、邮件投递，以及每个明确启用连接器的独立凭据。
+- 数据库必须按顺序应用到 `202607290057`；`057` 提供同域 ALTCHA fallback 所需的短时、action 绑定和原子单次消费生命周期。
 
 当前工作树是 v2.8.4 release candidate。生产构建、源码契约、部署单测与固定浏览器门禁
 必须全部通过；完整浏览器矩阵必须在生产激活前重跑。本轮证据见
@@ -24,6 +24,7 @@ APP_URL=https://crm.example.com
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=production-site-key
 TURNSTILE_SECRET_KEY=production-server-secret
 TURNSTILE_EXPECTED_HOSTNAME=crm.example.com
+ALTCHA_HMAC_SECRET=independent-random-secret-at-least-32-bytes
 NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
@@ -55,8 +56,20 @@ OBSERVABILITY_SAMPLE_RATE=1
 只能接收允许列表中的 request ID、路由模板、方法、状态、时延、结果与稳定错误码，不得接收
 查询串、Cookie、请求体、账号标识或 CRM 业务内容。
 
-`NEXT_PUBLIC_*` 只能保存公开值。service role、Turnstile secret、限流/可信设备 HMAC、邮件及
+`NEXT_PUBLIC_*` 只能保存公开值。service role、Turnstile secret、ALTCHA HMAC、限流/可信设备 HMAC、邮件及
 连接器 token 不得进入浏览器、提交、构建日志或客户端 bundle。初始化后删除 `ADMIN_PASSWORD`。
+
+### 验证码发布顺序
+
+1. 先应用 `202607290057`，再发布包含 fallback 的应用；反向顺序会让本地验证 fail-closed。
+2. `ALTCHA_HMAC_SECRET` 必须是独立、稳定且所有应用实例一致的至少 32 字节随机值；轮换会使
+   尚未消费的短时 challenge/attestation 立即失效。
+3. 保留现有三个 Turnstile 变量。Turnstile 仍是默认 Provider，本地 ALTCHA 仅在脚本错误、
+   约 7 秒超时、组件错误或服务端确认不可达时自动启用。
+4. Caddy/代理必须原样放行并禁止缓存 `/api/captcha/challenge` 与 `/api/captcha/verify`；
+   ALTCHA 前端 chunk、challenge 和 verify 均应保持应用同域。
+5. 监控 `captcha.verification` 事件的 `provider`、`fallbackReason`、`result` 与 `durationMs`。
+   ALTCHA 或数据库故障必须保持拒绝，不得配置任何 fail-open 规则。
 
 ## 3. 数据库与身份
 
@@ -65,7 +78,7 @@ OBSERVABILITY_SAMPLE_RATE=1
 3. 配置正式 APP URL、密码重置回调、SMTP 和显示六位 `{{ .Token }}` 的 OTP 模板。
 4. 管理员必须 TOTP/AAL2；普通员工可选 MFA，否则在新设备完成邮箱 OTP。
 5. 确认 `crm-avatars` 与 `crm-exports` 为 private。
-6. 按文件名顺序应用全部迁移到 `202607280056`：
+6. 按文件名顺序应用全部迁移到 `202607290057`：
 
 ```bash
 npx supabase db push --linked
@@ -77,7 +90,8 @@ npx supabase db lint --linked --level warning
 绩效与连接器对账；`052` 修复日历与隐私导出 Worker 通过 PostgREST 读取来源记录所需的最小
 `service_role` 权限；`053` 增加受限企业目录、SSO profile 兼容和不可变连接器 sandbox
 验证凭证；`054` 清理历史异常时区并将用户偏好限制在应用实际支持的集合中；`055` 增加 MFA
-恢复码、超级管理员直执和 30 天回收站；`056` 将 missing/stale Worker 分开计数。最终数据库
+恢复码、超级管理员直执和 30 天回收站；`056` 将 missing/stale Worker 分开计数；`057`
+新增 ALTCHA challenge/attestation 原子生命周期，必须先于启用 fallback 的应用版本部署。最终数据库
 测试总数应为 468，任一失败都不得部署
 应用。pgTAP 必须先在隔离数据库或 CI 完整运行；生产更新只执行明确 project ref 的
 forward-only push、dry-run 与 linked schema lint，不在生产库运行 destructive reset。

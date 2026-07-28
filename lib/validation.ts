@@ -1,4 +1,17 @@
 import { z } from "zod";
+import { captchaFallbackReasons } from "./captcha-types";
+
+export const captchaProofSchema = z.discriminatedUnion("provider", [
+  z.object({
+    provider: z.literal("turnstile"),
+    token: z.string().trim().min(1, "CAPTCHA_REQUIRED").max(32_768, "CAPTCHA_INVALID"),
+  }),
+  z.object({
+    provider: z.literal("altcha"),
+    token: z.string().trim().min(1, "CAPTCHA_REQUIRED").max(32_768, "CAPTCHA_INVALID"),
+    fallbackReason: z.enum(captchaFallbackReasons),
+  }),
+]);
 
 export const loginSchema = z.object({
   identifier: z.string().trim().min(3, "INVALID_IDENTIFIER").max(254, "INVALID_IDENTIFIER").refine(
@@ -6,9 +19,17 @@ export const loginSchema = z.object({
     "INVALID_IDENTIFIER",
   ),
   password: z.string().min(8, "PASSWORD_TOO_SHORT"),
-  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED"),
+  captchaProof: captchaProofSchema.optional(),
+  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED").max(32_768, "CAPTCHA_INVALID").optional(),
   remember: z.preprocess((value) => value === true || value === "on", z.boolean()).default(false),
-});
+}).superRefine((value, context) => {
+  if (!value.captchaProof && !value.turnstileToken) {
+    context.addIssue({ code: "custom", path: ["captchaProof"], message: "CAPTCHA_REQUIRED" });
+  }
+}).transform(({ turnstileToken, ...value }) => ({
+  ...value,
+  captchaProof: value.captchaProof ?? { provider: "turnstile" as const, token: turnstileToken! },
+}));
 
 export const deviceVerificationSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, "INVALID_DEVICE_CODE"),
@@ -28,5 +49,26 @@ export const initialPasswordSchema = z.object({
 
 export const passwordResetRequestSchema = z.object({
   email: z.string().trim().email("INVALID_EMAIL"),
-  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED"),
-});
+  captchaProof: captchaProofSchema.optional(),
+  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED").max(32_768, "CAPTCHA_INVALID").optional(),
+}).superRefine((value, context) => {
+  if (!value.captchaProof && !value.turnstileToken) {
+    context.addIssue({ code: "custom", path: ["captchaProof"], message: "CAPTCHA_REQUIRED" });
+  }
+}).transform(({ turnstileToken, ...value }) => ({
+  ...value,
+  captchaProof: value.captchaProof ?? { provider: "turnstile" as const, token: turnstileToken! },
+}));
+
+export const ssoStartSchema = z.object({
+  email: z.email().max(320),
+  captchaProof: captchaProofSchema.optional(),
+  turnstileToken: z.string().trim().min(1, "TURNSTILE_REQUIRED").max(32_768, "CAPTCHA_INVALID").optional(),
+}).superRefine((value, context) => {
+  if (!value.captchaProof && !value.turnstileToken) {
+    context.addIssue({ code: "custom", path: ["captchaProof"], message: "CAPTCHA_REQUIRED" });
+  }
+}).transform(({ turnstileToken, ...value }) => ({
+  ...value,
+  captchaProof: value.captchaProof ?? { provider: "turnstile" as const, token: turnstileToken! },
+}));

@@ -1,10 +1,15 @@
 # Lumina Education CRM
 
-Current release candidate: **v2.9.0**
+Current release candidate: **v2.9.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Customers,
 contacts, parents, students and household members are business records—not staff
 authentication accounts.
+
+v2.9.1 keeps Cloudflare Turnstile as the default CAPTCHA and automatically falls back to a
+same-origin, self-hosted ALTCHA flow when the script, widget or verification service is unavailable.
+Signed, short-lived, action-bound challenges and attestations are atomically single-use, while the
+existing authentication rate limits remain fail-closed.
 
 v2.9.0 closes the July 29 identity-integrity, canonical-origin and navigation audit. Concurrent
 browser requests now share one refresh operation; password changes revoke server sessions and
@@ -176,7 +181,7 @@ lead conversion.
 - `GET /api/health?mode=ready`: Auth, database, environment, queue SLA, optional
   integrations and the enabled worker heartbeat set, with executable remediation details.
 
-The v2.9.0 source implementation and migration through `202607280056` are complete. Current local
+The v2.9.1 source implementation and migration through `202607290057` are complete. Current local
 verification evidence and externally gated production steps are recorded in the implementation
 status. A clean-commit gate must still pass before production activation.
 A production rollout

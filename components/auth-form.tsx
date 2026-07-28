@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
-import { TurnstileWidget } from "./turnstile-widget";
+import { CaptchaWidget } from "./captcha-widget";
+import type { CaptchaFallbackReason, CaptchaProof } from "@/lib/captcha-types";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
 function PasswordField({ error }: { error?: string }) {
@@ -69,9 +70,22 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       ? "auth.security.passwordChangedReview"
       : "";
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
-  const handleTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
+  const [captchaProof, setCaptchaProof] = useState<CaptchaProof | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const [captchaFallbackSignal, setCaptchaFallbackSignal] = useState(0);
+  const [captchaFallbackReason, setCaptchaFallbackReason] = useState<CaptchaFallbackReason>("service_unavailable");
+  const handleCaptchaProof = useCallback((proof: CaptchaProof | null) => setCaptchaProof(proof), []);
+  const resetCaptcha = () => {
+    setCaptchaProof(null);
+    setCaptchaResetKey((value) => value + 1);
+  };
+  const applyServerCaptchaFallback = (reason: unknown) => {
+    if (reason !== "service_unavailable" && reason !== "not_configured") return false;
+    setCaptchaProof(null);
+    setCaptchaFallbackReason(reason);
+    setCaptchaFallbackSignal((value) => value + 1);
+    return true;
+  };
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,8 +95,8 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
     setPending(true);
     setFormError("");
     setFieldErrors({});
-    if (!turnstileToken) {
-      setFieldErrors({ turnstile: t("auth.error.turnstileRequired") });
+    if (!captchaProof) {
+      setFieldErrors({ captcha: t("auth.error.captchaRequired") });
       setPending(false);
       submissionInFlight.current = false;
       return;
@@ -93,13 +107,17 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       const response = await fetchWithTimeout("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...Object.fromEntries(form.entries()), turnstileToken }),
+        body: JSON.stringify({ ...Object.fromEntries(form.entries()), captchaProof }),
       }, 15_000);
-      const result = (await response.json()) as { code?: string; field?: string; next?: string };
+      const result = (await response.json()) as {
+        code?: string;
+        field?: string;
+        next?: string;
+        error?: { details?: { field?: string; fallbackReason?: string } };
+      };
       if (!response.ok) {
-        // Turnstile tokens are single-use. Refresh after every server attempt,
-        // including an incorrect password, so the next submission is valid.
-        setTurnstileResetKey((value) => value + 1);
+        // Both Turnstile tokens and local attestations are single-use.
+        resetCaptcha();
         const errorKeys: Record<string, string> = {
           INVALID_CREDENTIALS: "auth.error.invalidCredentials",
           INVALID_IDENTIFIER: "auth.error.invalidIdentifier",
@@ -107,7 +125,11 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
           AUTH_NOT_CONFIGURED: "auth.error.notConfigured",
           STAFF_ACCESS_DENIED: "auth.error.staffAccess",
           TOO_MANY_ATTEMPTS: "auth.error.tooManyAttempts",
-          TURNSTILE_REQUIRED: "auth.error.turnstileRequired",
+          CAPTCHA_REQUIRED: "auth.error.captchaRequired",
+          CAPTCHA_INVALID: "auth.error.captchaFailed",
+          CAPTCHA_REPLAYED: "auth.error.captchaExpired",
+          CAPTCHA_NOT_CONFIGURED: "auth.error.captchaUnavailable",
+          TURNSTILE_REQUIRED: "auth.error.captchaRequired",
           TURNSTILE_FAILED: "auth.error.turnstileFailed",
           TURNSTILE_UNAVAILABLE: "auth.error.turnstileUnavailable",
           TURNSTILE_NOT_CONFIGURED: "auth.turnstile.notConfigured",
@@ -115,10 +137,14 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
           EMAIL_VERIFICATION_UNAVAILABLE: "auth.error.unavailable",
         };
         const message = t(errorKeys[result.code ?? ""] ?? "auth.error.retry");
-        if (result.field === "turnstile") {
-          setFieldErrors({ turnstile: message });
-        } else if (result.field === "identifier" || result.field === "password") {
-          setFieldErrors({ [result.field]: message });
+        const details = result.error?.details;
+        const field = result.field ?? details?.field;
+        if (applyServerCaptchaFallback(details?.fallbackReason)) {
+          setFieldErrors({ captcha: t("auth.captcha.fallback.serverPrompt") });
+        } else if (field === "captcha" || field === "turnstile") {
+          setFieldErrors({ captcha: message });
+        } else if (field === "identifier" || field === "password") {
+          setFieldErrors({ [field]: message });
         } else {
           setFormError(message);
         }
@@ -129,7 +155,7 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       router.refresh();
     } catch (error) {
       setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.error.network"));
-      setTurnstileResetKey((value) => value + 1);
+      resetCaptcha();
     } finally {
       if (!navigationStarted) {
         submissionInFlight.current = false;
@@ -150,8 +176,8 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       submissionInFlight.current = false;
       return;
     }
-    if (!turnstileToken) {
-      setFieldErrors({ turnstile: t("auth.error.turnstileRequired") });
+    if (!captchaProof) {
+      setFieldErrors({ captcha: t("auth.error.captchaRequired") });
       submissionInFlight.current = false;
       return;
     }
@@ -160,9 +186,13 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       const response = await fetchWithTimeout("/api/auth/sso", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: identifier, turnstileToken }),
+        body: JSON.stringify({ email: identifier, captchaProof }),
       }, 15_000);
-      const result = await response.json() as { url?: string; code?: string };
+      const result = await response.json() as {
+        url?: string;
+        code?: string;
+        error?: { details?: { field?: string; fallbackReason?: string } };
+      };
       if (!response.ok || !result.url) {
         const errorKeys: Record<string, string> = {
           INVALID_SSO_EMAIL: "auth.sso.emailRequired",
@@ -170,19 +200,28 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
           SSO_NOT_CONFIGURED: "auth.sso.unavailable",
           SSO_PROVIDER_REJECTED: "auth.sso.failed",
           TOO_MANY_ATTEMPTS: "auth.error.tooManyAttempts",
-          TURNSTILE_REQUIRED: "auth.error.turnstileRequired",
+          CAPTCHA_REQUIRED: "auth.error.captchaRequired",
+          CAPTCHA_INVALID: "auth.error.captchaFailed",
+          CAPTCHA_REPLAYED: "auth.error.captchaExpired",
+          CAPTCHA_NOT_CONFIGURED: "auth.error.captchaUnavailable",
+          TURNSTILE_REQUIRED: "auth.error.captchaRequired",
           TURNSTILE_FAILED: "auth.error.turnstileFailed",
           TURNSTILE_UNAVAILABLE: "auth.error.turnstileUnavailable",
         };
-        setFormError(t(errorKeys[result.code ?? ""] ?? "auth.sso.failed"));
-        setTurnstileResetKey((value) => value + 1);
+        const fallbackApplied = applyServerCaptchaFallback(result.error?.details?.fallbackReason);
+        if (fallbackApplied) {
+          setFieldErrors({ captcha: t("auth.captcha.fallback.serverPrompt") });
+        } else {
+          setFormError(t(errorKeys[result.code ?? ""] ?? "auth.sso.failed"));
+        }
+        resetCaptcha();
         return;
       }
       navigationStarted = true;
       window.location.assign(result.url);
     } catch (error) {
       setFormError(t(isTimeoutError(error) ? "auth.error.timeout" : "auth.sso.unavailable"));
-      setTurnstileResetKey((value) => value + 1);
+      resetCaptcha();
     } finally {
       if (!navigationStarted) {
         submissionInFlight.current = false;
@@ -237,7 +276,13 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
       </div>
       <p className="auth-session-policy"><ShieldCheck size={15} />{t("auth.sessionDuration")}</p>
 
-      <TurnstileWidget onToken={handleTurnstileToken} resetKey={turnstileResetKey} error={fieldErrors.turnstile} />
+      <CaptchaWidget
+        onProof={handleCaptchaProof}
+        resetKey={captchaResetKey}
+        error={fieldErrors.captcha}
+        fallbackSignal={captchaFallbackSignal}
+        fallbackReason={captchaFallbackReason}
+      />
 
       {formError && (
         <div className="form-message error" role="alert">
