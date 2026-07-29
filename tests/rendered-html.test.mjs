@@ -59,9 +59,9 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   const migrationNames = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.ok(migrationNames.length >= 68);
+  assert.ok(migrationNames.length >= 69);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607290063_v320_delivery_integrity.sql");
+  assert.equal(migrationNames.at(-1), "202607290064_v330_communication_scalability.sql");
   const [migrator, verifier, finalMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
@@ -79,7 +79,8 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   assert.match(authMigration, /app_auth\.password_credentials/);
   assert.match(authMigration, /app_auth\.sessions/);
   assert.match(authMigration, /app_auth\.totp_factors/);
-  assert.match(finalMigration, /appointments_creation_request_uidx/);
+  assert.match(finalMigration, /communication_threads_creation_request_uidx/);
+  assert.match(finalMigration, /communication_inbox_page/);
   assert.match(profileRlsMigration, /users and administrators read profiles/);
   assert.match(backupMigration, /crm_backup/);
 });

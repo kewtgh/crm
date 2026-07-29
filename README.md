@@ -1,17 +1,17 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.2.0**
+Current release candidate: **v3.3.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.2 keeps the self-managed PostgreSQL architecture introduced in v3.0 and makes high-value
-calendar and communication actions safely retryable. Appointment creation now has database-backed
-request fingerprints, malformed calendar action payloads cannot infer a state change, communication
-delivery uses stable provider idempotency keys within the browser timeout budget, and the inbox
-reports when its 100 most recent matching threads are a truncated result. The runtime remains
-designed for one VPS:
+Version 3.3 keeps the self-managed PostgreSQL architecture introduced in v3.0 and makes the
+communications inbox bounded and replay-safe. Conversation creation now has database-backed request
+fingerprints; a replay of an already successful message no longer calls the provider again; inbox
+responses contain only a page of conversation summaries; and the selected conversation loads a
+separate, paginated message history. Search and pagination state also survive write-side refreshes.
+The runtime remains designed for one VPS:
 
 ```text
 Caddy :443
@@ -111,9 +111,9 @@ npm run deploy:production:rollback
 ```
 
 See the [deployment and recovery runbook](docs/DEPLOYMENT.md), the
-[v3.2 audit](docs/AUDIT_2026-07-29_V3.2.0.md), its
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V3.2.0.md), and the
-[final re-audit](docs/FINAL_REAUDIT_2026-07-29_V3.2.0.md). The PostgreSQL transition history remains
+[v3.3 audit](docs/AUDIT_2026-07-29_V3.3.0.md), its
+[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V3.3.0.md), and the
+[final re-audit](docs/FINAL_REAUDIT_2026-07-29_V3.3.0.md). The PostgreSQL transition history remains
 in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md) and
 [completion and gap review](docs/POSTGRESQL_MIGRATION_COMPLETION_AND_GAP_REVIEW_2026-07-29.md).
 The concise current state is in [implementation status](docs/IMPLEMENTATION_STATUS.md).
