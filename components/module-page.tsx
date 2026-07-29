@@ -230,6 +230,7 @@ export function ModulePage({
       onCloseSavedViews={() => setSavedViewsOpen(false)}
     />
     {drawer && <AccessibleDrawer
+      pending={saving}
       title={t("modules.createRecord", { record: t(`${prefix}.singular`) })}
       eyebrow={t("eyebrow.createRecord")}
       description={t("modules.createHelp")}
@@ -274,18 +275,18 @@ export function ModulePage({
         {!duplicateChecked && <InlineMessage type="warning">{t("modules.checkRequired")}</InlineMessage>}
         {error && <InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions">
-          <button className="secondary-button" type="button" onClick={close}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={saving} onClick={close}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={!duplicateChecked || duplicates.length > 0 || saving}><CheckCircle2 size={17}/>{saving ? t("common.saving") : t("modules.createRecord", { record: t(`${prefix}.singular`) })}</button>
         </div>
       </form>
     </AccessibleDrawer>}
-    {exportOpen&&resource&&<AccessibleDrawer title={t("export.requestTitle")} eyebrow={t("exports.eyebrow")} description={t("export.requestHelp")} onClose={()=>setExportOpen(false)}>
+    {exportOpen&&resource&&<AccessibleDrawer pending={exportPending} title={t("export.requestTitle")} eyebrow={t("exports.eyebrow")} description={t("export.requestHelp")} onClose={()=>setExportOpen(false)}>
       <form onSubmit={requestExport}>
         <InlineMessage type="info">{t("export.requestHelp")}</InlineMessage>
         <label className="field"><span>{t("export.format")}</span><select name="format" defaultValue="CSV"><option value="CSV">CSV</option><option value="XLSX">XLSX</option><option value="PDF">PDF</option></select><small>{t("export.formatHelp")}</small></label>
         <label className="field"><span>{t("export.reason")} *</span><textarea name="reason" rows={4} minLength={3} maxLength={1000} placeholder={t("export.reasonPlaceholder")} required/></label>
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
-        <div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setExportOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={exportPending}><Download size={16}/>{exportPending?t("common.processing"):t("export.request")}</button></div>
+        <div className="drawer-actions"><button className="secondary-button" type="button" disabled={exportPending} onClick={()=>setExportOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={exportPending}><Download size={16}/>{exportPending?t("common.processing"):t("export.request")}</button></div>
       </form>
     </AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}

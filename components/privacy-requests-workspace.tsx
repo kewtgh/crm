@@ -97,17 +97,16 @@ export function PrivacyRequestsWorkspace({ initial }: { initial: PageResult<Priv
       {!data.items.length && <div className="empty-state"><span>{t("privacyRequests.empty")}</span></div>}
       <Pagination page={data.page} totalPages={pages} total={data.total} pageSize={data.pageSize} onPage={(page) => void reload(page)} onPageSize={(pageSize) => void reload(1, pageSize)}/>
     </section>
-    {reviewing && <AccessibleDrawer title={t("privacyRequests.reviewTitle")} description={t("privacyRequests.reviewHelp")} onClose={() => setReviewing(null)}>
+    {reviewing && <AccessibleDrawer pending={pending} title={t("privacyRequests.reviewTitle")} description={t("privacyRequests.reviewHelp")} onClose={() => setReviewing(null)}>
       <form onSubmit={manage}>
         <label className="field"><span>{t("privacyRequests.nextStatus")}</span><select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{availableStatuses(reviewing).map((status) => <option key={status} value={status}>{t(`privacyRequests.status.${status.toLowerCase()}`)}</option>)}</select></label>
         <label className="field"><span>{t("privacyRequests.identityStatus")}</span><select value={identityStatus} onChange={(event) => setIdentityStatus(event.target.value)}>{["PENDING","VERIFIED","FAILED"].map((status) => <option key={status} value={status}>{t(`privacyRequests.identity.${status.toLowerCase()}`)}</option>)}</select></label>
         <label className="field"><span>{t("privacyRequests.decision")}</span><textarea name="decision" rows={4} minLength={3} maxLength={2000} required/></label>
         {(reviewing.type === "EXPORT" || reviewing.type === "DELETION") && <InlineMessage type="warning">{t("privacyRequests.dualReview")}</InlineMessage>}
         {error && <InlineMessage type="error">{error}</InlineMessage>}
-        <div className="drawer-actions"><button type="button" className="secondary-button" onClick={() => setReviewing(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.processing") : t("common.confirm")}</button></div>
+        <div className="drawer-actions"><button type="button" className="secondary-button" disabled={pending} onClick={() => setReviewing(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.processing") : t("common.confirm")}</button></div>
       </form>
     </AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
 }
-

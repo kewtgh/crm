@@ -116,7 +116,7 @@ export function CrmRecordEditor({
 
   return <>
     <button className="secondary-button" type="button" onClick={()=>void begin()}><Pencil size={16}/>{t("crm.edit")}</button>
-    {open&&<AccessibleDrawer title={detail?`${detail.nameZh} / ${detail.nameEn}`:t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
+    {open&&<AccessibleDrawer pending={pending} title={detail?`${detail.nameZh} / ${detail.nameEn}`:t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
       {loading&&!detail&&<p role="status">{t("common.loading")}</p>}
       {detail&&<form onSubmit={save}>
         <div className="form-grid two-column">
@@ -145,7 +145,7 @@ export function CrmRecordEditor({
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions">
           <button className="danger-button" type="button" disabled={pending} onClick={()=>setArchiveOpen(true)}><Archive size={16}/>{t("crm.archive")}</button>
-          <button className="secondary-button" type="button" onClick={()=>setOpen(false)}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={pending} onClick={()=>setOpen(false)}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button>
         </div>
       </form>}
@@ -155,10 +155,10 @@ export function CrmRecordEditor({
         {!detail.history.length&&<p className="select-empty">{t("crm.historyEmpty")}</p>}
       </section>}
     </AccessibleDrawer>}
-    {archiveOpen&&<AccessibleDrawer title={t("common.confirmAction")} description={t("crm.archiveConfirm")} onClose={()=>setArchiveOpen(false)}>
+    {archiveOpen&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("crm.archiveConfirm")} onClose={()=>setArchiveOpen(false)}>
       <InlineMessage type="warning">{t("common.actionCannotUndo")}</InlineMessage>
       {error&&<InlineMessage type="error">{error}</InlineMessage>}
-      <div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setArchiveOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void archive()}>{pending?t("common.processing"):t("crm.archive")}</button></div>
+      <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setArchiveOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void archive()}>{pending?t("common.processing"):t("crm.archive")}</button></div>
     </AccessibleDrawer>}
     {toast&&<Toast message={toast} onClose={()=>setToast("")}/>}
   </>;

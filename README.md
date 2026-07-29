@@ -1,17 +1,19 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.4.0**
+Current release candidate: **v3.5.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.4 keeps the self-managed PostgreSQL architecture introduced in v3.0 and makes background
-delivery bounded at both the task and service levels. Notification and calendar requests now send
-stable provider idempotency headers; every delivery has an explicit timeout; independent Worker
-categories run concurrently while each category uses limited, ordered job concurrency; and runtime
-configuration rejects batch/concurrency combinations that cannot fit the reviewed systemd budget.
-Critical loading and fatal-error states also provide complete bilingual feedback.
+Version 3.5 closes the organization-wide business-date architecture gate. Each workspace now has a
+constrained, audited business timezone that administrators can change only with AAL2; user and
+workspace-scoped Worker transactions apply it locally so existing PostgreSQL date rules agree.
+Contract countdowns use the same business date. Pending mutation drawers cannot be dismissed through
+Escape, overlay, close or cancel controls; legacy timestamps use personal display preferences; and
+the task priority queue reports when its 12-item summary is truncated and links to the full list.
+Administrators can also switch Cloudflare Turnstile off for constrained networks; sign-in, SSO and
+password recovery then enforce the self-hosted ALTCHA verifier instead of bypassing CAPTCHA.
 The runtime remains designed for one VPS:
 
 ```text
@@ -118,9 +120,9 @@ npm run deploy:production:rollback
 ```
 
 See the [deployment and recovery runbook](docs/DEPLOYMENT.md), the
-[v3.4 audit](docs/AUDIT_2026-07-29_V3.4.0.md), its
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V3.4.0.md), and the
-[final re-audit](docs/FINAL_REAUDIT_2026-07-29_V3.4.0.md). The PostgreSQL transition history remains
+[v3.5 audit](docs/AUDIT_2026-07-30_V3.5.0.md), its
+[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-30_V3.5.0.md), and the
+[final re-audit](docs/FINAL_REAUDIT_2026-07-30_V3.5.0.md). The PostgreSQL transition history remains
 in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md) and
 [completion and gap review](docs/POSTGRESQL_MIGRATION_COMPLETION_AND_GAP_REVIEW_2026-07-29.md).
 The concise current state is in [implementation status](docs/IMPLEMENTATION_STATUS.md).

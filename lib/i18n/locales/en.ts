@@ -11,6 +11,7 @@ import { enV200 } from "./v200";
 import { enV220 } from "./v220";
 import { enV250 } from "./v250";
 import { enV270 } from "./v270";
+import { enV350 } from "./v350";
 
 export const en: Messages = {
   "pipeline.currencyScope":"Currency scope",
@@ -26,6 +27,7 @@ export const en: Messages = {
   ...enV220,
   ...enV250,
   ...enV270,
+  ...enV350,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.persistFailed": "Language changed on this device, but the account preference could not be saved. Try again later.",

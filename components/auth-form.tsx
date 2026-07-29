@@ -51,7 +51,7 @@ function PasswordField({ error }: { error?: string }) {
   );
 }
 
-export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCode }: { ssoEnabled?: boolean; initialErrorCode?: string; initialNoticeCode?: string }) {
+export function AuthForm({ ssoEnabled = false, turnstileEnabled = true, initialErrorCode, initialNoticeCode }: { ssoEnabled?: boolean; turnstileEnabled?: boolean; initialErrorCode?: string; initialNoticeCode?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -80,7 +80,7 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
     setCaptchaResetKey((value) => value + 1);
   };
   const applyServerCaptchaFallback = (reason: unknown) => {
-    if (reason !== "service_unavailable" && reason !== "not_configured") return false;
+    if (reason !== "service_unavailable" && reason !== "not_configured" && reason !== "administrator_disabled") return false;
     setCaptchaProof(null);
     setCaptchaFallbackReason(reason);
     setCaptchaFallbackSignal((value) => value + 1);
@@ -282,6 +282,7 @@ export function AuthForm({ ssoEnabled = false, initialErrorCode, initialNoticeCo
         error={fieldErrors.captcha}
         fallbackSignal={captchaFallbackSignal}
         fallbackReason={captchaFallbackReason}
+        turnstileEnabled={turnstileEnabled}
       />
 
       {formError && (

@@ -59,13 +59,17 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   const migrationNames = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.ok(migrationNames.length >= 69);
+  assert.ok(migrationNames.length >= 73);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607290064_v330_communication_scalability.sql");
-  const [migrator, verifier, finalMigration, backupMigration, profileRlsMigration] = await Promise.all([
+  assert.equal(migrationNames.at(-1), "202607300068_workspace_turnstile_policy.sql");
+  const [migrator, verifier, finalMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
     readFile(repositoryFile(`db/migrations/${migrationNames.at(-1)}`), "utf8"),
+    readFile(repositoryFile("db/migrations/202607300065_workspace_business_timezone.sql"), "utf8"),
+    readFile(repositoryFile("db/migrations/202607300066_worker_business_timezone_permissions.sql"), "utf8"),
+    readFile(repositoryFile("db/migrations/202607300067_business_date_text_contract.sql"), "utf8"),
+    readFile(repositoryFile("db/migrations/202607290064_v330_communication_scalability.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607290060_backup_role_privileges.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607290062_v310_profile_rls_repair.sql"), "utf8"),
   ]);
@@ -79,8 +83,13 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   assert.match(authMigration, /app_auth\.password_credentials/);
   assert.match(authMigration, /app_auth\.sessions/);
   assert.match(authMigration, /app_auth\.totp_factors/);
-  assert.match(finalMigration, /communication_threads_creation_request_uidx/);
-  assert.match(finalMigration, /communication_inbox_page/);
+  assert.match(finalMigration, /turnstile_enabled/);
+  assert.match(finalMigration, /WORKSPACE_TURNSTILE_POLICY_CHANGED/);
+  assert.match(businessTimezoneMigration, /set_workspace_business_timezone/);
+  assert.match(workerPermissionMigration, /to crm_worker/);
+  assert.match(businessDateMigration, /YYYY-MM-DD/);
+  assert.match(communicationMigration, /communication_threads_creation_request_uidx/);
+  assert.match(communicationMigration, /communication_inbox_page/);
   assert.match(profileRlsMigration, /users and administrators read profiles/);
   assert.match(backupMigration, /crm_backup/);
 });

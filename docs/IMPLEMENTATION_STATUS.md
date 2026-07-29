@@ -1,6 +1,6 @@
-# Implementation status — v3.4.0 release candidate
+# Implementation status — v3.5.0 release candidate
 
-Status date: 2026-07-29
+Status date: 2026-07-30
 
 ## Outcome
 
@@ -49,42 +49,51 @@ batch/concurrency combinations whose external wait bound exceeds 210 seconds. Lo
 error states now provide complete bilingual feedback, and staff creation cannot be dismissed while
 its result is uncertain.
 
+v3.5.0 makes the workspace business date an explicit architecture primitive. User and
+workspace-scoped Worker transactions apply the constrained workspace timezone locally; date-only
+RPC values use a stable `YYYY-MM-DD` JSON contract; and contract countdowns use the same business
+date. Administrators have an AAL2-protected, audited organization settings page for the timezone and
+the CAPTCHA provider. Turnstile remains enabled by default; when disabled for constrained networks,
+login, SSO and password recovery enforce self-hosted ALTCHA. Pending mutation drawers now protect
+all close surfaces, older timestamps use personal preferences, and task summary truncation is
+explicit. Mobile organization summaries and generic switch pointer/focus behavior were also fixed.
+
 ## Repository completion
 
 | Area | Result |
 | --- | --- |
 | Platform dependency exit | Complete; historical source retained only under `archive/supabase` |
-| PostgreSQL schema | 69 ordered, checksummed migrations; advisory lock and idempotent rerun |
+| PostgreSQL schema | 73 ordered, checksummed migrations; advisory lock and idempotent rerun |
 | Database integrity | Valid foreign keys and indexes; duplicate identities and orphan relations checked |
 | Data access | `pg`/Kysely pools and transaction authorization context for app/system/Worker |
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
 | Storage | Local-persistent and S3-compatible implementations with safe keys and short-lived access |
-| Workers | Six processors use `crm_worker`; categories run in parallel with ordered limited concurrency, lease tokens, heartbeat and queue state |
+| Workers | Six processors use `crm_worker`; categories run in parallel with ordered limited concurrency, workspace business timezone, lease tokens, heartbeat and queue state |
 | Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
 | Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
-| Documentation | v3.4.0 audit, executed plan, deployment/recovery runbook and final re-audit |
+| Documentation | v3.5.0 audit, executed plan, deployment/recovery runbook and final re-audit |
 
 ## Verification record
 
 | Gate | Result |
 | --- | --- |
-| Migration chain / forward apply | Pass; 69 checksummed migrations, with 064 applied locally |
+| Migration chain / forward apply | Pass; 73 checksummed migrations, with 068 applied locally |
 | Integrity validation | Pass; no invalid constraints/indexes, duplicate identities or orphan relations |
 | Business schema contracts | Pass for phase 2, v0.9 and v1.1 |
 | Worker safety | Pass; bounded-concurrency, delivery timeout/idempotency and 210-second configuration-budget contracts |
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
-| Database integration | Pass; 69 migrations, 96 public tables, Auth/session/TOTP/RLS, atomic profile rollback, appointment and communication idempotency, delivery ownership and two-level pagination |
+| Database integration | Pass for the scoped v3.5 probe; user and Worker transactions both returned `2026-07-30` for `Asia/Taipei`; the earlier full v3.4 database record remains valid for its 69-migration baseline |
 | TypeScript / ESLint | Pass |
-| Production build | Pass; v3.4.0 final source produced all application/API routes |
-| Node contracts | Pass; 36/36 core/version and 5/5 CAPTCHA contracts |
+| Production build | Pass; v3.5.0 final source produced all application/API routes including organization settings |
+| Node contracts | Pass; 41/41 core/version and 6/6 CAPTCHA contracts |
 | Deployment contracts | Pass; 19/19 release, rollback, readiness, role and storage boundary contracts |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
-| Affected Chromium flow | Pass; v3.4.0 Chromium 1228 `01-public`/`07-admin`/`08-notification`, 19 page/viewports plus notification invariant, 0 errors/warnings, identities 2/2 cleaned |
+| Affected Chromium flow | Pass; v3.5.0 fixed Chromium 1228 checked admin/tasks/contracts, then the final organization desktop/mobile and Turnstile→ALTCHA→restore interaction; 0 final errors/warnings, identity 1/1 cleaned |
 
-The v3.4.0 plan limits browser verification to public error/auth surfaces, staff administration and
-notification behavior using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser
-evidence are recorded in the v3.4.0 re-audit.
+The v3.5.0 plan limits browser verification to directly affected organization settings, tasks,
+contracts and the CAPTCHA provider transition using the pinned `ms-playwright/chromium-1228`
+runtime. Final build and browser evidence are recorded in the v3.5.0 re-audit.
 
 ## External production gates
 
@@ -102,10 +111,10 @@ environment owner must:
 5. place the former test project in read-only mode for the chosen observation period, then have the
    project owner close it.
 
-The organization-wide business date remains an explicit architecture decision: date-only rules
-currently use PostgreSQL `current_date`, while personal settings control display timezone. A future
-workspace-timezone migration must update all affected contract, quote, receivable, consent and
-reporting rules together; no isolated page-level timezone patch is represented as complete.
+The organization-wide business date decision is now implemented through transaction-local
+PostgreSQL timezone context. Personal timezone settings remain display-only. Production still needs
+an AAL2 administrator to confirm the intended business timezone and Turnstile policy after migration
+068; disabling Turnstile requires a valid `ALTCHA_HMAC_SECRET` and never disables CAPTCHA.
 
 The executable procedure is in [DEPLOYMENT.md](DEPLOYMENT.md). The detailed implementation evidence
 and historical-plan comparison are in

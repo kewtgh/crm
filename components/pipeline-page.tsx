@@ -358,6 +358,7 @@ export function PipelinePage({
     <p className="kanban-note">{t("pipeline.note")}</p>
 
     {createOpen && <AccessibleDrawer
+      pending={submitting}
       title={t("pipeline.new")}
       eyebrow={t("eyebrow.revenueMomentum")}
       description={t("pipeline.createHelp")}
@@ -385,13 +386,14 @@ export function PipelinePage({
         </div>
         {drawerError && <InlineMessage type="error">{drawerError}</InlineMessage>}
         <div className="drawer-actions">
-          <button className="secondary-button" type="button" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={submitting} onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={submitting}>{submitting ? t("common.saving") : t("common.create")}</button>
         </div>
       </form>
     </AccessibleDrawer>}
 
     {transition && <AccessibleDrawer
+      pending={submitting}
       title={t("pipeline.transition.title")}
       eyebrow={t("pipeline.transition.eyebrow")}
       description={t("pipeline.transition.description")}
@@ -413,7 +415,7 @@ export function PipelinePage({
         {transition.stage === "LOST" && <label className="field"><span>{t("pipeline.transition.reason")} *</span><textarea name="reason" rows={5} maxLength={500} required placeholder={t("pipeline.transition.reasonHelp")}/></label>}
         {drawerError && <InlineMessage type="error">{drawerError}</InlineMessage>}
         <div className="drawer-actions">
-          <button className="secondary-button" type="button" onClick={() => setTransition(null)}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={submitting} onClick={() => setTransition(null)}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={submitting}>{submitting ? t("common.saving") : t("pipeline.transition.confirm")}</button>
         </div>
       </form>
