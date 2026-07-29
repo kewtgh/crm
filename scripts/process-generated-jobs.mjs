@@ -1,4 +1,5 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { boundedWorkerInteger } from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
 import { workerObjectStore } from "./lib/worker-object-store.mjs";
 import { createHash } from "node:crypto";
@@ -290,7 +291,7 @@ try{
   await expireArtifacts();
   const jobs=await request("/db/rpc/claim_generated_jobs_leased",{
     method:"POST",
-    body:JSON.stringify({batch_size:Number(process.env.EXPORT_BATCH_SIZE??10),worker_id:workerId,lease_seconds:900}),
+    body:JSON.stringify({batch_size:boundedWorkerInteger(process.env.EXPORT_BATCH_SIZE,{name:"EXPORT_BATCH_SIZE",defaultValue:10,maximum:10}),worker_id:workerId,lease_seconds:900}),
   });
   let ready=0;
   for(const job of jobs){

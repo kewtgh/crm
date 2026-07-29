@@ -29,6 +29,10 @@ const positiveInteger = z.string().trim().regex(/^\d+$/).refine((value) => {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0;
 }, "A positive integer is required");
+const boundedPositiveInteger = (maximum: number) => positiveInteger.refine(
+  (value) => Number(value) <= maximum,
+  `Value must not exceed ${maximum}`,
+);
 const configuredUrl = z.url().refine((value) => {
   try {
     const host = new URL(value).hostname.toLowerCase();
@@ -134,10 +138,11 @@ const deliveryEnvironmentSchema = z.object({
   WORKER_DATABASE_URL: databaseUrl,
   EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
   EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
-  OUTBOX_BATCH_SIZE: positiveInteger,
-  CALENDAR_DELIVERY_BATCH_SIZE: positiveInteger,
-  EXPORT_BATCH_SIZE: positiveInteger,
-  REMINDER_BATCH_SIZE: positiveInteger,
+  OUTBOX_BATCH_SIZE: boundedPositiveInteger(40),
+  CALENDAR_DELIVERY_BATCH_SIZE: boundedPositiveInteger(40),
+  EXPORT_BATCH_SIZE: boundedPositiveInteger(10),
+  REMINDER_BATCH_SIZE: boundedPositiveInteger(200),
+  WORKER_JOB_CONCURRENCY: boundedPositiveInteger(8).optional(),
 });
 const webhookEnvironmentSchema = z.object({
   WEBHOOK_MICROSOFT_365_SECRET: productionSecret,
@@ -148,12 +153,12 @@ const webhookEnvironmentSchema = z.object({
   WEBHOOK_PAYMENT_SECRET: productionSecret,
   WEBHOOK_PROCESSOR_URL: configuredUrl,
   WEBHOOK_PROCESSOR_TOKEN: productionSecret,
-  WEBHOOK_BATCH_SIZE: positiveInteger,
+  WEBHOOK_BATCH_SIZE: boundedPositiveInteger(40),
 });
 const integrationEnvironmentSchema = z.object({
   INTEGRATION_SYNC_PROCESSOR_URL: configuredUrl,
   INTEGRATION_SYNC_PROCESSOR_TOKEN: productionSecret,
-  INTEGRATION_SYNC_BATCH_SIZE: positiveInteger,
+  INTEGRATION_SYNC_BATCH_SIZE: boundedPositiveInteger(12),
 });
 const observabilityEnvironmentSchema = z.object({
   OBSERVABILITY_WEBHOOK_URL: configuredUrl,
@@ -164,6 +169,27 @@ const ssoEnvironmentSchema = z.object({
   SSO_ALLOWED_DOMAINS: z.string().trim().min(1).refine((value) => value.split(",").every((domain) => /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain.trim())), "Invalid SSO domain list"),
 });
 const scimEnvironmentSchema = z.object({ SCIM_BEARER_TOKEN: productionSecret });
+
+const WORKER_EXTERNAL_BUDGET_SECONDS = 210;
+function workerBudgetIssues(environment: NodeJS.ProcessEnv) {
+  const integer = (key: string, fallback: number) => {
+    const raw = environment[key];
+    if (raw === undefined || !/^\d+$/.test(raw.trim())) return fallback;
+    return Number(raw);
+  };
+  const concurrency = integer("WORKER_JOB_CONCURRENCY", 4);
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 8) return [];
+  const exceeds = (batchKey: string, fallback: number, timeoutSeconds: number) => (
+    Math.ceil(integer(batchKey, fallback) / concurrency) * timeoutSeconds
+      > WORKER_EXTERNAL_BUDGET_SECONDS
+  );
+  return [
+    ...(exceeds("OUTBOX_BATCH_SIZE", 20, 20) ? ["OUTBOX_BATCH_SIZE"] : []),
+    ...(exceeds("CALENDAR_DELIVERY_BATCH_SIZE", 20, 20) ? ["CALENDAR_DELIVERY_BATCH_SIZE"] : []),
+    ...(featureEnabled(environment.WEBHOOKS_ENABLED) && exceeds("WEBHOOK_BATCH_SIZE", 20, 20) ? ["WEBHOOK_BATCH_SIZE"] : []),
+    ...(featureEnabled(environment.INTEGRATION_SYNC_ENABLED) && exceeds("INTEGRATION_SYNC_BATCH_SIZE", 10, 60) ? ["INTEGRATION_SYNC_BATCH_SIZE"] : []),
+  ];
+}
 
 export type WorkerRuntimeEnvironmentStatus = {
   valid: boolean;
@@ -212,10 +238,11 @@ export function inspectWorkerRuntimeEnvironment(
   const scimResult = scimEnabled ? scimEnvironmentSchema.safeParse(environment) : null;
   const invalidKeys = (result: z.ZodSafeParseResult<unknown> | null) => result && !result.success
     ? result.error.issues.map((issue) => String(issue.path[0] ?? "environment")) : [];
-  const missing = [...core.missing, ...invalidKeys(deliveryResult), ...invalidKeys(webhookResult), ...invalidKeys(integrationResult), ...invalidKeys(observabilityResult), ...invalidKeys(ssoResult), ...invalidKeys(scimResult)];
-  const delivery = deliveryResult.success;
-  const webhooks = !webhooksEnabled || webhookResult?.success === true;
-  const integrations = !integrationsEnabled || integrationResult?.success === true;
+  const budgetIssues = workerBudgetIssues(environment);
+  const missing = [...core.missing, ...invalidKeys(deliveryResult), ...invalidKeys(webhookResult), ...invalidKeys(integrationResult), ...invalidKeys(observabilityResult), ...invalidKeys(ssoResult), ...invalidKeys(scimResult), ...budgetIssues];
+  const delivery = deliveryResult.success && !budgetIssues.some((key) => ["OUTBOX_BATCH_SIZE","CALENDAR_DELIVERY_BATCH_SIZE"].includes(key));
+  const webhooks = !webhooksEnabled || (webhookResult?.success === true && !budgetIssues.includes("WEBHOOK_BATCH_SIZE"));
+  const integrations = !integrationsEnabled || (integrationResult?.success === true && !budgetIssues.includes("INTEGRATION_SYNC_BATCH_SIZE"));
   const observability = !observabilityEnabled || observabilityResult?.success === true;
   const sso = !ssoEnabled || ssoResult?.success === true;
   const scim = !scimEnabled || scimResult?.success === true;

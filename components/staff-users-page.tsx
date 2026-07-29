@@ -81,6 +81,26 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
     if (!open && dialog?.open) dialog.close();
   }, [open]);
 
+  const closeDialog = () => {
+    if (pending) return;
+    setError("");
+    setFieldError({});
+    close();
+  };
+
+  const clearEditedFieldError = (event: React.FormEvent<HTMLFormElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+    setError("");
+    if (!target.name) return;
+    setFieldError((current) => {
+      if (!current[target.name]) return current;
+      const next = { ...current };
+      delete next[target.name];
+      return next;
+    });
+  };
+
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setPending(true); setError(""); setFieldError({});
     const form = new FormData(event.currentTarget);
@@ -98,9 +118,9 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
     finally { setPending(false); }
   };
 
-  return <dialog className="staff-dialog" ref={dialogRef} onClose={close} aria-labelledby="create-staff-title">
-    <form method="dialog" className="dialog-close"><button className="icon-button" aria-label={t("common.close")}><X size={18}/></button></form>
-    <form className="staff-invite-form" onSubmit={submit} noValidate>
+  return <dialog className="staff-dialog" ref={dialogRef} onClose={closeDialog} onCancel={(event)=>{if(pending)event.preventDefault();}} aria-labelledby="create-staff-title" aria-busy={pending||undefined}>
+    <form method="dialog" className="dialog-close"><button className="icon-button" disabled={pending} aria-label={t("common.close")}><X size={18}/></button></form>
+    <form className="staff-invite-form" onSubmit={submit} onChange={clearEditedFieldError} noValidate>
       <div className="auth-form-heading"><p className="eyebrow">{t("admin.users.createEyebrow")}</p><h2 id="create-staff-title">{t("admin.users.createTitle")}</h2><p>{t("admin.users.createHelp")}</p></div>
       <div className="credential-flow"><span><KeyRound size={20}/></span><div><b>{t("admin.users.passwordGenerated")}</b><p>{t("admin.users.passwordGeneratedHelp")}</p></div></div>
       <div className="form-grid two-column"><Field name="displayNameZh" label={t("settings.nameZh")} error={fieldError.displayNameZh}/><Field name="displayNameEn" label={t("settings.nameEn")} error={fieldError.displayNameEn}/></div>
@@ -109,7 +129,7 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
       <div className="form-grid two-column"><label className="field"><span>{t("settings.role")}</span><select name="role" defaultValue="SALES_SPECIALIST">{roles.map((role) => <option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select>{fieldError.role && <small className="field-error">{fieldError.role}</small>}</label><Field name="team" label={t("admin.users.team")} error={fieldError.team}/></div>
       {error && <InlineMessage type="error">{error}</InlineMessage>}
       <InlineMessage type="warning"><ShieldCheck size={16}/>{t("admin.users.createBoundary")}</InlineMessage>
-      <div className="drawer-actions"><button className="secondary-button" type="button" onClick={close}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={pending}><MailPlus size={16}/>{t(pending ? "admin.users.creating" : "admin.users.createAccount")}</button></div>
+      <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={closeDialog}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={pending}><MailPlus size={16}/>{t(pending ? "admin.users.creating" : "admin.users.createAccount")}</button></div>
     </form>
   </dialog>;
 }

@@ -1,4 +1,9 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import {
+  boundedWorkerInteger,
+  mapWithConcurrency,
+  workerJobConcurrency,
+} from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
 
 const required = [
@@ -19,12 +24,13 @@ async function rpc(name, body) {
 
 try {
   const events = await rpc("claim_webhook_events_leased", {
-    batch_size: Number(process.env.WEBHOOK_BATCH_SIZE ?? 20),
+    batch_size: boundedWorkerInteger(process.env.WEBHOOK_BATCH_SIZE, {
+      name:"WEBHOOK_BATCH_SIZE",defaultValue:20,maximum:40,
+    }),
     worker_id: workerId,
     lease_seconds: 300,
   });
-  let processed = 0;
-  for (const event of events) {
+  const outcomes = await mapWithConcurrency(events, workerJobConcurrency(), async (event) => {
     try {
       const response = await fetch(process.env.WEBHOOK_PROCESSOR_URL, {
         method: "POST",
@@ -48,15 +54,17 @@ try {
         target_event: event.id,
         token: event.lease_token,
       });
-      processed += 1;
+      return true;
     } catch (error) {
       await rpc("fail_webhook_event_leased", {
         target_event: event.id,
         token: event.lease_token,
         failure: error instanceof Error ? error.message : "Unknown webhook processing error",
       });
+      return false;
     }
-  }
+  });
+  const processed = outcomes.filter(Boolean).length;
   await heartbeat.success({ claimed: events.length, processed });
   process.stdout.write(`Processed ${events.length} webhook events; ${processed} completed.\n`);
 } catch (error) {

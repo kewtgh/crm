@@ -1,4 +1,9 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import {
+  boundedWorkerInteger,
+  mapWithConcurrency,
+  workerJobConcurrency,
+} from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
 
 const required = [
@@ -19,12 +24,13 @@ async function rpc(name, body) {
 
 try {
   const jobs = await rpc("claim_integration_sync_jobs", {
-    batch_size: Number(process.env.INTEGRATION_SYNC_BATCH_SIZE ?? 10),
+    batch_size: boundedWorkerInteger(process.env.INTEGRATION_SYNC_BATCH_SIZE, {
+      name:"INTEGRATION_SYNC_BATCH_SIZE",defaultValue:10,maximum:12,
+    }),
     worker_id: workerId,
     lease_seconds: 900,
   });
-  let completed = 0;
-  for (const job of jobs) {
+  const outcomes = await mapWithConcurrency(jobs, workerJobConcurrency(), async (job) => {
     try {
       const validations = await workerJson(`/db/table/connector_validation_receipts?select=id&workspace_id=eq.${job.workspace_id}&provider=eq.${job.provider}&status=eq.SUCCEEDED&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&order=validated_at.desc&limit=1`);
       if (!validations.length) throw new Error("CONNECTOR_VALIDATION_REQUIRED");
@@ -51,15 +57,17 @@ try {
         token: job.lease_token,
         next_cursor: String(receipt.nextCursor ?? job.cursor_before ?? ""),
       });
-      completed += 1;
+      return true;
     } catch (error) {
       await rpc("fail_integration_sync_job", {
         job_id: job.id,
         token: job.lease_token,
         failure: error instanceof Error ? error.message : "Unknown integration sync error",
       });
+      return false;
     }
-  }
+  });
+  const completed = outcomes.filter(Boolean).length;
   await heartbeat.success({ claimed: jobs.length, completed });
   process.stdout.write(`Processed ${jobs.length} integration sync jobs; ${completed} completed.\n`);
 } catch (error) {

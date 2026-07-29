@@ -1,4 +1,4 @@
-# Implementation status — v3.3.0 release candidate
+# Implementation status — v3.4.0 release candidate
 
 Status date: 2026-07-29
 
@@ -42,6 +42,13 @@ The inbox loads a real page of thread summaries and the selected thread loads an
 messages, with accessible pagination for both. Write-side refreshes preserve the current search,
 page size and selected thread.
 
+v3.4.0 closes the background-delivery time-budget gap. Notification and calendar Webhooks now send
+stable `Idempotency-Key` headers and have explicit timeouts. Independent Worker categories start in
+parallel; each external category uses ordered, limited concurrency; and runtime preflight rejects
+batch/concurrency combinations whose external wait bound exceeds 210 seconds. Loading and fatal
+error states now provide complete bilingual feedback, and staff creation cannot be dismissed while
+its result is uncertain.
+
 ## Repository completion
 
 | Area | Result |
@@ -52,10 +59,10 @@ page size and selected thread.
 | Data access | `pg`/Kysely pools and transaction authorization context for app/system/Worker |
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
 | Storage | Local-persistent and S3-compatible implementations with safe keys and short-lived access |
-| Workers | Six processors use `crm_worker`; enabled processors report heartbeat and queue state |
+| Workers | Six processors use `crm_worker`; categories run in parallel with ordered limited concurrency, lease tokens, heartbeat and queue state |
 | Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
 | Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
-| Documentation | v3.3.0 audit, executed plan, deployment/recovery runbook and final re-audit |
+| Documentation | v3.4.0 audit, executed plan, deployment/recovery runbook and final re-audit |
 
 ## Verification record
 
@@ -64,20 +71,20 @@ page size and selected thread.
 | Migration chain / forward apply | Pass; 69 checksummed migrations, with 064 applied locally |
 | Integrity validation | Pass; no invalid constraints/indexes, duplicate identities or orphan relations |
 | Business schema contracts | Pass for phase 2, v0.9 and v1.1 |
-| Worker cycle | Pass; 4/4 enabled processors healthy |
+| Worker safety | Pass; bounded-concurrency, delivery timeout/idempotency and 210-second configuration-budget contracts |
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
 | Database integration | Pass; 69 migrations, 96 public tables, Auth/session/TOTP/RLS, atomic profile rollback, appointment and communication idempotency, delivery ownership and two-level pagination |
 | TypeScript / ESLint | Pass |
-| Production build | Pass; v3.3.0 final source produced all application/API routes |
-| Node contracts | Pass; 31/31 core/version and 5/5 CAPTCHA contracts |
+| Production build | Pass; v3.4.0 final source produced all application/API routes |
+| Node contracts | Pass; 36/36 core/version and 5/5 CAPTCHA contracts |
 | Deployment contracts | Pass; 19/19 release, rollback, readiness, role and storage boundary contracts |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
-| Affected Chromium flow | Pass; v3.3.0 Chromium 1228 phase `02-manager-core-a`, 13 page/viewports, 0 errors/warnings, identity 1/1 cleaned |
+| Affected Chromium flow | Pass; v3.4.0 Chromium 1228 `01-public`/`07-admin`/`08-notification`, 19 page/viewports plus notification invariant, 0 errors/warnings, identities 2/2 cleaned |
 
-The v3.3.0 plan limits browser verification to the directly affected messages surface and its shared
-core phase using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser evidence
-are recorded in the v3.3.0 re-audit.
+The v3.4.0 plan limits browser verification to public error/auth surfaces, staff administration and
+notification behavior using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser
+evidence are recorded in the v3.4.0 re-audit.
 
 ## External production gates
 
@@ -94,6 +101,11 @@ environment owner must:
    test fixture is presented as production capacity evidence;
 5. place the former test project in read-only mode for the chosen observation period, then have the
    project owner close it.
+
+The organization-wide business date remains an explicit architecture decision: date-only rules
+currently use PostgreSQL `current_date`, while personal settings control display timezone. A future
+workspace-timezone migration must update all affected contract, quote, receivable, consent and
+reporting rules together; no isolated page-level timezone patch is represented as complete.
 
 The executable procedure is in [DEPLOYMENT.md](DEPLOYMENT.md). The detailed implementation evidence
 and historical-plan comparison are in

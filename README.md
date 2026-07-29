@@ -1,16 +1,17 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.3.0**
+Current release candidate: **v3.4.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.3 keeps the self-managed PostgreSQL architecture introduced in v3.0 and makes the
-communications inbox bounded and replay-safe. Conversation creation now has database-backed request
-fingerprints; a replay of an already successful message no longer calls the provider again; inbox
-responses contain only a page of conversation summaries; and the selected conversation loads a
-separate, paginated message history. Search and pagination state also survive write-side refreshes.
+Version 3.4 keeps the self-managed PostgreSQL architecture introduced in v3.0 and makes background
+delivery bounded at both the task and service levels. Notification and calendar requests now send
+stable provider idempotency headers; every delivery has an explicit timeout; independent Worker
+categories run concurrently while each category uses limited, ordered job concurrency; and runtime
+configuration rejects batch/concurrency combinations that cannot fit the reviewed systemd budget.
+Critical loading and fatal-error states also provide complete bilingual feedback.
 The runtime remains designed for one VPS:
 
 ```text
@@ -69,6 +70,12 @@ Run the enabled queue processors once:
 npm run workers:process
 ```
 
+Independent Worker categories run in parallel. `WORKER_JOB_CONCURRENCY` limits work inside each
+category to 1–8 jobs (default 4); the runtime also validates each batch/concurrency combination
+against a 210-second external-I/O budget. `WORKER_DATABASE_POOL_MAX` is a per-process ceiling, so
+capacity planning must account for all enabled categories. Mail providers must honor the stable
+`Idempotency-Key` header before production delivery is enabled.
+
 ## Verification and deployment
 
 For a bounded repository check:
@@ -111,9 +118,9 @@ npm run deploy:production:rollback
 ```
 
 See the [deployment and recovery runbook](docs/DEPLOYMENT.md), the
-[v3.3 audit](docs/AUDIT_2026-07-29_V3.3.0.md), its
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V3.3.0.md), and the
-[final re-audit](docs/FINAL_REAUDIT_2026-07-29_V3.3.0.md). The PostgreSQL transition history remains
+[v3.4 audit](docs/AUDIT_2026-07-29_V3.4.0.md), its
+[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-29_V3.4.0.md), and the
+[final re-audit](docs/FINAL_REAUDIT_2026-07-29_V3.4.0.md). The PostgreSQL transition history remains
 in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md) and
 [completion and gap review](docs/POSTGRESQL_MIGRATION_COMPLETION_AND_GAP_REVIEW_2026-07-29.md).
 The concise current state is in [implementation status](docs/IMPLEMENTATION_STATUS.md).
