@@ -1,0 +1,24 @@
+debug = false
+
+[worker.oci]
+  enabled = true
+  gc = true
+  reservedSpace = "2GB"
+  maxUsedSpace = "12GB"
+  minFreeSpace = "10GB"
+
+[[worker.oci.gcpolicy]]
+  filters = ["type==source.local", "type==source.git.checkout"]
+  keepDuration = "24h"
+  reservedSpace = "2GB"
+  maxUsedSpace = "8GB"
+
+[[worker.oci.gcpolicy]]
+  all = true
+  keepDuration = "168h"
+  reservedSpace = "2GB"
+  maxUsedSpace = "12GB"
+  minFreeSpace = "10GB"
+
+[worker.containerd]
+  enabled = false

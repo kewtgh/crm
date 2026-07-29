@@ -1,4 +1,4 @@
-# Implementation status — v3.5.0 release candidate
+# Implementation status — v3.6.0 release candidate
 
 Status date: 2026-07-30
 
@@ -58,6 +58,14 @@ login, SSO and password recovery enforce self-hosted ALTCHA. Pending mutation dr
 all close surfaces, older timestamps use personal preferences, and task summary truncation is
 explicit. Mobile organization summaries and generic switch pointer/focus behavior were also fixed.
 
+v3.6.0 makes disk capacity and project isolation part of the persistent production deployment.
+Before Git pull, a fixed root-owned unit validates root, the Docker daemon's exact data root and the
+release filesystem against byte and percentage floors, then verifies an independently marked
+`lumina-crm-buildkit` builder with bounded GC. After all Web/Worker and public health checks pass,
+the runner persists application acceptance and cleans only old Lumina releases, fully labelled
+Lumina image IDs and that builder's cache. Current/rollback releases, volumes, backups, uploads and
+other Compose projects are never candidates; cleanup failure is non-fatal and fully reported.
+
 ## Repository completion
 
 | Area | Result |
@@ -69,9 +77,9 @@ explicit. Mobile organization summaries and generic switch pointer/focus behavio
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
 | Storage | Local-persistent and S3-compatible implementations with safe keys and short-lived access |
 | Workers | Six processors use `crm_worker`; categories run in parallel with ordered limited concurrency, workspace business timezone, lease tokens, heartbeat and queue state |
-| Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
-| Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
-| Documentation | v3.5.0 audit, executed plan, deployment/recovery runbook and final re-audit |
+| Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup, monthly restore test and isolated BuildKit GC |
+| Deployment | Root/Docker/release capacity gate; project-only post-health cleanup; forward-only migration, atomic switch and application rollback |
+| Documentation | v3.6.0 storage audit, executed plan, deployment/storage/recovery runbook and final re-audit |
 
 ## Verification record
 
@@ -84,24 +92,24 @@ explicit. Mobile organization summaries and generic switch pointer/focus behavio
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
 | Database integration | Pass for the scoped v3.5 probe; user and Worker transactions both returned `2026-07-30` for `Asia/Taipei`; the earlier full v3.4 database record remains valid for its 69-migration baseline |
-| TypeScript / ESLint | Pass |
-| Production build | Pass; v3.5.0 final source produced all application/API routes including organization settings |
+| TypeScript / ESLint | Pass for v3.6.0 final source |
+| Production build | Pass; v3.6.0 final source produced all application/API routes |
 | Node contracts | Pass; 41/41 core/version and 6/6 CAPTCHA contracts |
-| Deployment contracts | Pass; 19/19 release, rollback, readiness, role and storage boundary contracts |
+| Deployment contracts | Pass; 23/23 disk gate, project isolation, release/rollback, readiness and cleanup-failure contracts |
+| Deployment asset dry-run | Pass; fixed root entrypoint, systemd/sudoers boundary, BuildKit limits and command allowlist |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
 | Affected Chromium flow | Pass; v3.5.0 fixed Chromium 1228 checked admin/tasks/contracts, then the final organization desktop/mobile and Turnstile→ALTCHA→restore interaction; 0 final errors/warnings, identity 1/1 cleaned |
 
-The v3.5.0 plan limits browser verification to directly affected organization settings, tasks,
-contracts and the CAPTCHA provider transition using the pinned `ms-playwright/chromium-1228`
-runtime. Final build and browser evidence are recorded in the v3.5.0 re-audit.
+The v3.6.0 change is limited to deployment/storage code and documentation, so no browser phase was
+run. The unchanged v3.5.0 application interaction evidence remains recorded in its re-audit.
 
 ## External production gates
 
 Repository completion does not pretend that external systems were changed. Before activation, the
 environment owner must:
 
-1. install PostgreSQL/Caddy/systemd definitions on the actual VPS and supply unique production
-   credentials and keys;
+1. install PostgreSQL/Caddy/systemd definitions, the root-owned Lumina storage maintenance program
+   and BuildKit configuration on the actual VPS, then supply unique production credentials and keys;
 2. configure real DNS/TLS, independent S3 storage/lifecycle, mail, IdP/SCIM and notification
    endpoints as applicable;
 3. run the deployment dry-run, hosted liveness/readiness, login/write/Worker/object checks and an

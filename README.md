@@ -1,12 +1,18 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.5.0**
+Current release candidate: **v3.6.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.5 closes the organization-wide business-date architecture gate. Each workspace now has a
+Version 3.6 adds a deployment-time storage gate for root, Docker and release filesystems; an
+independently owned Lumina BuildKit builder; and post-health project-only release/image/cache
+cleanup with complete evidence. Current, rollback and recent successful releases remain protected,
+and cleanup failures cannot roll back a healthy production version. The deployment runner still
+has no Docker socket or arbitrary Docker CLI access.
+
+Version 3.5 closed the organization-wide business-date architecture gate. Each workspace now has a
 constrained, audited business timezone that administrators can change only with AAL2; user and
 workspace-scoped Worker transactions apply it locally so existing PostgreSQL date rules agree.
 Contract countdowns use the same business date. Pending mutation drawers cannot be dismissed through
@@ -96,6 +102,8 @@ phase relevant to a scoped change, or the staged matrix when preparing an author
 On an initialized Linux VPS, the persistent deployment runner performs:
 
 ```text
+root/Docker/release capacity gate
+-> isolated Lumina BuildKit verification
 git pull --ff-only
 -> npm install
 -> checks
@@ -104,7 +112,9 @@ git pull --ff-only
 -> atomic release switch
 -> Web/Worker restart
 -> liveness/readiness/public health
--> application rollback on failure
+-> persist accepted/rollback releases
+-> Lumina-only release/image/BuildKit cleanup
+failure before acceptance -> application rollback
 ```
 
 Only the Git pull may receive the configured loopback proxy. Database, build, Web, Worker, backup
@@ -120,9 +130,9 @@ npm run deploy:production:rollback
 ```
 
 See the [deployment and recovery runbook](docs/DEPLOYMENT.md), the
-[v3.5 audit](docs/AUDIT_2026-07-30_V3.5.0.md), its
-[executed remediation plan](docs/REMEDIATION_AND_PRODUCT_PLAN_2026-07-30_V3.5.0.md), and the
-[final re-audit](docs/FINAL_REAUDIT_2026-07-30_V3.5.0.md). The PostgreSQL transition history remains
+[v3.6 storage audit](docs/DEPLOYMENT_STORAGE_AUDIT_2026-07-30_V3.6.0.md), its
+[executed remediation plan](docs/DEPLOYMENT_STORAGE_REMEDIATION_PLAN_2026-07-30_V3.6.0.md), and the
+[final re-audit](docs/FINAL_REAUDIT_2026-07-30_V3.6.0.md). The PostgreSQL transition history remains
 in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md) and
 [completion and gap review](docs/POSTGRESQL_MIGRATION_COMPLETION_AND_GAP_REVIEW_2026-07-29.md).
 The concise current state is in [implementation status](docs/IMPLEMENTATION_STATUS.md).

@@ -12,6 +12,7 @@ import {
   readdirSync,
   realpathSync,
   renameSync,
+  statfsSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -35,7 +36,9 @@ import {
   makeDeploymentId,
   makeReleaseId,
   parseEnvironmentText,
+  parseDeploymentStoragePolicy,
   parseSystemdProperties,
+  planReleasesForCleanup,
   planInterruptedRecovery,
   PRODUCTION_LOCAL_OBJECT_ROOT,
   PRODUCTION_LOCAL_URL,
@@ -43,7 +46,8 @@ import {
   redactSecrets,
   retryHealth,
   rollbackAfterCutover,
-  selectReleasesForCleanup,
+  runNonFatalCleanup,
+  diskSnapshotFromStatfs,
   validateEnvironmentFileMetadata,
   validateEnvironmentKeyPolicy,
   validateMigrationEnvironment,
@@ -63,13 +67,16 @@ const deployEnvPath = "/etc/lumina-crm/deploy.env";
 const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const lastSuccessPath = path.join(stateRoot, "last-success.json");
+const storageCleanupRequestPath = path.join(stateRoot, "storage-cleanup-request.json");
+const storageReportPath = "/var/lib/lumina-crm/storage-maintenance/latest.json";
 const npmCommand = "/usr/bin/npm";
 const webService = "lumina-crm.service";
 const workerService = "lumina-crm-workers.service";
 const workerTimer = "lumina-crm-workers.timer";
+const storagePrepareService = "lumina-crm-storage-prepare.service";
+const storageCleanupService = "lumina-crm-storage-cleanup.service";
 const expectedRepository = "git@github.com:kewtgh/crm.git";
 const expectedBranch = "main";
-const releaseRetention = 5;
 
 const limits = {
   total: 3_600_000,
@@ -104,6 +111,7 @@ let switched = false;
 let migrationApplied = false;
 let migrationMayHaveChanged = false;
 let createdRelease = false;
+let storagePolicy;
 
 assertRealDirectory(stateRoot, "Deployment state directory");
 assertRealDirectory(logRoot, "Deployment log directory");
@@ -131,6 +139,9 @@ let persisted = {
   migrationApplied: false,
   migrationMayHaveChanged: false,
   rollback: null,
+  applicationAccepted: false,
+  acceptedAt: null,
+  cleanup: null,
   error: null,
 };
 
@@ -331,11 +342,12 @@ function loadEnvironments() {
     allowed: DEPLOY_ENV_ALLOWED_KEYS,
   });
   validateMigrationEnvironment(deploy);
+  storagePolicy = parseDeploymentStoragePolicy(deploy);
   mkdirSync(PRODUCTION_LOCAL_OBJECT_ROOT, { recursive: true, mode: 0o750 });
   assertRealDirectory(PRODUCTION_LOCAL_OBJECT_ROOT, "Persistent object storage sandbox directory");
   secretValues = collectSecretValues(production, deploy);
   log("INFO", "Validated production.env and deploy.env names, ownership, permissions, and required keys; values are redacted");
-  return { production, deploy };
+  return { production, deploy, storagePolicy };
 }
 
 function installEnvironment() {
@@ -411,6 +423,104 @@ async function verifySystemd({ requireWorkerSuccess = true } = {}) {
 
 async function sudoSystemctl(label, args) {
   await run(label, "sudo", ["-n", "/usr/bin/systemctl", ...args], { timeoutMs: limits.systemd });
+}
+
+function readStorageReport(mode, notBeforeMs) {
+  try {
+    const report = JSON.parse(readFileSync(storageReportPath, "utf8"));
+    const startedAt = Date.parse(String(report.startedAt ?? ""));
+    if (report.mode !== mode || !Number.isFinite(startedAt) || startedAt < notBeforeMs - 1_000) return null;
+    return report;
+  } catch {
+    return null;
+  }
+}
+
+function logStorageReport(report) {
+  const summary = {
+    status: report.status,
+    mode: report.mode,
+    reportPath: report.reportPath,
+    logPath: report.logPath,
+    error: report.error ?? null,
+    diskBefore: report.diskBefore ?? report.disk ?? null,
+    diskAfter: report.diskAfter ?? null,
+    builder: report.builder ?? null,
+    deletedImages: report.cleanup?.deletedImages ?? [],
+    estimatedImageBytes: report.cleanup?.estimatedImageBytes ?? 0,
+    cleanupFailures: report.cleanup?.failures ?? [],
+  };
+  log(report.status === "SUCCEEDED" ? "INFO" : "ERROR", `LUMINA_STORAGE_REPORT ${JSON.stringify(summary)}`);
+}
+
+async function runStorageService({ service, mode, label, timeoutMs }) {
+  const startedAt = Date.now();
+  try {
+    await run(label, "sudo", ["-n", "/usr/bin/systemctl", "start", service], {
+      timeoutMs,
+    });
+  } catch (error) {
+    const report = readStorageReport(mode, startedAt);
+    if (report) {
+      logStorageReport(report);
+      throw new Error(report.error
+        || `Lumina storage ${mode} finished with ${report.status}; inspect ${report.reportPath ?? storageReportPath}`);
+    }
+    throw error;
+  }
+  const report = readStorageReport(mode, startedAt);
+  if (!report) throw new Error(`Lumina storage ${mode} did not create a fresh report at ${storageReportPath}`);
+  logStorageReport(report);
+  if (report.status !== "SUCCEEDED") {
+    throw new Error(`Lumina storage ${mode} finished with ${report.status}; inspect ${report.reportPath}`);
+  }
+  return report;
+}
+
+async function prepareDeploymentStorage() {
+  return runStorageService({
+    service: storagePrepareService,
+    mode: "prepare",
+    label: "verify deployment disk capacity and isolated Lumina BuildKit",
+    timeoutMs: 180_000,
+  });
+}
+
+function writeStorageCleanupRequest(success) {
+  atomicJson(storageCleanupRequestPath, {
+    deploymentId: success.deploymentId,
+    releasePath: success.currentRelease,
+    applicationAccepted: true,
+    acceptedAt: success.acceptedAt,
+  });
+}
+
+async function cleanupDockerStorage() {
+  return runStorageService({
+    service: storageCleanupService,
+    mode: "cleanup",
+    label: "clean isolated Lumina Docker images and BuildKit cache",
+    timeoutMs: 360_000,
+  });
+}
+
+async function postSuccessCleanup(activeRelease) {
+  const releaseCleanup = await runNonFatalCleanup(
+    () => pruneOldReleases(activeRelease),
+    (error) => log("ERROR", `Non-fatal Lumina release cleanup failure: ${error instanceof Error ? error.message : String(error)}`),
+  );
+  const dockerCleanup = await runNonFatalCleanup(
+    cleanupDockerStorage,
+    (error) => log("ERROR", `Non-fatal Lumina Docker/BuildKit cleanup failure: ${error instanceof Error ? error.message : String(error)}`),
+  );
+  return {
+    release: releaseCleanup.ok
+      ? { ok: true, report: releaseCleanup.value }
+      : { ok: false, error: releaseCleanup.error },
+    docker: dockerCleanup.ok
+      ? { ok: true, reportPath: dockerCleanup.value.reportPath }
+      : { ok: false, error: dockerCleanup.error },
+  };
 }
 
 async function verifyHealth(version, { includePublic = true } = {}) {
@@ -537,35 +647,135 @@ async function removeWorktree(release) {
   });
 }
 
+function successfulReleaseManifest(release) {
+  const manifestPath = path.join(release, ".lumina-release.json");
+  try {
+    const metadata = lstatSync(manifestPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) return false;
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    return /^[0-9a-f]{40}$/.test(String(manifest.commit ?? ""))
+      && typeof manifest.version === "string"
+      && manifest.version.length > 0
+      && typeof manifest.deploymentId === "string";
+  } catch {
+    return false;
+  }
+}
+
+function releaseDiskSnapshot(label) {
+  return diskSnapshotFromStatfs({
+    label,
+    path: releasesRoot,
+    minimumAvailableBytes: storagePolicy.releaseMinimumAvailableBytes,
+    minimumFreePercent: storagePolicy.minimumFreePercent,
+  }, statfsSync(releasesRoot));
+}
+
+async function releaseSizeBytes(release) {
+  const result = await run("measure release cleanup candidate", "du", [
+    "--summarize",
+    "--bytes",
+    "--one-file-system",
+    release,
+  ], { cwd: releasesRoot, timeoutMs: limits.git });
+  const bytes = Number(result.stdout.split(/\s+/, 1)[0]);
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : null;
+}
+
+async function removeReleaseCandidate(candidate) {
+  try {
+    await removeWorktree(candidate.path);
+  } catch (error) {
+    if (!existsSync(candidate.path)) {
+      await run("prune removed worktree metadata", "git", ["worktree", "prune", "--expire", "now"], {
+        cwd: sourceRoot,
+        timeoutMs: limits.git,
+      });
+      return;
+    }
+    if (candidate.reason !== "failed-residue") throw error;
+    const safeRelease = assertReleasePath(releasesRoot, candidate.path, "Failed release residue");
+    const protectedPaths = new Set([
+      existsSync(currentLink) ? realpathSync(currentLink) : null,
+      previousRelease,
+    ].filter(Boolean).map((item) => path.resolve(item)));
+    if (protectedPaths.has(safeRelease)) throw new Error(`Refusing to remove protected release ${safeRelease}`);
+    await fs.rm(safeRelease, { recursive: true, force: false });
+    await run("prune removed failed worktree metadata", "git", ["worktree", "prune", "--expire", "now"], {
+      cwd: sourceRoot,
+      timeoutMs: limits.git,
+    });
+  }
+}
+
 async function pruneOldReleases(activeRelease) {
+  const diskBefore = releaseDiskSnapshot("Lumina releases before release cleanup");
   let removals;
   try {
     const entries = readdirSync(releasesRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => {
         const release = path.join(releasesRoot, entry.name);
-        return { path: release, mtimeMs: statSync(release).mtimeMs };
+        return {
+          path: release,
+          mtimeMs: statSync(release).mtimeMs,
+          successful: successfulReleaseManifest(release),
+        };
       });
     const lastSuccess = existsSync(lastSuccessPath) ? JSON.parse(readFileSync(lastSuccessPath, "utf8")) : {};
-    removals = selectReleasesForCleanup(entries, {
+    removals = planReleasesForCleanup(entries, {
       releasesRoot,
       currentRelease: realpathSync(currentLink),
       previousRelease: lastSuccess.previousRelease,
       activeRelease,
-      retain: releaseRetention,
+      retain: storagePolicy.releaseRetention,
+      failedRetentionMs: storagePolicy.failedReleaseRetentionHours * 60 * 60 * 1_000,
     });
   } catch (error) {
-    log("ERROR", `Release cleanup skipped without deleting anything: ${error instanceof Error ? error.message : String(error)}`);
-    return;
+    throw new Error(`Release cleanup skipped without deleting anything: ${error instanceof Error ? error.message : String(error)}`);
   }
-  for (const release of removals) {
+  const deleted = [];
+  const failures = [];
+  for (const candidate of removals) {
+    let sizeBytes = null;
+    let measurementError = null;
     try {
-      await removeWorktree(release);
-      log("INFO", `Removed unused old Lumina release ${release}`);
+      sizeBytes = await releaseSizeBytes(candidate.path);
     } catch (error) {
-      log("ERROR", `Could not remove unused old release ${release}: ${error instanceof Error ? error.message : String(error)}`);
+      measurementError = error instanceof Error ? error.message : String(error);
+      log("ERROR", `Could not measure release cleanup candidate ${candidate.path}: ${measurementError}`);
+    }
+    try {
+      await removeReleaseCandidate(candidate);
+      deleted.push({ ...candidate, sizeBytes, measurementError });
+      log("INFO", `LUMINA_RELEASE_REMOVED ${JSON.stringify({ ...candidate, sizeBytes, measurementError })}`);
+    } catch (error) {
+      const failure = {
+        ...candidate,
+        sizeBytes,
+        measurementError,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      failures.push(failure);
+      log("ERROR", `LUMINA_RELEASE_REMOVE_FAILED ${JSON.stringify(failure)}`);
     }
   }
+  const diskAfter = releaseDiskSnapshot("Lumina releases after release cleanup");
+  const report = {
+    candidates: removals,
+    deleted,
+    failures,
+    estimatedDeletedBytes: deleted.reduce((total, item) => total + (item.sizeBytes ?? 0), 0),
+    diskBefore,
+    diskAfter: {
+      ...diskAfter,
+      availableBytesBefore: diskBefore.availableBytes,
+      availableBytesDelta: diskAfter.availableBytes - diskBefore.availableBytes,
+    },
+  };
+  log("INFO", `LUMINA_RELEASE_CLEANUP_REPORT ${JSON.stringify(report)}`);
+  if (failures.length) throw new Error(`${failures.length} Lumina release cleanup operation(s) failed`);
+  return report;
 }
 
 async function preflight() {
@@ -587,6 +797,7 @@ function validateDeploymentFilesystem({ createReleaseRoot = false } = {}) {
   }
   if (!existsSync(path.join(sourceRoot, ".git"))) throw new Error(`Source checkout is not a Git repository: ${sourceRoot}`);
   if (!existsSync(npmCommand)) throw new Error(`${npmCommand} is missing`);
+  if (!existsSync("/usr/bin/du")) throw new Error("/usr/bin/du is required for release cleanup accounting");
   if (!existsSync("/usr/bin/nc")) throw new Error("/usr/bin/nc is required for the one-shot GitHub pull proxy");
   for (const [directory, label] of [
     [deployRoot, "Deployment root"],
@@ -607,11 +818,12 @@ async function recoverInterruptedRun() {
     prior: priorInterruptedStatus,
     currentRelease: current,
   });
-  if (recovery.action === "NONE") return;
+  if (recovery.action === "NONE") return recovery;
   log("ERROR", `Recovering interrupted request ${request.requestId} with action ${recovery.action}`);
   if (recovery.migrationMayHaveChanged) {
     log("ERROR", "The interrupted run may already have applied forward database migrations; database data will not be rolled back");
   }
+  if (recovery.action === "FINALIZE_ACCEPTED") return recovery;
   if (recovery.action === "ROLLBACK_THEN_RESUME") {
     const previous = assertReleasePath(releasesRoot, recovery.previousRelease, "Interrupted previous release");
     if (!existsSync(previous)) throw new Error(`Interrupted previous release is missing: ${previous}`);
@@ -630,6 +842,54 @@ async function recoverInterruptedRun() {
     });
     log("INFO", `Removed interrupted release ${recovery.failedRelease}`);
   }
+  return recovery;
+}
+
+async function finalizeAcceptedInterruptedRun(recovery) {
+  if (!existsSync(lastSuccessPath)) throw new Error("Accepted interrupted deployment is missing last-success.json");
+  const accepted = JSON.parse(readFileSync(lastSuccessPath, "utf8"));
+  const acceptedRelease = assertReleasePath(releasesRoot, recovery.acceptedRelease, "Accepted release");
+  if (path.resolve(accepted.currentRelease ?? "") !== acceptedRelease
+    || realpathSync(currentLink) !== acceptedRelease) {
+    throw new Error("Accepted interrupted deployment no longer matches current/last-success");
+  }
+  releaseDir = acceptedRelease;
+  previousRelease = accepted.previousRelease;
+  previousCommit = accepted.previousCommit;
+  targetCommit = accepted.currentCommit;
+  applicationVersion = accepted.currentVersion;
+  migrationApplied = accepted.migrationApplied === true;
+  migrationMayHaveChanged = accepted.migrationMayHaveChanged === true;
+  switched = false;
+  persist({
+    stage: "recover accepted post-success cleanup",
+    applicationAccepted: true,
+    acceptedAt: accepted.acceptedAt ?? accepted.succeededAt,
+    previousCommit,
+    targetCommit,
+    applicationVersion,
+    releasePath: releaseDir,
+    previousRelease,
+    migrationApplied,
+    migrationMayHaveChanged,
+  });
+  writeStorageCleanupRequest({
+    ...accepted,
+    deploymentId: accepted.deploymentId,
+    acceptedAt: accepted.acceptedAt ?? accepted.succeededAt,
+  });
+  const cleanup = await postSuccessCleanup(releaseDir);
+  persist({
+    result: "SUCCESS",
+    stage: "complete",
+    finishedAt: new Date().toISOString(),
+    durationMs: elapsedMs(),
+    applicationAccepted: true,
+    cleanup,
+  });
+  log("INFO", `Recovered accepted release ${releaseDir} without application rollback`);
+  log("INFO", "deployment result: SUCCESS");
+  log("INFO", "LUMINA_PRODUCTION_DEPLOY_OK");
 }
 
 async function deploy(production, deployEnvironment) {
@@ -737,6 +997,7 @@ async function deploy(production, deployEnvironment) {
   switched = true;
   await activateRelease(applicationVersion);
 
+  const acceptedAt = new Date().toISOString();
   const success = {
     deploymentId,
     currentRelease: releaseDir,
@@ -745,12 +1006,27 @@ async function deploy(production, deployEnvironment) {
     previousCommit,
     currentVersion: applicationVersion,
     previousVersion,
-    succeededAt: new Date().toISOString(),
+    succeededAt: acceptedAt,
+    acceptedAt,
     migrationApplied,
     migrationMayHaveChanged,
   };
   atomicJson(lastSuccessPath, success);
-  await pruneOldReleases(releaseDir);
+  switched = false;
+  persist({
+    stage: "post-success storage cleanup",
+    applicationAccepted: true,
+    acceptedAt,
+    previousCommit,
+    targetCommit,
+    applicationVersion,
+    releasePath: releaseDir,
+    previousRelease,
+    migrationApplied,
+    migrationMayHaveChanged,
+  });
+  writeStorageCleanupRequest(success);
+  const cleanup = await postSuccessCleanup(releaseDir);
   persist({
     result: "SUCCESS",
     stage: "complete",
@@ -763,8 +1039,10 @@ async function deploy(production, deployEnvironment) {
     previousRelease,
     migrationApplied,
     migrationMayHaveChanged,
+    applicationAccepted: true,
+    acceptedAt,
+    cleanup,
   });
-  switched = false;
   log("INFO", `deployment ID: ${deploymentId}`);
   log("INFO", `previous commit: ${previousCommit}`);
   log("INFO", `target commit: ${targetCommit}`);
@@ -854,13 +1132,39 @@ async function main() {
     environments = loadEnvironments();
     setStage("deployment filesystem validation");
     validateDeploymentFilesystem({ createReleaseRoot: true });
-    await recoverInterruptedRun();
+    const recovery = await recoverInterruptedRun();
+    if (recovery.action === "FINALIZE_ACCEPTED") {
+      await finalizeAcceptedInterruptedRun(recovery);
+      return;
+    }
     await preflight();
-    if (request.mode === "deploy") await deploy(environments.production, environments.deploy);
+    if (request.mode === "deploy") {
+      await prepareDeploymentStorage();
+      await deploy(environments.production, environments.deploy);
+    }
     else await manualRollback();
   } catch (error) {
     const message = redactSecrets(error instanceof Error ? error.message : String(error), secretValues);
     log("ERROR", message);
+    if (persisted.applicationAccepted === true) {
+      switched = false;
+      log("ERROR", "Post-success cleanup/finalization failed after health acceptance; the running production release will not be rolled back");
+      try {
+        persist({
+          result: "SUCCESS",
+          stage: "complete-with-cleanup-warning",
+          finishedAt: new Date().toISOString(),
+          durationMs: elapsedMs(),
+          cleanup: { ok: false, error: message },
+          error: null,
+        });
+      } catch (persistError) {
+        log("ERROR", `Could not persist accepted cleanup warning: ${persistError instanceof Error ? persistError.message : String(persistError)}`);
+      }
+      log("INFO", "deployment result: SUCCESS");
+      log("INFO", "LUMINA_PRODUCTION_DEPLOY_OK");
+      return;
+    }
     let rollbackResult = { attempted: false, restored: false };
     try {
       rollbackResult = await rollbackAfterCutover({

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   assertHealthPayload,
+  assertDeploymentDiskCapacity,
   assertLoopbackListener,
   assertPathWithin,
   assertProxyFreeEnvironment,
@@ -14,6 +15,7 @@ import {
   classifyPersistedDeployment,
   cleanupFailedRelease,
   collectSecretValues,
+  diskSnapshotFromStatfs,
   directRuntimeEnvironment,
   GITHUB_PULL_PROXY_URL,
   githubPullArguments,
@@ -21,11 +23,14 @@ import {
   makeDeploymentId,
   makeReleaseId,
   parseEnvironmentText,
+  parseDeploymentStoragePolicy,
+  planReleasesForCleanup,
   planInterruptedRecovery,
   PRODUCTION_DEPLOY_LOCK_PATH,
   redactSecrets,
   retryHealth,
   rollbackAfterCutover,
+  runNonFatalCleanup,
   selectReleasesForCleanup,
   validateDeployAssetTexts,
   validateDirectoryMetadata,
@@ -36,6 +41,14 @@ import {
   validateRequiredEnvironment,
   writeExclusiveRequest,
 } from "../scripts/lib/production-deploy-core.mjs";
+import {
+  assertAllowedDockerArguments,
+  LUMINA_COMPOSE_PROJECT,
+  LUMINA_MANAGED_LABEL,
+  LUMINA_REPOSITORY_LABEL,
+  LUMINA_REPOSITORY_VALUE,
+  selectLuminaImageCandidates,
+} from "../deploy/libexec/lumina-crm-storage-maintenance.mjs";
 
 test("creates UTC deployment and release IDs with an explicit commit", () => {
   const date = new Date("2026-07-28T12:34:56.789Z");
@@ -98,6 +111,41 @@ test("validates environment names and secure file modes without echoing values",
       { label: "deploy.env", allowed: ["MIGRATION_DATABASE_URL"] },
     ),
     /NODE_OPTIONS/,
+  );
+});
+
+test("blocks deployment unless root, Docker, and release filesystems satisfy byte and percentage gates", () => {
+  const policy = parseDeploymentStoragePolicy({
+    LUMINA_DOCKER_DATA_ROOT: "/srv/docker",
+    LUMINA_DEPLOY_MIN_FREE_PERCENT: "15",
+    LUMINA_ROOT_MIN_FREE_GB: "8",
+    LUMINA_DOCKER_MIN_FREE_GB: "10",
+    LUMINA_RELEASE_MIN_FREE_GB: "8",
+    LUMINA_RELEASE_RETENTION: "5",
+    LUMINA_FAILED_RELEASE_RETENTION_HOURS: "24",
+    LUMINA_BUILDKIT_CACHE_RETENTION_HOURS: "168",
+    LUMINA_BUILDKIT_MAX_CACHE_GB: "12",
+    LUMINA_BUILDKIT_RESERVED_CACHE_GB: "2",
+  });
+  assert.equal(policy.dockerDataRoot, path.resolve("/srv/docker"));
+  const healthy = diskSnapshotFromStatfs({
+    label: "Docker data root",
+    path: policy.dockerDataRoot,
+    minimumAvailableBytes: 10 * 1024 ** 3,
+    minimumFreePercent: 15,
+  }, { blocks: 100, bavail: 20, bsize: 1024 ** 3 });
+  assert.equal(healthy.freePercent, 20);
+  assert.doesNotThrow(() => assertDeploymentDiskCapacity([healthy]));
+  assert.throws(
+    () => assertDeploymentDiskCapacity([{ ...healthy, availableBytes: 9 * 1024 ** 3 }]),
+    /LUMINA_DEPLOY_DISK_GATE_FAILED.*Docker data root.*requires at least/,
+  );
+  assert.throws(
+    () => parseDeploymentStoragePolicy({
+      LUMINA_BUILDKIT_MAX_CACHE_GB: "4",
+      LUMINA_BUILDKIT_RESERVED_CACHE_GB: "4",
+    }),
+    /must be lower/,
   );
 });
 
@@ -330,7 +378,7 @@ test("requires effective systemd hostname, direct runtime, worker result, and ti
   }), /waiting/);
 });
 
-test("release cleanup protects current, previous, active, and newest retained releases", () => {
+test("release cleanup protects rollback set and recent successes while expiring old failed residue", () => {
   const root = path.resolve("release-retention");
   const names = [
     "20260728T100000Z-aaaaaaaaaaaa",
@@ -340,21 +388,132 @@ test("release cleanup protects current, previous, active, and newest retained re
     "20260728T140000Z-eeeeeeeeeeee",
     "20260728T150000Z-ffffffffffff",
   ];
-  const entries = names.map((name, index) => ({ path: path.join(root, name), mtimeMs: index }));
+  const entries = names.map((name, index) => ({
+    path: path.join(root, name),
+    mtimeMs: index * 1_000,
+    successful: true,
+  }));
+  const failedOld = {
+    path: path.join(root, "20260728T160000Z-121212121212"),
+    mtimeMs: 1_000,
+    successful: false,
+  };
+  const failedRecent = {
+    path: path.join(root, "20260728T170000Z-131313131313"),
+    mtimeMs: 99_000,
+    successful: false,
+  };
   const current = entries[5].path;
   const previous = entries[1].path;
   const active = entries[4].path;
-  const removals = selectReleasesForCleanup(entries, {
+  const plan = planReleasesForCleanup([...entries, failedOld, failedRecent], {
     releasesRoot: root,
     currentRelease: current,
     previousRelease: previous,
     activeRelease: active,
     retain: 2,
+    failedRetentionMs: 10_000,
+    nowMs: 100_000,
   });
+  const removals = plan.map((entry) => entry.path);
   assert(!removals.includes(current));
   assert(!removals.includes(previous));
   assert(!removals.includes(active));
   assert(removals.includes(entries[0].path));
+  assert.deepEqual(plan.find((entry) => entry.path === failedOld.path), {
+    path: failedOld.path,
+    reason: "failed-residue",
+  });
+  assert(!removals.includes(failedRecent.path));
+  assert.deepEqual(selectReleasesForCleanup(entries, {
+    releasesRoot: root,
+    currentRelease: current,
+    previousRelease: previous,
+    activeRelease: active,
+    retain: 2,
+  }), planReleasesForCleanup(entries, {
+    releasesRoot: root,
+    currentRelease: current,
+    previousRelease: previous,
+    activeRelease: active,
+    retain: 2,
+  }).map((entry) => entry.path));
+});
+
+test("Docker cleanup candidates require every Lumina identity and protect active/recent images", () => {
+  const imageId = (character) => `sha256:${character.repeat(64)}`;
+  const luminaLabels = {
+    [LUMINA_MANAGED_LABEL]: "true",
+    [LUMINA_REPOSITORY_LABEL]: LUMINA_REPOSITORY_VALUE,
+    "com.docker.compose.project": LUMINA_COMPOSE_PROJECT,
+  };
+  const image = (id, created, overrides = {}) => ({
+    Id: imageId(id),
+    Created: created,
+    Size: 100,
+    RepoTags: [`ghcr.io/kewtgh/lumina-crm:${id}`],
+    Config: { Labels: luminaLabels },
+    ...overrides,
+  });
+  const newest = image("a", "2026-07-30T00:00:00.000Z");
+  const rollback = image("b", "2026-07-29T00:00:00.000Z");
+  const activeOld = image("c", "2026-07-01T00:00:00.000Z");
+  const removable = image("d", "2026-06-01T00:00:00.000Z");
+  const hunter = image("e", "2026-05-01T00:00:00.000Z", {
+    RepoTags: ["hunterai/service:old"],
+    Config: {
+      Labels: {
+        ...luminaLabels,
+        [LUMINA_REPOSITORY_LABEL]: "hunterai/service",
+        "com.docker.compose.project": "hunterai",
+      },
+    },
+  });
+  const temporalWithPartialSpoof = image("f", "2026-05-01T00:00:00.000Z", {
+    RepoTags: ["temporal/server:old"],
+    Config: { Labels: { [LUMINA_MANAGED_LABEL]: "true" } },
+  });
+  const candidates = selectLuminaImageCandidates([
+    newest,
+    rollback,
+    activeOld,
+    removable,
+    hunter,
+    temporalWithPartialSpoof,
+  ], {
+    inUseIds: new Set([activeOld.Id]),
+    nowMs: Date.parse("2026-07-30T12:00:00.000Z"),
+    minimumAgeMs: 7 * 24 * 60 * 60 * 1_000,
+    retain: 2,
+  });
+  assert.deepEqual(candidates.map((entry) => entry.Id), [removable.Id]);
+});
+
+test("Docker maintenance allowlist rejects host-global and non-Lumina destructive commands", () => {
+  assert.equal(assertAllowedDockerArguments(["info", "--format", "{{.DockerRootDir}}"]), true);
+  assert.equal(assertAllowedDockerArguments(["container", "ls", "--all", "--quiet"]), true);
+  for (const args of [
+    ["system", "prune", "-a"],
+    ["system", "prune", "--volumes"],
+    ["image", "prune", "-a"],
+    ["volume", "prune"],
+    ["network", "prune"],
+    ["container", "rm", "abcdef123456"],
+    ["buildx", "--builder", "lumina-crm-buildkit", "prune", "--all"],
+    ["image", "ls", "--quiet"],
+  ]) {
+    assert.throws(() => assertAllowedDockerArguments(args), /Forbidden Docker command|outside the Lumina/);
+  }
+});
+
+test("post-success cleanup failure is non-fatal", async () => {
+  const failures = [];
+  const result = await runNonFatalCleanup(
+    async () => { throw new Error("simulated cleanup failure"); },
+    async (error) => failures.push(error.message),
+  );
+  assert.deepEqual(result, { ok: false, error: "simulated cleanup failure" });
+  assert.deepEqual(failures, ["simulated cleanup failure"]);
 });
 
 test("exclusive request file rejects concurrent deploys and remains recoverable", async () => {
@@ -434,6 +593,18 @@ test("plans safe recovery after a runner interruption before or after cutover", 
     }),
     /no recorded previous release/,
   );
+  assert.deepEqual(
+    planInterruptedRecovery({
+      requestId,
+      prior: { ...prior, applicationAccepted: true },
+      currentRelease: prior.releasePath,
+    }),
+    {
+      action: "FINALIZE_ACCEPTED",
+      acceptedRelease: prior.releasePath,
+      migrationMayHaveChanged: true,
+    },
+  );
 });
 
 test("repository dry-run assets keep the v3 role, storage, lock, privilege, and loopback boundaries", async () => {
@@ -445,6 +616,10 @@ test("repository dry-run assets keep the v3 role, storage, lock, privilege, and 
     productionEnvironment,
     deploymentEnvironment,
     runner,
+    storagePrepareUnit,
+    storageCleanupUnit,
+    storageMaintenance,
+    buildkitConfiguration,
     packageJson,
   ] = await Promise.all([
     readFile(new URL("../deploy/systemd/lumina-crm-deploy.service", import.meta.url), "utf8"),
@@ -454,6 +629,10 @@ test("repository dry-run assets keep the v3 role, storage, lock, privilege, and 
     readFile(new URL("../deploy/production.env.example", import.meta.url), "utf8"),
     readFile(new URL("../deploy/deploy.env.example", import.meta.url), "utf8"),
     readFile(new URL("../scripts/deploy-production-runner.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm-storage-prepare.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm-storage-cleanup.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/libexec/lumina-crm-storage-maintenance.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/buildkitd.toml", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
   const assets = {
@@ -464,6 +643,10 @@ test("repository dry-run assets keep the v3 role, storage, lock, privilege, and 
     productionEnvironment,
     deploymentEnvironment,
     runner,
+    storagePrepareUnit,
+    storageCleanupUnit,
+    storageMaintenance,
+    buildkitConfiguration,
     packageJson,
   };
   assert.equal(validateDeployAssetTexts(assets), true);
@@ -506,6 +689,12 @@ test("repository dry-run assets keep the v3 role, storage, lock, privilege, and 
   assert.match(serviceUnit, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
   assert.match(webUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
   assert.match(workerUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
+  assert.match(storagePrepareUnit, /\/usr\/local\/libexec\/lumina-crm-storage-maintenance\.mjs prepare/);
+  assert.match(storageCleanupUnit, /\/usr\/local\/libexec\/lumina-crm-storage-maintenance\.mjs cleanup/);
+  assert.doesNotMatch(storageMaintenance, /docker (?:system|image|volume|network) prune/i);
+  assert.match(buildkitConfiguration, /keepDuration = "168h"/);
+  const acceptedSequence = /await activateRelease\(applicationVersion\);[\s\S]+applicationAccepted: true[\s\S]+postSuccessCleanup\(releaseDir\)/;
+  assert.match(runner, acceptedSequence);
   assert.doesNotMatch(webUnit, /^ReadWritePaths=.*\/opt\/lumina-crm/m);
   const rebootFragileUnit = serviceUnit
     .replaceAll(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lock/lumina-crm-deploy.lock")
@@ -521,5 +710,6 @@ test("repository dry-run assets keep the v3 role, storage, lock, privilege, and 
     () => validateDeployAssetTexts({ ...assets, packageJson: { ...packageJson, allowScripts: {} } }),
     /install-script allowlist/,
   );
-  assert.doesNotMatch(`${serviceUnit}\n${sudoers}\n${runner}`, /cloudflared|hunterai|docker|v2raya/i);
+  assert.doesNotMatch(`${serviceUnit}\n${sudoers}\n${runner}`, /cloudflared|hunterai|v2raya/i);
+  assert.doesNotMatch(`${sudoers}\n${runner}`, /\/usr\/bin\/docker|docker\.sock|["']docker["']/i);
 });

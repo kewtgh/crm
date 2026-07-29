@@ -1,0 +1,33 @@
+[Unit]
+Description=Lumina CRM deployment disk gate and isolated BuildKit preparation
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=lumina-crm
+ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs prepare
+TimeoutStartSec=180s
+UMask=0027
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+NoNewPrivileges=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+StateDirectory=lumina-crm/storage-maintenance
+StateDirectoryMode=0750
+LogsDirectory=lumina-crm/storage-maintenance
+LogsDirectoryMode=0750
+ReadWritePaths=/run/docker.sock
