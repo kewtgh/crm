@@ -1,5 +1,8 @@
 # Lumina CRM v3.1.0 修复与产品增强计划
 
+> **Archived / obsolete production architecture:** this point-in-time plan predates the v3.7
+> Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.
+
 - 日期：2026-07-29
 - 输入：`AUDIT_2026-07-29_V3.1.0.md`
 - 目标版本：3.1.0

@@ -34,6 +34,8 @@ const dumpPath = path.join(temporaryRoot, "database.dump");
 const databaseName = `lumina_restore_${Date.now()}_${process.pid}`;
 if (!/^lumina_restore_\d+_\d+$/.test(databaseName)) throw new Error("RESTORE_DATABASE_NAME_INVALID");
 const admin = new pg.Client({ connectionString: adminUrl, application_name: "lumina-restore-test" });
+let adminConnected = false;
+let restoreDatabaseCreated = false;
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -49,10 +51,12 @@ function run(command, args) {
   });
 }
 
-await decryptBackup(encryptedPath, dumpPath);
-await admin.connect();
 try {
+  await decryptBackup(encryptedPath, dumpPath);
+  await admin.connect();
+  adminConnected = true;
   await admin.query(`create database "${databaseName}"`);
+  restoreDatabaseCreated = true;
   const restoreUrl = new URL(adminUrl);
   restoreUrl.pathname = `/${databaseName}`;
   await run(process.env.PG_RESTORE_COMMAND || "pg_restore", [
@@ -85,11 +89,13 @@ try {
   }
   process.stdout.write(`[db:restore:test] verified encrypted backup in ${databaseName}.\n`);
 } finally {
-  await admin.query(
-    "select pg_terminate_backend(pid) from pg_stat_activity where datname=$1 and pid<>pg_backend_pid()",
-    [databaseName],
-  ).catch(() => undefined);
-  await admin.query(`drop database if exists "${databaseName}"`).catch(() => undefined);
-  await admin.end();
+  if (adminConnected && restoreDatabaseCreated) {
+    await admin.query(
+      "select pg_terminate_backend(pid) from pg_stat_activity where datname=$1 and pid<>pg_backend_pid()",
+      [databaseName],
+    ).catch(() => undefined);
+    await admin.query(`drop database if exists "${databaseName}"`).catch(() => undefined);
+  }
+  if (adminConnected) await admin.end().catch(() => undefined);
   await rm(temporaryRoot, { recursive: true, force: true });
 }

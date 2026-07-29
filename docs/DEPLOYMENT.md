@@ -1,369 +1,290 @@
-# Lumina CRM v3.6 — PostgreSQL deployment, storage and recovery runbook
+# Lumina CRM v3.7 production deployment
 
-This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
-share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.
+This is the only current production runbook. Documents describing host-installed PostgreSQL,
+host Node Web/Worker processes, immutable npm release directories, or Caddy as the user-facing
+endpoint are historical v3.6-and-earlier records.
 
-## 1. Host layout
+Lumina's fixed Compose project is `lumina-crm`; its databases, networks, volumes, images, builder,
+logs, backups, and release state must remain separate from HunterAI, Temporal, and every other
+project.
+
+## Architecture and inventory
 
 ```text
-/opt/lumina-crm/source       reviewed Git checkout
-/opt/lumina-crm/releases     immutable application releases
-/opt/lumina-crm/current      symlink to the active release
-/var/lib/lumina-crm          deploy state, cache, local objects and short-lived backups
-/var/lib/lumina-crm/storage-maintenance  root-owned Lumina Docker/BuildKit ownership and reports
-/var/log/lumina-crm/storage-maintenance  project-only cleanup evidence
-/var/lib/postgresql          PostgreSQL data
-/etc/lumina-crm              production.env and deploy.env
-/etc/lumina-crm/buildkitd.toml  Lumina-only BuildKit GC policy
-/etc/postgresql              PostgreSQL configuration
-/etc/caddy                   HTTPS reverse-proxy configuration
+crm.ewaya.com
+  -> Cloudflare Worker (public hostname)
+  -> configurable, distinct Lumina origin hostname
+  -> host Caddy origin gateway + shared-secret verification
+  -> 127.0.0.1:3200
+  -> lumina-crm Web container
+  -> lumina-crm PostgreSQL on the internal backend network
 ```
 
-Use a dedicated `lumina-crm` Unix account. Keep the database data directory and persistent object
-directory outside source and release paths.
+`compose.production.yml` is the unique production Compose entry point.
 
-## 2. PostgreSQL
-
-Install the current supported PostgreSQL 18 packages and client tools (`psql`, `pg_dump`,
-`pg_restore`). Copy the reviewed baselines from:
-
-- `deploy/postgresql/postgresql.conf`;
-- `deploy/postgresql/pg_hba.conf`.
-
-The baseline listens on `127.0.0.1` and `::1`, uses SCRAM authentication, enables the slow-query log,
-rotates logs, enables `pg_stat_statements`, and sets conservative 8 GB host memory defaults.
-Confirm the effective listener before continuing:
-
-```bash
-sudo ss -ltnp | grep 5432
-sudo -u postgres psql -Atqc "show listen_addresses"
-```
-
-No firewall rule may expose port 5432. Run `VACUUM` and `ANALYZE` through PostgreSQL autovacuum;
-review table bloat and slow queries periodically instead of scheduling blanket `VACUUM FULL`.
-PgBouncer is optional and should be introduced only when measured connection pressure requires it.
-
-## 3. Database roles and clean initialization
-
-The repository defines:
-
-| Role | Purpose |
+| Boundary | Production object |
 | --- | --- |
-| `crm_app` | request-scoped application access with RLS |
-| `crm_system` | trusted server authentication/admin workflows |
-| `crm_worker` | queue claims, completion and heartbeats |
-| `crm_migrator` | Schema ownership and forward migrations |
-| `crm_backup` | read-only logical backup; `BYPASSRLS` only so every tenant row is included |
+| Compose project | `lumina-crm` |
+| Long-running services | `postgres`, `web`, `worker` |
+| One-shot services | `db-bootstrap`, `migration-verify`, `migrate`, `bootstrap-admin`, `backup`, `restore-test` |
+| Backend network | `lumina-crm-backend`, `internal: true` |
+| Edge/outbound network | `lumina-crm-edge` |
+| Database volume | external `lumina-crm-postgres-data` |
+| Local objects volume | external `lumina-crm-objects` |
+| Encrypted backup volume | external `lumina-crm-backups` |
+| Builder | `lumina-crm-buildkit` only |
+| Host Web publication | `127.0.0.1:3200:3200` |
 
-Because the pre-v3 database contains test data only, initialize a new empty `lumina_crm` database.
-Do not copy the retired authentication tables.
+PostgreSQL 18.4 joins only backend and publishes no host port. Web and Worker join backend plus edge
+and never use host networking. Database URLs use the `postgres` service DNS name.
 
-Prepare `/etc/lumina-crm/deploy.env` from `deploy/deploy.env.example`, then run from the reviewed
-release:
+## HunterAI isolation and prohibited operations
 
-```bash
-set -a
-. /etc/lumina-crm/deploy.env
-set +a
-npm run db:bootstrap
-npm run db:migrations:verify
-npm run db:migrate
-```
+Do not join, reuse, stop, restart, or clean any HunterAI, Temporal, or foreign container, network,
+volume, image, database, or builder. Do not add Lumina to another Compose project.
 
-`db:bootstrap` creates or rotates only the named database roles. `db:migrate` takes a PostgreSQL
-advisory lock, stores SHA-256 checksums in `app_meta.schema_migrations`, rejects modified applied
-migrations and commits one migration at a time.
-
-Migration `202607300065_workspace_business_timezone.sql` adds the constrained workspace business
-timezone (default `Asia/Taipei`) and its audited administrator RPC; migration `066` adds only the
-Worker permissions required to read that setting, and `067` fixes the date-only RPC as a stable
-`YYYY-MM-DD` text contract across JSON boundaries. Migration `068` adds the audited workspace
-Turnstile policy. After applying them, verify both organization controls with an AAL2 administrator.
-User transactions and workspace-scoped Worker transactions set PostgreSQL `TimeZone` locally; do
-not replace this with a host-global timezone.
-
-Turnstile is enabled by default. When an administrator disables it, login, SSO and password recovery
-must render and verify the self-hosted ALTCHA challenge; the switch never disables CAPTCHA. Keep
-`ALTCHA_HMAC_SECRET` configured in every mode. Cloudflare One identity/email access controls are a
-separate layer and do not replace the CAPTCHA, rate-limit, MFA or trusted-device controls.
-
-Create the first administrator with a strong one-time password supplied through the protected
-environment:
-
-```bash
-npm run auth:bootstrap-admin
-```
-
-The administrator must replace the temporary password, enroll TOTP and retain recovery codes.
-
-## 4. Runtime configuration
-
-Install `/etc/lumina-crm/production.env` as `root:lumina-crm` mode `0640`. Start with
-`deploy/production.env.example`; `.env.example` also contains bootstrap and deployment-only
-settings and must not be copied into the runtime environment.
-At minimum configure:
-
-- canonical HTTPS `APP_URL` and CAPTCHA keys;
-- independent `DATABASE_URL`, `SYSTEM_DATABASE_URL`, and `WORKER_DATABASE_URL`;
-- workspace UUID and independent throttle/device/TOTP/storage secrets;
-- local persistent or S3-compatible object storage;
-- delivery endpoint used for verification, reset and device codes.
-
-The deployment preflight enforces the dedicated `crm_app`, `crm_system`, `crm_worker`, and
-`crm_migrator` URL usernames. The application role must not receive system, migration or backup
-credentials. Bootstrap administrator settings and the migration, administration, backup, and host
-monitoring settings belong outside `production.env`; deployment and backup settings belong in
-`/etc/lumina-crm/deploy.env`.
-
-`crm_backup` is the sole non-superuser RLS bypass exception. It receives read-only grants and cannot
-write, create databases, create roles or replicate. Never use it in Web, API, Worker or reporting
-runtime code.
-
-For the reviewed local-storage profile, use `/var/lib/lumina-crm/objects` and include it in
-off-host backup. The deployment runner creates and verifies this real sandbox directory for both
-providers (it remains empty in S3 mode); the Web and Worker systemd sandboxes grant write access
-only to this persistent root. During initial host provisioning, create it before the first Web start:
-
-```bash
-sudo install -d -o lumina-crm -g lumina-crm -m 0750 /var/lib/lumina-crm/objects
-```
-
-For S3-compatible storage, configure every `S3_*` field shown in the runtime template and give the
-runtime a bucket prefix scoped to CRM objects; use a separate account and bucket for database
-backups.
-
-## 5. Caddy and systemd
-
-Install `deploy/caddy/Caddyfile` as the Caddy site configuration and provide `CRM_DOMAIN` and
-`ACME_EMAIL` through Caddy's environment. It terminates HTTPS and proxies only to
-`127.0.0.1:3200`.
-
-Install the reviewed units under `/etc/systemd/system`:
-
-- `lumina-crm.service`;
-- `lumina-crm-workers.service` and `.timer`;
-- `lumina-crm-backup.service` and `.timer`;
-- `lumina-crm-restore-test.service` and `.timer`;
-- `lumina-crm-disk-monitor.service` and `.timer`;
-- `lumina-crm-storage-prepare.service`;
-- `lumina-crm-storage-cleanup.service`;
-- `lumina-crm-deploy.service`.
-
-Before the first production deployment, install the storage program outside the Git checkout. It
-must remain root-owned so the `lumina-crm` account cannot replace code executed with Docker access:
-
-```bash
-sudo install -d -o root -g root -m 0755 /usr/local/libexec
-sudo install -o root -g root -m 0755 \
-  deploy/libexec/lumina-crm-storage-maintenance.mjs \
-  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
-sudo install -o root -g root -m 0644 deploy/buildkitd.toml /etc/lumina-crm/buildkitd.toml
-sudo install -o root -g root -m 0644 \
-  deploy/systemd/lumina-crm-storage-prepare.service \
-  /etc/systemd/system/lumina-crm-storage-prepare.service
-sudo install -o root -g root -m 0644 \
-  deploy/systemd/lumina-crm-storage-cleanup.service \
-  /etc/systemd/system/lumina-crm-storage-cleanup.service
-sudo install -o root -g root -m 0440 \
-  deploy/sudoers/lumina-crm-deploy /etc/sudoers.d/lumina-crm-deploy
-sudo visudo -cf /etc/sudoers.d/lumina-crm-deploy
-sudo systemctl daemon-reload
-```
-
-Install Docker Engine with the Buildx plugin before these units. Do not add `lumina-crm` to the
-`docker` group. The deployment runner can start only the two fixed storage units; it cannot execute
-Docker, access `docker.sock`, change cleanup filters, or run repository code as root.
-
-Then:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now caddy lumina-crm.service
-sudo systemctl enable --now lumina-crm-workers.timer
-sudo systemctl enable --now lumina-crm-backup.timer
-sudo systemctl enable --now lumina-crm-restore-test.timer
-sudo systemctl enable --now lumina-crm-disk-monitor.timer
-```
-
-The Worker service keeps its four-minute execution boundary. Independent Worker categories start
-in parallel; each category uses `WORKER_JOB_CONCURRENCY` (1–8, default 4) and preserves stable item
-ordering plus database lease-token completion. Runtime preflight rejects batch/concurrency pairs
-whose external waiting bound exceeds 210 seconds, leaving 30 seconds for database and process
-cleanup. `WORKER_DATABASE_POOL_MAX` applies to each Worker process, not the whole cycle; with the
-four default categories and the sample pool limit of 4, plan for up to 16 Worker-role connections
-(24 when both optional categories are enabled), in addition to Web/system pools.
-
-Notification outbox requests use the outbox job UUID as `Idempotency-Key`; calendar deliveries use
-their persisted idempotency key. Do not enable the mail endpoint until the real provider has been
-tested to return the original result without repeating delivery when the same key and payload are
-replayed. Every mail delivery attempt has a 20-second timeout and continues through the existing
-lease-aware failure/backoff path on timeout or non-2xx response.
-
-All CRM units clear inherited proxy variables. Review the least-privilege sudo policy in
-`deploy/sudoers/lumina-crm-deploy`; it authorizes only the CRM application units used by the
-deployment runner.
-
-## 6. Backup and recovery
-
-The daily backup service:
-
-1. runs `pg_dump --format=custom` through `crm_backup`;
-2. encrypts with AES-256-GCM before persistence;
-3. uploads to an independent S3-compatible provider;
-4. keeps only a small local window;
-5. sends success or failure notification.
-
-Configure the object-store lifecycle to retain encrypted objects for 30 days (minimum 14). The
-application cannot enforce a remote provider lifecycle by itself.
-
-Run the first backup and inspect its journal:
-
-```bash
-sudo systemctl start lumina-crm-backup.service
-sudo journalctl -u lumina-crm-backup.service -n 100 --no-pager
-```
-
-Restore verification selects the newest local encrypted backup by default, decrypts into a private
-temporary directory, creates only a `lumina_restore_<timestamp>_<pid>` database, restores with
-`--exit-on-error`, verifies authentication/CRM/migration structures and drops the temporary database.
-It never restores over `lumina_crm`.
-
-```bash
-sudo systemctl start lumina-crm-restore-test.service
-sudo journalctl -u lumina-crm-restore-test.service -n 100 --no-pager
-```
-
-For a downloaded off-host backup:
-
-```bash
-npm run db:restore:test -- /absolute/path/lumina-crm-YYYYMMDDTHHMMSSZ.dump.enc
-```
-
-Record the observed duration. Recovery time is not an estimate until a real restore has completed.
-VPS snapshots are supplementary and do not replace logical backup.
-
-## 7. Capacity and monitoring
-
-`lumina-crm-disk-monitor.timer` checks the configured application/PostgreSQL paths every 15 minutes
-and sends a webhook below `DISK_FREE_PERCENT_THRESHOLD` (15% by default). Independently, every
-production deployment performs a privileged read-only gate against `/`, the Docker daemon's actual
-data root and `/opt/lumina-crm/releases`. The gate requires both the configured percentage and the
-per-target byte floor; it stops before Git pull, dependency installation, build or migration.
-
-`deploy.env.example` defaults to 8 GiB free on root/releases, 10 GiB on Docker and 15% on every
-target. `LUMINA_DOCKER_DATA_ROOT` must exactly match:
-
-```bash
-sudo docker info --format '{{.DockerRootDir}}'
-```
-
-The prepare unit creates or verifies only `lumina-crm-buildkit`. A same-named builder without the
-root-owned Lumina ownership marker is rejected, never adopted. `deploy/buildkitd.toml` caps its cache
-at 12 GiB, keeps 2 GiB reserved, targets 10 GiB host free space and ages general cache after seven
-days. The normal CRM npm/Vinext build remains host-native; any later reviewed Lumina container build
-must select this builder and add all of these image labels:
+Never run these for Lumina:
 
 ```text
-com.lumina.crm.managed=true
-com.lumina.crm.repository=kewtgh/crm
-com.docker.compose.project=lumina-crm
+docker system prune
+docker system prune -a
+docker image prune -a
+docker volume prune
+docker builder prune
+docker compose down -v
 ```
 
-It must also use a repository tag containing `lumina-crm`. Unlabelled or partially labelled images
-are never cleanup candidates.
+Release and rollback use `docker compose up -d`, never `down`. Cleanup considers only image IDs
+returned by all three exact Lumina labels. Before deletion it rechecks those labels, an exact
+`lumina-crm[-ops]:<40-char-commit>` tag, container use, age/retention, and the protected
+current/rollback/recent set. Cache GC selects only `lumina-crm-buildkit`. Cleanup never removes a
+container, network, or volume.
 
-The cleanup program can remove only explicit, old image IDs that match all four identity conditions
-and are not used by any container. It prunes only the named Lumina builder. It never removes a
-container, network or volume and never runs `docker system prune`, `docker image prune`,
-`docker volume prune`, or a `--volumes` prune. PostgreSQL volumes, backups, uploads, HunterAI,
-Temporal and other project resources are outside its candidate model.
+## Host provisioning
 
-## 8. Release deployment
+Provision Ubuntu with Docker Engine, Compose, Buildx, Caddy, Git, and Node 24 only for the
+deployment controller. Do not install/run PostgreSQL or CRM Web/Worker with host systemd.
 
-After one-time host, systemd, environment, database-role, and Caddy provisioning, the release
-controller performs repeatable one-command deployments. Before the first real run, use its
-non-mutating configuration check:
+```text
+/opt/lumina-crm/source                    checked-out kewtgh/crm main
+/etc/lumina-crm/deploy.env                non-secret deployment settings
+/etc/lumina-crm/origin.env                Caddy origin hostname/secret
+/etc/lumina-crm/secrets/                  root-owned Compose secret sources
+/var/lib/lumina-crm/deployments/          accepted image/deployment state
+/var/lib/lumina-crm/docker-config/        Lumina-only Buildx configuration
+/var/lib/lumina-crm/storage-maintenance/  builder ownership/cleanup state
+/var/log/lumina-crm/                      deployment/maintenance logs
+```
 
-```bash
-npm run deploy:production:dry-run
+Install the reviewed systemd, sudoers, Caddy, BuildKit, and maintenance assets from `deploy/`.
+`lumina-crm.service` invokes only fixed Compose startup/reload commands. Backup/restore timers invoke
+only their fixed Lumina Compose task. The deploy service holds
+`/var/lib/lumina-crm/deploy.lock`.
+
+Ensure the pinned PostgreSQL 18.4 image is present, then create the three explicit external volumes:
+
+```sh
+docker pull postgres:18.4-bookworm
+sudo -u lumina-crm /opt/lumina-crm/source/deploy/scripts/provision-volumes.sh
+```
+
+The script verifies exact labels before adopting an existing volume and refuses foreign volumes.
+It uses that pinned image with `--network none`, no secrets, and only `CHOWN` capability to make
+the objects and encrypted-backup volume roots writable by runtime UID/GID 10001. It never mounts
+or changes the PostgreSQL volume in that helper. Never replace the PostgreSQL volume during update
+or rollback.
+
+Install each `deploy/*.env.example` secret template as its basename without `.example` under
+`/etc/lumina-crm/secrets`, root-owned and mode `0640`. Install the PostgreSQL password alone at:
+
+```text
+/etc/lumina-crm/secrets/postgres-superuser-password.txt
+```
+
+Compose mounts the files under `/run/secrets`; the entrypoint exports only the selected file to its
+child process. Secret values are not placed in Compose YAML or image build arguments.
+
+Run the storage prepare unit once. It verifies host/Docker/state capacity and creates or verifies
+only the marked `lumina-crm-buildkit` builder:
+
+```sh
+sudo systemctl start lumina-crm-storage-prepare.service
+sudo systemctl status lumina-crm-storage-prepare.service
+```
+
+## Credential boundaries
+
+| File / consumer | Database identity and other secrets |
+| --- | --- |
+| `production.env` / Web | `crm_app`, `crm_system`, auth and object-signing secrets |
+| `worker.env` / Worker | `crm_worker`, delivery/integration and object-store credentials |
+| `database-bootstrap.env` | PostgreSQL administrator plus five role passwords |
+| `migration.env` | `crm_migrator` only |
+| `bootstrap-admin.env` | `crm_system` plus one-shot CRM admin input |
+| `backup.env` | read-only `crm_backup`, encryption/off-host credentials |
+| `restore.env` | restore administrator plus encryption key |
+| Cloudflare Worker | `ORIGIN_AUTH_SECRET` only |
+| Caddy | matching origin secret and two distinct hostnames |
+
+Web/Worker reject migration, backup, restore, and database-administrator variables. Backup rejects
+every write-capable database URL. No normal runtime service receives migration, backup, or
+PostgreSQL administrator credentials.
+
+All containers clear uppercase/lowercase proxy variables and set `NO_PROXY` for `postgres` and
+local services. The deploy runner tries one direct Git fetch. Only after failure may its single
+retry receive `LUMINA_GIT_FALLBACK_PROXY`; it never writes Git proxy configuration.
+
+## First database start
+
+Validate every profile without starting anything:
+
+```sh
+docker compose --project-name lumina-crm --profile ops \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml config
+```
+
+After provisioning the immutable images/state file, start PostgreSQL and run:
+
+```sh
+docker compose --project-name lumina-crm \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml up -d postgres
+
+docker compose --project-name lumina-crm --profile ops \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml run --rm db-bootstrap
+docker compose --project-name lumina-crm --profile ops \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml run --rm migration-verify
+docker compose --project-name lumina-crm --profile ops \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml run --rm migrate
+docker compose --project-name lumina-crm --profile ops \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml run --rm bootstrap-admin
+```
+
+`db-bootstrap` is repeat-safe but rotates role passwords to supplied values. It provisions
+`pgcrypto`, `citext`, and `pg_stat_statements` in the `extensions` schema; it does not migrate.
+`migrate` retains the advisory lock, SHA-256 checksums,
+modified-applied-migration rejection, one transaction per migration, lock/statement timeouts, and
+forward-only policy. Web/Worker never migrate at startup. Remove the one-shot CRM administrator
+password after successful bootstrap.
+
+The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
+`lumina-crm-rt-*` projects and remove only their exact resources:
+
+```powershell
+.\scripts\test-compose-database-integration.ps1
+.\scripts\test-compose-runtime-integration.ps1 `
+  -ApplicationImage lumina-crm-validation:3.7.0 `
+  -OperationsImage lumina-crm-ops-validation:3.7.0
+```
+
+They are local integration tests, not production deployment commands.
+
+## Worker operation and health
+
+The Compose-managed Worker loop verifies `service_schema_version()` before each cycle, acquires the
+session advisory lock `lumina-crm-worker-cycle`, and runs enabled categories in parallel. Existing
+lease tokens, per-category bounded concurrency, heartbeat/queue state, idempotency, retry/backoff,
+four-minute cycle limit, and 210-second external budget remain unchanged. Another cycle cannot
+overlap while the advisory lock is held.
+
+Worker health queries the real schema version, database readiness, required heartbeat freshness,
+and failed/stuck queue counts. A live Node process alone is not healthy.
+
+## Cloudflare Worker and origin gateway
+
+See `deploy/cloudflare-worker/README.md` and `deploy/caddy/Caddyfile`. Configure public
+`crm.ewaya.com`, a distinct origin URL/hostname, and the same independent origin secret in
+Cloudflare secret storage and Caddy's protected environment.
+
+The Worker rejects hostname loops, removes client forwarding/internal-auth headers, injects the
+secret, forwards method/query/body/content headers/Cookie/Set-Cookie/status, and forces `no-store`.
+Caddy rejects a wrong/missing secret, reconstructs trusted proxy headers, and proxies only to
+`127.0.0.1:3200`. Both layers reject detailed readiness; public monitoring uses only `/api/health`.
+Cloudflare Access does not replace CRM login, MFA, CAPTCHA, rate limiting, or trusted-device logic.
+
+```sh
+LUMINA_ORIGIN_URL=https://distinct-origin.example.com npm run cloudflare:config:verify
+npm run cloudflare:test
+```
+
+Worker deployment, DNS, Caddy, and production secrets are separate production actions.
+
+## Image deployment and rollback
+
+```sh
 npm run deploy:production
 npm run deploy:production:status
 npm run deploy:production:logs
+npm run deploy:production:rollback
+npm run deploy:production:dry-run
 ```
 
-The dry run checks the v3 runtime-role split, migration role, Local/S3 storage configuration,
-runtime/deployment secret boundary, persistent object-store sandbox permissions, lock location,
-loopback listener, reviewed install scripts, disk policy, fixed root storage entrypoint, BuildKit
-limits, Docker command allowlist and stable controller commands.
-
-The persistent runner:
+The persistent runner performs:
 
 ```text
-exclusive lock
--> root/Docker/release disk gate and isolated BuildKit verification
--> git pull --ff-only
--> exact commit and clean-tree validation
--> dependency install
--> type/lint/contract checks
--> production build
--> migration verification and locked migration
--> immutable release manifest
--> atomic current symlink switch
--> Web restart and Worker run
--> loopback liveness/readiness
--> public HTTPS health
--> persist applicationAccepted and rollback release
--> project-only release, image and BuildKit cleanup
--> final success
+exclusive Lumina lock
+-> capacity gate and isolated builder verification
+-> exact clean main/origin verification and one fetch
+-> containerized type/lint/contracts plus commit-tagged app/ops builds
+-> PostgreSQL health
+-> migration manifest verification and locked forward migration
+-> save accepted/rollback images
+-> Compose up Web/Worker (never down)
+-> independent PostgreSQL/Web/Worker health
+-> loopback detailed readiness
+-> Cloudflare public and authenticated origin liveness
+-> persist accepted state
+-> Lumina-only cleanup
 ```
 
-Only the single Git pull may use the configured loopback proxy. No build, migration, runtime,
-Worker, backup or health process inherits it.
+Pre-switch failure leaves Web/Worker unchanged. Post-switch failure restores previous app/ops
+images and rechecks locally. It never reverses migration and reports: “Application rolled back;
+database remains on the forward schema.” Each migration must remain compatible with the rollback
+application until acceptance. Cleanup starts only after acceptance; cleanup failure is a warning.
+Accepted state is persisted first so interruption can resume finalization safely.
 
-Cleanup begins only after every health check succeeds. It retains current, the recorded previous
-rollback release and five recent successful manifests; it removes older successes and failed build
-residue older than 24 hours. The maintenance reports record every candidate/result, estimated
-deleted bytes, BuildKit prune output and disk usage before/after under
-`/var/lib/lumina-crm/storage-maintenance` and `/var/log/lumina-crm/storage-maintenance`.
+## Daily status, logs, and health
 
-Cleanup failures are warnings after application acceptance: they do not stop or roll back the
-healthy Web/Worker release. An interrupted runner also recognizes the persisted accepted state and
-finishes cleanup/finalization without treating it as a failed cutover.
-
-If failure occurs before cutover, the active release is unchanged. If application validation fails
-after cutover, the runner restores and verifies the previous application release. A forward
-database migration is not automatically reversed; every migration must remain compatible with the
-previous application until the release is accepted.
-
-## 9. Clean cutover from the test system
-
-No business-data migration is required. Use this sequence:
-
-1. deploy the new empty PostgreSQL database and v3 application in pre-production;
-2. run migration, authentication, Worker and object-storage smoke checks;
-3. complete one encrypted backup and one real restore verification;
-4. stop writes to the old test deployment;
-5. create the production administrator and required staff accounts;
-6. switch the domain to Caddy on the new deployment;
-7. verify login, TOTP, CRUD, imports, exports, Worker heartbeats and backup notification;
-8. keep the old project read-only only as a short rollback reference, then delete it through its
-   provider console after the retention decision.
-
-Do not copy test sessions, password hashes, TOTP secrets, tokens or storage URLs into production.
-
-## 10. Incident checks
-
-```bash
+```sh
+docker compose --project-name lumina-crm \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml ps
+docker compose --project-name lumina-crm \
+  --env-file /var/lib/lumina-crm/deployments/compose.env \
+  -f /opt/lumina-crm/source/compose.production.yml logs --tail=200 web worker postgres
 curl -fsS http://127.0.0.1:3200/api/health
-curl -fsS http://127.0.0.1:3200/api/health?mode=ready
-sudo systemctl status postgresql lumina-crm.service lumina-crm-workers.timer
-sudo journalctl -u postgresql -u lumina-crm.service -u lumina-crm-workers.service -n 200 --no-pager
-sudo systemctl status lumina-crm-storage-prepare.service lumina-crm-storage-cleanup.service
-sudo journalctl -u lumina-crm-storage-prepare.service -u lumina-crm-storage-cleanup.service -n 200 --no-pager
-sudo cat /var/lib/lumina-crm/storage-maintenance/latest.json
+curl -fsS 'http://127.0.0.1:3200/api/health?mode=ready'
+curl -fsS https://crm.ewaya.com/api/health
 ```
 
-Readiness returns separate environment, authentication, database, Worker and queue reason codes.
-It is intentionally available only through loopback; public monitoring must use the minimal
-`/api/health` liveness response. Correct the reported component; do not hide a database failure
-behind a generic Web 200.
+Detailed loopback readiness independently reports Web environment, auth schema, database, Worker
+heartbeats, and queues. A live Web with failed database is not ready. Public acceptance traverses
+the Cloudflare Worker.
+
+## Backup, object storage, reboot, and diagnosis
+
+See `docs/BACKUP_RESTORE.md`. Backup uses `crm_backup`, custom-format pg_dump, and AES-256-GCM before
+local persistence/upload. Local-object mode also encrypts an archive of the external objects
+volume. Runtime and backup S3 bucket/account/prefix authorization must be independent. Remote
+lifecycle is provider-managed. Images/releases never contain or delete object bytes.
+
+PostgreSQL, Web, and Worker use `restart: unless-stopped`. Docker restores them after reboot; Web
+and Worker wait for PostgreSQL health, and Worker refuses consumption until migrations are current.
+External volumes retain data. Backup/restore timers still call fixed Compose tasks. Validate reboot
+behavior only with an isolated test project/container recreation, never by rebooting development or
+production during repository testing.
+
+Diagnose only exact Lumina resources:
+
+```sh
+systemctl status lumina-crm-deploy.service lumina-crm-backup.timer lumina-crm-restore-test.timer
+journalctl -u lumina-crm-deploy.service -n 200 --no-pager
+```
+
+Do not print secret files, use `docker inspect` to read secrets, or paste full database URLs into
+logs/tickets. Report variable names, component status, image commit, and redacted error codes.

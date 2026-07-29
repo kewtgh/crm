@@ -1,5 +1,8 @@
 # Lumina Education CRM v2.3.0 补充整改最终复审
 
+> **Archived / obsolete production architecture:** this point-in-time review predates the v3.7
+> Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.
+
 - 复审日期：2026-07-24
 - 输入：`SUPPLEMENTAL_AUDIT_2026-07-24_V2.3.0.md`、
   `SUPPLEMENTAL_REMEDIATION_PLAN_2026-07-24_V2.3.0.md`
@@ -67,4 +70,3 @@ readiness 200 为准。
 
 外部剩余事项仅包括生产 secrets、Supabase link/备份、systemd unit 首次安装、邮件模板、
 Worker 心跳和目标服务器 readiness；这些不能在本地伪造为已上线。
-

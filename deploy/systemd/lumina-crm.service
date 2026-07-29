@@ -1,27 +1,26 @@
 [Unit]
-Description=Lumina Education CRM web application
-After=network-online.target
+Description=Lumina CRM isolated Docker Compose application
+Requires=docker.service
+After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=lumina-crm
 Group=lumina-crm
-WorkingDirectory=/opt/lumina-crm/current
-EnvironmentFile=/etc/lumina-crm/production.env
-Environment=NODE_ENV=production
-UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY RSYNC_PROXY http_proxy https_proxy all_proxy no_proxy ftp_proxy rsync_proxy LUMINA_HTTPS_PROXY NODE_OPTIONS NODE_USE_ENV_PROXY GIT_PROXY_COMMAND NPM_CONFIG_PROXY NPM_CONFIG_HTTPS_PROXY NPM_CONFIG_NOPROXY GLOBAL_AGENT_HTTP_PROXY GLOBAL_AGENT_HTTPS_PROXY GLOBAL_AGENT_NO_PROXY
-ExecStart=/usr/bin/npm run start -- --port 3200 --hostname 127.0.0.1
-Restart=on-failure
-RestartSec=5s
-TimeoutStartSec=90s
+WorkingDirectory=/opt/lumina-crm/source
+EnvironmentFile=/etc/lumina-crm/deploy.env
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy NODE_OPTIONS
+ExecStart=/usr/bin/docker compose --project-name lumina-crm --env-file /var/lib/lumina-crm/deployments/compose.env -f /opt/lumina-crm/source/compose.production.yml up -d postgres web worker
+ExecReload=/usr/bin/docker compose --project-name lumina-crm --env-file /var/lib/lumina-crm/deployments/compose.env -f /opt/lumina-crm/source/compose.production.yml up -d --no-deps web worker
+RemainAfterExit=yes
+TimeoutStartSec=5min
 TimeoutStopSec=30s
-KillMode=mixed
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=read-only
 ProtectSystem=strict
-ReadWritePaths=/var/lib/lumina-crm/objects
+ReadWritePaths=/var/lib/lumina-crm
 
 [Install]
 WantedBy=multi-user.target

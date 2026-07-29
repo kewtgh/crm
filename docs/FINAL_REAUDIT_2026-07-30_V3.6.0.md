@@ -1,5 +1,8 @@
 # Lumina CRM v3.6.0 部署存储最终复审
 
+> **Archived / obsolete production architecture:** this v3.6 host-release review is retained only
+> as historical evidence. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 复审日期：2026-07-30
 输入：`DEPLOYMENT_STORAGE_AUDIT_2026-07-30_V3.6.0.md` 与
 `DEPLOYMENT_STORAGE_REMEDIATION_PLAN_2026-07-30_V3.6.0.md`

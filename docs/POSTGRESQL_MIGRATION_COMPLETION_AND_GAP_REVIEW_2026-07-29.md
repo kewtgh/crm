@@ -1,5 +1,8 @@
 # PostgreSQL migration completion and final gap review
 
+> **Archived / obsolete production architecture:** this point-in-time review describes the retired
+> host PostgreSQL/Node deployment. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 - Date: 2026-07-29
 - Release: 3.0.0
 - Audit: `SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md`

@@ -1,5 +1,8 @@
 # Lumina Education CRM v2.3.0 最终遗漏复审
 
+> **Archived / obsolete production architecture:** this point-in-time review predates the v3.7
+> Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.
+
 - 复审日期：2026-07-23
 - 输入：`AUDIT_2026-07-23_V2.2.1.md`、`REMEDIATION_PLAN_2026-07-23_V2.3.0.md`
 - 结论：计划无遗漏、无未完成实现；完整发布门禁通过

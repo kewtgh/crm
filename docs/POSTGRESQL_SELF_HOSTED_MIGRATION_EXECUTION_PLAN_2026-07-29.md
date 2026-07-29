@@ -1,5 +1,8 @@
 # 本机 PostgreSQL 完整重构与迁移执行计划
 
+> **Archived / obsolete production architecture:** this plan describes the retired host
+> PostgreSQL/Node deployment. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 - 日期：2026-07-29
 - 输入审计：`docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md`
 - 数据假设：现有生产数据库为测试数据，可销毁并从空库重建

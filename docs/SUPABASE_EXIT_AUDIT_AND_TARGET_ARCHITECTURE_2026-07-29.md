@@ -1,5 +1,8 @@
 # Supabase 退出审计与本机 PostgreSQL 目标架构
 
+> **Archived / obsolete production architecture:** this document describes the retired host
+> PostgreSQL/Node target. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 - 日期：2026-07-29
 - 范围：当前 `main`（应用版本 2.9.1）
 - 目标：CRM Web、Worker 与 PostgreSQL 部署在同一台 VPS，解除 Supabase 平台依赖

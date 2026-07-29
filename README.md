@@ -1,16 +1,16 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.6.0**
+Current release candidate: **v3.7.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.6 adds a deployment-time storage gate for root, Docker and release filesystems; an
-independently owned Lumina BuildKit builder; and post-health project-only release/image/cache
-cleanup with complete evidence. Current, rollback and recent successful releases remain protected,
-and cleanup failures cannot roll back a healthy production version. The deployment runner still
-has no Docker socket or arbitrary Docker CLI access.
+Version 3.7 moves production to the fixed, isolated `lumina-crm` Docker Compose project. PostgreSQL,
+Web, Worker, migrations, encrypted backup/restore, commit-tagged image release, application-only
+rollback, and Lumina-only cleanup now have explicit container and credential boundaries. A
+Cloudflare Worker fronts a distinct authenticated Caddy origin; HunterAI and Temporal resources are
+never shared or managed by Lumina.
 
 Version 3.5 closed the organization-wide business-date architecture gate. Each workspace now has a
 constrained, audited business timezone that administrators can change only with AAL2; user and
@@ -20,15 +20,15 @@ Escape, overlay, close or cancel controls; legacy timestamps use personal displa
 the task priority queue reports when its 12-item summary is truncated and links to the full list.
 Administrators can also switch Cloudflare Turnstile off for constrained networks; sign-in, SSO and
 password recovery then enforce the self-hosted ALTCHA verifier instead of bypassing CAPTCHA.
-The runtime remains designed for one VPS:
+The production runtime remains designed for one shared VPS:
 
 ```text
-Caddy :443
-  -> Web / API :3200
-     -> application services and database gateway
-        -> PostgreSQL 127.0.0.1:5432
-  -> systemd Worker timer
-  -> encrypted backup and restore-test timers
+crm.ewaya.com
+  -> Cloudflare Worker
+     -> distinct Lumina origin hostname
+        -> authenticated host Caddy gateway
+           -> 127.0.0.1:3200
+              -> Compose Web / Worker / private PostgreSQL
 ```
 
 The application has no managed-platform SDK or API dependency. It uses separate application,
@@ -40,7 +40,8 @@ set by the application.
 
 Files are stored through a local-persistent/S3-compatible abstraction. PostgreSQL migrations are
 ordered, checksummed, protected by an advisory lock and kept under `db/migrations`. Production
-PostgreSQL listens only on loopback. Daily encrypted backups go to an independent object store;
+PostgreSQL publishes no host port and joins only the internal Lumina backend. Daily encrypted
+backups go to an independent object store;
 monthly restore verification creates and destroys only a uniquely named temporary database.
 
 ## Local development
@@ -102,24 +103,22 @@ phase relevant to a scoped change, or the staged matrix when preparing an author
 On an initialized Linux VPS, the persistent deployment runner performs:
 
 ```text
-root/Docker/release capacity gate
+root/Docker/state capacity gate
 -> isolated Lumina BuildKit verification
-git pull --ff-only
--> npm install
--> checks
--> build
--> checksummed PostgreSQL migration
--> atomic release switch
--> Web/Worker restart
--> liveness/readiness/public health
--> persist accepted/rollback releases
--> Lumina-only release/image/BuildKit cleanup
-failure before acceptance -> application rollback
+-> one exact Git fetch and fast-forward
+-> containerized checks and commit-tagged app/ops images
+-> migration verification and locked forward migration
+-> Compose Web/Worker image switch
+-> independent PostgreSQL/Web/Worker health
+-> loopback readiness and Cloudflare/origin liveness
+-> persist accepted/rollback images
+-> Lumina-only image/BuildKit cleanup
+post-switch failure -> application-image rollback; database stays forward
 ```
 
-Only the Git pull may receive the configured loopback proxy. Database, build, Web, Worker, backup
-and health processes use direct connections. The database migration is forward-only; application
-rollback never claims to reverse an already applied Schema migration.
+Only one retry after a failed direct Git fetch may receive the temporary configured proxy. It is
+never persisted. Containers clear proxy variables. Database migration is forward-only; application
+rollback never claims to reverse an applied schema migration.
 
 ```bash
 npm run deploy:production:dry-run
@@ -129,13 +128,12 @@ npm run deploy:production:logs
 npm run deploy:production:rollback
 ```
 
-See the [deployment and recovery runbook](docs/DEPLOYMENT.md), the
-[v3.6 storage audit](docs/DEPLOYMENT_STORAGE_AUDIT_2026-07-30_V3.6.0.md), its
-[executed remediation plan](docs/DEPLOYMENT_STORAGE_REMEDIATION_PLAN_2026-07-30_V3.6.0.md), and the
-[final re-audit](docs/FINAL_REAUDIT_2026-07-30_V3.6.0.md). The PostgreSQL transition history remains
+See the current [deployment runbook](docs/DEPLOYMENT.md),
+[backup/restore runbook](docs/BACKUP_RESTORE.md), [rollback runbook](docs/ROLLBACK.md), and
+[implementation status](docs/IMPLEMENTATION_STATUS.md). Versioned v3.6 and earlier deployment audits
+are historical/obsolete for production provisioning. The PostgreSQL transition history remains
 in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-07-29.md) and
 [completion and gap review](docs/POSTGRESQL_MIGRATION_COMPLETION_AND_GAP_REVIEW_2026-07-29.md).
-The concise current state is in [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Health
 

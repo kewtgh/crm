@@ -61,11 +61,12 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
     .sort();
   assert.ok(migrationNames.length >= 73);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607300068_workspace_turnstile_policy.sql");
-  const [migrator, verifier, finalMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
+  assert.equal(migrationNames.at(-1), "202607300069_container_runtime_boundary.sql");
+  const [migrator, verifier, containerMigration, turnstileMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
     readFile(repositoryFile(`db/migrations/${migrationNames.at(-1)}`), "utf8"),
+    readFile(repositoryFile("db/migrations/202607300068_workspace_turnstile_policy.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300065_workspace_business_timezone.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300066_worker_business_timezone_permissions.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300067_business_date_text_contract.sql"), "utf8"),
@@ -83,8 +84,10 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   assert.match(authMigration, /app_auth\.password_credentials/);
   assert.match(authMigration, /app_auth\.sessions/);
   assert.match(authMigration, /app_auth\.totp_factors/);
-  assert.match(finalMigration, /turnstile_enabled/);
-  assert.match(finalMigration, /WORKSPACE_TURNSTILE_POLICY_CHANGED/);
+  assert.match(containerMigration, /service_schema_version/);
+  assert.match(containerMigration, /pg_stat_statements/);
+  assert.match(turnstileMigration, /turnstile_enabled/);
+  assert.match(turnstileMigration, /WORKSPACE_TURNSTILE_POLICY_CHANGED/);
   assert.match(businessTimezoneMigration, /set_workspace_business_timezone/);
   assert.match(workerPermissionMigration, /to crm_worker/);
   assert.match(businessDateMigration, /YYYY-MM-DD/);
@@ -148,22 +151,21 @@ test("runs Workers through the low-privilege PostgreSQL role and heartbeat contr
   assert.match(heartbeat, /record_worker_heartbeat/);
 });
 
-test("deploys standard database migrations with a lock and without runtime proxy inheritance", async () => {
-  const [runner, core, releaseGate, deployEnvironment] = await Promise.all([
+test("deploys standard database migrations with a lock and isolated Compose credentials", async () => {
+  const [runner, migrator, releaseGate, deployEnvironment, migrationEnvironment] = await Promise.all([
     readFile(repositoryFile("scripts/deploy-production-runner.mjs"), "utf8"),
-    readFile(repositoryFile("scripts/lib/production-deploy-core.mjs"), "utf8"),
+    readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/release-gate.mjs"), "utf8"),
     readFile(repositoryFile("deploy/deploy.env.example"), "utf8"),
+    readFile(repositoryFile("deploy/migration.env.example"), "utf8"),
   ]);
-  assert.match(runner, /db:migrations:verify/);
-  assert.match(runner, /db:migrate/);
-  assert.match(runner, /validateMigrationEnvironment/);
-  assert.match(core, /MIGRATION_DATABASE_URL/);
-  assert.match(core, /crm_migrator/);
-  assert.match(core, /directRuntimeEnvironment/);
+  assert.match(runner, /verify migration manifest/);
+  assert.match(runner, /apply locked forward migration/);
+  assert.match(migrator, /pg_advisory_lock/);
+  assert.match(migrator, /checksum/);
+  assert.match(migrationEnvironment, /MIGRATION_DATABASE_URL=.*crm_migrator/);
   assert.match(releaseGate, /db:smoke/);
-  assert.match(deployEnvironment, /DATABASE_ADMIN_URL/);
-  assert.match(deployEnvironment, /BACKUP_DATABASE_URL/);
+  assert.doesNotMatch(deployEnvironment, /DATABASE_ADMIN_URL|BACKUP_DATABASE_URL/);
 });
 
 test("provides encrypted off-host backup and destructive restore-test isolation", async () => {
