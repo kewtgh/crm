@@ -1,4 +1,4 @@
-# Lumina CRM v3.2 — PostgreSQL deployment and recovery runbook
+# Lumina CRM v3.3 — PostgreSQL deployment and recovery runbook
 
 This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
 share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.

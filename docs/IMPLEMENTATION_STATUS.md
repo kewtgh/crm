@@ -1,4 +1,4 @@
-# Implementation status — v3.2.0 release candidate
+# Implementation status — v3.3.0 release candidate
 
 Status date: 2026-07-29
 
@@ -35,12 +35,19 @@ retries, use a synchronous operation lock, send a stable provider idempotency he
 provider timeout below the browser budget. The inbox now reports total/truncated metadata and the UI
 surfaces the 100-thread display cap without the former duplicate search icon.
 
+v3.3.0 removes that fixed-snapshot boundary. Communication thread creation now has a per-user
+request key and normalized SHA-256 payload fingerprint. Message enqueue returns bounded delivery
+ownership, so successful, failed and active short-window replays do not call the provider again.
+The inbox loads a real page of thread summaries and the selected thread loads an independent page of
+messages, with accessible pagination for both. Write-side refreshes preserve the current search,
+page size and selected thread.
+
 ## Repository completion
 
 | Area | Result |
 | --- | --- |
 | Platform dependency exit | Complete; historical source retained only under `archive/supabase` |
-| PostgreSQL schema | 68 ordered, checksummed migrations; advisory lock and idempotent rerun |
+| PostgreSQL schema | 69 ordered, checksummed migrations; advisory lock and idempotent rerun |
 | Database integrity | Valid foreign keys and indexes; duplicate identities and orphan relations checked |
 | Data access | `pg`/Kysely pools and transaction authorization context for app/system/Worker |
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
@@ -48,29 +55,29 @@ surfaces the 100-thread display cap without the former duplicate search icon.
 | Workers | Six processors use `crm_worker`; enabled processors report heartbeat and queue state |
 | Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
 | Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
-| Documentation | v3.2.0 audit, executed plan, deployment/recovery runbook and final re-audit |
+| Documentation | v3.3.0 audit, executed plan, deployment/recovery runbook and final re-audit |
 
 ## Verification record
 
 | Gate | Result |
 | --- | --- |
-| Migration chain / forward apply | Pass; 68 checksummed migrations, with 063 applied locally |
+| Migration chain / forward apply | Pass; 69 checksummed migrations, with 064 applied locally |
 | Integrity validation | Pass; no invalid constraints/indexes, duplicate identities or orphan relations |
 | Business schema contracts | Pass for phase 2, v0.9 and v1.1 |
 | Worker cycle | Pass; 4/4 enabled processors healthy |
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
-| Database integration | Pass; 68 migrations, 96 public tables, Auth/session/TOTP/RLS, atomic profile rollback, appointment idempotency and inbox capacity metadata |
+| Database integration | Pass; 69 migrations, 96 public tables, Auth/session/TOTP/RLS, atomic profile rollback, appointment and communication idempotency, delivery ownership and two-level pagination |
 | TypeScript / ESLint | Pass |
-| Production build | Pass; v3.2.0 final source produced all application/API routes |
-| Node contracts | Pass; 28/28 core/version and 5/5 CAPTCHA contracts |
+| Production build | Pass; v3.3.0 final source produced all application/API routes |
+| Node contracts | Pass; 31/31 core/version and 5/5 CAPTCHA contracts |
 | Deployment contracts | Pass; 19/19 release, rollback, readiness, role and storage boundary contracts |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
-| Affected Chromium flow | Pass; Chromium 1228 phase `02-manager-core-a`, 13 page/viewports, 0 errors/warnings, identity 1/1 cleaned |
+| Affected Chromium flow | Pass; v3.3.0 Chromium 1228 phase `02-manager-core-a`, 13 page/viewports, 0 errors/warnings, identity 1/1 cleaned |
 
-The v3.2.0 plan limits browser verification to the directly affected calendar and messages surfaces
-using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser evidence are recorded
-in the v3.2.0 re-audit.
+The v3.3.0 plan limits browser verification to the directly affected messages surface and its shared
+core phase using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser evidence
+are recorded in the v3.3.0 re-audit.
 
 ## External production gates
 

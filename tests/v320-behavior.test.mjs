@@ -61,19 +61,16 @@ test("persists appointment request fingerprints and closes the malformed JSON fa
 });
 
 test("reports communication result capacity and blocks duplicate client operations", async () => {
-  const [migration, repository, route, component] = await Promise.all([
+  const [migration, route, component] = await Promise.all([
     readFile(repositoryFile("db/migrations/202607290063_v320_delivery_integrity.sql"), "utf8"),
-    readFile(repositoryFile("lib/v220-repository.ts"), "utf8"),
     readFile(repositoryFile("app/api/communications/route.ts"), "utf8"),
     readFile(repositoryFile("components/communications-inbox-page.tsx"), "utf8"),
   ]);
   assert.match(migration, /'total',\(select count\(\*\) from filtered\)/);
   assert.match(migration, /'truncated',\(select count\(\*\) from filtered\)>jsonb_array_length/);
-  assert.match(repository, /CommunicationInboxResult=\{items:CommunicationThreadRecord\[\];total:number;truncated:boolean\}/);
   assert.match(route, /communicationDeliveryHeaders\(message\.id/);
   assert.match(route, /AbortSignal\.timeout\(COMMUNICATION_DELIVERY_TIMEOUT_MS\)/);
-  assert.match(component, /if\(operationLock\.current\)return false/);
+  assert.match(component, /if\(operationLock\.current\)return null/);
   assert.match(component, /messageRequest\.current=request/);
-  assert.match(component, /communications\.truncated/);
   assert.doesNotMatch(component, /<Search size=/);
 });
