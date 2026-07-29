@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -18,9 +18,9 @@
     "build:raw": "vinext build",
     "start": "vinext start",
     "test": "node scripts/run-bounded.mjs --label test --timeout-seconds 360 --idle-seconds 120 -- npm run test:raw",
-    "test:raw": "npm run build:raw && node --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/production-deploy.test.mjs tests/root-redirect.test.mjs tests/v290-behavior.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
+    "test:raw": "npm run build:raw && node --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/production-deploy.test.mjs tests/root-redirect.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:contracts": "node scripts/run-bounded.mjs --label contracts --timeout-seconds 120 --idle-seconds 60 -- npm run test:contracts:raw",
-    "test:contracts:raw": "node --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
+    "test:contracts:raw": "node --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
     "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs",
     "typecheck": "node scripts/run-bounded.mjs --label typecheck --timeout-seconds 120 --idle-seconds 60 -- npm run typecheck:raw",

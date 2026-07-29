@@ -11,6 +11,15 @@ export type ApiRequestObservabilityEvent = {
   errorCode?: string;
 };
 
+export type ApiRequestFailureEvent = {
+  name: "api.request.failed";
+  requestId: string;
+  method: string;
+  route: string;
+  errorType: string;
+  errorCode: string;
+};
+
 export type CaptchaObservabilityEvent = {
   name: "captcha.verification";
   provider: "turnstile" | "altcha";
@@ -20,7 +29,10 @@ export type CaptchaObservabilityEvent = {
   durationMs: number;
 };
 
-export type ObservabilityEvent = ApiRequestObservabilityEvent | CaptchaObservabilityEvent;
+export type ObservabilityEvent =
+  | ApiRequestObservabilityEvent
+  | ApiRequestFailureEvent
+  | CaptchaObservabilityEvent;
 
 function enabled(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
@@ -41,9 +53,10 @@ export async function emitObservabilityEvent(event: ObservabilityEvent) {
   };
   // This allow-listed envelope never includes request bodies, query strings,
   // cookies, account identifiers, or business-record content.
-  const alwaysLog = event.name === "api.request.completed"
-    ? event.status >= 500
-    : event.result !== "success";
+  const alwaysLog = event.name === "api.request.failed"
+    || (event.name === "api.request.completed"
+      ? event.status >= 500
+      : event.result !== "success");
   if (alwaysLog || Math.random() <= sampleRate()) {
     console.info(`[observability] ${JSON.stringify(envelope)}`);
   }

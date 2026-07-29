@@ -30,12 +30,14 @@ import {
   cleanupFailedRelease,
   collectSecretValues,
   directRuntimeEnvironment,
+  DEPLOY_ENV_ALLOWED_KEYS,
   githubPullArguments,
   makeDeploymentId,
   makeReleaseId,
   parseEnvironmentText,
   parseSystemdProperties,
   planInterruptedRecovery,
+  PRODUCTION_LOCAL_OBJECT_ROOT,
   PRODUCTION_LOCAL_URL,
   PRODUCTION_PUBLIC_URL,
   redactSecrets,
@@ -44,8 +46,9 @@ import {
   selectReleasesForCleanup,
   validateEnvironmentFileMetadata,
   validateEnvironmentKeyPolicy,
+  validateMigrationEnvironment,
+  validateProductionRuntimeEnvironment,
   validateDirectoryMetadata,
-  validateRequiredEnvironment,
 } from "./lib/production-deploy-core.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -322,70 +325,14 @@ function loadEnvironments() {
   assertProxyFreeEnvironment(process.env, "Deployment runner systemd environment");
   const production = loadEnvironmentFile(productionEnvPath, "production.env");
   const deploy = loadEnvironmentFile(deployEnvPath, "deploy.env");
-  validateEnvironmentKeyPolicy(production, {
-    label: "production.env",
-    forbidden: [
-      /^(?:PATH|HOME|USER|LOGNAME|SHELL|NODE_OPTIONS|NODE_ENV|CI|TMPDIR|TMP|TEMP|XDG_CACHE_HOME|SSH_AUTH_SOCK)$/i,
-      /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY|GIT_PROXY_COMMAND|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
-      /^(?:DATABASE_ADMIN_URL|MIGRATION_DATABASE_URL|CRM_(?:APP|SYSTEM|WORKER|MIGRATOR|BACKUP)_DB_PASSWORD|BACKUP_.+|DISK_.+)$/i,
-    ],
-  });
+  validateProductionRuntimeEnvironment(production);
   validateEnvironmentKeyPolicy(deploy, {
     label: "deploy.env",
-    allowed: [
-      "DATABASE_ADMIN_URL",
-      "MIGRATION_DATABASE_URL",
-      "CRM_APP_DB_PASSWORD",
-      "CRM_SYSTEM_DB_PASSWORD",
-      "CRM_WORKER_DB_PASSWORD",
-      "CRM_MIGRATOR_DB_PASSWORD",
-      "CRM_BACKUP_DB_PASSWORD",
-      "BACKUP_DATABASE_URL",
-      "BACKUP_LOCAL_ROOT",
-      "BACKUP_ENCRYPTION_KEY",
-      "BACKUP_RETENTION_DAYS",
-      "BACKUP_S3_ENDPOINT",
-      "BACKUP_S3_REGION",
-      "BACKUP_S3_BUCKET",
-      "BACKUP_S3_ACCESS_KEY_ID",
-      "BACKUP_S3_SECRET_ACCESS_KEY",
-      "BACKUP_NOTIFICATION_WEBHOOK_URL",
-      "BACKUP_NOTIFICATION_WEBHOOK_TOKEN",
-      "DISK_MONITOR_PATHS",
-      "DISK_FREE_PERCENT_THRESHOLD",
-      "DISK_NOTIFICATION_WEBHOOK_URL",
-      "DISK_NOTIFICATION_WEBHOOK_TOKEN",
-    ],
+    allowed: DEPLOY_ENV_ALLOWED_KEYS,
   });
-  validateRequiredEnvironment(production, {
-    label: "production.env",
-    required: [
-      "APP_URL",
-      "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
-      "TURNSTILE_SECRET_KEY",
-      "TURNSTILE_EXPECTED_HOSTNAME",
-      "ALTCHA_HMAC_SECRET",
-      "DATABASE_URL",
-      "SYSTEM_DATABASE_URL",
-      "WORKER_DATABASE_URL",
-      "CRM_WORKSPACE_ID",
-      "LOGIN_THROTTLE_HASH_SECRET",
-      "TRUSTED_DEVICE_HASH_SECRET",
-      "TOTP_ENCRYPTION_KEY",
-      "OBJECT_STORAGE_PROVIDER",
-      "OBJECT_STORAGE_SIGNING_SECRET",
-      "EMAIL_DELIVERY_WEBHOOK_URL",
-      "EMAIL_DELIVERY_WEBHOOK_TOKEN",
-    ],
-    exact: {
-      APP_URL: PRODUCTION_PUBLIC_URL,
-      TURNSTILE_EXPECTED_HOSTNAME: "crm.ewaya.com",
-    },
-  });
-  validateRequiredEnvironment(deploy, {
-    label: "deploy.env",
-    required: ["MIGRATION_DATABASE_URL"],
-  });
+  validateMigrationEnvironment(deploy);
+  mkdirSync(PRODUCTION_LOCAL_OBJECT_ROOT, { recursive: true, mode: 0o750 });
+  assertRealDirectory(PRODUCTION_LOCAL_OBJECT_ROOT, "Persistent object storage sandbox directory");
   secretValues = collectSecretValues(production, deploy);
   log("INFO", "Validated production.env and deploy.env names, ownership, permissions, and required keys; values are redacted");
   return { production, deploy };

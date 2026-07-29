@@ -320,7 +320,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     <a className="skip-link" href="#main-content">{t("nav.skipContent")}</a>
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
       {mobileOpen && <button className="mobile-overlay" onClick={closeMobile} aria-label={t("nav.close")} />}
-      <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")}>
+      <aside ref={sidebarRef} id="main-navigation" className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label={t("nav.main")} role={mobileOpen?"dialog":undefined} aria-modal={mobileOpen||undefined}>
         <div className="sidebar-header">
           <Link href="/dashboard" className="brand-lockup inverse" onClick={closeMobile} aria-label={t("brand.name")}>
             <span className="brand-logo-surface">

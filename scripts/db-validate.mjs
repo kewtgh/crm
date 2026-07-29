@@ -1,4 +1,5 @@
 import pg from "pg";
+import { readdir } from "node:fs/promises";
 
 const connectionString = process.env.SYSTEM_DATABASE_URL?.trim();
 if (!connectionString) throw new Error("SYSTEM_DATABASE_URL_NOT_CONFIGURED");
@@ -6,6 +7,8 @@ const client = new pg.Client({
   connectionString,
   application_name: "lumina-database-validation",
 });
+const expectedMigrationCount = (await readdir(new URL("../db/migrations/", import.meta.url)))
+  .filter((name) => name.endsWith(".sql")).length;
 
 await client.connect();
 try {
@@ -83,7 +86,7 @@ try {
   if (expectedRoles.size) {
     throw new Error(`DATABASE_ROLES_MISSING:${[...expectedRoles].join(",")}`);
   }
-  if (Number(migrations.rows[0]?.count) !== 65) {
+  if (Number(migrations.rows[0]?.count) !== expectedMigrationCount) {
     throw new Error(`MIGRATION_COUNT_MISMATCH:${migrations.rows[0]?.count}`);
   }
   if (invalidConstraints.rowCount) {

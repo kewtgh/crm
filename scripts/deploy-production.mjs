@@ -285,6 +285,9 @@ function dryRun() {
     serviceUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-deploy.service"), "utf8"),
     sudoers: readFileSync(path.join(sourceRoot, "deploy", "sudoers", "lumina-crm-deploy"), "utf8"),
     webUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm.service"), "utf8"),
+    workerUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-workers.service"), "utf8"),
+    productionEnvironment: readFileSync(path.join(sourceRoot, "deploy", "production.env.example"), "utf8"),
+    deploymentEnvironment: readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8"),
     runner: readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8"),
     packageJson,
   });

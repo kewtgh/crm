@@ -1,4 +1,4 @@
-# Lumina CRM v3.0 — PostgreSQL deployment and recovery runbook
+# Lumina CRM v3.1 — PostgreSQL deployment and recovery runbook
 
 This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
 share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.
@@ -82,7 +82,9 @@ The administrator must replace the temporary password, enroll TOTP and retain re
 
 ## 4. Runtime configuration
 
-Install `/etc/lumina-crm/production.env` as `root:lumina-crm` mode `0640`. Start with `.env.example`.
+Install `/etc/lumina-crm/production.env` as `root:lumina-crm` mode `0640`. Start with
+`deploy/production.env.example`; `.env.example` also contains bootstrap and deployment-only
+settings and must not be copied into the runtime environment.
 At minimum configure:
 
 - canonical HTTPS `APP_URL` and CAPTCHA keys;
@@ -91,16 +93,28 @@ At minimum configure:
 - local persistent or S3-compatible object storage;
 - delivery endpoint used for verification, reset and device codes.
 
-The application role must not receive system, migration or backup credentials. The migration and
-backup URLs belong only in `/etc/lumina-crm/deploy.env`.
+The deployment preflight enforces the dedicated `crm_app`, `crm_system`, `crm_worker`, and
+`crm_migrator` URL usernames. The application role must not receive system, migration or backup
+credentials. Bootstrap administrator settings and the migration, administration, backup, and host
+monitoring settings belong outside `production.env`; deployment and backup settings belong in
+`/etc/lumina-crm/deploy.env`.
 
 `crm_backup` is the sole non-superuser RLS bypass exception. It receives read-only grants and cannot
 write, create databases, create roles or replicate. Never use it in Web, API, Worker or reporting
 runtime code.
 
-For local persistent objects use an absolute path such as `/var/lib/lumina-crm/objects` and include
-it in off-host backup. For S3-compatible storage, give the runtime a bucket prefix scoped to CRM
-objects; use a separate account and bucket for database backups.
+For the reviewed local-storage profile, use `/var/lib/lumina-crm/objects` and include it in
+off-host backup. The deployment runner creates and verifies this real sandbox directory for both
+providers (it remains empty in S3 mode); the Web and Worker systemd sandboxes grant write access
+only to this persistent root. During initial host provisioning, create it before the first Web start:
+
+```bash
+sudo install -d -o lumina-crm -g lumina-crm -m 0750 /var/lib/lumina-crm/objects
+```
+
+For S3-compatible storage, configure every `S3_*` field shown in the runtime template and give the
+runtime a bucket prefix scoped to CRM objects; use a separate account and bucket for database
+backups.
 
 ## 5. Caddy and systemd
 
@@ -180,7 +194,9 @@ readiness and Worker heartbeats in the same alerting system.
 
 ## 8. Release deployment
 
-After a clean-commit pre-production check:
+After one-time host, systemd, environment, database-role, and Caddy provisioning, the release
+controller performs repeatable one-command deployments. Before the first real run, use its
+non-mutating configuration check:
 
 ```bash
 npm run deploy:production:dry-run
@@ -188,6 +204,10 @@ npm run deploy:production
 npm run deploy:production:status
 npm run deploy:production:logs
 ```
+
+The dry run checks the v3 runtime-role split, migration role, Local/S3 storage configuration,
+runtime/deployment secret boundary, persistent object-store sandbox permissions, lock location,
+loopback listener, reviewed install scripts, and stable controller commands.
 
 The persistent runner:
 
@@ -240,4 +260,6 @@ sudo journalctl -u postgresql -u lumina-crm.service -u lumina-crm-workers.servic
 ```
 
 Readiness returns separate environment, authentication, database, Worker and queue reason codes.
-Correct the reported component; do not hide a database failure behind a generic Web 200.
+It is intentionally available only through loopback; public monitoring must use the minimal
+`/api/health` liveness response. Correct the reported component; do not hide a database failure
+behind a generic Web 200.

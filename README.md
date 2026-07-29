@@ -1,13 +1,14 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.0.0**
+Current release candidate: **v3.1.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.0 moves the complete runtime to a standard, self-managed PostgreSQL architecture designed
-for one VPS:
+Version 3.1 keeps the self-managed PostgreSQL architecture introduced in v3.0 and closes integrity,
+privacy and high-density workflow gaps in imports, profile/avatar updates, readiness diagnostics and
+the calendar. The runtime remains designed for one VPS:
 
 ```text
 Caddy :443
@@ -115,8 +116,9 @@ The concise current state is in [implementation status](docs/IMPLEMENTATION_STAT
 ## Health
 
 - `GET /api/health` checks Web process liveness and release version.
-- `GET /api/health?mode=ready` reports environment, authentication schema, database, Worker and
-  queue status independently with stable reason codes.
+- `GET /api/health?mode=ready` is loopback-only and reports environment, authentication schema,
+  database, Worker and queue status independently with stable reason codes for local deployment
+  probes. Public requests receive only the minimal liveness endpoint.
 
 External providers remain disabled until genuine credentials and data-processing approval are
 supplied. The UI does not present a simulated provider connection, delivery, Worker heartbeat,

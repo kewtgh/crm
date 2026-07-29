@@ -59,13 +59,14 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   const migrationNames = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.ok(migrationNames.length >= 65);
+  assert.ok(migrationNames.length >= 67);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607290060_backup_role_privileges.sql");
-  const [migrator, verifier, finalMigration] = await Promise.all([
+  assert.equal(migrationNames.at(-1), "202607290062_v310_profile_rls_repair.sql");
+  const [migrator, verifier, finalMigration, backupMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
     readFile(repositoryFile(`db/migrations/${migrationNames.at(-1)}`), "utf8"),
+    readFile(repositoryFile("db/migrations/202607290060_backup_role_privileges.sql"), "utf8"),
   ]);
   assert.match(migrator, /pg_advisory_lock/);
   assert.match(migrator, /checksum/);
@@ -77,7 +78,8 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   assert.match(authMigration, /app_auth\.password_credentials/);
   assert.match(authMigration, /app_auth\.sessions/);
   assert.match(authMigration, /app_auth\.totp_factors/);
-  assert.match(finalMigration, /crm_backup/);
+  assert.match(finalMigration, /users and administrators read profiles/);
+  assert.match(backupMigration, /crm_backup/);
 });
 
 test("uses Argon2id, opaque server sessions, encrypted TOTP, and replay protection", async () => {
@@ -143,7 +145,9 @@ test("deploys standard database migrations with a lock and without runtime proxy
   ]);
   assert.match(runner, /db:migrations:verify/);
   assert.match(runner, /db:migrate/);
-  assert.match(runner, /MIGRATION_DATABASE_URL/);
+  assert.match(runner, /validateMigrationEnvironment/);
+  assert.match(core, /MIGRATION_DATABASE_URL/);
+  assert.match(core, /crm_migrator/);
   assert.match(core, /directRuntimeEnvironment/);
   assert.match(releaseGate, /db:smoke/);
   assert.match(deployEnvironment, /DATABASE_ADMIN_URL/);

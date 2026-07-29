@@ -428,7 +428,7 @@ async function main(){
         const secret=(await page.locator(".mfa-enrollment code").textContent())?.trim();
         if(!secret)report.errors.push({kind:"mfa",url:"/settings/security",message:"MFA enrollment did not expose the manual secret"});
         else{
-          const{qaTotp}=await import("./lib/qa-auth.mjs");
+          const{qaTotp}=await import("./lib/qa-totp.mjs");
           await page.getByLabel("6 位验证码").fill(qaTotp(secret));
           const verificationResponse=page.waitForResponse(response=>response.url().includes("/api/settings/mfa")&&response.request().method()==="POST",{timeout:8_000});
           await page.getByRole("button",{name:"验证并启用 MFA"}).click();

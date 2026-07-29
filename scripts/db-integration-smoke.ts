@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { readdir } from "node:fs/promises";
 import {
   authenticateAccount,
   createAccount,
@@ -26,6 +27,8 @@ const fixtureId = randomUUID();
 const identifier = `db-smoke-${fixtureId}@invalid.local`;
 const username = `db.smoke.${fixtureId.replaceAll("-", "").slice(0, 20)}`;
 const password = `Sm0ke!${randomBytes(24).toString("base64url")}`;
+const expectedMigrationCount = (await readdir(new URL("../db/migrations/", import.meta.url)))
+  .filter((name) => name.endsWith(".sql")).length;
 let fixtureUserId: string | null = null;
 
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -72,7 +75,7 @@ try {
       (select count(*)::text from pg_class c join pg_namespace n on n.oid=c.relnamespace
        where n.nspname='public' and c.relkind='r' and c.relrowsecurity) as rls_tables`,
   );
-  assert.equal(Number(schema.rows[0]?.migrations), 65);
+  assert.equal(Number(schema.rows[0]?.migrations), expectedMigrationCount);
   assert.ok(Number(schema.rows[0]?.tables) >= 96);
   assert.ok(Number(schema.rows[0]?.rls_tables) >= 96);
 
@@ -105,25 +108,64 @@ try {
   assert.equal(await verifyTotp(identity.id, factor.id, code), false, "TOTP replay was accepted");
   assert.equal(await deleteTotpFactor(identity.id, factor.id), true);
 
-  const role = await withDatabaseContext(
-    {
-      kind: "user",
-      authorization: {
-        userId: identity.id,
-        workspaceId: identity.workspaceId,
-        role: identity.role,
-        aal: "aal2",
-      },
+  const userContext = {
+    kind: "user" as const,
+    authorization: {
+      userId: identity.id,
+      workspaceId: identity.workspaceId,
+      role: identity.role,
+      aal: "aal2" as const,
     },
+  };
+  const profile = await withDatabaseContext(
+    userContext,
     async (client) => {
-      const result = await client.query<{ role: string; workspace_id: string }>(
-        "select public.current_crm_role() as role, public.current_workspace_id() as workspace_id",
+      const context = await client.query<{ user_id: string | null; profile_visible: boolean }>(
+        `select app_auth.current_user_id() as user_id,
+                exists(
+                  select 1 from public.user_profiles
+                  where user_id=app_auth.current_user_id()
+                ) as profile_visible`,
+      );
+      assert.equal(context.rows[0]?.user_id, identity.id);
+      assert.equal(context.rows[0]?.profile_visible, true);
+      await client.query(
+        "select public.update_own_profile($1,$2,$3,$4)",
+        ["资料原子更新", "Atomic Profile", "Dr.", "Committed together"],
+      );
+      const result = await client.query<{
+        role: string;
+        workspace_id: string;
+        display_name_zh: string;
+        bio: string;
+      }>(
+        `select public.current_crm_role() as role,
+                public.current_workspace_id() as workspace_id,
+                profile.display_name_zh,
+                preferences.bio
+         from public.user_profiles profile
+         join public.user_preferences preferences on preferences.user_id=profile.user_id
+         where profile.user_id=app_auth.current_user_id()`,
       );
       return result.rows[0];
     },
   );
-  assert.equal(role.role, "SUPER_ADMIN");
-  assert.equal(role.workspace_id, identity.workspaceId);
+  assert.equal(profile.role, "SUPER_ADMIN");
+  assert.equal(profile.workspace_id, identity.workspaceId);
+  assert.equal(profile.display_name_zh, "资料原子更新");
+  assert.equal(profile.bio, "Committed together");
+  await assert.rejects(
+    withDatabaseContext(userContext, (client) => client.query(
+      "select public.update_own_profile($1,$2,$3,$4)",
+      ["不应保留", "Must Roll Back", "Dr.", null],
+    )),
+  );
+  const rolledBackProfile = await withDatabaseContext(userContext, async (client) => (
+    await client.query<{ display_name_zh: string }>(
+      "select display_name_zh from public.user_profiles where user_id=app_auth.current_user_id()",
+    )
+  ).rows[0]);
+  assert.equal(rolledBackProfile.display_name_zh, "资料原子更新");
   const changedPassword = `Changed!${randomBytes(24).toString("base64url")}`;
   await updateAccountPassword(identity.id, changedPassword, {
     clearMustChange: true,
@@ -133,7 +175,7 @@ try {
   assert.equal((await authenticateAccount(identifier, changedPassword))?.id, identity.id);
   process.stdout.write(
     `[db:smoke] ${schema.rows[0].migrations} migrations, ${schema.rows[0].tables} tables, `
-    + "Argon2id/session/TOTP/RLS context verified.\n",
+    + "Argon2id/session/TOTP/RLS/atomic-profile context verified.\n",
   );
 } finally {
   if (fixtureUserId) {

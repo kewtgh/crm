@@ -66,11 +66,16 @@ export async function loadUserSettings(user: AppUser): Promise<UserSettings> {
   };
 }
 
-export async function updateProfile(userId: string, input: Pick<UserSettings, "displayNameZh" | "displayNameEn" | "honorific" | "bio">) {
-  await Promise.all([
-    databaseJson(`/db/table/user_profiles?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ display_name_zh: input.displayNameZh, display_name_en: input.displayNameEn, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
-    databaseJson(`/db/table/user_preferences?user_id=eq.${userId}`, { method: "PATCH", body: JSON.stringify({ honorific: input.honorific, bio: input.bio, updated_at: new Date().toISOString() }), headers: { Prefer: "return=minimal" } }),
-  ]);
+export async function updateProfile(input: Pick<UserSettings, "displayNameZh" | "displayNameEn" | "honorific" | "bio">) {
+  await databaseJson<boolean>("/db/rpc/update_own_profile", {
+    method: "POST",
+    body: JSON.stringify({
+      target_display_name_zh: input.displayNameZh,
+      target_display_name_en: input.displayNameEn,
+      target_honorific: input.honorific,
+      target_bio: input.bio,
+    }),
+  });
 }
 
 export async function updateAccount(userId: string, input: Pick<UserSettings, "locale" | "timezone" | "dateFormat">) {

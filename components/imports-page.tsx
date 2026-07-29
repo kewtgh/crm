@@ -11,6 +11,11 @@ import { useUserPreferences } from "@/components/user-preferences-context";
 import { CsvParseError, parseCsvDocument } from "@/lib/csv";
 import { parseXlsxDocument } from "@/lib/xlsx";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import {
+  IMPORT_EXECUTION_BATCH_SIZE,
+  importExecutionPassLimit,
+  isImportExecutionTerminal,
+} from "@/lib/import-execution";
 
 const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
 type RelatedSearchItem={value:string;labelZh:string;labelEn:string;type:string};
@@ -55,6 +60,7 @@ export function ImportsPage({
     invalid: number; unresolved: number; canExecute: boolean;
   } | null>(null);
   const [pending, setPending] = useState(false);
+  const [executionProgress,setExecutionProgress]=useState<{processed:number;total:number}|null>(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [mergeResource, setMergeResource] = useState<"CONTACTS" | "ORGANIZATIONS">("CONTACTS");
@@ -106,6 +112,9 @@ export function ImportsPage({
 
   const open = async (id: string, nextRowPage = 1, nextRowPageSize = rowPageSize) => {
     setSelected(id);
+    setRows([]);
+    setRowTotal(0);
+    setDryRun(null);
     const request=await runRowLoad(signal=>Promise.all([
       apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}&rowPageSize=${nextRowPageSize}`,{signal}),
       apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`,{signal}),
@@ -226,6 +235,7 @@ export function ImportsPage({
     if (!selected) return;
     setPending(true);
     setError("");
+    setExecutionProgress(null);
     let preflightResult: { summary: NonNullable<typeof dryRun> };
     try {
       preflightResult = await apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${selected}/dry-run`);
@@ -242,14 +252,22 @@ export function ImportsPage({
     }
     setDryRun(preflightResult.summary);
     let status = "PROCESSING";
-    for (let index = 0; index < 12 && status === "PROCESSING"; index += 1) {
+    let latest = current;
+    const passLimit = importExecutionPassLimit(current?.total ?? 0);
+    for (let index = 0; index < passLimit && status === "PROCESSING"; index += 1) {
       try {
         const result = await apiFetch<{ item: ImportBatchRecord }>("/api/imports", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ operation: "process", target_batch: selected, batch_size: 50 }),
+          body: JSON.stringify({ operation: "process", target_batch: selected, batch_size: IMPORT_EXECUTION_BATCH_SIZE }),
         });
+        latest = result.item;
         status = result.item.status;
+        setExecutionProgress({
+          processed: result.item.applied + result.item.failed,
+          total: result.item.total,
+        });
+        setBatches((items)=>items.map((item)=>item.id===result.item.id?result.item:item));
       } catch {
         setError(t("imports.executeFailed"));
         setPending(false);
@@ -259,7 +277,11 @@ export function ImportsPage({
     setPending(false);
     await loadBatches();
     await open(selected, Math.min(rowPage, rowPages));
-    setToast(t("imports.executed"));
+    if (latest && isImportExecutionTerminal(latest.status)) {
+      setToast(t("imports.executed"));
+    } else {
+      setError(t("imports.executionIncomplete"));
+    }
   };
 
   const rollback = async () => {
@@ -397,6 +419,7 @@ export function ImportsPage({
       <div className="surface import-rows">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.rowsEyebrow")}</p><h2>{current ? current.filename : t("imports.selectBatch")}</h2></div>{current && <StatusBadge tone="blue">{t(`imports.status.${current.status.toLowerCase()}`)}</StatusBadge>}</div>
         {current && dryRun && <div className={`import-dry-run ${dryRun.canExecute ? "ready" : "blocked"}`}><SearchCheck size={20}/><div><b>{t("imports.dryRun")}</b><small>{t("imports.dryRunHelp", { create: dryRun.create, update: dryRun.update, merge: dryRun.merge, skip: dryRun.skip, invalid: dryRun.invalid, unresolved: dryRun.unresolved })}</small></div><StatusBadge tone={dryRun.canExecute ? "green" : "amber"}>{t(dryRun.canExecute ? "imports.dryRunReady" : "imports.dryRunBlocked")}</StatusBadge></div>}
+        {current && pending && executionProgress && <InlineMessage type="info">{t("imports.executionProgress",{processed:executionProgress.processed,total:executionProgress.total})}</InlineMessage>}
         {rows.map((row) => <article className="import-row" key={row.id}>
           <span>#{row.rowNumber}</span>
           <div>
