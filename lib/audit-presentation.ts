@@ -11,7 +11,8 @@ const auditWords = {
     CLAIMED: "已绑定", STAGED: "已预配", DEPROVISIONED: "已停用", CONTRACT: "合同",
     QUOTE: "报价", PAYMENT: "付款", REFUND: "退款", EXPORT: "导出", APPROVAL: "审批",
     TASK: "任务", DEVICE: "设备", INTEGRATION: "集成", PROFILE: "个人资料",
-    MEMBERSHIP: "成员关系",
+    MEMBERSHIP: "成员关系", WORKSPACE: "工作区", BUSINESS: "业务", TIMEZONE: "时区",
+    TURNSTILE: "Turnstile", POLICY: "策略", CHANGED: "已更改",
   },
   en: {
     INSERT: "Created", CREATE: "Create", CREATED: "Created", UPDATE: "Updated", UPDATED: "Updated",
@@ -24,6 +25,8 @@ const auditWords = {
     STAGED: "staged", DEPROVISIONED: "deprovisioned", CONTRACT: "contract", QUOTE: "quote",
     PAYMENT: "payment", REFUND: "refund", EXPORT: "export", APPROVAL: "approval", TASK: "task",
     DEVICE: "device", INTEGRATION: "integration", PROFILE: "profile", MEMBERSHIP: "membership",
+    WORKSPACE: "workspace", BUSINESS: "business", TIMEZONE: "timezone", TURNSTILE: "Turnstile",
+    POLICY: "policy", CHANGED: "changed",
   },
 } as const satisfies Record<Locale, Record<string, string>>;
 
@@ -46,6 +49,7 @@ const auditEntities = {
     LEADS: "线索",
     PRODUCTS: "产品与服务",
     MFARECOVERYCODES: "二次验证恢复码",
+    WORKSPACE: "工作区",
   },
   en: {
     USERPREFERENCES: "User preferences",
@@ -65,6 +69,7 @@ const auditEntities = {
     LEADS: "Leads",
     PRODUCTS: "Products and services",
     MFARECOVERYCODES: "MFA recovery codes",
+    WORKSPACE: "Workspace",
   },
 } as const satisfies Record<Locale, Record<string, string>>;
 

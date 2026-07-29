@@ -35,7 +35,11 @@ async function post(request: Request) {
   const captcha = await verifyCaptchaProof(parsed.data.captchaProof, request, "staff_login");
   if (!captcha.ok) {
     await recordLoginFailure(identity);
-    throw new ApiError(captcha.code, captcha.status, captcha.code, { field: "captcha" });
+    throw new ApiError(captcha.code, captcha.status, captcha.code, {
+      field: "captcha",
+      provider: parsed.data.captchaProof.provider,
+      ...(captcha.fallbackReason ? { fallbackReason: captcha.fallbackReason } : {}),
+    });
   }
 
   const state = await createEnterpriseSsoState(email);

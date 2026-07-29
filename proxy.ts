@@ -22,6 +22,7 @@ export function proxy(request: NextRequest) {
     `img-src 'self' data: blob:${objectStorageOrigin ? ` ${objectStorageOrigin}` : ""}`,
     `connect-src 'self'${objectStorageOrigin ? ` ${objectStorageOrigin}` : ""} https://challenges.cloudflare.com${development ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
     "frame-src https://challenges.cloudflare.com",
+    "worker-src 'self' blob:",
     "font-src 'self' data:",
     ...(secureAppOrigin ? ["upgrade-insecure-requests"] : []),
   ].join("; ");

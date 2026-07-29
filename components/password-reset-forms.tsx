@@ -9,7 +9,7 @@ import type { CaptchaFallbackReason, CaptchaProof } from "@/lib/captcha-types";
 import { passwordValueSchema } from "@/lib/validation";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
-export function PasswordResetRequestForm() {
+export function PasswordResetRequestForm({turnstileEnabled=true}:{turnstileEnabled?:boolean}) {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +39,7 @@ export function PasswordResetRequestForm() {
       if (!response.ok){
         const keys:Record<string,string>={INVALID_EMAIL:"auth.error.invalidEmail",AUTH_NOT_CONFIGURED:"auth.error.notConfigured",AUTH_UNAVAILABLE:"auth.error.unavailable",TOO_MANY_ATTEMPTS:"auth.error.rateLimited",CAPTCHA_REQUIRED:"auth.error.captchaRequired",CAPTCHA_INVALID:"auth.error.captchaFailed",CAPTCHA_REPLAYED:"auth.error.captchaExpired",CAPTCHA_NOT_CONFIGURED:"auth.error.captchaUnavailable",TURNSTILE_REQUIRED:"auth.error.captchaRequired",TURNSTILE_FAILED:"auth.error.turnstileFailed",TURNSTILE_UNAVAILABLE:"auth.error.turnstileUnavailable",TURNSTILE_NOT_CONFIGURED:"auth.turnstile.notConfigured"};
         const fallback=result.error?.details?.fallbackReason;
-        if(fallback==="service_unavailable"||fallback==="not_configured"){
+        if(fallback==="service_unavailable"||fallback==="not_configured"||fallback==="administrator_disabled"){
           setCaptchaProof(null);
           setCaptchaFallbackReason(fallback);
           setCaptchaFallbackSignal(value=>value+1);
@@ -60,7 +60,7 @@ export function PasswordResetRequestForm() {
   return <form className="auth-form" onSubmit={submit} noValidate>
     <div className="auth-form-heading"><p className="eyebrow">{t("eyebrow.accountRecovery")}</p><h1>{t("auth.reset.title")}</h1><p>{t("auth.reset.requestDescription")}</p></div>
     <label className="field"><span>{t("auth.email")}</span><input type="email" name="email" autoComplete="email" required /></label>
-    <CaptchaWidget action="password_recovery" onProof={handleCaptchaProof} resetKey={captchaResetKey} fallbackSignal={captchaFallbackSignal} fallbackReason={captchaFallbackReason}/>
+    <CaptchaWidget action="password_recovery" onProof={handleCaptchaProof} resetKey={captchaResetKey} fallbackSignal={captchaFallbackSignal} fallbackReason={captchaFallbackReason} turnstileEnabled={turnstileEnabled}/>
     {error && <div className="form-message error" role="alert"><LockKeyhole size={17} /><span>{error}</span></div>}
     {success && <div className="form-message success" role="status"><Check size={17} /><span>{success}</span></div>}
     <button className="primary-button auth-submit" type="submit" disabled={pending || Boolean(success)}>{pending && <LoaderCircle className="spin" size={18} />}{t("auth.reset.send")}</button>

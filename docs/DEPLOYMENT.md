@@ -1,4 +1,4 @@
-# Lumina CRM v3.4 — PostgreSQL deployment and recovery runbook
+# Lumina CRM v3.5 — PostgreSQL deployment and recovery runbook
 
 This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
 share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.
@@ -70,6 +70,19 @@ npm run db:migrate
 `db:bootstrap` creates or rotates only the named database roles. `db:migrate` takes a PostgreSQL
 advisory lock, stores SHA-256 checksums in `app_meta.schema_migrations`, rejects modified applied
 migrations and commits one migration at a time.
+
+Migration `202607300065_workspace_business_timezone.sql` adds the constrained workspace business
+timezone (default `Asia/Taipei`) and its audited administrator RPC; migration `066` adds only the
+Worker permissions required to read that setting, and `067` fixes the date-only RPC as a stable
+`YYYY-MM-DD` text contract across JSON boundaries. Migration `068` adds the audited workspace
+Turnstile policy. After applying them, verify both organization controls with an AAL2 administrator.
+User transactions and workspace-scoped Worker transactions set PostgreSQL `TimeZone` locally; do
+not replace this with a host-global timezone.
+
+Turnstile is enabled by default. When an administrator disables it, login, SSO and password recovery
+must render and verify the self-hosted ALTCHA challenge; the switch never disables CAPTCHA. Keep
+`ALTCHA_HMAC_SECRET` configured in every mode. Cloudflare One identity/email access controls are a
+separate layer and do not replace the CAPTCHA, rate-limit, MFA or trusted-device controls.
 
 Create the first administrator with a strong one-time password supplied through the protected
 environment:

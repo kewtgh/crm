@@ -247,12 +247,14 @@ export function AccessibleDrawer({
   title,
   eyebrow,
   description,
+  pending = false,
   onClose,
   children,
 }: {
   title: string;
   eyebrow?: string;
   description?: string;
+  pending?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -263,9 +265,11 @@ export function AccessibleDrawer({
   const closeRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const pendingRef = useRef(pending);
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    pendingRef.current = pending;
+  }, [onClose, pending]);
   useEffect(() => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
@@ -277,7 +281,7 @@ export function AccessibleDrawer({
       (preferred ?? closeRef.current)?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !pendingRef.current) {
         event.preventDefault();
         onCloseRef.current();
         return;
@@ -310,12 +314,13 @@ export function AccessibleDrawer({
     };
   }, []);
   return <>
-    <button className="drawer-overlay" type="button" aria-label={t("common.close")} onClick={onClose}/>
+    <button className="drawer-overlay" type="button" aria-label={t("common.close")} disabled={pending} onClick={onClose}/>
     <aside
       ref={drawerRef}
       className="record-drawer"
       role="dialog"
       aria-modal="true"
+      aria-busy={pending}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
     >
@@ -325,7 +330,7 @@ export function AccessibleDrawer({
           <h2 id={titleId}>{title}</h2>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
-        <button ref={closeRef} className="icon-button" type="button" aria-label={t("common.close")} onClick={onClose}><X size={20}/></button>
+        <button ref={closeRef} className="icon-button" type="button" disabled={pending} aria-label={t("common.close")} onClick={onClose}><X size={20}/></button>
       </div>
       {children}
     </aside>

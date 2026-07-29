@@ -23,6 +23,7 @@ const fallbackMessageKeys: Record<CaptchaFallbackReason, string> = {
   token_expired: "auth.captcha.fallback.expired",
   service_unavailable: "auth.captcha.fallback.service",
   not_configured: "auth.captcha.fallback.notConfigured",
+  administrator_disabled: "auth.captcha.fallback.administratorDisabled",
 };
 
 function AltchaProviderWidget({
@@ -121,6 +122,7 @@ export function CaptchaWidget({
   error,
   fallbackSignal = 0,
   fallbackReason = "service_unavailable",
+  turnstileEnabled = true,
 }: {
   action?: CaptchaAction;
   onProof: (proof: CaptchaProof | null) => void;
@@ -128,10 +130,15 @@ export function CaptchaWidget({
   error?: string;
   fallbackSignal?: number;
   fallbackReason?: CaptchaFallbackReason;
+  turnstileEnabled?: boolean;
 }) {
   const { locale, t } = useI18n();
   const errorId = `${useId().replace(/:/g, "")}-error`;
-  const [providerState, setProviderState] = useState<CaptchaProviderState>({ provider: "turnstile" });
+  const [providerState, setProviderState] = useState<CaptchaProviderState>(
+    turnstileEnabled
+      ? { provider: "turnstile" }
+      : { provider: "altcha", fallbackReason: "administrator_disabled" },
+  );
 
   const useFallback = useCallback((event: TurnstileFailureEvent) => {
     onProof(null);

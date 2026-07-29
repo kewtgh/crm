@@ -443,6 +443,48 @@ async function main(){
         }
         process.stdout.write("[QA] pass MFA QR, recovery-code enrollment and copy feedback\n");
       }
+      if(env.QA_VALIDATE_TURNSTILE_POLICY==="1"){
+        await page.setViewportSize({width:1440,height:900});
+        await page.goto(`${base}/admin/workspace`,{waitUntil:"networkidle"});
+        const turnstileToggle=page.getByRole("checkbox",{name:"Cloudflare Turnstile"});
+        await turnstileToggle.waitFor({state:"visible",timeout:8_000});
+        const originallyEnabled=await turnstileToggle.isChecked();
+        let changed=false;
+        try{
+          if(originallyEnabled){
+            await turnstileToggle.uncheck();
+            const securityForm=page.locator(".workspace-security-setting").locator("..");
+            const responsePromise=page.waitForResponse(response=>response.url().includes("/api/admin/workspace")&&response.request().method()==="PATCH",{timeout:8_000});
+            await securityForm.getByRole("button",{name:"保存"}).click();
+            const response=await responsePromise;
+            if(!response.ok())throw new Error(`Turnstile disable returned ${response.status()}`);
+            changed=true;
+          }
+          const publicContext=await browser.newContext({locale:"zh-CN"});
+          try{
+            const publicPage=await publicContext.newPage();observe(publicPage);publicPage.setDefaultTimeout(actionTimeoutMs);
+            await publicPage.goto(`${base}/login`,{waitUntil:"networkidle"});
+            await publicPage.locator('[data-captcha-provider="altcha"]').waitFor({state:"visible",timeout:8_000});
+            if(await publicPage.locator('[data-captcha-provider="turnstile"]').count()){
+              report.errors.push({kind:"captcha-policy",url:"/login",message:"Turnstile remained mounted while the workspace policy disabled it"});
+            }
+          }finally{
+            await publicContext.close();
+          }
+        }finally{
+          if(changed){
+            await page.goto(`${base}/admin/workspace`,{waitUntil:"networkidle"});
+            const restoreToggle=page.getByRole("checkbox",{name:"Cloudflare Turnstile"});
+            await restoreToggle.check();
+            const restoreForm=page.locator(".workspace-security-setting").locator("..");
+            const restoreResponsePromise=page.waitForResponse(response=>response.url().includes("/api/admin/workspace")&&response.request().method()==="PATCH",{timeout:8_000});
+            await restoreForm.getByRole("button",{name:"保存"}).click();
+            const restoreResponse=await restoreResponsePromise;
+            if(!restoreResponse.ok())throw new Error(`Turnstile restore returned ${restoreResponse.status()}`);
+          }
+        }
+        process.stdout.write("[QA] pass audited Turnstile-to-ALTCHA policy and state restoration\n");
+      }
       await context.close();
     }else if(env.QA_SCOPE==="notification"){
       const identity=await createIdentity("SALES_MANAGER","notification");identities.push(identity);
@@ -604,6 +646,7 @@ async function main(){
     for(const identity of identities){
       try{
         await cleanupV210Scenario(identity,scenarios.get(identity.id));
+        await qaQuery("update public.audit_events set actor_id=null where actor_id=$1",[identity.id]);
         await qaQuery("delete from app_auth.accounts where id=$1",[identity.id]);
         report.identity.cleaned+=1;
       }catch(error){

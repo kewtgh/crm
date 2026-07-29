@@ -47,6 +47,11 @@ export function dateTimePartsFor(value: Date, timezone: SupportedTimezone | "UTC
   };
 }
 
+export function dateKeyFor(value: Date, timezone: SupportedTimezone) {
+  const parts = dateTimePartsFor(value, timezone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 export function localDateTimeKey(value: Date, timezone: SupportedTimezone) {
   const parts = dateTimePartsFor(value, timezone);
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;

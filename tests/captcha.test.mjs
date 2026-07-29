@@ -90,13 +90,31 @@ test("fails closed and requests local fallback when Turnstile is unreachable", a
     { provider: "turnstile", token: "turnstile-token" },
     request(),
     "staff_login",
-    { turnstileFetch: async () => { throw new Error("network unavailable"); } },
+    {
+      turnstileEnabled: true,
+      turnstileFetch: async () => { throw new Error("network unavailable"); },
+    },
   );
   assert.deepEqual(result, {
     ok: false,
     code: "TURNSTILE_UNAVAILABLE",
     status: 503,
     fallbackReason: "service_unavailable",
+  });
+});
+
+test("rejects stale Turnstile proofs when administrators enforce ALTCHA", async () => {
+  const result = await verifyCaptchaProof(
+    { provider: "turnstile", token: "turnstile-token" },
+    request(),
+    "staff_login",
+    { turnstileEnabled: false },
+  );
+  assert.deepEqual(result, {
+    ok: false,
+    code: "TURNSTILE_DISABLED",
+    status: 400,
+    fallbackReason: "administrator_disabled",
   });
 });
 

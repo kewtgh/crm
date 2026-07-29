@@ -17,6 +17,7 @@ import type {
   CommunicationInboxResult,
   CommunicationThreadRecord,
 } from "@/lib/v220-repository";
+import { useUserPreferences } from "./user-preferences-context";
 
 const communicationPurposes=["SERVICE","TRANSACTIONAL","EVENT","MARKETING"] as const;
 type OperationResult={operation:"thread"|"send"|"inbound"|"retry";threadId:string;messageId?:string};
@@ -29,6 +30,7 @@ export function CommunicationsInboxPage({
   initialThread:CommunicationThreadRecord|null;
 }){
   const{locale,t}=useI18n();
+  const{formatDate}=useUserPreferences();
   const[inbox,setInbox]=useState(initial);
   const[selectedId,setSelectedId]=useState(initialThread?.id??initial.items[0]?.id??"");
   const[thread,setThread]=useState(initialThread);
@@ -254,7 +256,7 @@ export function CommunicationsInboxPage({
           <header><div><h2>{thread.subject}</h2><p>{locale==="zh-CN"?thread.contactZh:thread.contactEn} · {thread.email} · {t(`communications.purpose.${thread.purpose.toLowerCase()}`)}</p></div></header>
           <div className="communication-messages">{thread.messages.map(message=><div className={message.direction.toLowerCase()} key={message.id}>
             <p>{message.body}</p>
-            <small>{new Date(message.createdAt).toLocaleString(locale)} · {t(`communications.delivery.${message.deliveryStatus.toLowerCase()}`)} · {t("communications.attempts")} {message.attemptCount}{message.lastError?` · ${message.lastError}`:""}</small>
+            <small>{formatDate(message.createdAt,{includeTime:true})} · {t(`communications.delivery.${message.deliveryStatus.toLowerCase()}`)} · {t("communications.attempts")} {message.attemptCount}{message.lastError?` · ${message.lastError}`:""}</small>
             {message.direction==="OUTBOUND"&&message.deliveryStatus==="FAILED"&&<button className="text-button" type="button" disabled={pending||threadLoading} onClick={()=>void retry(message.id)}><RotateCcw size={14}/>{t("communications.retry")}</button>}
           </div>)}</div>
           {thread.messageTotal>0&&<div className="communication-message-pagination"><Pagination page={Math.min(thread.messagePage,messagePages)} totalPages={messagePages} total={thread.messageTotal} pageSize={thread.messagePageSize} onPage={value=>void loadThread(thread.id,value,thread.messagePageSize)} onPageSize={value=>void loadThread(thread.id,undefined,value)}/></div>}
@@ -265,13 +267,13 @@ export function CommunicationsInboxPage({
         </>:<div className="empty-state"><span>{t("communications.choose")}</span></div>}
       </article>
     </section>
-    {open&&<AccessibleDrawer title={t("communications.new")} description={t("communications.purposeHelp")} onClose={()=>setOpen(false)}>
+    {open&&<AccessibleDrawer pending={pending} title={t("communications.new")} description={t("communications.purposeHelp")} onClose={()=>setOpen(false)}>
       <form onSubmit={create} onChange={()=>{if(!pending)threadRequest.current=null;}}>
         <SearchableSelect label={t("privacyRequests.contact")} value={contact} options={contacts} onChange={value=>{setContact(value);threadRequest.current=null;}} onSearch={searchContacts}/>
         <label className="field"><span>{t("communications.subject")}</span><input name="subject" required maxLength={200}/></label>
         <label className="field"><span>{t("communications.purpose")}</span><select name="purpose" defaultValue="SERVICE">{communicationPurposes.map(value=><option key={value} value={value}>{t(`communications.purpose.${value.toLowerCase()}`)}</option>)}</select><small>{t("communications.purposeClassification")}</small></label>
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
-        <div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{t("common.create")}</button></div>
+        <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending?t("common.processing"):t("common.create")}</button></div>
       </form>
     </AccessibleDrawer>}
     {toast&&<Toast message={toast} onClose={()=>setToast("")}/>}

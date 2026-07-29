@@ -5,6 +5,7 @@ import {
   type CaptchaLifecycle,
 } from "./altcha-captcha";
 import type { CaptchaAction, CaptchaProof } from "./captcha-types";
+import { loadTurnstileEnabled } from "./captcha-configuration";
 import { verifyTurnstileToken } from "./turnstile";
 
 export type CaptchaVerification =
@@ -15,11 +16,12 @@ export type CaptchaVerification =
         | "TURNSTILE_FAILED"
         | "TURNSTILE_UNAVAILABLE"
         | "TURNSTILE_NOT_CONFIGURED"
+        | "TURNSTILE_DISABLED"
         | "CAPTCHA_INVALID"
         | "CAPTCHA_REPLAYED"
         | "CAPTCHA_NOT_CONFIGURED";
       status: 400 | 503;
-      fallbackReason?: "service_unavailable" | "not_configured";
+      fallbackReason?: "service_unavailable" | "not_configured" | "administrator_disabled";
     };
 
 export async function verifyCaptchaProof(
@@ -29,10 +31,27 @@ export async function verifyCaptchaProof(
   dependencies: {
     lifecycle?: CaptchaLifecycle;
     turnstileFetch?: typeof fetch;
+    turnstileEnabled?: boolean;
     now?: number;
   } = {},
 ): Promise<CaptchaVerification> {
   if (proof.provider === "turnstile") {
+    let turnstileEnabled = dependencies.turnstileEnabled;
+    if (turnstileEnabled === undefined) {
+      try {
+        turnstileEnabled = await loadTurnstileEnabled();
+      } catch {
+        return { ok: false, code: "CAPTCHA_NOT_CONFIGURED", status: 503 };
+      }
+    }
+    if (!turnstileEnabled) {
+      return {
+        ok: false,
+        code: "TURNSTILE_DISABLED",
+        status: 400,
+        fallbackReason: "administrator_disabled",
+      };
+    }
     const result = await verifyTurnstileToken(proof.token, request, action, {
       fetchImpl: dependencies.turnstileFetch,
     });

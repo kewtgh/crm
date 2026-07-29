@@ -16,6 +16,7 @@ const pool = new pg.Pool({
 });
 
 const identifierPattern = /^[a-z_][a-z0-9_]*$/i;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const quoteIdentifier = (value) => {
   if (!identifierPattern.test(value)) throw new Error("INVALID_DATABASE_IDENTIFIER");
   return `"${value}"`;
@@ -317,10 +318,26 @@ export async function workerJson(path, options = {}) {
   if (!rpcMatch && !tableMatch) throw new Error("INVALID_DATABASE_PATH");
   const client = await pool.connect();
   try {
-    return rpcMatch
+    await client.query("begin");
+    await client.query("set local statement_timeout = '60s'");
+    await client.query("set local lock_timeout = '5s'");
+    if (options.workspaceId !== undefined) {
+      if (!uuidPattern.test(String(options.workspaceId))) throw new Error("WORKER_WORKSPACE_ID_INVALID");
+      const timezone = await client.query(
+        "select business_timezone from public.workspaces where id=$1",
+        [options.workspaceId],
+      );
+      const businessTimezone = timezone.rows[0]?.business_timezone;
+      if (!businessTimezone) throw new Error("WORKER_WORKSPACE_TIMEZONE_NOT_FOUND");
+      await client.query("select set_config('TimeZone',$1,true)", [businessTimezone]);
+    }
+    const result = rpcMatch
       ? await rpc(client, rpcMatch[1], options)
       : await table(client, tableMatch[1], url.searchParams, options);
+    await client.query("commit");
+    return result;
   } catch (error) {
+    await client.query("rollback").catch(() => undefined);
     const code = error?.code ? ` ${error.code}` : "";
     throw new Error(`${url.pathname} failed${code}: ${error?.message ?? "unknown"}`, { cause: error });
   } finally {

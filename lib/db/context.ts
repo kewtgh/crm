@@ -26,6 +26,15 @@ async function setContext(client: PoolClient, context: DatabaseContext) {
         set_config('app.system', 'false', true)`,
       [userId, workspaceId, role, aal],
     );
+    const timezone = await client.query<{ business_timezone: string }>(
+      `select business_timezone
+       from public.workspaces
+       where id = $1`,
+      [workspaceId],
+    );
+    const businessTimezone = timezone.rows[0]?.business_timezone;
+    if (!businessTimezone) throw new Error("WORKSPACE_BUSINESS_TIMEZONE_NOT_FOUND");
+    await client.query("select set_config('TimeZone', $1, true)", [businessTimezone]);
     return;
   }
   await client.query(

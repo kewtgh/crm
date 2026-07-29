@@ -139,7 +139,11 @@ async function performanceExport(job){
 }
 async function marketingContactsExport(job){
   const channel=String(job.parameters?.channel??"").toUpperCase();if(!["EMAIL","SMS","PHONE","WECHAT","WHATSAPP"].includes(channel))throw new Error("Invalid marketing channel");
-  const rows=await requestAll(`/db/rpc/marketing_export_rows`,{method:"POST",body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel})});
+  const rows=await requestAll(`/db/rpc/marketing_export_rows`,{
+    method:"POST",
+    body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel}),
+    workspaceId:job.workspace_id,
+  });
   return [["Contact ID","Name (ZH)","Name (EN)","Email","Phone","Authorized channel","Consent source","Obtained at","Retention until"],...rows.map(item=>[item.contact_id,item.name_zh,item.name_en,item.email,item.phone,item.channel,item.consent_source,item.obtained_at,item.retention_until])];
 }
 async function requestAll(path,options={}){

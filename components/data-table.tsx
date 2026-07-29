@@ -83,7 +83,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
     completeness: t("modules.completeness"),
   };
 
-  return <><div className={`data-surface ${loading ? "is-loading" : ""}`} aria-busy={loading}>
+  return <><div id="record-list" className={`data-surface ${loading ? "is-loading" : ""}`} aria-busy={loading}>
     <div className="table-toolbar"><SearchField value={query} onChange={setSearch} placeholder={t(`${prefix}.search`)} /><div className="filter-chips"><label className="compact-select"><span>{t("common.status")}</span><select value={status} onChange={event=>{setStatus(event.target.value);setPage(1);}}><option value="all">{t("common.all")}</option>{statusOptions.map(value=><option value={value} key={value}>{t(`crm.status.${value}`)}</option>)}</select></label></div></div>
     {error && <div className="table-error"><InlineMessage type="error">{error}</InlineMessage><button className="secondary-button" type="button" onClick={retry}>{t("common.retry")}</button></div>}
     <div className="table-scroll"><table className="data-table"><thead><tr>

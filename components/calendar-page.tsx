@@ -173,7 +173,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
       </aside>
     </section>
 
-    {drawerOpen && <AccessibleDrawer title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => {scheduleRequestKey.current=null;setDrawerOpen(false);}}>
+    {drawerOpen && <AccessibleDrawer pending={schedulePending} title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => {scheduleRequestKey.current=null;setDrawerOpen(false);}}>
         <form onSubmit={submitSchedule} onChange={()=>{if(!schedulePending)scheduleRequestKey.current=null;}}>
           <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required maxLength={160} placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>

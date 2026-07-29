@@ -12,6 +12,7 @@ export const captchaFallbackReasons = [
   "token_expired",
   "service_unavailable",
   "not_configured",
+  "administrator_disabled",
 ] as const;
 export type CaptchaFallbackReason = (typeof captchaFallbackReasons)[number];
 
