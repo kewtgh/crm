@@ -77,6 +77,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
   const [cancelPending,setCancelPending]=useState(false);
   const [schedulePending,setSchedulePending]=useState(false);
   const scheduleLock=useRef(false);
+  const scheduleRequestKey=useRef<string|null>(null);
   const runRelatedSearch=useRemoteSearch();
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
@@ -95,6 +96,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
   const openSchedule = (date = selectedDate) => {
     setSelectedDate(date);
     setRelated("");
+    scheduleRequestKey.current=null;
     setDrawerOpen(true);
   };
 
@@ -111,7 +113,8 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
     if (persistent) {
       const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
       const attendeeEmails=String(form.get("attendees")??"").split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);const consentConfirmed=form.get("attendeeConsent")==="on";
-      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch(caught){setFormError(presentApiError(caught,t,"calendar.saveFailed").message);scheduleLock.current=false;setSchedulePending(false);return;}
+      scheduleRequestKey.current??=crypto.randomUUID();
+      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})),requestKey:scheduleRequestKey.current }) });id=result.item.id;}catch(caught){setFormError(presentApiError(caught,t,"calendar.saveFailed").message);scheduleLock.current=false;setSchedulePending(false);return;}
     }
     setEvents((current) => [...current, {
       id,
@@ -125,6 +128,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
       deliveryStatus:String(form.get("attendees")??"").trim()?"QUEUED":"NONE",
     }]);
     setCalendarTotal(current=>current+1);
+    scheduleRequestKey.current=null;
     scheduleLock.current=false;
     setSchedulePending(false);
     setDrawerOpen(false);
@@ -169,8 +173,8 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
       </aside>
     </section>
 
-    {drawerOpen && <AccessibleDrawer title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => setDrawerOpen(false)}>
-        <form onSubmit={submitSchedule}>
+    {drawerOpen && <AccessibleDrawer title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => {scheduleRequestKey.current=null;setDrawerOpen(false);}}>
+        <form onSubmit={submitSchedule} onChange={()=>{if(!schedulePending)scheduleRequestKey.current=null;}}>
           <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required maxLength={160} placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.type")}</span><select name="type" defaultValue="meeting"><option value="meeting">{t("calendar.meeting")}</option><option value="consultation">{t("calendar.consultation")}</option><option value="followup">{t("calendar.followup")}</option><option value="deadline">{t("calendar.deadline")}</option></select></label><label className="field"><span>{t("calendar.channel")}</span><span className="input-icon"><Video size={16} /><input name="channel" maxLength={80} defaultValue="Teams" /></span></label></div>
@@ -180,7 +184,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
           <label className="field"><span>{t("calendar.remindAt")}</span><select name="reminder" defaultValue={t("calendar.reminder.day")}><option>{t("calendar.reminder.start")}</option><option>{t("calendar.reminder.30m")}</option><option>{t("calendar.reminder.2h")}</option><option>{t("calendar.reminder.day")}</option><option>{t("calendar.reminder.3d")}</option></select></label>
           <div className="appointment-hints"><span><Users size={16} />{t("calendar.deliveryHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
           {formError && <InlineMessage type="error">{formError}</InlineMessage>}
-          <div className="drawer-actions"><button className="secondary-button" type="button" disabled={schedulePending} onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={schedulePending} aria-busy={schedulePending}><CalendarDays size={17} />{schedulePending?t("common.processing"):t("calendar.save")}</button></div>
+          <div className="drawer-actions"><button className="secondary-button" type="button" disabled={schedulePending} onClick={() => {scheduleRequestKey.current=null;setDrawerOpen(false);}}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={schedulePending} aria-busy={schedulePending}><CalendarDays size={17} />{schedulePending?t("common.processing"):t("calendar.save")}</button></div>
         </form>
     </AccessibleDrawer>}
     {cancelEvent&&<ConfirmDialog title={t("common.confirmAction")} description={t("calendar.cancelConfirm",{title:locale==="en"&&cancelEvent.titleEn?cancelEvent.titleEn:cancelEvent.title})} confirmLabel={t("calendar.cancelEvent")} pending={cancelPending} onClose={()=>setCancelEvent(null)} onConfirm={()=>void confirmCancellation()}/>}

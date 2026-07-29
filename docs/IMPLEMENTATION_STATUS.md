@@ -1,4 +1,4 @@
-# Implementation status — v3.1.0 release candidate
+# Implementation status — v3.2.0 release candidate
 
 Status date: 2026-07-29
 
@@ -27,12 +27,20 @@ updates profile tables atomically, keeps detailed readiness on loopback, reports
 and user-timezone boundaries, completes mobile-navigation modal semantics, and validates the
 one-command deployment against the v3 database-role and Local/S3 storage boundaries.
 
+v3.2.0 makes calendar and communication mutations failure-safe. Malformed calendar action JSON no
+longer defaults to completion; appointment creation stores a per-user request key plus normalized
+SHA-256 payload fingerprint so uncertain retries return the original record instead of duplicating
+appointments, attendees or deliveries. Communication drafts reuse their request key across unchanged
+retries, use a synchronous operation lock, send a stable provider idempotency header and keep the
+provider timeout below the browser budget. The inbox now reports total/truncated metadata and the UI
+surfaces the 100-thread display cap without the former duplicate search icon.
+
 ## Repository completion
 
 | Area | Result |
 | --- | --- |
 | Platform dependency exit | Complete; historical source retained only under `archive/supabase` |
-| PostgreSQL schema | 67 ordered, checksummed migrations; advisory lock and idempotent rerun |
+| PostgreSQL schema | 68 ordered, checksummed migrations; advisory lock and idempotent rerun |
 | Database integrity | Valid foreign keys and indexes; duplicate identities and orphan relations checked |
 | Data access | `pg`/Kysely pools and transaction authorization context for app/system/Worker |
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
@@ -40,30 +48,29 @@ one-command deployment against the v3 database-role and Local/S3 storage boundar
 | Workers | Six processors use `crm_worker`; enabled processors report heartbeat and queue state |
 | Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
 | Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
-| Documentation | v3.1.0 audit, executed plan, deployment/recovery runbook and final re-audit |
+| Documentation | v3.2.0 audit, executed plan, deployment/recovery runbook and final re-audit |
 
 ## Verification record
 
 | Gate | Result |
 | --- | --- |
-| Migration chain / forward apply | Pass; 67 checksummed migrations, with 061/062 applied locally |
-| Database integration | Pass; Argon2id, session, TOTP replay protection, RLS and password-change revocation |
+| Migration chain / forward apply | Pass; 68 checksummed migrations, with 063 applied locally |
 | Integrity validation | Pass; no invalid constraints/indexes, duplicate identities or orphan relations |
 | Business schema contracts | Pass for phase 2, v0.9 and v1.1 |
 | Worker cycle | Pass; 4/4 enabled processors healthy |
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
-| Database integration | Pass; 67 migrations, 96 public tables, Auth/session/TOTP/RLS and atomic profile rollback |
+| Database integration | Pass; 68 migrations, 96 public tables, Auth/session/TOTP/RLS, atomic profile rollback, appointment idempotency and inbox capacity metadata |
 | TypeScript / ESLint | Pass |
-| Production build | Pass; native PostgreSQL, Argon2 and S3 packages remain server externals |
-| Node contracts | Pass; 24/24 core/v3.1, 5/5 CAPTCHA and 19/19 deployment |
-| Deployment dry-run | Pass; templates, roles, storage, systemd and controller assets valid; no mutations |
+| Production build | Pass; v3.2.0 final source produced all application/API routes |
+| Node contracts | Pass; 28/28 core/version and 5/5 CAPTCHA contracts |
+| Deployment contracts | Pass; 19/19 release, rollback, readiness, role and storage boundary contracts |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
-| Affected Chromium flow | Pass; calendar/imports/settings/admin, 46 page/viewports, 0 errors/warnings, 4/4 identities cleaned |
+| Affected Chromium flow | Pass; Chromium 1228 phase `02-manager-core-a`, 13 page/viewports, 0 errors/warnings, identity 1/1 cleaned |
 
-The full ten-stage Chromium matrix was not repeated because the saved v3.1.0 plan limits verification
-to the directly affected phases. The four affected phases used pinned
-`ms-playwright/chromium-1228`, Chromium `149.0.7827.55`, one build hash and one source fingerprint.
+The v3.2.0 plan limits browser verification to the directly affected calendar and messages surfaces
+using the pinned `ms-playwright/chromium-1228` runtime. Final build and browser evidence are recorded
+in the v3.2.0 re-audit.
 
 ## External production gates
 

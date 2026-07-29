@@ -30,6 +30,7 @@ const password = `Sm0ke!${randomBytes(24).toString("base64url")}`;
 const expectedMigrationCount = (await readdir(new URL("../db/migrations/", import.meta.url)))
   .filter((name) => name.endsWith(".sql")).length;
 let fixtureUserId: string | null = null;
+let fixtureAppointmentId: string | null = null;
 
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 function base32Decode(value: string) {
@@ -166,6 +167,68 @@ try {
     )
   ).rows[0]);
   assert.equal(rolledBackProfile.display_name_zh, "资料原子更新");
+
+  const appointmentRequestKey = `db-smoke:${fixtureId}`;
+  const appointmentArguments = [
+    "数据库幂等预约",
+    "Database idempotent appointment",
+    "MEETING",
+    null,
+    null,
+    "Database smoke",
+    "2030-01-15T02:00:00.000Z",
+    "2030-01-15T03:00:00.000Z",
+    "Test",
+    [30],
+    JSON.stringify([]),
+    appointmentRequestKey,
+  ];
+  const appointmentSql = `select id,creation_request_key,creation_request_fingerprint
+    from public.create_appointment_with_delivery(
+      $1::text,$2::text,$3::text,$4::text,$5::uuid,$6::text,
+      $7::timestamptz,$8::timestamptz,$9::text,$10::integer[],$11::jsonb,$12::text
+    )`;
+  const appointment = await withDatabaseContext(userContext, async (client) => {
+    const first = (await client.query<{
+      id: string;
+      creation_request_key: string;
+      creation_request_fingerprint: string;
+    }>(appointmentSql, appointmentArguments)).rows[0];
+    const replay = (await client.query<{ id: string }>(
+      appointmentSql,
+      appointmentArguments,
+    )).rows[0];
+    assert.equal(replay?.id, first?.id);
+    const count = await client.query<{ count: string }>(
+      `select count(*)::text from public.appointments
+       where created_by=app_auth.current_user_id() and creation_request_key=$1`,
+      [appointmentRequestKey],
+    );
+    assert.equal(Number(count.rows[0]?.count), 1);
+    const inbox = (await client.query<{
+      snapshot: { items: unknown[]; total: number; truncated: boolean };
+    }>(
+      "select public.communication_inbox_snapshot($1,$2) as snapshot",
+      ["", 100],
+    )).rows[0]?.snapshot;
+    assert.ok(Array.isArray(inbox?.items));
+    assert.equal(typeof inbox?.total, "number");
+    assert.equal(typeof inbox?.truncated, "boolean");
+    assert.equal(inbox?.truncated, Number(inbox?.total ?? 0) > Number(inbox?.items.length ?? 0));
+    return first;
+  });
+  assert.ok(appointment?.id);
+  assert.equal(appointment.creation_request_key, appointmentRequestKey);
+  assert.match(appointment.creation_request_fingerprint, /^[a-f0-9]{64}$/);
+  fixtureAppointmentId = appointment.id;
+  await assert.rejects(
+    withDatabaseContext(userContext, (client) => client.query(appointmentSql, [
+      "不同负载",
+      ...appointmentArguments.slice(1),
+    ])),
+    /appointment_idempotency_conflict/,
+  );
+
   const changedPassword = `Changed!${randomBytes(24).toString("base64url")}`;
   await updateAccountPassword(identity.id, changedPassword, {
     clearMustChange: true,
@@ -175,9 +238,13 @@ try {
   assert.equal((await authenticateAccount(identifier, changedPassword))?.id, identity.id);
   process.stdout.write(
     `[db:smoke] ${schema.rows[0].migrations} migrations, ${schema.rows[0].tables} tables, `
-    + "Argon2id/session/TOTP/RLS/atomic-profile context verified.\n",
+    + "Argon2id/session/TOTP/RLS/atomic-profile/appointment-idempotency/inbox-capacity context verified.\n",
   );
 } finally {
+  if (fixtureAppointmentId) {
+    await poolQuery("system", "delete from public.appointments where id=$1", [fixtureAppointmentId])
+      .catch(() => undefined);
+  }
   if (fixtureUserId) {
     await poolQuery("system", "delete from app_auth.accounts where id=$1", [fixtureUserId])
       .catch(() => undefined);
