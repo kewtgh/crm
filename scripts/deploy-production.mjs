@@ -18,10 +18,7 @@ import {
   assertPathWithin,
   classifyPersistedDeployment,
   isSystemdServiceInProgress,
-  PRODUCTION_LOCAL_URL,
   PRODUCTION_DEPLOY_LOCK_PATH,
-  PRODUCTION_PUBLIC_URL,
-  validateDeployAssetTexts,
   validateDirectoryMetadata,
   writeExclusiveRequest,
 } from "./lib/production-deploy-core.mjs";
@@ -49,7 +46,7 @@ Usage:
   npm run deploy:production:detach       Start an update and return after the runner accepts it
   npm run deploy:production:status       Show the persisted deployment state
   npm run deploy:production:logs         Print the latest deployment log
-  npm run deploy:production:rollback     Roll back application files to the recorded previous release
+  npm run deploy:production:rollback     Restore the recorded immutable application images
   npm run deploy:production:dry-run      Validate repository deployment assets without side effects
 
 The systemd runner continues if SSH disconnects. Re-run the status or logs command
@@ -153,7 +150,8 @@ function printSummary(status) {
     `previous commit: ${status.previousCommit ?? "unknown"}`,
     `target commit: ${status.targetCommit ?? "unknown"}`,
     `application version: ${status.applicationVersion ?? "unknown"}`,
-    `release path: ${status.releasePath ?? "not created"}`,
+  `previous image: ${status.previousImage ?? "none"}`,
+  `target image: ${status.targetImage ?? "not built"}`,
     `started: ${status.startedAt ?? "unknown"}`,
     `finished: ${status.finishedAt ?? "not finished"}`,
     `duration ms: ${status.durationMs ?? "not finished"}`,
@@ -280,34 +278,36 @@ async function logs({ follow = false } = {}) {
 }
 
 function dryRun() {
-  const packageJson = JSON.parse(readFileSync(path.join(sourceRoot, "package.json"), "utf8"));
-  validateDeployAssetTexts({
-    serviceUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-deploy.service"), "utf8"),
-    sudoers: readFileSync(path.join(sourceRoot, "deploy", "sudoers", "lumina-crm-deploy"), "utf8"),
-    webUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm.service"), "utf8"),
-    workerUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-workers.service"), "utf8"),
-    productionEnvironment: readFileSync(path.join(sourceRoot, "deploy", "production.env.example"), "utf8"),
-    deploymentEnvironment: readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8"),
-    runner: readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8"),
-    storagePrepareUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-storage-prepare.service"), "utf8"),
-    storageCleanupUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-storage-cleanup.service"), "utf8"),
-    storageMaintenance: readFileSync(path.join(sourceRoot, "deploy", "libexec", "lumina-crm-storage-maintenance.mjs"), "utf8"),
-    buildkitConfiguration: readFileSync(path.join(sourceRoot, "deploy", "buildkitd.toml"), "utf8"),
-    packageJson,
-  });
+  const compose = readFileSync(path.join(sourceRoot, "compose.production.yml"), "utf8");
+  const dockerfile = readFileSync(path.join(sourceRoot, "Dockerfile"), "utf8");
+  const runner = readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8");
+  const caddy = readFileSync(path.join(sourceRoot, "deploy", "caddy", "Caddyfile"), "utf8");
+  const worker = readFileSync(path.join(sourceRoot, "deploy", "cloudflare-worker", "src", "index.mjs"), "utf8");
+  const required = [
+    [compose, /name: \$\{LUMINA_COMPOSE_PROJECT:-lumina-crm\}/, "fixed Compose project"],
+    [compose, /127\.0\.0\.1:3200/, "loopback Web publication"],
+    [compose, /internal: true/, "internal backend network"],
+    [dockerfile, /com\.lumina\.crm\.managed="true"/, "image ownership label"],
+    [runner, /lumina-crm-buildkit/, "isolated BuildKit builder"],
+    [runner, /apply locked forward migration/, "forward migration gate"],
+    [caddy, /X-Lumina-Origin-Auth/, "origin authentication"],
+    [worker, /cacheEverything: false/, "Worker no-cache contract"],
+  ];
+  const missing = required.filter(([text, pattern]) => !pattern.test(text)).map(([, , label]) => label);
+  if (missing.length) throw new Error(`Deployment assets are incomplete: ${missing.join(", ")}`);
   process.stdout.write(`LUMINA_PRODUCTION_DEPLOY_DRY_RUN_OK
 source: ${sourceRoot}
-release root: ${path.join(deployRoot, "releases")}
-current link: ${path.join(deployRoot, "current")}
+Compose project: lumina-crm
+Compose file: ${path.join(deployRoot, "source", "compose.production.yml")}
 state root: ${stateRoot}
 log root: ${logRoot}
-storage gate: /, configured Docker data root, ${path.join(deployRoot, "releases")}
+storage gate: /, configured Docker data root, ${stateRoot}
 BuildKit builder: lumina-crm-buildkit (fixed root-owned maintenance unit)
 storage report: /var/lib/lumina-crm/storage-maintenance/latest.json
-local health: ${PRODUCTION_LOCAL_URL}/api/health
-public health: ${PRODUCTION_PUBLIC_URL}/api/health
+local health: http://127.0.0.1:3200/api/health
+public health: configured LUMINA_PUBLIC_HEALTH_URL through Cloudflare Worker
 Database migrations: project-owned PostgreSQL chain in db/migrations
-No files, services, symlinks, databases, or network resources were changed.
+No files, services, images, containers, databases, or network resources were changed.
 `);
 }
 

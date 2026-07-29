@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { closeWorkerDatabase, withWorkerAdvisoryLock } from "./lib/worker-database.mjs";
 
 const allWorkers=[
   ["REMINDERS","process-reminders.mjs"],
@@ -33,22 +34,29 @@ function run(script){
   });
 }
 
-const results=await Promise.all(workers.map(async([worker,script])=>{
-  process.stdout.write(`\n[worker-cycle] ${worker}\n`);
-  const result=await run(script);
-  if(result.code!==0&&process.env.WORKER_DATABASE_URL){
-    await createWorkerHeartbeat(worker)
-      .failure(result.error,{orchestrated:true})
-      .catch(()=>undefined);
-  }
-  return{worker,...result};
-}));
-for(const result of results){
-  if(result.code!==0)failures.push({worker:result.worker,error:result.error});
-}
+try {
+  const locked=await withWorkerAdvisoryLock("lumina-crm-worker-cycle",async()=>{
+    const results=await Promise.all(workers.map(async([worker,script])=>{
+      process.stdout.write(`\n[worker-cycle] ${worker}\n`);
+      const result=await run(script);
+      if(result.code!==0&&process.env.WORKER_DATABASE_URL){
+        await createWorkerHeartbeat(worker)
+          .failure(result.error,{orchestrated:true})
+          .catch(()=>undefined);
+      }
+      return{worker,...result};
+    }));
+    for(const result of results){
+      if(result.code!==0)failures.push({worker:result.worker,error:result.error});
+    }
 
-if(failures.length){
-  const summary=failures.map(item=>`${item.worker}: ${item.error?.message??"failed"}`).join("; ");
-  throw new Error(`Worker cycle failed (${failures.length}/${workers.length}): ${summary}`);
+    if(failures.length){
+      const summary=failures.map(item=>`${item.worker}: ${item.error?.message??"failed"}`).join("; ");
+      throw new Error(`Worker cycle failed (${failures.length}/${workers.length}): ${summary}`);
+    }
+    process.stdout.write(`\nWorker cycle completed: ${workers.length}/${workers.length} enabled workers healthy${skipped.length?`; disabled: ${skipped.join(", ")}`:""}.\n`);
+  });
+  if(!locked.acquired)throw new Error("WORKER_CYCLE_ALREADY_RUNNING");
+} finally {
+  await closeWorkerDatabase().catch(()=>undefined);
 }
-process.stdout.write(`\nWorker cycle completed: ${workers.length}/${workers.length} enabled workers healthy${skipped.length?`; disabled: ${skipped.join(", ")}`:""}.\n`);

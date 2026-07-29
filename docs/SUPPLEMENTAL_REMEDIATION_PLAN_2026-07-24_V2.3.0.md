@@ -1,5 +1,8 @@
 # Lumina Education CRM v2.3.0 补充整改计划
 
+> **Archived / obsolete production architecture:** this point-in-time plan predates the v3.7
+> Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.
+
 - 输入：`SUPPLEMENTAL_AUDIT_2026-07-24_V2.3.0.md`
 - 目标：关闭补充审计的 4 项问题，并重新执行完整发布门禁
 - 状态：已完成；最终逐项复核见

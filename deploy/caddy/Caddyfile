@@ -1,30 +1,36 @@
-{
-	email {$ACME_EMAIL}
-	admin 127.0.0.1:2019
-}
-
-{$CRM_DOMAIN} {
+{$LUMINA_ORIGIN_HOSTNAME} {
 	encode zstd gzip
 
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		-Server
-	}
+	route {
+		@origin_authorized header X-Lumina-Origin-Auth {$LUMINA_ORIGIN_AUTH_SECRET}
+		handle @origin_authorized {
+			@detailed_readiness {
+				path /api/health
+				query mode=ready
+			}
+			respond @detailed_readiness 404
 
-	reverse_proxy 127.0.0.1:3200 {
-		health_uri /api/health
-		health_interval 30s
-		health_timeout 5s
-	}
-
-	log {
-		output file /var/log/caddy/lumina-crm-access.log {
-			roll_size 20MiB
-			roll_keep 10
-			roll_keep_for 720h
+			reverse_proxy 127.0.0.1:3200 {
+				header_up -X-Lumina-Origin-Auth
+				header_up -X-Forwarded-For
+				header_up -X-Forwarded-Host
+				header_up -X-Forwarded-Proto
+				header_up -X-Real-IP
+				header_up -CF-Connecting-IP
+				header_up X-Forwarded-For {http.request.header.X-Lumina-Client-IP}
+				header_up CF-Connecting-IP {http.request.header.X-Lumina-Client-IP}
+				header_up X-Forwarded-Host {$LUMINA_PUBLIC_HOSTNAME}
+				header_up X-Forwarded-Proto https
+				header_up Host {$LUMINA_PUBLIC_HOSTNAME}
+				header_up -X-Lumina-Client-IP
+			}
 		}
-		format json
+
+		respond 403
+	}
+
+	header {
+		Cache-Control "private, no-store, max-age=0"
+		-Server
 	}
 }

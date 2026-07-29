@@ -1,4 +1,5 @@
 import { z } from "zod";
+import path from "node:path";
 import { secureEndpointOrigin } from "./application-origin.mjs";
 
 const placeholderPattern = /replace-with|change-me|example-secret|your-project|your-anon|server-only-service|production-site-key|production-server-secret|public-anon-key|workspace-uuid|independent-random/i;
@@ -101,8 +102,20 @@ export type WorkerKey = (typeof WORKER_KEYS)[number];
 
 const featureEnabled = (value: string | undefined) => /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
 
-const deliveryKeys = [
+const workerBaseKeys = [
   "WORKER_DATABASE_URL",
+  "CRM_WORKSPACE_ID",
+  "OBJECT_STORAGE_PROVIDER",
+] as const;
+const localStorageKeys = ["OBJECT_STORAGE_LOCAL_ROOT"] as const;
+const s3StorageKeys = [
+  "S3_ENDPOINT",
+  "S3_REGION",
+  "S3_BUCKET",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
+] as const;
+const deliveryKeys = [
   "EMAIL_DELIVERY_WEBHOOK_URL",
   "EMAIL_DELIVERY_WEBHOOK_TOKEN",
   "OUTBOX_BATCH_SIZE",
@@ -134,8 +147,27 @@ const observabilityKeys = [
 const ssoKeys = ["SSO_ALLOWED_DOMAINS"] as const;
 const scimKeys = ["SCIM_BEARER_TOKEN"] as const;
 
-const deliveryEnvironmentSchema = z.object({
+const workerBaseEnvironmentSchema = z.object({
   WORKER_DATABASE_URL: databaseUrl,
+  CRM_WORKSPACE_ID: z.uuid(),
+  OBJECT_STORAGE_PROVIDER: z.enum(["local", "s3"]),
+  OBJECT_STORAGE_LOCAL_ROOT: z.string().trim().refine((value) => path.isAbsolute(value), "An absolute object storage path is required").optional(),
+  S3_ENDPOINT: configuredUrl.optional(),
+  S3_REGION: configured.optional(),
+  S3_BUCKET: configured.optional(),
+  S3_ACCESS_KEY_ID: configured.optional(),
+  S3_SECRET_ACCESS_KEY: productionSecret.optional(),
+}).superRefine((value, context) => {
+  if (value.OBJECT_STORAGE_PROVIDER === "local" && !value.OBJECT_STORAGE_LOCAL_ROOT) {
+    context.addIssue({ code: "custom", path: ["OBJECT_STORAGE_LOCAL_ROOT"], message: "Local object storage path is required" });
+  }
+  if (value.OBJECT_STORAGE_PROVIDER === "s3") {
+    for (const key of s3StorageKeys) {
+      if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "S3 object storage setting is required" });
+    }
+  }
+});
+const deliveryEnvironmentSchema = z.object({
   EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
   EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
   OUTBOX_BATCH_SIZE: boundedPositiveInteger(40),
@@ -214,7 +246,7 @@ export type WorkerRuntimeEnvironmentStatus = {
 export function inspectWorkerRuntimeEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): WorkerRuntimeEnvironmentStatus {
-  const core = inspectCoreRuntimeEnvironment(environment);
+  const base = workerBaseEnvironmentSchema.safeParse(environment);
   const webhooksEnabled = featureEnabled(environment.WEBHOOKS_ENABLED);
   const integrationsEnabled = featureEnabled(environment.INTEGRATION_SYNC_ENABLED);
   const observabilityEnabled = featureEnabled(environment.OBSERVABILITY_ENABLED);
@@ -228,7 +260,8 @@ export function inspectWorkerRuntimeEnvironment(
     ...(webhooksEnabled ? ["WEBHOOK_INBOX" as const] : []),
     ...(integrationsEnabled ? ["INTEGRATION_SYNC" as const] : []),
   ];
-  const activeGroups = [deliveryKeys, ...(webhooksEnabled ? [webhookKeys] : []), ...(integrationsEnabled ? [integrationKeys] : []), ...(observabilityEnabled ? [observabilityKeys] : []), ...(ssoEnabled ? [ssoKeys] : []), ...(scimEnabled ? [scimKeys] : [])];
+  const storageKeys = environment.OBJECT_STORAGE_PROVIDER === "s3" ? s3StorageKeys : localStorageKeys;
+  const activeGroups = [workerBaseKeys, storageKeys, deliveryKeys, ...(webhooksEnabled ? [webhookKeys] : []), ...(integrationsEnabled ? [integrationKeys] : []), ...(observabilityEnabled ? [observabilityKeys] : []), ...(ssoEnabled ? [ssoKeys] : []), ...(scimEnabled ? [scimKeys] : [])];
   const activeKeys = activeGroups.flat();
   const deliveryResult = deliveryEnvironmentSchema.safeParse(environment);
   const webhookResult = webhooksEnabled ? webhookEnvironmentSchema.safeParse(environment) : null;
@@ -239,7 +272,7 @@ export function inspectWorkerRuntimeEnvironment(
   const invalidKeys = (result: z.ZodSafeParseResult<unknown> | null) => result && !result.success
     ? result.error.issues.map((issue) => String(issue.path[0] ?? "environment")) : [];
   const budgetIssues = workerBudgetIssues(environment);
-  const missing = [...core.missing, ...invalidKeys(deliveryResult), ...invalidKeys(webhookResult), ...invalidKeys(integrationResult), ...invalidKeys(observabilityResult), ...invalidKeys(ssoResult), ...invalidKeys(scimResult), ...budgetIssues];
+  const missing = [...invalidKeys(base), ...invalidKeys(deliveryResult), ...invalidKeys(webhookResult), ...invalidKeys(integrationResult), ...invalidKeys(observabilityResult), ...invalidKeys(ssoResult), ...invalidKeys(scimResult), ...budgetIssues];
   const delivery = deliveryResult.success && !budgetIssues.some((key) => ["OUTBOX_BATCH_SIZE","CALENDAR_DELIVERY_BATCH_SIZE"].includes(key));
   const webhooks = !webhooksEnabled || (webhookResult?.success === true && !budgetIssues.includes("WEBHOOK_BATCH_SIZE"));
   const integrations = !integrationsEnabled || (integrationResult?.success === true && !budgetIssues.includes("INTEGRATION_SYNC_BATCH_SIZE"));
@@ -247,8 +280,8 @@ export function inspectWorkerRuntimeEnvironment(
   const sso = !ssoEnabled || ssoResult?.success === true;
   const scim = !scimEnabled || scimResult?.success === true;
   return {
-    valid: core.valid && delivery && webhooks && integrations && observability && sso && scim,
-    core: core.valid,
+    valid: base.success && delivery && webhooks && integrations && observability && sso && scim,
+    core: base.success,
     delivery,
     webhooks,
     integrations,
@@ -261,9 +294,31 @@ export function inspectWorkerRuntimeEnvironment(
     ssoEnabled,
     scimEnabled,
     enabledWorkers,
-    configured: core.configured + activeKeys.filter((key) => Boolean(environment[key]?.trim())).length,
-    expected: core.expected + activeKeys.length,
+    configured: activeKeys.filter((key) => Boolean(environment[key]?.trim())).length,
+    expected: activeKeys.length,
     missing: [...new Set(missing)],
+  };
+}
+
+export function inspectWebReadinessEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const core = inspectCoreRuntimeEnvironment(environment);
+  const webhooksEnabled = featureEnabled(environment.WEBHOOKS_ENABLED);
+  const integrationsEnabled = featureEnabled(environment.INTEGRATION_SYNC_ENABLED);
+  return {
+    ...core,
+    core: core.valid,
+    webhooksEnabled,
+    integrationsEnabled,
+    enabledWorkers: [
+      "REMINDERS",
+      "NOTIFICATION_OUTBOX",
+      "CALENDAR_DELIVERIES",
+      "GENERATED_JOBS",
+      ...(webhooksEnabled ? ["WEBHOOK_INBOX"] : []),
+      ...(integrationsEnabled ? ["INTEGRATION_SYNC"] : []),
+    ] as WorkerKey[],
   };
 }
 

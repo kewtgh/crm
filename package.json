@@ -1,6 +1,6 @@
 {
   "name": "lumina-education-crm",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -59,6 +59,11 @@
     "webhooks:process": "node --env-file-if-exists=.env.local scripts/process-webhook-inbox.mjs",
     "integrations:process": "node --env-file-if-exists=.env.local scripts/process-integration-sync.mjs",
     "workers:process": "node --env-file-if-exists=.env.local scripts/process-worker-cycle.mjs",
+    "workers:loop": "node --env-file-if-exists=.env.local scripts/run-worker-loop.mjs",
+    "workers:health": "node --env-file-if-exists=.env.local scripts/worker-healthcheck.mjs",
+    "compose:config": "docker compose -f compose.production.yml config",
+    "cloudflare:test": "node --test --test-isolation=none tests/cloudflare-worker-proxy.test.mjs",
+    "cloudflare:config:verify": "node scripts/verify-public-health-config.mjs",
     "qa:assets": "node scripts/run-bounded.mjs --label production-assets --timeout-seconds 90 --idle-seconds 45 -- npm run qa:assets:raw",
     "qa:assets:raw": "node scripts/check-production-assets.mjs",
     "qa:server:start": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs start",
@@ -96,7 +101,8 @@
     "react-dom": "19.2.8",
     "read-excel-file": "^9.3.2",
     "write-excel-file": "^4.1.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "vinext": "^0.1.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",
@@ -114,7 +120,6 @@
     "tailwindcss": "4.2.1",
     "tsx": "^4.21.0",
     "typescript": "5.9.3",
-    "vinext": "^0.1.8",
     "vite": "8.1.5",
     "vite-tsconfig-paths": "^6.1.1"
   },

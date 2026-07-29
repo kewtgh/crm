@@ -1,5 +1,8 @@
 # Lumina CRM v3.6.0 部署存储整改计划
 
+> **Archived / obsolete production architecture:** this v3.6 host-release plan is retained only
+> as historical evidence. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 本计划来自 `DEPLOYMENT_STORAGE_AUDIT_2026-07-30_V3.6.0.md`。仓库内工作已全部执行；
 实际 VPS 安装和首次生产部署明确未执行。
 

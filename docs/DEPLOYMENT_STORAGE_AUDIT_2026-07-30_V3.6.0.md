@@ -1,5 +1,8 @@
 # Lumina CRM v3.6.0 部署存储安全审计
 
+> **Archived / obsolete production architecture:** this v3.6 host-release audit is retained only
+> as historical evidence. Use `docs/DEPLOYMENT.md` for the v3.7 Compose architecture.
+
 审计日期：2026-07-30
 审计范围：生产部署 runner、release 生命周期、磁盘监控、systemd/sudo 边界，以及共享
 Docker/BuildKit 主机上的项目隔离。未执行生产部署，也未执行任何 Docker 清理命令。

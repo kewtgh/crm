@@ -26,6 +26,8 @@ const validWorkerEnvironment = {
   SYSTEM_DATABASE_URL:"postgresql://crm_system:system-password@127.0.0.1:5432/lumina_crm",
   WORKER_DATABASE_URL:"postgresql://crm_worker:worker-password@127.0.0.1:5432/lumina_crm",
   CRM_WORKSPACE_ID:"00000000-0000-4000-8000-000000000001",
+  OBJECT_STORAGE_PROVIDER:"local",
+  OBJECT_STORAGE_LOCAL_ROOT:"/var/lib/lumina-crm/objects",
   LOGIN_THROTTLE_HASH_SECRET:"l".repeat(40),
   TRUSTED_DEVICE_HASH_SECRET:"d".repeat(40),
   TOTP_ENCRYPTION_KEY:"m".repeat(40),

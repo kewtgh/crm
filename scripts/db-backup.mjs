@@ -34,6 +34,14 @@ const finalName = `lumina-crm-${timestamp}.dump.enc`;
 const finalPath = path.join(localRoot, finalName);
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "lumina-crm-backup-"));
 const dumpPath = path.join(temporaryRoot, "database.dump");
+const backupLocalObjects = /^(1|true|yes|on)$/i.test(process.env.BACKUP_LOCAL_OBJECTS ?? "false");
+const objectsRoot = process.env.BACKUP_OBJECTS_ROOT?.trim();
+if (backupLocalObjects && (!objectsRoot || !path.isAbsolute(objectsRoot))) {
+  throw new Error("BACKUP_OBJECTS_ROOT_MUST_BE_ABSOLUTE_WHEN_LOCAL_OBJECT_BACKUP_IS_ENABLED");
+}
+const objectsArchivePath = path.join(temporaryRoot, "objects.tar");
+const objectsFinalName = `lumina-crm-${timestamp}.objects.tar.enc`;
+const objectsFinalPath = path.join(localRoot, objectsFinalName);
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -92,27 +100,45 @@ try {
       secretAccessKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY,
     },
   });
-  const objectKey = `postgresql/${new Date().toISOString().slice(0, 10)}/${finalName}`;
-  await client.send(new PutObjectCommand({
+  const upload = (key, file, size, format) => client.send(new PutObjectCommand({
     Bucket: process.env.BACKUP_S3_BUCKET,
-    Key: objectKey,
-    Body: createReadStream(finalPath),
-    ContentLength: encrypted.size,
+    Key: key,
+    Body: createReadStream(file),
+    ContentLength: size,
     ContentType: "application/octet-stream",
-    Metadata: {
-      encryption: "aes-256-gcm",
-      format: "pg-dump-custom",
-    },
+    Metadata: { encryption: "aes-256-gcm", format },
   }));
+  const datePrefix = new Date().toISOString().slice(0, 10);
+  const objectKey = `postgresql/${datePrefix}/${finalName}`;
+  await upload(objectKey, finalPath, encrypted.size, "pg-dump-custom");
+  let objects = null;
+  if (backupLocalObjects) {
+    await run(process.env.TAR_COMMAND || "tar", [
+      "--create",
+      "--file",
+      objectsArchivePath,
+      "--directory",
+      objectsRoot,
+      ".",
+    ]);
+    await encryptBackup(objectsArchivePath, objectsFinalPath);
+    const encryptedObjects = await stat(objectsFinalPath);
+    const objectsKey = `objects/${datePrefix}/${objectsFinalName}`;
+    await upload(objectsKey, objectsFinalPath, encryptedObjects.size, "tar");
+    objects = { objectKey: objectsKey, bytes: encryptedObjects.size };
+  }
 
   const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
   for (const entry of await readdir(localRoot, { withFileTypes: true })) {
-    if (!entry.isFile() || !/^lumina-crm-\d{8}T\d{6}Z\.dump\.enc$/.test(entry.name)) continue;
+    if (!entry.isFile()
+      || !/^lumina-crm-\d{8}T\d{6}Z\.(?:dump|objects\.tar)\.enc$/.test(entry.name)) continue;
     const candidate = path.join(localRoot, entry.name);
     if ((await stat(candidate)).mtimeMs < cutoff) await rm(candidate, { force: true });
   }
-  await notify("SUCCEEDED", { objectKey, bytes: encrypted.size, retentionDays });
-  process.stdout.write(`[db:backup] uploaded ${objectKey} (${encrypted.size} encrypted bytes).\n`);
+  await notify("SUCCEEDED", { objectKey, bytes: encrypted.size, objects, retentionDays });
+  process.stdout.write(
+    `[db:backup] uploaded encrypted database${objects ? " and local objects" : ""} backup (${encrypted.size} database bytes).\n`,
+  );
 } catch (error) {
   await notify("FAILED", {
     error: String(error instanceof Error ? error.message : error).slice(0, 500),

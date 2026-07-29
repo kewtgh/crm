@@ -32,12 +32,9 @@ import {
   rollbackAfterCutover,
   runNonFatalCleanup,
   selectReleasesForCleanup,
-  validateDeployAssetTexts,
   validateDirectoryMetadata,
   validateEnvironmentFileMetadata,
   validateEnvironmentKeyPolicy,
-  validateMigrationEnvironment,
-  validateProductionRuntimeEnvironment,
   validateRequiredEnvironment,
   writeExclusiveRequest,
 } from "../scripts/lib/production-deploy-core.mjs";
@@ -451,7 +448,7 @@ test("Docker cleanup candidates require every Lumina identity and protect active
     Id: imageId(id),
     Created: created,
     Size: 100,
-    RepoTags: [`ghcr.io/kewtgh/lumina-crm:${id}`],
+    RepoTags: [`ghcr.io/kewtgh/lumina-crm:${id.repeat(40)}`],
     Config: { Labels: luminaLabels },
     ...overrides,
   });
@@ -459,6 +456,7 @@ test("Docker cleanup candidates require every Lumina identity and protect active
   const rollback = image("b", "2026-07-29T00:00:00.000Z");
   const activeOld = image("c", "2026-07-01T00:00:00.000Z");
   const removable = image("d", "2026-06-01T00:00:00.000Z");
+  const protectedRollback = image("9", "2026-05-15T00:00:00.000Z");
   const hunter = image("e", "2026-05-01T00:00:00.000Z", {
     RepoTags: ["hunterai/service:old"],
     Config: {
@@ -478,10 +476,12 @@ test("Docker cleanup candidates require every Lumina identity and protect active
     rollback,
     activeOld,
     removable,
+    protectedRollback,
     hunter,
     temporalWithPartialSpoof,
   ], {
     inUseIds: new Set([activeOld.Id]),
+    protectedTags: new Set(protectedRollback.RepoTags),
     nowMs: Date.parse("2026-07-30T12:00:00.000Z"),
     minimumAgeMs: 7 * 24 * 60 * 60 * 1_000,
     retain: 2,
@@ -607,109 +607,131 @@ test("plans safe recovery after a runner interruption before or after cutover", 
   );
 });
 
-test("repository dry-run assets keep the v3 role, storage, lock, privilege, and loopback boundaries", async () => {
+test("production Compose assets keep project, role, network, volume, proxy and cleanup boundaries", async () => {
   const [
+    compose,
+    dockerfile,
     serviceUnit,
     sudoers,
-    webUnit,
-    workerUnit,
     productionEnvironment,
+    workerEnvironment,
+    migrationEnvironment,
+    backupEnvironment,
     deploymentEnvironment,
     runner,
     storagePrepareUnit,
     storageCleanupUnit,
     storageMaintenance,
     buildkitConfiguration,
+    volumeProvisioning,
+    caddy,
+    cloudflareWorker,
+    containerEntrypoint,
+    databaseBootstrap,
+    databaseMigrate,
+    backup,
+    restore,
     packageJson,
   ] = await Promise.all([
+    readFile(new URL("../compose.production.yml", import.meta.url), "utf8"),
+    readFile(new URL("../Dockerfile", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm-deploy.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/sudoers/lumina-crm-deploy", import.meta.url), "utf8"),
-    readFile(new URL("../deploy/systemd/lumina-crm.service", import.meta.url), "utf8"),
-    readFile(new URL("../deploy/systemd/lumina-crm-workers.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/production.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/worker.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/migration.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/backup.env.example", import.meta.url), "utf8"),
     readFile(new URL("../deploy/deploy.env.example", import.meta.url), "utf8"),
     readFile(new URL("../scripts/deploy-production-runner.mjs", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm-storage-prepare.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm-storage-cleanup.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/libexec/lumina-crm-storage-maintenance.mjs", import.meta.url), "utf8"),
     readFile(new URL("../deploy/buildkitd.toml", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/scripts/provision-volumes.sh", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/caddy/Caddyfile", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/cloudflare-worker/src/index.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/container-entrypoint.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/db-bootstrap.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/db-migrate.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/db-backup.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/db-restore-test.mjs", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
-  const assets = {
-    serviceUnit,
-    sudoers,
-    webUnit,
-    workerUnit,
-    productionEnvironment,
-    deploymentEnvironment,
-    runner,
-    storagePrepareUnit,
-    storageCleanupUnit,
-    storageMaintenance,
-    buildkitConfiguration,
-    packageJson,
-  };
-  assert.equal(validateDeployAssetTexts(assets), true);
-  const production = parseEnvironmentText(productionEnvironment, "production.env.example");
-  assert.equal(validateProductionRuntimeEnvironment(production), true);
-  assert.equal(validateMigrationEnvironment({
-    MIGRATION_DATABASE_URL: "postgresql://crm_migrator:secret@127.0.0.1:5432/lumina_crm",
-    BACKUP_DATABASE_URL: "postgresql://crm_backup:secret@127.0.0.1:5432/lumina_crm",
-  }), true);
-  assert.throws(
-    () => validateProductionRuntimeEnvironment({
-      ...production,
-      DATABASE_URL: production.SYSTEM_DATABASE_URL,
-    }),
-    /dedicated v3 runtime database roles/,
-  );
-  assert.throws(
-    () => validateProductionRuntimeEnvironment({
-      ...production,
-      OBJECT_STORAGE_LOCAL_ROOT: "/opt/lumina-crm/current/objects",
-    }),
-    /OBJECT_STORAGE_LOCAL_ROOT/,
-  );
-  assert.throws(
-    () => validateProductionRuntimeEnvironment({
-      ...production,
-      ADMIN_PASSWORD: "must-not-be-runtime",
-    }),
-    /ADMIN_PASSWORD/,
-  );
-  assert.throws(
-    () => validateMigrationEnvironment({
-      MIGRATION_DATABASE_URL: "postgresql://crm_app:secret@127.0.0.1:5432/lumina_crm",
-    }),
-    /crm_migrator/,
-  );
+
+  assert.match(compose, /^name: \$\{LUMINA_COMPOSE_PROJECT:-lumina-crm\}$/m);
+  assert.match(compose, /image: postgres:18\.4-bookworm/);
+  assert.match(compose, /"\$\{LUMINA_WEB_BIND:-127\.0\.0\.1:3200\}:3200"/);
+  assert.match(compose, /backend:\s*\n\s+name:.*\n\s+internal: true/);
+  assert.doesNotMatch(compose.match(/postgres:[\s\S]+?\n  web:/)?.[0] ?? "", /\n\s+ports:/);
+  for (const service of ["postgres", "web", "worker"]) {
+    const section = compose.match(new RegExp(`\\n  ${service}:[\\s\\S]+?(?=\\n  [a-z-]+:|\\nnetworks:)`))?.[0] ?? "";
+    assert.match(section, /restart: unless-stopped/, `${service} restart policy`);
+  }
+  assert.match(compose, /postgres_data:\s*\n\s+external: true/);
+  assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/web_runtime_env/);
+  assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/worker_runtime_env/);
+  assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS application/);
+  assert.match(dockerfile, /USER 10001:10001/);
+  for (const label of [
+    'com.lumina.crm.managed="true"',
+    'com.lumina.crm.repository="kewtgh/crm"',
+    'com.docker.compose.project="lumina-crm"',
+  ]) assert.match(dockerfile, new RegExp(label.replaceAll(".", "\\.")));
+
+  assert.doesNotMatch(productionEnvironment, /WORKER_DATABASE_URL|MIGRATION_DATABASE_URL|BACKUP_DATABASE_URL|DATABASE_ADMIN_URL|ADMIN_PASSWORD/);
+  assert.doesNotMatch(workerEnvironment, /^DATABASE_URL=|SYSTEM_DATABASE_URL|MIGRATION_DATABASE_URL|BACKUP_DATABASE_URL|DATABASE_ADMIN_URL/m);
+  assert.match(migrationEnvironment, /MIGRATION_DATABASE_URL=postgresql:\/\/crm_migrator:.*@postgres:5432\/lumina_crm/);
+  assert.match(backupEnvironment, /BACKUP_DATABASE_URL=postgresql:\/\/crm_backup:.*@postgres:5432\/lumina_crm/);
+  assert.doesNotMatch(deploymentEnvironment, /PASSWORD|TOKEN|DATABASE_URL/);
+  assert.match(containerEntrypoint, /_CREDENTIAL_BOUNDARY_VIOLATION/);
+  assert.match(containerEntrypoint, /\], "WEB"\)/);
+  assert.match(containerEntrypoint, /\], "BACKUP"\)/);
+  assert.match(databaseBootstrap, /create extension if not exists pgcrypto with schema extensions/i);
+  assert.match(databaseBootstrap, /create extension if not exists citext with schema extensions/i);
+  assert.match(databaseBootstrap, /create extension if not exists pg_stat_statements with schema extensions/i);
+  assert.match(databaseBootstrap, /grant usage on schema extensions to crm_migrator/i);
+  assert.match(databaseMigrate, /set local search_path = public, extensions/i);
+
   assert.equal(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lib/lumina-crm/deploy.lock");
-  assert.doesNotMatch(serviceUnit, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
-  assert.doesNotMatch(serviceUnit, /^Environment=LUMINA_HTTPS_PROXY|register-proxy|127\.0\.0\.1:20271|127\.0\.0\.1:10808/m);
+  assert.match(serviceUnit, /flock --nonblock --exclusive/);
   assert.match(serviceUnit, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
-  assert.match(webUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
-  assert.match(workerUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
   assert.match(storagePrepareUnit, /\/usr\/local\/libexec\/lumina-crm-storage-maintenance\.mjs prepare/);
   assert.match(storageCleanupUnit, /\/usr\/local\/libexec\/lumina-crm-storage-maintenance\.mjs cleanup/);
   assert.doesNotMatch(storageMaintenance, /docker (?:system|image|volume|network) prune/i);
   assert.match(buildkitConfiguration, /keepDuration = "168h"/);
-  const acceptedSequence = /await activateRelease\(applicationVersion\);[\s\S]+applicationAccepted: true[\s\S]+postSuccessCleanup\(releaseDir\)/;
-  assert.match(runner, acceptedSequence);
-  assert.doesNotMatch(webUnit, /^ReadWritePaths=.*\/opt\/lumina-crm/m);
-  const rebootFragileUnit = serviceUnit
-    .replaceAll(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lock/lumina-crm-deploy.lock")
-    .replace(
-      "ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm",
-      "ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm /var/lock/lumina-crm-deploy.lock",
-    );
-  assert.throws(
-    () => validateDeployAssetTexts({ ...assets, serviceUnit: rebootFragileUnit }),
-    /StateDirectory|volatile lock file/,
-  );
-  assert.throws(
-    () => validateDeployAssetTexts({ ...assets, packageJson: { ...packageJson, allowScripts: {} } }),
-    /install-script allowlist/,
-  );
-  assert.doesNotMatch(`${serviceUnit}\n${sudoers}\n${runner}`, /cloudflared|hunterai|v2raya/i);
-  assert.doesNotMatch(`${sudoers}\n${runner}`, /\/usr\/bin\/docker|docker\.sock|["']docker["']/i);
+  assert.match(volumeProvisioning, /postgres:18\.4-bookworm/);
+  assert.match(volumeProvisioning, /--network none/);
+  assert.match(volumeProvisioning, /--cap-add CHOWN/);
+  assert.match(volumeProvisioning, /10001:10001 \/data/);
+  assert.doesNotMatch(volumeProvisioning, /mount[^\\n]*postgres_volume/);
+  for (const contract of [
+    /build immutable application image/,
+    /verify migration manifest/,
+    /apply locked forward migration/,
+    /switch Web and Worker images/,
+    /loopback readiness/,
+    /Cloudflare Worker public liveness/,
+  ]) assert.match(runner, contract);
+  assert.match(runner, /await buildImages\(target\);[\s\S]+await migrate\(candidateEnv\);[\s\S]+await switchApplication\(candidateEnv\);[\s\S]+await acceptRuntime\(composeEnvPath\)/);
+  assert.match(runner, /Application rolled back; database remains on the forward schema/);
+  assert.match(storageMaintenance, /current-rollback-or-recent-success/);
+  assert.match(storageMaintenance, /imageDecisions/);
+  assert.doesNotMatch(`${serviceUnit}\n${sudoers}\n${runner}\n${compose}`, /hunterai|temporal|v2raya/i);
+
+  assert.match(caddy, /X-Lumina-Origin-Auth/);
+  assert.match(caddy, /reverse_proxy 127\.0\.0\.1:3200/);
+  assert.match(caddy, /header_up -X-Forwarded-For/);
+  assert.match(cloudflareWorker, /headers\.delete\(INTERNAL_AUTH_HEADER\)|untrustedForwardingHeaders/);
+  assert.match(cloudflareWorker, /cacheEverything: false/);
+  assert.match(backup, /--format=custom/);
+  assert.match(backup, /encryptBackup/);
+  assert.match(backup, /BACKUP_LOCAL_OBJECTS/);
+  assert.match(backup, /await upload\(objectKey[\s\S]+await notify\("SUCCEEDED"/);
+  assert.match(restore, /lumina_restore_/);
+  assert.match(restore, /--exit-on-error/);
+  assert.match(restore, /drop database if exists/);
+
+  const executableAssets = `${runner}\n${storageMaintenance}\n${compose}\n${serviceUnit}\n${sudoers}`;
+  assert.doesNotMatch(executableAssets, /docker\s+system\s+prune|docker\s+image\s+prune\s+-a|docker\s+volume\s+prune|compose\s+down\s+-v/i);
+  assert.equal(packageJson.version, "3.7.0");
 });

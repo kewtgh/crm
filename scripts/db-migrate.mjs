@@ -58,6 +58,7 @@ try {
     try {
       await client.query("set local lock_timeout = '10s'");
       await client.query("set local statement_timeout = '120s'");
+      await client.query("set local search_path = public, extensions");
       await client.query(sql);
       const executionMs = Math.max(0, Math.round(performance.now() - startedAt));
       await client.query(

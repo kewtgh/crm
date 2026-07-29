@@ -349,6 +349,25 @@ export async function workerQuery(text, values = []) {
   return pool.query(text, values);
 }
 
+export async function withWorkerAdvisoryLock(name, operation) {
+  const client = await pool.connect();
+  let locked = false;
+  try {
+    const result = await client.query(
+      "select pg_try_advisory_lock(hashtext($1)) as locked",
+      [name],
+    );
+    locked = result.rows[0]?.locked === true;
+    if (!locked) return { acquired: false };
+    return { acquired: true, value: await operation() };
+  } finally {
+    if (locked) {
+      await client.query("select pg_advisory_unlock(hashtext($1))", [name]).catch(() => undefined);
+    }
+    client.release();
+  }
+}
+
 export async function closeWorkerDatabase() {
   await pool.end();
 }

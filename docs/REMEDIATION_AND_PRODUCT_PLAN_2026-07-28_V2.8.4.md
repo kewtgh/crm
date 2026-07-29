@@ -1,5 +1,8 @@
 # Lumina CRM v2.8.4 整合修改计划
 
+> **Archived / obsolete production architecture:** this point-in-time plan predates the v3.7
+> Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.
+
 计划日期：2026-07-28
 依据：[v2.8.4 全面审计](AUDIT_2026-07-28_V2.8.4.md)
 

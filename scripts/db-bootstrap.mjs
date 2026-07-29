@@ -31,6 +31,10 @@ const client = new Client({
 await client.connect();
 try {
   const database = (await client.query("select current_database() as name")).rows[0].name;
+  await client.query("create schema if not exists extensions");
+  await client.query("create extension if not exists pgcrypto with schema extensions");
+  await client.query("create extension if not exists citext with schema extensions");
+  await client.query("create extension if not exists pg_stat_statements with schema extensions");
   for (const [role, password] of roles) {
     const exists = (await client.query("select 1 from pg_roles where rolname = $1", [role])).rowCount;
     if (!exists) {
@@ -49,6 +53,7 @@ try {
   }
   await client.query(`grant create on database ${escapeIdentifier(database)} to crm_migrator`);
   await client.query("grant all on schema public to crm_migrator");
+  await client.query("grant usage on schema extensions to crm_migrator");
   await client.query("grant pg_read_all_data to crm_backup");
   await client.query("revoke create on schema public from public");
   process.stdout.write(`[db:bootstrap] roles prepared for ${database}.\n`);

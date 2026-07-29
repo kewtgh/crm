@@ -28,9 +28,7 @@ const PROGRAM_PATH = "/usr/local/libexec/lumina-crm-storage-maintenance.mjs";
 const DOCKER_COMMAND = "/usr/bin/docker";
 const DEPLOY_ENV_PATH = "/etc/lumina-crm/deploy.env";
 const BUILDKIT_CONFIG_PATH = "/etc/lumina-crm/buildkitd.toml";
-const DEPLOY_ROOT = "/opt/lumina-crm";
-const RELEASES_ROOT = `${DEPLOY_ROOT}/releases`;
-const CURRENT_LINK = `${DEPLOY_ROOT}/current`;
+const DEPLOY_STATE_ROOT = "/var/lib/lumina-crm/deployments";
 const LAST_SUCCESS_PATH = "/var/lib/lumina-crm/deployments/last-success.json";
 const CLEANUP_REQUEST_PATH = "/var/lib/lumina-crm/deployments/storage-cleanup-request.json";
 const STATE_ROOT = "/var/lib/lumina-crm/storage-maintenance";
@@ -40,7 +38,7 @@ const BUILDER_MARKER_PATH = `${STATE_ROOT}/builder-owner.json`;
 const LATEST_REPORT_PATH = `${STATE_ROOT}/latest.json`;
 const GIBIBYTE = 1024 ** 3;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
-const LUMINA_TAG_PATTERN = /(?:^|\/)lumina-crm(?::|\/)/;
+const LUMINA_TAG_PATTERN = /(?:^|\/)lumina-crm(?:-ops)?:[0-9a-f]{40}$/;
 
 function boundedInteger(value, { name, minimum, maximum, fallback }) {
   const source = String(value ?? fallback);
@@ -99,11 +97,13 @@ export function parseStoragePolicy(environment = {}) {
       maximum: 1024,
       fallback: 10,
     }) * GIBIBYTE,
-    releaseMinimumAvailableBytes: boundedInteger(environment.LUMINA_RELEASE_MIN_FREE_GB, {
-      name: "LUMINA_RELEASE_MIN_FREE_GB",
+    releaseMinimumAvailableBytes: boundedInteger(
+      environment.LUMINA_STATE_MIN_FREE_GB ?? environment.LUMINA_RELEASE_MIN_FREE_GB,
+      {
+      name: "LUMINA_STATE_MIN_FREE_GB",
       minimum: 2,
       maximum: 1024,
-      fallback: 8,
+      fallback: 4,
     }) * GIBIBYTE,
     cacheRetentionHours: boundedInteger(environment.LUMINA_BUILDKIT_CACHE_RETENTION_HOURS, {
       name: "LUMINA_BUILDKIT_CACHE_RETENTION_HOURS",
@@ -160,7 +160,7 @@ function captureDisk(policy) {
   return [
     diskSnapshot("root filesystem", "/", policy.rootMinimumAvailableBytes, policy.minimumFreePercent),
     diskSnapshot("Docker data root", policy.dockerDataRoot, policy.dockerMinimumAvailableBytes, policy.minimumFreePercent),
-    diskSnapshot("Lumina releases", RELEASES_ROOT, policy.releaseMinimumAvailableBytes, policy.minimumFreePercent),
+    diskSnapshot("Lumina deploy state", DEPLOY_STATE_ROOT, policy.releaseMinimumAvailableBytes, policy.minimumFreePercent),
   ];
 }
 
@@ -342,10 +342,15 @@ function validateCleanupRequest() {
   if (request.applicationAccepted !== true || request.deploymentId !== lastSuccess.deploymentId) {
     throw new Error("Storage cleanup request does not match the accepted deployment");
   }
-  const release = path.resolve(String(request.releasePath ?? ""));
-  if (!release.startsWith(`${RELEASES_ROOT}/`) || realpathSync(CURRENT_LINK) !== release
-    || path.resolve(lastSuccess.currentRelease) !== release) {
-    throw new Error("Storage cleanup request is not for the current accepted Lumina release");
+  if (request.currentImage !== lastSuccess.currentImage
+    || !LUMINA_TAG_PATTERN.test(String(request.currentImage ?? ""))) {
+    throw new Error("Storage cleanup request is not for the current accepted Lumina image");
+  }
+  if (!Array.isArray(request.protectedImageTags)
+    || request.protectedImageTags.some((tag) => (
+      typeof tag !== "string" || !LUMINA_TAG_PATTERN.test(tag)
+    ))) {
+    throw new Error("Storage cleanup protected image tags are invalid");
   }
   const ageMs = Date.now() - Date.parse(String(request.acceptedAt ?? ""));
   if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 60 * 60 * 1_000) {
@@ -392,6 +397,7 @@ function exactLuminaImage(image) {
 
 export function selectLuminaImageCandidates(images, {
   inUseIds = new Set(),
+  protectedTags = new Set(),
   nowMs = Date.now(),
   minimumAgeMs = 7 * 24 * 60 * 60 * 1_000,
   retain = 2,
@@ -405,6 +411,7 @@ export function selectLuminaImageCandidates(images, {
   return exact.filter((image) => (
     !newest.has(image.Id)
     && !inUseIds.has(image.Id)
+    && !(image.RepoTags ?? []).some((tag) => protectedTags.has(tag))
     && nowMs - image.createdMs >= minimumAgeMs
   ));
 }
@@ -417,7 +424,7 @@ function buildkitUsage() {
   };
 }
 
-function cleanupDocker(policy) {
+function cleanupDocker(policy, request) {
   const marker = existsSync(BUILDER_MARKER_PATH) ? readJson(BUILDER_MARKER_PATH) : null;
   const fingerprint = configFingerprint(policy);
   if (!marker || marker.owner !== LUMINA_REPOSITORY_VALUE
@@ -427,10 +434,29 @@ function cleanupDocker(policy) {
   validateBuilderInspect(runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME]).stdout);
 
   const images = listLuminaImages();
+  const inUseIds = inUseImageIds();
+  const protectedTags = new Set(request.protectedImageTags);
   const candidates = selectLuminaImageCandidates(images, {
-    inUseIds: inUseImageIds(),
+    inUseIds,
+    protectedTags,
     minimumAgeMs: policy.cacheRetentionHours * 60 * 60 * 1_000,
     retain: 2,
+  });
+  const candidateIds = new Set(candidates.map((image) => image.Id));
+  const imageDecisions = images.map((image) => {
+    const reasons = [];
+    if (!exactLuminaImage(image)) reasons.push("labels-or-repository-tag-not-exact");
+    if (inUseIds.has(image.Id)) reasons.push("used-by-container");
+    if ((image.RepoTags ?? []).some((tag) => protectedTags.has(tag))) {
+      reasons.push("current-rollback-or-recent-success");
+    }
+    if (!candidateIds.has(image.Id) && !reasons.length) reasons.push("retention-or-minimum-age");
+    return {
+      id: image.Id,
+      repositoryTags: image.RepoTags ?? [],
+      decision: candidateIds.has(image.Id) ? "DELETE_CANDIDATE" : "REJECTED",
+      reasons,
+    };
   });
   const deletedImages = [];
   const failures = [];
@@ -475,6 +501,7 @@ function cleanupDocker(policy) {
       repositoryTags: image.RepoTags ?? [],
       sizeBytes: Number(image.Size ?? 0),
     })),
+    imageDecisions,
     deletedImages,
     estimatedImageBytes: deletedImages.reduce((total, image) => total + image.sizeBytes, 0),
     cacheBefore,
@@ -524,7 +551,7 @@ async function perform(mode) {
     throw new Error(`Lumina storage maintenance must run from root-owned ${PROGRAM_PATH}`);
   }
   assertRegularRootFile(PROGRAM_PATH, "Lumina storage maintenance program");
-  assertRealDirectory(RELEASES_ROOT, "Lumina release root");
+  assertRealDirectory(DEPLOY_STATE_ROOT, "Lumina deploy state root");
   mkdirSync(STATE_ROOT, { recursive: true, mode: 0o750 });
   mkdirSync(LOG_ROOT, { recursive: true, mode: 0o750 });
   mkdirSync(DOCKER_CONFIG_ROOT, { recursive: true, mode: 0o700 });
@@ -555,13 +582,13 @@ async function perform(mode) {
     }
     if (mode !== "cleanup") throw new Error(`Unsupported storage maintenance mode: ${mode}`);
     const request = validateCleanupRequest();
-    const cleanup = cleanupDocker(policy);
+    const cleanup = cleanupDocker(policy, request);
     const diskAfter = captureDisk(policy);
     return {
       status: cleanup.failures.length ? "PARTIAL" : "SUCCEEDED",
       mode,
       deploymentId: request.deploymentId,
-      acceptedRelease: request.releasePath,
+      acceptedImage: request.currentImage,
       diskBefore,
       diskAfter: diskDelta(diskBefore, diskAfter),
       cleanup,
