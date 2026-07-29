@@ -15,6 +15,7 @@ export {
 export const PRODUCTION_PUBLIC_URL = "https://crm.ewaya.com";
 export const PRODUCTION_LOCAL_URL = "http://127.0.0.1:3200";
 export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
+export const PRODUCTION_LOCAL_OBJECT_ROOT = "/var/lib/lumina-crm/objects";
 export const GITHUB_PULL_PROXY_URL = "http://127.0.0.1:20271";
 export const RELEASE_NAME_PATTERN = /^\d{8}T\d{6}Z-[0-9a-f]{12}$/;
 export const LEGACY_RELEASE_NAME_PATTERN = /^\d{14}-[0-9a-f]{12}$/;
@@ -24,6 +25,57 @@ export const REVIEWED_INSTALL_SCRIPTS = Object.freeze({
   "esbuild@0.28.1": true,
   "unrs-resolver@1.12.2": true,
 });
+export const PRODUCTION_RUNTIME_REQUIRED_KEYS = Object.freeze([
+  "APP_URL",
+  "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+  "TURNSTILE_SECRET_KEY",
+  "TURNSTILE_EXPECTED_HOSTNAME",
+  "ALTCHA_HMAC_SECRET",
+  "DATABASE_URL",
+  "SYSTEM_DATABASE_URL",
+  "WORKER_DATABASE_URL",
+  "CRM_WORKSPACE_ID",
+  "LOGIN_THROTTLE_HASH_SECRET",
+  "TRUSTED_DEVICE_HASH_SECRET",
+  "TOTP_ENCRYPTION_KEY",
+  "OBJECT_STORAGE_PROVIDER",
+  "OBJECT_STORAGE_SIGNING_SECRET",
+  "EMAIL_DELIVERY_WEBHOOK_URL",
+  "EMAIL_DELIVERY_WEBHOOK_TOKEN",
+]);
+export const PRODUCTION_RUNTIME_EXACT_VALUES = Object.freeze({
+  APP_URL: PRODUCTION_PUBLIC_URL,
+  TURNSTILE_EXPECTED_HOSTNAME: "crm.ewaya.com",
+});
+export const PRODUCTION_RUNTIME_FORBIDDEN_PATTERNS = Object.freeze([
+  /^(?:PATH|HOME|USER|LOGNAME|SHELL|NODE_OPTIONS|NODE_ENV|CI|TMPDIR|TMP|TEMP|XDG_CACHE_HOME|SSH_AUTH_SOCK)$/i,
+  /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY|GIT_PROXY_COMMAND|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
+  /^(?:DATABASE_ADMIN_URL|MIGRATION_DATABASE_URL|CRM_(?:APP|SYSTEM|WORKER|MIGRATOR|BACKUP)_DB_PASSWORD|BACKUP_.+|DISK_.+|ADMIN_.+)$/i,
+]);
+export const DEPLOY_ENV_ALLOWED_KEYS = Object.freeze([
+  "DATABASE_ADMIN_URL",
+  "MIGRATION_DATABASE_URL",
+  "CRM_APP_DB_PASSWORD",
+  "CRM_SYSTEM_DB_PASSWORD",
+  "CRM_WORKER_DB_PASSWORD",
+  "CRM_MIGRATOR_DB_PASSWORD",
+  "CRM_BACKUP_DB_PASSWORD",
+  "BACKUP_DATABASE_URL",
+  "BACKUP_LOCAL_ROOT",
+  "BACKUP_ENCRYPTION_KEY",
+  "BACKUP_RETENTION_DAYS",
+  "BACKUP_S3_ENDPOINT",
+  "BACKUP_S3_REGION",
+  "BACKUP_S3_BUCKET",
+  "BACKUP_S3_ACCESS_KEY_ID",
+  "BACKUP_S3_SECRET_ACCESS_KEY",
+  "BACKUP_NOTIFICATION_WEBHOOK_URL",
+  "BACKUP_NOTIFICATION_WEBHOOK_TOKEN",
+  "DISK_MONITOR_PATHS",
+  "DISK_FREE_PERCENT_THRESHOLD",
+  "DISK_NOTIFICATION_WEBHOOK_URL",
+  "DISK_NOTIFICATION_WEBHOOK_TOKEN",
+]);
 
 const REQUIRED_READINESS_CHECKS = ["environment", "auth", "database", "workers", "queues"];
 const SECRET_KEY_PATTERN = /(TOKEN|SECRET|PASSWORD|PRIVATE|SERVICE_ROLE|KEY|CREDENTIAL|DSN|CONNECTION_STRING|WEBHOOK_URL)/i;
@@ -140,6 +192,81 @@ export function validateEnvironmentKeyPolicy(environment, {
   ));
   if (disallowed.length) {
     throw new Error(`${label} contains disallowed variables: ${disallowed.sort().join(", ")}`);
+  }
+  return true;
+}
+
+function databaseUsername(value, label) {
+  try {
+    const parsed = new URL(String(value));
+    if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.username) throw new Error();
+    return decodeURIComponent(parsed.username);
+  } catch {
+    throw new Error(`${label} must be a complete PostgreSQL URL`);
+  }
+}
+
+export function validateProductionRuntimeEnvironment(environment, { label = "production.env" } = {}) {
+  validateEnvironmentKeyPolicy(environment, {
+    label,
+    forbidden: PRODUCTION_RUNTIME_FORBIDDEN_PATTERNS,
+  });
+  validateRequiredEnvironment(environment, {
+    label,
+    required: PRODUCTION_RUNTIME_REQUIRED_KEYS,
+    exact: PRODUCTION_RUNTIME_EXACT_VALUES,
+  });
+
+  const databaseRoles = {
+    DATABASE_URL: "crm_app",
+    SYSTEM_DATABASE_URL: "crm_system",
+    WORKER_DATABASE_URL: "crm_worker",
+  };
+  const mismatchedRoles = Object.entries(databaseRoles)
+    .filter(([key, role]) => databaseUsername(environment[key], `${label} ${key}`) !== role)
+    .map(([key]) => key);
+  if (mismatchedRoles.length) {
+    throw new Error(`${label} must use the dedicated v3 runtime database roles for: ${mismatchedRoles.join(", ")}`);
+  }
+
+  const provider = String(environment.OBJECT_STORAGE_PROVIDER ?? "").trim().toLowerCase();
+  if (provider === "local") {
+    validateRequiredEnvironment(environment, {
+      label,
+      required: ["OBJECT_STORAGE_LOCAL_ROOT"],
+      exact: { OBJECT_STORAGE_LOCAL_ROOT: PRODUCTION_LOCAL_OBJECT_ROOT },
+    });
+  } else if (provider === "s3") {
+    validateRequiredEnvironment(environment, {
+      label,
+      required: [
+        "S3_ENDPOINT",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
+      ],
+    });
+    let endpoint;
+    try { endpoint = new URL(environment.S3_ENDPOINT); } catch { throw new Error(`${label} S3_ENDPOINT must be a valid HTTPS URL`); }
+    if (endpoint.protocol !== "https:") throw new Error(`${label} S3_ENDPOINT must be a valid HTTPS URL`);
+  } else {
+    throw new Error(`${label} OBJECT_STORAGE_PROVIDER must be local or s3`);
+  }
+  return true;
+}
+
+export function validateMigrationEnvironment(environment, { label = "deploy.env" } = {}) {
+  validateRequiredEnvironment(environment, {
+    label,
+    required: ["MIGRATION_DATABASE_URL"],
+  });
+  if (databaseUsername(environment.MIGRATION_DATABASE_URL, `${label} MIGRATION_DATABASE_URL`) !== "crm_migrator") {
+    throw new Error(`${label} MIGRATION_DATABASE_URL must use the dedicated crm_migrator role`);
+  }
+  if (environment.BACKUP_DATABASE_URL
+    && databaseUsername(environment.BACKUP_DATABASE_URL, `${label} BACKUP_DATABASE_URL`) !== "crm_backup") {
+    throw new Error(`${label} BACKUP_DATABASE_URL must use the dedicated crm_backup role`);
   }
   return true;
 }
@@ -426,7 +553,16 @@ export function assertReviewedInstallScriptPolicy(packageJson) {
   return true;
 }
 
-export function validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson }) {
+export function validateDeployAssetTexts({
+  serviceUnit,
+  sudoers,
+  webUnit,
+  workerUnit,
+  productionEnvironment,
+  deploymentEnvironment,
+  runner,
+  packageJson,
+}) {
   const failures = [];
   const lockCommand = `/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 ${PRODUCTION_DEPLOY_LOCK_PATH}`;
   if (!serviceUnit.includes(lockCommand)) failures.push("deploy service must lock inside its systemd StateDirectory");
@@ -458,7 +594,35 @@ export function validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner
   }
   if (!runner.includes("directRuntimeEnvironment")) failures.push("deploy child stages must strip proxy environment");
   if (!runner.includes("process.versions.node")) failures.push("deploy runner must enforce Node.js 24.x");
+  if (!runner.includes("mkdirSync(PRODUCTION_LOCAL_OBJECT_ROOT")
+    || !runner.includes('assertRealDirectory(PRODUCTION_LOCAL_OBJECT_ROOT, "Persistent object storage sandbox directory")')) {
+    failures.push("deploy runner must create and verify the persistent object storage sandbox directory");
+  }
   if (!webUnit.includes("--hostname 127.0.0.1")) failures.push("web unit must bind to 127.0.0.1");
+  if (!/^ReadWritePaths=.*\/var\/lib\/lumina-crm\/objects(?:\s|$)/m.test(webUnit ?? "")) {
+    failures.push("web unit must allow writes to the persistent local object root");
+  }
+  if (!/^ReadWritePaths=.*\/var\/lib\/lumina-crm\/objects(?:\s|$)/m.test(workerUnit ?? "")) {
+    failures.push("worker unit must allow writes to the persistent local object root");
+  }
+  try {
+    validateProductionRuntimeEnvironment(
+      parseEnvironmentText(productionEnvironment, "production.env.example"),
+      { label: "production.env.example" },
+    );
+  } catch (error) {
+    failures.push(error.message);
+  }
+  try {
+    const example = parseEnvironmentText(deploymentEnvironment, "deploy.env.example");
+    validateEnvironmentKeyPolicy(example, {
+      label: "deploy.env.example",
+      allowed: DEPLOY_ENV_ALLOWED_KEYS,
+    });
+    validateMigrationEnvironment(example, { label: "deploy.env.example" });
+  } catch (error) {
+    failures.push(error.message);
+  }
   for (const forbidden of ["cloudflared", "hunterai", "docker", "v2raya", "reboot", "poweroff"]) {
     if (sudoers.toLowerCase().includes(forbidden)) failures.push(`sudoers must not mention ${forbidden}`);
     if (runner.toLowerCase().includes(forbidden)) failures.push(`deploy runner must not mention ${forbidden}`);

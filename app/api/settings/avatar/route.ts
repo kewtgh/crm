@@ -51,13 +51,13 @@ async function post(request: Request) {
     return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
   }
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const avatarPath = `${user.id}/avatar.${extension}`;
+  const avatarPath = `${user.id}/${crypto.randomUUID()}.${extension}`;
   const previous = await loadUserSettings(user);
-  await objectStore().put(`avatars/${avatarPath}`, bytes, {
-    contentType: file.type,
-    checksum: createHash("sha256").update(bytes).digest("hex"),
-  });
   try {
+    await objectStore().put(`avatars/${avatarPath}`, bytes, {
+      contentType: file.type,
+      checksum: createHash("sha256").update(bytes).digest("hex"),
+    });
     await databaseJson(`/db/table/user_preferences?user_id=eq.${user.id}`, {
       method: "PATCH",
       body: JSON.stringify({ avatar_path: avatarPath, updated_at: new Date().toISOString() }),

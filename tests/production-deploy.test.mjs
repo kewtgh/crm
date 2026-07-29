@@ -31,6 +31,8 @@ import {
   validateDirectoryMetadata,
   validateEnvironmentFileMetadata,
   validateEnvironmentKeyPolicy,
+  validateMigrationEnvironment,
+  validateProductionRuntimeEnvironment,
   validateRequiredEnvironment,
   writeExclusiveRequest,
 } from "../scripts/lib/production-deploy-core.mjs";
@@ -434,19 +436,77 @@ test("plans safe recovery after a runner interruption before or after cutover", 
   );
 });
 
-test("repository dry-run assets keep the lock, least privilege, and loopback binding", async () => {
-  const [serviceUnit, sudoers, webUnit, runner, packageJson] = await Promise.all([
+test("repository dry-run assets keep the v3 role, storage, lock, privilege, and loopback boundaries", async () => {
+  const [
+    serviceUnit,
+    sudoers,
+    webUnit,
+    workerUnit,
+    productionEnvironment,
+    deploymentEnvironment,
+    runner,
+    packageJson,
+  ] = await Promise.all([
     readFile(new URL("../deploy/systemd/lumina-crm-deploy.service", import.meta.url), "utf8"),
     readFile(new URL("../deploy/sudoers/lumina-crm-deploy", import.meta.url), "utf8"),
     readFile(new URL("../deploy/systemd/lumina-crm.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/lumina-crm-workers.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/production.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/deploy.env.example", import.meta.url), "utf8"),
     readFile(new URL("../scripts/deploy-production-runner.mjs", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
-  assert.equal(validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson }), true);
+  const assets = {
+    serviceUnit,
+    sudoers,
+    webUnit,
+    workerUnit,
+    productionEnvironment,
+    deploymentEnvironment,
+    runner,
+    packageJson,
+  };
+  assert.equal(validateDeployAssetTexts(assets), true);
+  const production = parseEnvironmentText(productionEnvironment, "production.env.example");
+  assert.equal(validateProductionRuntimeEnvironment(production), true);
+  assert.equal(validateMigrationEnvironment({
+    MIGRATION_DATABASE_URL: "postgresql://crm_migrator:secret@127.0.0.1:5432/lumina_crm",
+    BACKUP_DATABASE_URL: "postgresql://crm_backup:secret@127.0.0.1:5432/lumina_crm",
+  }), true);
+  assert.throws(
+    () => validateProductionRuntimeEnvironment({
+      ...production,
+      DATABASE_URL: production.SYSTEM_DATABASE_URL,
+    }),
+    /dedicated v3 runtime database roles/,
+  );
+  assert.throws(
+    () => validateProductionRuntimeEnvironment({
+      ...production,
+      OBJECT_STORAGE_LOCAL_ROOT: "/opt/lumina-crm/current/objects",
+    }),
+    /OBJECT_STORAGE_LOCAL_ROOT/,
+  );
+  assert.throws(
+    () => validateProductionRuntimeEnvironment({
+      ...production,
+      ADMIN_PASSWORD: "must-not-be-runtime",
+    }),
+    /ADMIN_PASSWORD/,
+  );
+  assert.throws(
+    () => validateMigrationEnvironment({
+      MIGRATION_DATABASE_URL: "postgresql://crm_app:secret@127.0.0.1:5432/lumina_crm",
+    }),
+    /crm_migrator/,
+  );
   assert.equal(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lib/lumina-crm/deploy.lock");
   assert.doesNotMatch(serviceUnit, /\/var\/lock\/|ReadWritePaths=.*\.lock/);
   assert.doesNotMatch(serviceUnit, /^Environment=LUMINA_HTTPS_PROXY|register-proxy|127\.0\.0\.1:20271|127\.0\.0\.1:10808/m);
   assert.match(serviceUnit, /UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY/);
+  assert.match(webUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
+  assert.match(workerUnit, /^ReadWritePaths=\/var\/lib\/lumina-crm\/objects$/m);
+  assert.doesNotMatch(webUnit, /^ReadWritePaths=.*\/opt\/lumina-crm/m);
   const rebootFragileUnit = serviceUnit
     .replaceAll(PRODUCTION_DEPLOY_LOCK_PATH, "/var/lock/lumina-crm-deploy.lock")
     .replace(
@@ -454,11 +514,11 @@ test("repository dry-run assets keep the lock, least privilege, and loopback bin
       "ReadWritePaths=/opt/lumina-crm /var/lib/lumina-crm /var/log/lumina-crm /var/lock/lumina-crm-deploy.lock",
     );
   assert.throws(
-    () => validateDeployAssetTexts({ serviceUnit: rebootFragileUnit, sudoers, webUnit, runner, packageJson }),
+    () => validateDeployAssetTexts({ ...assets, serviceUnit: rebootFragileUnit }),
     /StateDirectory|volatile lock file/,
   );
   assert.throws(
-    () => validateDeployAssetTexts({ serviceUnit, sudoers, webUnit, runner, packageJson: { ...packageJson, allowScripts: {} } }),
+    () => validateDeployAssetTexts({ ...assets, packageJson: { ...packageJson, allowScripts: {} } }),
     /install-script allowlist/,
   );
   assert.doesNotMatch(`${serviceUnit}\n${sudoers}\n${runner}`, /cloudflared|hunterai|docker|v2raya/i);

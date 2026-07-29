@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BellRing,
   CalendarDays,
@@ -21,6 +21,7 @@ import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { calendarMonthRange } from "@/lib/timezone";
 
 type CalendarEvent = {
   id: string;
@@ -52,13 +53,15 @@ function monthCells(month: Date) {
   ];
 }
 
-export function CalendarPage({ initialCalendarEvents = [], persistent = false }: { initialCalendarEvents?: CalendarEvent[]; persistent?: boolean }) {
+export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal, initialCalendarTruncated = false, persistent = false }: { initialCalendarEvents?: CalendarEvent[]; initialCalendarTotal?:number; initialCalendarTruncated?:boolean; persistent?: boolean }) {
   const { locale, t } = useI18n();
-  const {todayKey:preferredTodayKey}=useUserPreferences();
+  const {todayKey:preferredTodayKey,timezone}=useUserPreferences();
   const todayKey=preferredTodayKey();
   const [todayYear,todayMonth]=todayKey.split("-").map(Number);
   const [month, setMonth] = useState(() => new Date(todayYear, todayMonth-1, 1));
   const [events, setEvents] = useState(initialCalendarEvents);
+  const [calendarTotal,setCalendarTotal]=useState(initialCalendarTotal??initialCalendarEvents.length);
+  const [calendarTruncated,setCalendarTruncated]=useState(initialCalendarTruncated);
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [related, setRelated] = useState("");
@@ -72,6 +75,8 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const [reschedule,setReschedule]=useState<{id:string;date:string;time:string}|null>(null);
   const [cancelEvent,setCancelEvent]=useState<CalendarEvent|null>(null);
   const [cancelPending,setCancelPending]=useState(false);
+  const [schedulePending,setSchedulePending]=useState(false);
+  const scheduleLock=useRef(false);
   const runRelatedSearch=useRemoteSearch();
   const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
 
@@ -83,7 +88,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
   const safeUpcomingPage=Math.min(upcomingPage,upcomingPages);
   const visibleUpcoming=upcoming.slice((safeUpcomingPage-1)*upcomingPageSize,safeUpcomingPage*upcomingPageSize);
 
-  useEffect(()=>{if(!persistent)return;const from=new Date(Date.UTC(month.getFullYear(),month.getMonth(),1));const to=new Date(Date.UTC(month.getFullYear(),month.getMonth()+2,1));const controller=new AbortController();void apiFetch<{items:CalendarEvent[]}>(`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{signal:controller.signal}).then(result=>setEvents(result.items)).catch(caught=>{if(!controller.signal.aborted)setFormError(presentApiError(caught,t,"calendar.loadFailed").message);});return()=>controller.abort();},[month,persistent,t]);
+  useEffect(()=>{if(!persistent)return;const range=calendarMonthRange(month.getFullYear(),month.getMonth(),2,timezone);const controller=new AbortController();void apiFetch<{items:CalendarEvent[];total:number;truncated:boolean}>(`/api/calendar?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,{signal:controller.signal}).then(result=>{setEvents(result.items);setCalendarTotal(result.total);setCalendarTruncated(result.truncated);}).catch(caught=>{if(!controller.signal.aborted)setFormError(presentApiError(caught,t,"calendar.loadFailed").message);});return()=>controller.abort();},[month,persistent,t,timezone]);
 
   const searchRelated=useCallback(async(query:string)=>{if(!persistent)return;setRelatedLoading(true);const result=await runRelatedSearch(signal=>apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));if(!result.current)return;setRelatedLoading(false);if("error" in result){setFormError(t("calendar.relatedLoadFailed"));return;}setRelatedOptions(result.value.items.filter(item=>item.type!=="USER").map((item)=>({value:item.value,label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t(item.type==="ORGANIZATION"?"calendar.relatedOrganization":"calendar.relatedContact")})));},[locale,persistent,runRelatedSearch,t]);
 
@@ -95,15 +100,18 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
 
   const submitSchedule = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if(scheduleLock.current)return;
+    scheduleLock.current=true;
     setFormError("");
     const form = new FormData(event.currentTarget);
     const relation = relatedOptions.find((option) => option.value === related)?.label ?? t("calendar.unlinked");
     const reminderValues: Record<string, number> = { [t("calendar.reminder.start")]: 0, [t("calendar.reminder.30m")]: 30, [t("calendar.reminder.2h")]: 120, [t("calendar.reminder.day")]: 1440, [t("calendar.reminder.3d")]: 4320 };
     let id = `local-${Date.now()}`;
+    setSchedulePending(true);
     if (persistent) {
       const [relatedType,relatedId]=related.includes(":")?related.split(":"):["",""];
       const attendeeEmails=String(form.get("attendees")??"").split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);const consentConfirmed=form.get("attendeeConsent")==="on";
-      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch(caught){setFormError(presentApiError(caught,t,"calendar.saveFailed").message);return;}
+      try{const result=await apiFetch<{item:{id:string}}>("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: String(form.get("title")), locale, date: String(form.get("date")), time: String(form.get("time")), type: String(form.get("type")), channel: String(form.get("channel")), related: relation, relatedType:relatedType||null,relatedId:relatedId||null, reminder: reminderValues[String(form.get("reminder"))] ?? 1440,attendees:attendeeEmails.map(email=>({email,consentConfirmed})) }) });id=result.item.id;}catch(caught){setFormError(presentApiError(caught,t,"calendar.saveFailed").message);scheduleLock.current=false;setSchedulePending(false);return;}
     }
     setEvents((current) => [...current, {
       id,
@@ -116,6 +124,9 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
       reminder: String(form.get("reminder")),
       deliveryStatus:String(form.get("attendees")??"").trim()?"QUEUED":"NONE",
     }]);
+    setCalendarTotal(current=>current+1);
+    scheduleLock.current=false;
+    setSchedulePending(false);
     setDrawerOpen(false);
     setToast(t("calendar.saved"));
   };
@@ -132,6 +143,7 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
       <div><p className="eyebrow">{t("calendar.eyebrow")}</p><h1>{t("calendar.title")}</h1><p>{t("calendar.description")}</p></div>
       <div className="page-actions"><button className="secondary-button" type="button" onClick={() => {setMonth(new Date(todayYear,todayMonth-1,1));setSelectedDate(todayKey);}}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
     </section>
+    {calendarTruncated&&<InlineMessage type="warning">{t("calendar.truncated",{shown:events.length,total:calendarTotal})}</InlineMessage>}
     <section className="calendar-layout">
       <div className="surface calendar-surface">
         <div className="calendar-toolbar">
@@ -159,16 +171,16 @@ export function CalendarPage({ initialCalendarEvents = [], persistent = false }:
 
     {drawerOpen && <AccessibleDrawer title={t("calendar.new")} eyebrow={t("eyebrow.newAppointment")} description={t("calendar.formHelp")} onClose={() => setDrawerOpen(false)}>
         <form onSubmit={submitSchedule}>
-          <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required placeholder={t("calendar.subjectPlaceholder")} /></label>
+          <label className="field"><span>{t("calendar.subject")} <b>*</b></span><input name="title" required maxLength={160} placeholder={t("calendar.subjectPlaceholder")} /></label>
           <div className="form-grid two-column"><label className="field"><span>{t("calendar.date")} <b>*</b></span><input name="date" type="date" defaultValue={selectedDate} required /></label><label className="field"><span>{t("calendar.time")} <b>*</b></span><input name="time" type="time" defaultValue="10:00" required /></label></div>
-          <div className="form-grid two-column"><label className="field"><span>{t("calendar.type")}</span><select name="type" defaultValue="meeting"><option value="meeting">{t("calendar.meeting")}</option><option value="consultation">{t("calendar.consultation")}</option><option value="followup">{t("calendar.followup")}</option><option value="deadline">{t("calendar.deadline")}</option></select></label><label className="field"><span>{t("calendar.channel")}</span><span className="input-icon"><Video size={16} /><input name="channel" defaultValue="Teams" /></span></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("calendar.type")}</span><select name="type" defaultValue="meeting"><option value="meeting">{t("calendar.meeting")}</option><option value="consultation">{t("calendar.consultation")}</option><option value="followup">{t("calendar.followup")}</option><option value="deadline">{t("calendar.deadline")}</option></select></label><label className="field"><span>{t("calendar.channel")}</span><span className="input-icon"><Video size={16} /><input name="channel" maxLength={80} defaultValue="Teams" /></span></label></div>
           <SearchableSelect label={t("calendar.related")} options={relatedOptions} value={related} onChange={setRelated} onSearch={searchRelated} loading={relatedLoading} placeholder={t("calendar.relatedPlaceholder")} />
-          <label className="field"><span>{t("calendar.attendees")}</span><textarea name="attendees" rows={3} placeholder={t("calendar.attendeesPlaceholder")}/></label>
+          <label className="field"><span>{t("calendar.attendees")}</span><textarea name="attendees" rows={3} maxLength={5000} placeholder={t("calendar.attendeesPlaceholder")}/></label>
           <label className="check-row"><input name="attendeeConsent" type="checkbox"/><span>{t("calendar.attendeeConsent")}</span></label>
           <label className="field"><span>{t("calendar.remindAt")}</span><select name="reminder" defaultValue={t("calendar.reminder.day")}><option>{t("calendar.reminder.start")}</option><option>{t("calendar.reminder.30m")}</option><option>{t("calendar.reminder.2h")}</option><option>{t("calendar.reminder.day")}</option><option>{t("calendar.reminder.3d")}</option></select></label>
           <div className="appointment-hints"><span><Users size={16} />{t("calendar.deliveryHelp")}</span><span><MapPin size={16} />{t("calendar.locationHelp")}</span></div>
           {formError && <InlineMessage type="error">{formError}</InlineMessage>}
-          <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit"><CalendarDays size={17} />{t("calendar.save")}</button></div>
+          <div className="drawer-actions"><button className="secondary-button" type="button" disabled={schedulePending} onClick={() => setDrawerOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={schedulePending} aria-busy={schedulePending}><CalendarDays size={17} />{schedulePending?t("common.processing"):t("calendar.save")}</button></div>
         </form>
     </AccessibleDrawer>}
     {cancelEvent&&<ConfirmDialog title={t("common.confirmAction")} description={t("calendar.cancelConfirm",{title:locale==="en"&&cancelEvent.titleEn?cancelEvent.titleEn:cancelEvent.title})} confirmLabel={t("calendar.cancelEvent")} pending={cancelPending} onClose={()=>setCancelEvent(null)} onConfirm={()=>void confirmCancellation()}/>}

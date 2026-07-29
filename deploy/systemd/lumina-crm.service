@@ -21,7 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/opt/lumina-crm
+ReadWritePaths=/var/lib/lumina-crm/objects
 
 [Install]
 WantedBy=multi-user.target

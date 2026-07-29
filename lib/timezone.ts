@@ -71,3 +71,37 @@ export function zonedLocalDateTimeToUtc(value: string, timezone: SupportedTimezo
   }
   return result;
 }
+
+function normalizedMonth(year: number, zeroBasedMonth: number) {
+  const value = new Date(0);
+  value.setUTCHours(0, 0, 0, 0);
+  value.setUTCFullYear(year, zeroBasedMonth, 1);
+  return value;
+}
+
+export function calendarMonthRange(
+  year: number,
+  zeroBasedMonth: number,
+  monthCount: number,
+  timezone: SupportedTimezone,
+) {
+  if (
+    !Number.isInteger(year)
+    || !Number.isInteger(zeroBasedMonth)
+    || !Number.isInteger(monthCount)
+    || year < 1
+    || year > 9998
+    || monthCount < 1
+    || monthCount > 24
+  ) {
+    throw new RangeError("Invalid calendar month range");
+  }
+  const start = normalizedMonth(year, zeroBasedMonth);
+  const end = normalizedMonth(year, zeroBasedMonth + monthCount);
+  const localMidnight = (value: Date) =>
+    `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-01T00:00`;
+  return {
+    from: zonedLocalDateTimeToUtc(localMidnight(start), timezone).toISOString(),
+    to: zonedLocalDateTimeToUtc(localMidnight(end), timezone).toISOString(),
+  };
+}

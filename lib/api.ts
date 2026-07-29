@@ -68,6 +68,11 @@ function errorResponse(error: unknown, requestId: string, fallbackCode: string) 
   return apiErrorResponse(fallbackCode, 500, requestId);
 }
 
+function safeErrorType(error: unknown) {
+  const type = error instanceof Error ? error.name : "NonErrorThrown";
+  return /^[A-Za-z][A-Za-z0-9._-]{0,79}$/.test(type) ? type : "Error";
+}
+
 async function normalizeErrorResponse(response: Response, requestId: string) {
   const payload = await response.clone().json().catch(() => ({})) as {
     code?: string;
@@ -148,7 +153,18 @@ export function apiRoute<Context = unknown>(
       return await complete(response);
     } catch (error) {
       const errorCode=error instanceof ApiError?error.code:error instanceof DatabaseRequestError?error.code:fallbackCode;
-      return await complete(errorResponse(error, requestId, fallbackCode),errorCode);
+      const response=errorResponse(error, requestId, fallbackCode);
+      if(response.status>=500){
+        void emitObservabilityEvent({
+          name:"api.request.failed",
+          requestId,
+          method:request.method,
+          route,
+          errorType:safeErrorType(error),
+          errorCode,
+        });
+      }
+      return await complete(response,errorCode);
     }
   };
 }

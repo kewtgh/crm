@@ -47,7 +47,7 @@ async function patch(request: Request) {
   }
   const user = await requireApiUser();
   try {
-    if (parsed.data.section === "profile") await updateProfile(user.id, parsed.data);
+    if (parsed.data.section === "profile") await updateProfile(parsed.data);
     if (parsed.data.section === "locale") await updateLocale(user.id, parsed.data.locale);
     if (parsed.data.section === "account") {
       await updateAccount(user.id, parsed.data);

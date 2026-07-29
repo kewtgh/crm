@@ -9,6 +9,7 @@ import {
   type ReadinessProbe,
   type ReadinessSnapshot,
 } from "@/lib/readiness-diagnostics";
+import { detailedReadinessAllowed } from "@/lib/readiness-request";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,9 @@ async function get(request: Request) {
   const checkedAt = new Date().toISOString();
   if (new URL(request.url).searchParams.get("mode") !== "ready") {
     return NextResponse.json({ status: "ok", version: APP_VERSION, checkedAt });
+  }
+  if (!detailedReadinessAllowed(request)) {
+    return NextResponse.json({ code: "READINESS_LOCAL_ONLY" }, { status: 404 });
   }
   const workspaceId = process.env.CRM_WORKSPACE_ID;
   const environment = inspectWorkerRuntimeEnvironment();

@@ -1,4 +1,4 @@
-# Implementation status — v3.0.0 release candidate
+# Implementation status — v3.1.0 release candidate
 
 Status date: 2026-07-29
 
@@ -22,41 +22,48 @@ Files use a local-persistent or S3-compatible object-store abstraction outside r
 The previous database contained only test data, so the transition deliberately uses a clean rebuild.
 There is no dual-write, CDC or credential migration path to maintain.
 
+v3.1.0 additionally makes 10,000-row imports terminal-state aware, uses versioned avatar objects,
+updates profile tables atomically, keeps detailed readiness on loopback, reports calendar capacity
+and user-timezone boundaries, completes mobile-navigation modal semantics, and validates the
+one-command deployment against the v3 database-role and Local/S3 storage boundaries.
+
 ## Repository completion
 
 | Area | Result |
 | --- | --- |
 | Platform dependency exit | Complete; historical source retained only under `archive/supabase` |
-| PostgreSQL schema | 65 ordered, checksummed migrations; advisory lock and idempotent rerun |
+| PostgreSQL schema | 67 ordered, checksummed migrations; advisory lock and idempotent rerun |
 | Database integrity | Valid foreign keys and indexes; duplicate identities and orphan relations checked |
 | Data access | `pg`/Kysely pools and transaction authorization context for app/system/Worker |
 | Authentication and authorization | Application-owned Auth plus existing workspace, role, capability and AAL2 semantics |
 | Storage | Local-persistent and S3-compatible implementations with safe keys and short-lived access |
 | Workers | Six processors use `crm_worker`; enabled processors report heartbeat and queue state |
 | Operations | Caddy, systemd, loopback PostgreSQL, disk monitor, daily backup and monthly restore test |
-| Deployment | Forward-only migration, atomic release switch, precise readiness and application rollback |
-| Documentation | Audit, executed plan, deployment/recovery runbook and final gap review updated for v3.0.0 |
+| Deployment | Dedicated runtime template; v3 role/provider preflight; persistent-object systemd sandbox; forward-only migration, atomic switch and application rollback |
+| Documentation | v3.1.0 audit, executed plan, deployment/recovery runbook and final re-audit |
 
 ## Verification record
 
 | Gate | Result |
 | --- | --- |
-| Empty database migration | Pass; 65 migrations, then idempotent rerun with 0 applied |
+| Migration chain / forward apply | Pass; 67 checksummed migrations, with 061/062 applied locally |
 | Database integration | Pass; Argon2id, session, TOTP replay protection, RLS and password-change revocation |
 | Integrity validation | Pass; no invalid constraints/indexes, duplicate identities or orphan relations |
 | Business schema contracts | Pass for phase 2, v0.9 and v1.1 |
 | Worker cycle | Pass; 4/4 enabled processors healthy |
 | Backup encryption | Pass; AES-256-GCM encrypt/decrypt hash round trip |
 | Restore drill | Pass in an isolated temporary database; migration/auth/table counts verified and database dropped |
+| Database integration | Pass; 67 migrations, 96 public tables, Auth/session/TOTP/RLS and atomic profile rollback |
 | TypeScript / ESLint | Pass |
 | Production build | Pass; native PostgreSQL, Argon2 and S3 packages remain server externals |
-| Node contracts | Pass; 17/17 core, 5/5 CAPTCHA, 19/19 deployment and 2/2 root/login HTTP |
+| Node contracts | Pass; 24/24 core/v3.1, 5/5 CAPTCHA and 19/19 deployment |
+| Deployment dry-run | Pass; templates, roles, storage, systemd and controller assets valid; no mutations |
 | Dependency audit | Pass; 0 known npm vulnerabilities |
-| Affected Chromium flow | Pass; login, email verification, trusted device, 30-day rotation, CSRF, password change and global revocation |
+| Affected Chromium flow | Pass; calendar/imports/settings/admin, 46 page/viewports, 0 errors/warnings, 4/4 identities cleaned |
 
-The full ten-stage Chromium matrix was not repeated because the repository instructions require the
-smallest browser phase affected by a scoped change. The affected pinned
-`ms-playwright/chromium-1228` authentication flow passed.
+The full ten-stage Chromium matrix was not repeated because the saved v3.1.0 plan limits verification
+to the directly affected phases. The four affected phases used pinned
+`ms-playwright/chromium-1228`, Chromium `149.0.7827.55`, one build hash and one source fingerprint.
 
 ## External production gates
 
