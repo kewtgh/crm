@@ -1,4 +1,5 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
+import { boundedWorkerInteger } from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
 
 const required = ["WORKER_DATABASE_URL"];
@@ -8,7 +9,9 @@ const heartbeat = createWorkerHeartbeat("REMINDERS");
 try {
   const result = await workerJson("/db/rpc/process_due_reminders", {
     method: "POST",
-    body: JSON.stringify({ batch_size: Number(process.env.REMINDER_BATCH_SIZE ?? 100) }),
+    body: JSON.stringify({ batch_size: boundedWorkerInteger(process.env.REMINDER_BATCH_SIZE, {
+      name:"REMINDER_BATCH_SIZE",defaultValue:100,maximum:200,
+    }) }),
   });
   await heartbeat.success({ processed: Number(result ?? 0) });
   process.stdout.write(`Processed ${Number(result ?? 0)} due reminders.\n`);

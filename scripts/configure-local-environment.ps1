@@ -82,6 +82,7 @@ foreach ($key in @(
 )) { Set-Default $key (New-RandomSecret) }
 
 foreach ($entry in @{
+  WORKER_JOB_CONCURRENCY = '4'
   OUTBOX_BATCH_SIZE = '20'
   CALENDAR_DELIVERY_BATCH_SIZE = '20'
   EXPORT_BATCH_SIZE = '10'

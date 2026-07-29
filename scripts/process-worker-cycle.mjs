@@ -33,16 +33,18 @@ function run(script){
   });
 }
 
-for(const [worker,script] of workers){
+const results=await Promise.all(workers.map(async([worker,script])=>{
   process.stdout.write(`\n[worker-cycle] ${worker}\n`);
   const result=await run(script);
-  if(result.code===0)continue;
-  failures.push({worker,error:result.error});
-  if(process.env.WORKER_DATABASE_URL){
+  if(result.code!==0&&process.env.WORKER_DATABASE_URL){
     await createWorkerHeartbeat(worker)
       .failure(result.error,{orchestrated:true})
       .catch(()=>undefined);
   }
+  return{worker,...result};
+}));
+for(const result of results){
+  if(result.code!==0)failures.push({worker:result.worker,error:result.error});
 }
 
 if(failures.length){

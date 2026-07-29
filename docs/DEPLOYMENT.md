@@ -1,4 +1,4 @@
-# Lumina CRM v3.3 — PostgreSQL deployment and recovery runbook
+# Lumina CRM v3.4 — PostgreSQL deployment and recovery runbook
 
 This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
 share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.
@@ -141,6 +141,20 @@ sudo systemctl enable --now lumina-crm-backup.timer
 sudo systemctl enable --now lumina-crm-restore-test.timer
 sudo systemctl enable --now lumina-crm-disk-monitor.timer
 ```
+
+The Worker service keeps its four-minute execution boundary. Independent Worker categories start
+in parallel; each category uses `WORKER_JOB_CONCURRENCY` (1–8, default 4) and preserves stable item
+ordering plus database lease-token completion. Runtime preflight rejects batch/concurrency pairs
+whose external waiting bound exceeds 210 seconds, leaving 30 seconds for database and process
+cleanup. `WORKER_DATABASE_POOL_MAX` applies to each Worker process, not the whole cycle; with the
+four default categories and the sample pool limit of 4, plan for up to 16 Worker-role connections
+(24 when both optional categories are enabled), in addition to Web/system pools.
+
+Notification outbox requests use the outbox job UUID as `Idempotency-Key`; calendar deliveries use
+their persisted idempotency key. Do not enable the mail endpoint until the real provider has been
+tested to return the original result without repeating delivery when the same key and payload are
+replayed. Every mail delivery attempt has a 20-second timeout and continues through the existing
+lease-aware failure/backoff path on timeout or non-2xx response.
 
 All CRM units clear inherited proxy variables. Review the least-privilege sudo policy in
 `deploy/sudoers/lumina-crm-deploy`; it authorizes only the CRM application units used by the
