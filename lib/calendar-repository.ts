@@ -28,10 +28,10 @@ export async function listAppointments(from: string, to: string,timezone:Support
   return {items,total,truncated:total>items.length};
 }
 
-export async function createAppointment(input: { title: string; locale: "zh-CN" | "en"; date: string; time: string; type: CalendarRecord["type"]; channel: string; related: string; relatedType?:"ORGANIZATION"|"CONTACT"|null;relatedId?:string|null; reminder: number;attendees:Array<{email:string;name?:string;contactId?:string|null;consentConfirmed:boolean}> },timezone:SupportedTimezone=normalizeTimezone(undefined)) {
+export async function createAppointment(input: { title: string; locale: "zh-CN" | "en"; date: string; time: string; type: CalendarRecord["type"]; channel: string; related: string; relatedType?:"ORGANIZATION"|"CONTACT"|null;relatedId?:string|null; reminder: number;attendees:Array<{email:string;name?:string;contactId?:string|null;consentConfirmed:boolean}>;requestKey:string },timezone:SupportedTimezone=normalizeTimezone(undefined)) {
   const types = { meeting: "MEETING", consultation: "CONSULTATION", followup: "FOLLOW_UP", deadline: "DEADLINE" } as const;
   const startsAt = zonedLocalDateTimeToUtc(`${input.date}T${input.time}`,timezone); const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-  return databaseJson<AppointmentRow>("/db/rpc/create_appointment_with_delivery",{method:"POST",body:JSON.stringify({title_zh:input.locale==="zh-CN"?input.title:input.title,title_en:input.title,event_type:types[input.type],relation_type:input.relatedType??null,relation_id:input.relatedId??null,relation_label:input.related,starts:startsAt.toISOString(),ends:endsAt.toISOString(),event_channel:input.channel,reminders:[input.reminder],attendees:input.attendees})});
+  return databaseJson<AppointmentRow>("/db/rpc/create_appointment_with_delivery",{method:"POST",body:JSON.stringify({title_zh:input.locale==="zh-CN"?input.title:input.title,title_en:input.title,event_type:types[input.type],relation_type:input.relatedType??null,relation_id:input.relatedId??null,relation_label:input.related,starts:startsAt.toISOString(),ends:endsAt.toISOString(),event_channel:input.channel,reminders:[input.reminder],attendees:input.attendees,target_request_key:input.requestKey})});
 }
 
 export async function completeAppointment(id: string) { await databaseJson("/db/rpc/complete_appointment", { method: "POST", body: JSON.stringify({ appointment_id: id }) }); }

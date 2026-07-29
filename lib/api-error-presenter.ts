@@ -14,6 +14,7 @@ const codeKeys: Record<string, string> = {
   SESSION_REFRESH_REQUIRED: "error.session",
   AUTH_REQUIRED: "error.session",
   RECORD_CONFLICT: "error.conflict",
+  APPOINTMENT_IDEMPOTENCY_CONFLICT: "error.conflict",
   RELATED_RECORD_CONFLICT: "error.relatedConflict",
   CONSTRAINT_VIOLATION: "error.invalidInput",
   EDUCATION_VERSION_CONFLICT: "error.versionConflict",
