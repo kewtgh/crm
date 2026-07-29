@@ -289,6 +289,10 @@ function dryRun() {
     productionEnvironment: readFileSync(path.join(sourceRoot, "deploy", "production.env.example"), "utf8"),
     deploymentEnvironment: readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8"),
     runner: readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8"),
+    storagePrepareUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-storage-prepare.service"), "utf8"),
+    storageCleanupUnit: readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-storage-cleanup.service"), "utf8"),
+    storageMaintenance: readFileSync(path.join(sourceRoot, "deploy", "libexec", "lumina-crm-storage-maintenance.mjs"), "utf8"),
+    buildkitConfiguration: readFileSync(path.join(sourceRoot, "deploy", "buildkitd.toml"), "utf8"),
     packageJson,
   });
   process.stdout.write(`LUMINA_PRODUCTION_DEPLOY_DRY_RUN_OK
@@ -297,6 +301,9 @@ release root: ${path.join(deployRoot, "releases")}
 current link: ${path.join(deployRoot, "current")}
 state root: ${stateRoot}
 log root: ${logRoot}
+storage gate: /, configured Docker data root, ${path.join(deployRoot, "releases")}
+BuildKit builder: lumina-crm-buildkit (fixed root-owned maintenance unit)
+storage report: /var/lib/lumina-crm/storage-maintenance/latest.json
 local health: ${PRODUCTION_LOCAL_URL}/api/health
 public health: ${PRODUCTION_PUBLIC_URL}/api/health
 Database migrations: project-owned PostgreSQL chain in db/migrations

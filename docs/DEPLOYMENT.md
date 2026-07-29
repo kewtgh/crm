@@ -1,4 +1,4 @@
-# Lumina CRM v3.5 — PostgreSQL deployment and recovery runbook
+# Lumina CRM v3.6 — PostgreSQL deployment, storage and recovery runbook
 
 This runbook targets one Linux VPS with 8 GB RAM. Caddy, the CRM Web process, Workers and PostgreSQL
 share the host. PostgreSQL must never listen on a public interface. Backups must leave the VPS.
@@ -10,8 +10,11 @@ share the host. PostgreSQL must never listen on a public interface. Backups must
 /opt/lumina-crm/releases     immutable application releases
 /opt/lumina-crm/current      symlink to the active release
 /var/lib/lumina-crm          deploy state, cache, local objects and short-lived backups
+/var/lib/lumina-crm/storage-maintenance  root-owned Lumina Docker/BuildKit ownership and reports
+/var/log/lumina-crm/storage-maintenance  project-only cleanup evidence
 /var/lib/postgresql          PostgreSQL data
 /etc/lumina-crm              production.env and deploy.env
+/etc/lumina-crm/buildkitd.toml  Lumina-only BuildKit GC policy
 /etc/postgresql              PostgreSQL configuration
 /etc/caddy                   HTTPS reverse-proxy configuration
 ```
@@ -142,7 +145,34 @@ Install the reviewed units under `/etc/systemd/system`:
 - `lumina-crm-backup.service` and `.timer`;
 - `lumina-crm-restore-test.service` and `.timer`;
 - `lumina-crm-disk-monitor.service` and `.timer`;
+- `lumina-crm-storage-prepare.service`;
+- `lumina-crm-storage-cleanup.service`;
 - `lumina-crm-deploy.service`.
+
+Before the first production deployment, install the storage program outside the Git checkout. It
+must remain root-owned so the `lumina-crm` account cannot replace code executed with Docker access:
+
+```bash
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
+sudo install -o root -g root -m 0755 \
+  deploy/libexec/lumina-crm-storage-maintenance.mjs \
+  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
+sudo install -o root -g root -m 0644 deploy/buildkitd.toml /etc/lumina-crm/buildkitd.toml
+sudo install -o root -g root -m 0644 \
+  deploy/systemd/lumina-crm-storage-prepare.service \
+  /etc/systemd/system/lumina-crm-storage-prepare.service
+sudo install -o root -g root -m 0644 \
+  deploy/systemd/lumina-crm-storage-cleanup.service \
+  /etc/systemd/system/lumina-crm-storage-cleanup.service
+sudo install -o root -g root -m 0440 \
+  deploy/sudoers/lumina-crm-deploy /etc/sudoers.d/lumina-crm-deploy
+sudo visudo -cf /etc/sudoers.d/lumina-crm-deploy
+sudo systemctl daemon-reload
+```
+
+Install Docker Engine with the Buildx plugin before these units. Do not add `lumina-crm` to the
+`docker` group. The deployment runner can start only the two fixed storage units; it cannot execute
+Docker, access `docker.sock`, change cleanup filters, or run repository code as root.
 
 Then:
 
@@ -214,10 +244,39 @@ VPS snapshots are supplementary and do not replace logical backup.
 
 ## 7. Capacity and monitoring
 
-`lumina-crm-disk-monitor.timer` checks PostgreSQL and application state files every 15 minutes. It
-fails and sends a webhook when available capacity falls below `DISK_FREE_PERCENT_THRESHOLD` (15%
-by default). Monitor Caddy errors, PostgreSQL slow queries, backup/restore unit failures, Web
-readiness and Worker heartbeats in the same alerting system.
+`lumina-crm-disk-monitor.timer` checks the configured application/PostgreSQL paths every 15 minutes
+and sends a webhook below `DISK_FREE_PERCENT_THRESHOLD` (15% by default). Independently, every
+production deployment performs a privileged read-only gate against `/`, the Docker daemon's actual
+data root and `/opt/lumina-crm/releases`. The gate requires both the configured percentage and the
+per-target byte floor; it stops before Git pull, dependency installation, build or migration.
+
+`deploy.env.example` defaults to 8 GiB free on root/releases, 10 GiB on Docker and 15% on every
+target. `LUMINA_DOCKER_DATA_ROOT` must exactly match:
+
+```bash
+sudo docker info --format '{{.DockerRootDir}}'
+```
+
+The prepare unit creates or verifies only `lumina-crm-buildkit`. A same-named builder without the
+root-owned Lumina ownership marker is rejected, never adopted. `deploy/buildkitd.toml` caps its cache
+at 12 GiB, keeps 2 GiB reserved, targets 10 GiB host free space and ages general cache after seven
+days. The normal CRM npm/Vinext build remains host-native; any later reviewed Lumina container build
+must select this builder and add all of these image labels:
+
+```text
+com.lumina.crm.managed=true
+com.lumina.crm.repository=kewtgh/crm
+com.docker.compose.project=lumina-crm
+```
+
+It must also use a repository tag containing `lumina-crm`. Unlabelled or partially labelled images
+are never cleanup candidates.
+
+The cleanup program can remove only explicit, old image IDs that match all four identity conditions
+and are not used by any container. It prunes only the named Lumina builder. It never removes a
+container, network or volume and never runs `docker system prune`, `docker image prune`,
+`docker volume prune`, or a `--volumes` prune. PostgreSQL volumes, backups, uploads, HunterAI,
+Temporal and other project resources are outside its candidate model.
 
 ## 8. Release deployment
 
@@ -234,12 +293,14 @@ npm run deploy:production:logs
 
 The dry run checks the v3 runtime-role split, migration role, Local/S3 storage configuration,
 runtime/deployment secret boundary, persistent object-store sandbox permissions, lock location,
-loopback listener, reviewed install scripts, and stable controller commands.
+loopback listener, reviewed install scripts, disk policy, fixed root storage entrypoint, BuildKit
+limits, Docker command allowlist and stable controller commands.
 
 The persistent runner:
 
 ```text
 exclusive lock
+-> root/Docker/release disk gate and isolated BuildKit verification
 -> git pull --ff-only
 -> exact commit and clean-tree validation
 -> dependency install
@@ -251,10 +312,23 @@ exclusive lock
 -> Web restart and Worker run
 -> loopback liveness/readiness
 -> public HTTPS health
+-> persist applicationAccepted and rollback release
+-> project-only release, image and BuildKit cleanup
+-> final success
 ```
 
 Only the single Git pull may use the configured loopback proxy. No build, migration, runtime,
 Worker, backup or health process inherits it.
+
+Cleanup begins only after every health check succeeds. It retains current, the recorded previous
+rollback release and five recent successful manifests; it removes older successes and failed build
+residue older than 24 hours. The maintenance reports record every candidate/result, estimated
+deleted bytes, BuildKit prune output and disk usage before/after under
+`/var/lib/lumina-crm/storage-maintenance` and `/var/log/lumina-crm/storage-maintenance`.
+
+Cleanup failures are warnings after application acceptance: they do not stop or roll back the
+healthy Web/Worker release. An interrupted runner also recognizes the persisted accepted state and
+finishes cleanup/finalization without treating it as a failed cutover.
 
 If failure occurs before cutover, the active release is unchanged. If application validation fails
 after cutover, the runner restores and verifies the previous application release. A forward
@@ -284,6 +358,9 @@ curl -fsS http://127.0.0.1:3200/api/health
 curl -fsS http://127.0.0.1:3200/api/health?mode=ready
 sudo systemctl status postgresql lumina-crm.service lumina-crm-workers.timer
 sudo journalctl -u postgresql -u lumina-crm.service -u lumina-crm-workers.service -n 200 --no-pager
+sudo systemctl status lumina-crm-storage-prepare.service lumina-crm-storage-cleanup.service
+sudo journalctl -u lumina-crm-storage-prepare.service -u lumina-crm-storage-cleanup.service -n 200 --no-pager
+sudo cat /var/lib/lumina-crm/storage-maintenance/latest.json
 ```
 
 Readiness returns separate environment, authentication, database, Worker and queue reason codes.

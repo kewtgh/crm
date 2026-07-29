@@ -50,7 +50,7 @@ export const PRODUCTION_RUNTIME_EXACT_VALUES = Object.freeze({
 export const PRODUCTION_RUNTIME_FORBIDDEN_PATTERNS = Object.freeze([
   /^(?:PATH|HOME|USER|LOGNAME|SHELL|NODE_OPTIONS|NODE_ENV|CI|TMPDIR|TMP|TEMP|XDG_CACHE_HOME|SSH_AUTH_SOCK)$/i,
   /^(?:NPM_CONFIG_.+|LUMINA_HTTPS_PROXY|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY|GIT_PROXY_COMMAND|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV)$/i,
-  /^(?:DATABASE_ADMIN_URL|MIGRATION_DATABASE_URL|CRM_(?:APP|SYSTEM|WORKER|MIGRATOR|BACKUP)_DB_PASSWORD|BACKUP_.+|DISK_.+|ADMIN_.+)$/i,
+  /^(?:DATABASE_ADMIN_URL|MIGRATION_DATABASE_URL|CRM_(?:APP|SYSTEM|WORKER|MIGRATOR|BACKUP)_DB_PASSWORD|BACKUP_.+|DISK_.+|LUMINA_(?:DOCKER|DEPLOY|ROOT|RELEASE|FAILED|BUILDKIT)_.+|ADMIN_.+)$/i,
 ]);
 export const DEPLOY_ENV_ALLOWED_KEYS = Object.freeze([
   "DATABASE_ADMIN_URL",
@@ -75,10 +75,21 @@ export const DEPLOY_ENV_ALLOWED_KEYS = Object.freeze([
   "DISK_FREE_PERCENT_THRESHOLD",
   "DISK_NOTIFICATION_WEBHOOK_URL",
   "DISK_NOTIFICATION_WEBHOOK_TOKEN",
+  "LUMINA_DOCKER_DATA_ROOT",
+  "LUMINA_DEPLOY_MIN_FREE_PERCENT",
+  "LUMINA_ROOT_MIN_FREE_GB",
+  "LUMINA_DOCKER_MIN_FREE_GB",
+  "LUMINA_RELEASE_MIN_FREE_GB",
+  "LUMINA_RELEASE_RETENTION",
+  "LUMINA_FAILED_RELEASE_RETENTION_HOURS",
+  "LUMINA_BUILDKIT_CACHE_RETENTION_HOURS",
+  "LUMINA_BUILDKIT_MAX_CACHE_GB",
+  "LUMINA_BUILDKIT_RESERVED_CACHE_GB",
 ]);
 
 const REQUIRED_READINESS_CHECKS = ["environment", "auth", "database", "workers", "queues"];
 const SECRET_KEY_PATTERN = /(TOKEN|SECRET|PASSWORD|PRIVATE|SERVICE_ROLE|KEY|CREDENTIAL|DSN|CONNECTION_STRING|WEBHOOK_URL)/i;
+const GIBIBYTE = 1024 ** 3;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -269,6 +280,123 @@ export function validateMigrationEnvironment(environment, { label = "deploy.env"
     throw new Error(`${label} BACKUP_DATABASE_URL must use the dedicated crm_backup role`);
   }
   return true;
+}
+
+function boundedInteger(value, {
+  label,
+  minimum,
+  maximum,
+  fallback,
+}) {
+  const source = String(value ?? fallback);
+  if (!/^\d+$/.test(source)) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}`);
+  const parsed = Number(source);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${label} must be an integer from ${minimum} to ${maximum}`);
+  }
+  return parsed;
+}
+
+export function parseDeploymentStoragePolicy(environment = {}) {
+  const dockerDataRoot = assertSpecificAbsolutePath(
+    String(environment.LUMINA_DOCKER_DATA_ROOT ?? "/var/lib/docker"),
+    "LUMINA_DOCKER_DATA_ROOT",
+  );
+  const policy = {
+    dockerDataRoot,
+    minimumFreePercent: boundedInteger(environment.LUMINA_DEPLOY_MIN_FREE_PERCENT, {
+      label: "LUMINA_DEPLOY_MIN_FREE_PERCENT",
+      minimum: 5,
+      maximum: 50,
+      fallback: 15,
+    }),
+    rootMinimumAvailableBytes: boundedInteger(environment.LUMINA_ROOT_MIN_FREE_GB, {
+      label: "LUMINA_ROOT_MIN_FREE_GB",
+      minimum: 2,
+      maximum: 1024,
+      fallback: 8,
+    }) * GIBIBYTE,
+    dockerMinimumAvailableBytes: boundedInteger(environment.LUMINA_DOCKER_MIN_FREE_GB, {
+      label: "LUMINA_DOCKER_MIN_FREE_GB",
+      minimum: 2,
+      maximum: 1024,
+      fallback: 10,
+    }) * GIBIBYTE,
+    releaseMinimumAvailableBytes: boundedInteger(environment.LUMINA_RELEASE_MIN_FREE_GB, {
+      label: "LUMINA_RELEASE_MIN_FREE_GB",
+      minimum: 2,
+      maximum: 1024,
+      fallback: 8,
+    }) * GIBIBYTE,
+    releaseRetention: boundedInteger(environment.LUMINA_RELEASE_RETENTION, {
+      label: "LUMINA_RELEASE_RETENTION",
+      minimum: 3,
+      maximum: 20,
+      fallback: 5,
+    }),
+    failedReleaseRetentionHours: boundedInteger(environment.LUMINA_FAILED_RELEASE_RETENTION_HOURS, {
+      label: "LUMINA_FAILED_RELEASE_RETENTION_HOURS",
+      minimum: 1,
+      maximum: 720,
+      fallback: 24,
+    }),
+    buildkitCacheRetentionHours: boundedInteger(environment.LUMINA_BUILDKIT_CACHE_RETENTION_HOURS, {
+      label: "LUMINA_BUILDKIT_CACHE_RETENTION_HOURS",
+      minimum: 24,
+      maximum: 2160,
+      fallback: 168,
+    }),
+    buildkitMaxCacheGb: boundedInteger(environment.LUMINA_BUILDKIT_MAX_CACHE_GB, {
+      label: "LUMINA_BUILDKIT_MAX_CACHE_GB",
+      minimum: 2,
+      maximum: 512,
+      fallback: 12,
+    }),
+    buildkitReservedCacheGb: boundedInteger(environment.LUMINA_BUILDKIT_RESERVED_CACHE_GB, {
+      label: "LUMINA_BUILDKIT_RESERVED_CACHE_GB",
+      minimum: 1,
+      maximum: 128,
+      fallback: 2,
+    }),
+  };
+  if (policy.buildkitReservedCacheGb >= policy.buildkitMaxCacheGb) {
+    throw new Error("LUMINA_BUILDKIT_RESERVED_CACHE_GB must be lower than LUMINA_BUILDKIT_MAX_CACHE_GB");
+  }
+  return Object.freeze(policy);
+}
+
+export function diskSnapshotFromStatfs(check, status) {
+  const totalBytes = Number(status?.blocks) * Number(status?.bsize);
+  const availableBytes = Number(status?.bavail) * Number(status?.bsize);
+  if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0
+    || !Number.isSafeInteger(availableBytes) || availableBytes < 0) {
+    throw new Error(`Could not calculate disk capacity for ${check.label} (${check.path})`);
+  }
+  return {
+    label: String(check.label),
+    path: path.resolve(check.path),
+    totalBytes,
+    availableBytes,
+    freePercent: Number((availableBytes / totalBytes * 100).toFixed(2)),
+    minimumAvailableBytes: Number(check.minimumAvailableBytes),
+    minimumFreePercent: Number(check.minimumFreePercent),
+  };
+}
+
+export function assertDeploymentDiskCapacity(snapshots) {
+  if (!Array.isArray(snapshots) || !snapshots.length) throw new Error("Deployment disk checks are required");
+  const unhealthy = snapshots.filter((snapshot) => (
+    snapshot.availableBytes < snapshot.minimumAvailableBytes
+    || snapshot.freePercent < snapshot.minimumFreePercent
+  ));
+  if (unhealthy.length) {
+    const details = unhealthy.map((snapshot) => (
+      `${snapshot.label} (${snapshot.path}) has ${snapshot.availableBytes} bytes/${snapshot.freePercent}% free; `
+      + `requires at least ${snapshot.minimumAvailableBytes} bytes/${snapshot.minimumFreePercent}%`
+    ));
+    throw new Error(`LUMINA_DEPLOY_DISK_GATE_FAILED: ${details.join("; ")}`);
+  }
+  return snapshots;
 }
 
 export function githubPullArguments({
@@ -475,24 +603,55 @@ export function assertLoopbackListener(output, port = 3200) {
   return true;
 }
 
-export function selectReleasesForCleanup(entries, {
+export function planReleasesForCleanup(entries, {
   releasesRoot,
   currentRelease,
   previousRelease,
   activeRelease,
   retain = 5,
+  failedRetentionMs = 24 * 60 * 60 * 1_000,
+  nowMs = Date.now(),
 }) {
   if (!Number.isInteger(retain) || retain < 2) throw new Error("Release retention must be at least 2");
+  if (!Number.isFinite(failedRetentionMs) || failedRetentionMs < 0) {
+    throw new Error("Failed release retention must be non-negative");
+  }
   const protectedPaths = new Set([currentRelease, previousRelease, activeRelease]
     .filter(Boolean)
     .map((item) => path.resolve(item)));
   const valid = entries
     .map((entry) => ({ ...entry, path: assertReleasePath(releasesRoot, entry.path) }))
     .sort((left, right) => right.mtimeMs - left.mtimeMs || right.path.localeCompare(left.path));
-  const newest = new Set(valid.slice(0, retain).map((entry) => entry.path));
+  const newestSuccessful = new Set(valid
+    .filter((entry) => entry.successful !== false)
+    .slice(0, retain)
+    .map((entry) => entry.path));
   return valid
-    .filter((entry) => !protectedPaths.has(entry.path) && !newest.has(entry.path))
-    .map((entry) => entry.path);
+    .filter((entry) => !protectedPaths.has(entry.path))
+    .flatMap((entry) => {
+      if (entry.successful !== false) {
+        return newestSuccessful.has(entry.path) ? [] : [{ path: entry.path, reason: "old-success" }];
+      }
+      return nowMs - entry.mtimeMs >= failedRetentionMs
+        ? [{ path: entry.path, reason: "failed-residue" }]
+        : [];
+    });
+}
+
+export function selectReleasesForCleanup(entries, options) {
+  return planReleasesForCleanup(entries, options).map((entry) => entry.path);
+}
+
+export async function runNonFatalCleanup(cleanup, onFailure = () => {}) {
+  try {
+    return { ok: true, value: await cleanup() };
+  } catch (error) {
+    await onFailure(error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function writeExclusiveRequest(fs, requestPath, request) {
@@ -525,6 +684,14 @@ export function planInterruptedRecovery({ requestId, prior, currentRelease }) {
   }
   if (!prior.releasePath) return { action: "RESUME_PRE_CUTOVER" };
   const migrationMayHaveChanged = prior.migrationMayHaveChanged === true || prior.migrationApplied === true;
+  if (prior.applicationAccepted === true
+    && path.resolve(currentRelease ?? "") === path.resolve(prior.releasePath)) {
+    return {
+      action: "FINALIZE_ACCEPTED",
+      acceptedRelease: prior.releasePath,
+      migrationMayHaveChanged,
+    };
+  }
   if (path.resolve(currentRelease ?? "") === path.resolve(prior.releasePath)) {
     if (!prior.previousRelease) {
       throw new Error("Interrupted cutover has no recorded previous release");
@@ -561,6 +728,10 @@ export function validateDeployAssetTexts({
   productionEnvironment,
   deploymentEnvironment,
   runner,
+  storagePrepareUnit,
+  storageCleanupUnit,
+  storageMaintenance,
+  buildkitConfiguration,
   packageJson,
 }) {
   const failures = [];
@@ -594,6 +765,11 @@ export function validateDeployAssetTexts({
   }
   if (!runner.includes("directRuntimeEnvironment")) failures.push("deploy child stages must strip proxy environment");
   if (!runner.includes("process.versions.node")) failures.push("deploy runner must enforce Node.js 24.x");
+  if (!runner.includes("applicationAccepted: true")
+    || !runner.includes("postSuccessCleanup(releaseDir)")
+    || !runner.includes("prepareDeploymentStorage()")) {
+    failures.push("deploy runner must gate storage and persist health acceptance before non-fatal cleanup");
+  }
   if (!runner.includes("mkdirSync(PRODUCTION_LOCAL_OBJECT_ROOT")
     || !runner.includes('assertRealDirectory(PRODUCTION_LOCAL_OBJECT_ROOT, "Persistent object storage sandbox directory")')) {
     failures.push("deploy runner must create and verify the persistent object storage sandbox directory");
@@ -620,21 +796,67 @@ export function validateDeployAssetTexts({
       allowed: DEPLOY_ENV_ALLOWED_KEYS,
     });
     validateMigrationEnvironment(example, { label: "deploy.env.example" });
+    parseDeploymentStoragePolicy(example);
   } catch (error) {
     failures.push(error.message);
   }
-  for (const forbidden of ["cloudflared", "hunterai", "docker", "v2raya", "reboot", "poweroff"]) {
+  for (const forbidden of ["cloudflared", "hunterai", "v2raya", "reboot", "poweroff"]) {
     if (sudoers.toLowerCase().includes(forbidden)) failures.push(`sudoers must not mention ${forbidden}`);
     if (runner.toLowerCase().includes(forbidden)) failures.push(`deploy runner must not mention ${forbidden}`);
+  }
+  if (/\/usr\/bin\/docker|docker\.sock|["']docker["']/.test(runner.toLowerCase())) {
+    failures.push("deploy runner must not execute Docker or access its socket directly");
+  }
+  if (/\/usr\/bin\/docker|docker\.sock|["']docker["']/.test(sudoers.toLowerCase())) {
+    failures.push("sudoers must not grant Docker CLI or socket access");
   }
   if (runner.includes('"db", "reset"')) failures.push("deploy runner must not reset the database");
   if (sudoers.includes("*")) failures.push("sudoers must not contain wildcard commands");
   try { assertReviewedInstallScriptPolicy(packageJson); } catch (error) { failures.push(error.message); }
   if (!sudoers.includes("lumina-crm-deploy.service")
+    || !sudoers.includes("lumina-crm-storage-prepare.service")
+    || !sudoers.includes("lumina-crm-storage-cleanup.service")
     || !sudoers.includes("lumina-crm.service")
     || !sudoers.includes("lumina-crm-workers.service")
     || !sudoers.includes("lumina-crm-workers.timer")) {
     failures.push("sudoers is missing a required Lumina unit");
+  }
+  for (const [label, unit, mode] of [
+    ["storage prepare unit", storagePrepareUnit, "prepare"],
+    ["storage cleanup unit", storageCleanupUnit, "cleanup"],
+  ]) {
+    if (!unit?.includes("User=root")
+      || !unit.includes("Group=lumina-crm")
+      || !unit.includes(`ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs ${mode}`)
+      || !unit.includes("ProtectSystem=strict")
+      || !unit.includes("RestrictAddressFamilies=AF_UNIX")
+      || !unit.includes("ReadWritePaths=/run/docker.sock")
+      || unit.includes("/opt/lumina-crm/source/scripts/")) {
+      failures.push(`${label} must use the fixed root-owned maintenance entrypoint and constrained Docker socket sandbox`);
+    }
+  }
+  if (!storageMaintenance?.includes('LUMINA_BUILDER_NAME = "lumina-crm-buildkit"')
+    || !storageMaintenance.includes('LUMINA_COMPOSE_PROJECT = "lumina-crm"')
+    || !storageMaintenance.includes("assertAllowedDockerArguments")
+    || !storageMaintenance.includes("selectLuminaImageCandidates")
+    || !storageMaintenance.includes("LUMINA_DEPLOY_DISK_GATE_FAILED")) {
+    failures.push("storage maintenance must enforce Lumina builder, image identity, command allowlist, and disk gate");
+  }
+  for (const forbidden of [
+    "docker system prune",
+    "docker image prune",
+    "docker volume prune",
+    "docker network prune",
+    "docker system prune --volumes",
+  ]) {
+    if (storageMaintenance?.toLowerCase().includes(forbidden)) {
+      failures.push(`storage maintenance must not contain ${forbidden}`);
+    }
+  }
+  if (!buildkitConfiguration?.includes('maxUsedSpace = "12GB"')
+    || !buildkitConfiguration.includes('keepDuration = "168h"')
+    || !buildkitConfiguration.includes('minFreeSpace = "10GB"')) {
+    failures.push("Lumina BuildKit configuration must cap cache, age it, and preserve host free space");
   }
   if (!packageJson.scripts?.["deploy:production"]
     || !packageJson.scripts?.["deploy:production:detach"]
