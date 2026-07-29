@@ -54,7 +54,34 @@ WORKDIR /app
 COPY --from=production-dependencies --chown=lumina:lumina /app/node_modules ./node_modules
 COPY --from=build --chown=lumina:lumina /app/dist ./dist
 COPY --chown=lumina:lumina package.json package-lock.json ./
-COPY --chown=lumina:lumina scripts ./scripts
+COPY --chown=lumina:lumina \
+    scripts/bootstrap-admin.mjs \
+    scripts/container-entrypoint.mjs \
+    scripts/db-backup.mjs \
+    scripts/db-bootstrap.mjs \
+    scripts/db-migrate.mjs \
+    scripts/db-restore-test.mjs \
+    scripts/db-verify-migrations.mjs \
+    scripts/process-calendar-deliveries.mjs \
+    scripts/process-generated-jobs.mjs \
+    scripts/process-integration-sync.mjs \
+    scripts/process-notification-outbox.mjs \
+    scripts/process-reminders.mjs \
+    scripts/process-webhook-inbox.mjs \
+    scripts/process-worker-cycle.mjs \
+    scripts/run-worker-loop.mjs \
+    scripts/worker-healthcheck.mjs \
+    scripts/worker-heartbeat.mjs \
+    scripts/worker-schema-check.mjs \
+    ./scripts/
+COPY --chown=lumina:lumina \
+    scripts/lib/backup-crypto.mjs \
+    scripts/lib/backup-policy.mjs \
+    scripts/lib/bounded-concurrency.mjs \
+    scripts/lib/delivery-webhook.mjs \
+    scripts/lib/worker-database.mjs \
+    scripts/lib/worker-object-store.mjs \
+    ./scripts/lib/
 COPY --chown=lumina:lumina db ./db
 USER 10001:10001
 EXPOSE 3200

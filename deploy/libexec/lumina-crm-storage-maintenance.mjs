@@ -23,6 +23,7 @@ export const LUMINA_COMPOSE_PROJECT = "lumina-crm";
 export const LUMINA_MANAGED_LABEL = "com.lumina.crm.managed";
 export const LUMINA_REPOSITORY_LABEL = "com.lumina.crm.repository";
 export const LUMINA_REPOSITORY_VALUE = "kewtgh/crm";
+export const LUMINA_ROOTLESS_DOCKER_DATA_ROOT = "/var/lib/lumina-crm/docker";
 
 const PROGRAM_PATH = "/usr/local/libexec/lumina-crm-storage-maintenance.mjs";
 const DOCKER_COMMAND = "/usr/bin/docker";
@@ -76,7 +77,7 @@ export function parseStoragePolicy(environment = {}) {
   }
   return {
     dockerDataRoot: specificAbsolutePath(
-      environment.LUMINA_DOCKER_DATA_ROOT ?? "/var/lib/docker",
+      environment.LUMINA_DOCKER_DATA_ROOT ?? LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
       "LUMINA_DOCKER_DATA_ROOT",
     ),
     minimumFreePercent: boundedInteger(environment.LUMINA_DEPLOY_MIN_FREE_PERCENT, {
@@ -200,7 +201,11 @@ export function assertAllowedDockerArguments(args) {
   if (forbidden) throw new Error(`Forbidden Docker command: docker ${args.join(" ")}`);
 
   if (category === "info") {
-    if (args.length === 3 && action === "--format" && rest[0] === "{{.DockerRootDir}}") return true;
+    if (args.length === 3 && action === "--format" && [
+      "{{.DockerRootDir}}",
+      "{{json .SecurityOptions}}",
+      "{{.CgroupDriver}}",
+    ].includes(rest[0])) return true;
   } else if (category === "buildx") {
     if (action === "inspect" && rest.length === 1 && rest[0] === LUMINA_BUILDER_NAME) return true;
     if (action === "create"
@@ -233,6 +238,7 @@ function dockerEnvironment() {
     HOME: STATE_ROOT,
     DOCKER_CONFIG: DOCKER_CONFIG_ROOT,
     BUILDX_CONFIG: `${DOCKER_CONFIG_ROOT}/buildx`,
+    DOCKER_HOST: process.env.DOCKER_HOST,
     LANG: "C.UTF-8",
   };
 }
@@ -268,6 +274,26 @@ function dockerRoot(policy) {
     throw new Error(`Docker reports data root ${reported}, but deploy.env requires ${policy.dockerDataRoot}`);
   }
   return reported;
+}
+
+function assertRootlessDocker(policy) {
+  const uid = process.getuid();
+  const expectedHost = `unix:///run/user/${uid}/docker.sock`;
+  if (process.env.DOCKER_HOST?.trim() !== expectedHost) {
+    throw new Error(`LUMINA_ROOTLESS_DOCKER_HOST_REQUIRED:${expectedHost}`);
+  }
+  const securityOptions = JSON.parse(
+    runDocker(["info", "--format", "{{json .SecurityOptions}}"]).stdout,
+  );
+  if (!Array.isArray(securityOptions)
+    || !securityOptions.some((value) => String(value).toLowerCase().includes("rootless"))) {
+    throw new Error("LUMINA_ROOTLESS_DOCKER_REQUIRED");
+  }
+  const cgroupDriver = runDocker(["info", "--format", "{{.CgroupDriver}}"]).stdout;
+  if (cgroupDriver !== "systemd") {
+    throw new Error("LUMINA_ROOTLESS_CGROUP_V2_SYSTEMD_REQUIRED");
+  }
+  return dockerRoot(policy);
 }
 
 function configFingerprint(policy) {
@@ -544,8 +570,8 @@ function persistReport(report) {
 }
 
 async function perform(mode) {
-  if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() !== 0) {
-    throw new Error("Lumina storage maintenance must run as root on Linux");
+  if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() === 0) {
+    throw new Error("Lumina storage maintenance must run as non-root lumina-crm on Linux");
   }
   if (realpathSync(process.argv[1]) !== PROGRAM_PATH) {
     throw new Error(`Lumina storage maintenance must run from root-owned ${PROGRAM_PATH}`);
@@ -560,7 +586,7 @@ async function perform(mode) {
   assertRealDirectory(DOCKER_CONFIG_ROOT, "Lumina Docker configuration directory");
 
   const policy = loadPolicy();
-  dockerRoot(policy);
+  assertRootlessDocker(policy);
   const diskBefore = captureDisk(policy);
   try {
     if (mode === "prepare") {

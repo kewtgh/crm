@@ -1,9 +1,10 @@
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { access, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import pg from "pg";
 import { decryptBackup } from "./lib/backup-crypto.mjs";
+import { matchingEncryptedObjectsPath } from "./lib/backup-policy.mjs";
 
 async function resolveEncryptedPath() {
   if (process.argv[2]) return path.resolve(process.argv[2]);
@@ -29,18 +30,29 @@ const encryptedPath = await resolveEncryptedPath();
 const adminUrl = process.env.RESTORE_DATABASE_ADMIN_URL?.trim()
   || process.env.DATABASE_ADMIN_URL?.trim();
 if (!adminUrl) throw new Error("RESTORE_DATABASE_ADMIN_URL_OR_DATABASE_ADMIN_URL_REQUIRED");
+const encryptedObjectsPath = matchingEncryptedObjectsPath(encryptedPath);
+const requireLocalObjects = /^(1|true|yes|on)$/i.test(
+  process.env.RESTORE_REQUIRE_LOCAL_OBJECTS ?? "false",
+);
+const verifyLocalObjects = await access(encryptedObjectsPath)
+  .then(() => true)
+  .catch(() => false);
+if (requireLocalObjects && !verifyLocalObjects) {
+  throw new Error("RESTORE_MATCHING_OBJECT_BACKUP_NOT_FOUND");
+}
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "lumina-crm-restore-"));
 const dumpPath = path.join(temporaryRoot, "database.dump");
+const objectsArchivePath = path.join(temporaryRoot, "objects.tar");
 const databaseName = `lumina_restore_${Date.now()}_${process.pid}`;
 if (!/^lumina_restore_\d+_\d+$/.test(databaseName)) throw new Error("RESTORE_DATABASE_NAME_INVALID");
 const admin = new pg.Client({ connectionString: adminUrl, application_name: "lumina-restore-test" });
 let adminConnected = false;
 let restoreDatabaseCreated = false;
 
-function run(command, args) {
+function run(command, args, { quiet = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      stdio: ["ignore", "inherit", "inherit"],
+      stdio: ["ignore", quiet ? "ignore" : "inherit", "inherit"],
       env: process.env,
       windowsHide: true,
     });
@@ -67,6 +79,14 @@ try {
     restoreUrl.toString(),
     dumpPath,
   ]);
+  if (verifyLocalObjects) {
+    await decryptBackup(encryptedObjectsPath, objectsArchivePath);
+    await run(process.env.TAR_COMMAND || "tar", [
+      "--list",
+      "--file",
+      objectsArchivePath,
+    ], { quiet: true });
+  }
   const restored = new pg.Client({
     connectionString: restoreUrl.toString(),
     application_name: "lumina-restore-verification",
@@ -87,7 +107,10 @@ try {
   } finally {
     await restored.end();
   }
-  process.stdout.write(`[db:restore:test] verified encrypted backup in ${databaseName}.\n`);
+  process.stdout.write(
+    `[db:restore:test] verified encrypted database backup in ${databaseName}`
+    + `${verifyLocalObjects ? " and its matching local-object archive" : ""}.\n`,
+  );
 } finally {
   if (adminConnected && restoreDatabaseCreated) {
     await admin.query(

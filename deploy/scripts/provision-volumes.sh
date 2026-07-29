@@ -1,6 +1,21 @@
 #!/bin/sh
 set -eu
 
+unset DOCKER_CONTEXT
+expected_docker_host="unix:///run/user/$(id -u)/docker.sock"
+if [ "${DOCKER_HOST:-}" != "$expected_docker_host" ]; then
+  echo "DOCKER_HOST must be the lumina-crm rootless socket: $expected_docker_host" >&2
+  exit 1
+fi
+if ! docker info --format '{{json .SecurityOptions}}' | grep -qi rootless; then
+  echo "Refusing to provision Lumina volumes through a rootful Docker daemon" >&2
+  exit 1
+fi
+if [ "$(docker info --format '{{.CgroupDriver}}')" != "systemd" ]; then
+  echo "Lumina rootless Docker requires the systemd cgroup driver" >&2
+  exit 1
+fi
+
 if [ "${LUMINA_COMPOSE_PROJECT:-lumina-crm}" != "lumina-crm" ]; then
   echo "LUMINA_COMPOSE_PROJECT must be lumina-crm" >&2
   exit 1

@@ -141,6 +141,8 @@ export const en: Messages = {
   "nav.profileSettings": "Personal & account settings",
   "nav.support": "Help & support",
   "nav.signOut": "Sign out securely",
+  "nav.signingOut": "Signing out securely…",
+  "nav.signOutFailed": "Sign-out failed. Please try again.",
   "nav.verified": "Verified",
   "nav.mfaEnabled": "MFA enabled",
   "nav.globalSearch": "Search organizations, contacts, students, households, or leads…",

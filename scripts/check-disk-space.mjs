@@ -1,11 +1,14 @@
 import { statfs } from "node:fs/promises";
 import path from "node:path";
 
-const threshold = Math.min(
-  50,
-  Math.max(5, Number(process.env.DISK_FREE_PERCENT_THRESHOLD ?? 15)),
-);
-const configuredPaths = (process.env.DISK_MONITOR_PATHS ?? "/var/lib/postgresql,/var/lib/lumina-crm")
+const rawThreshold = process.env.DISK_FREE_PERCENT_THRESHOLD?.trim() ?? "15";
+if (!/^\d+$/.test(rawThreshold)) throw new Error("DISK_FREE_PERCENT_THRESHOLD_INVALID");
+const threshold = Number(rawThreshold);
+if (!Number.isSafeInteger(threshold) || threshold < 5 || threshold > 50) {
+  throw new Error("DISK_FREE_PERCENT_THRESHOLD_MUST_BE_5_TO_50");
+}
+const configuredPaths = (process.env.DISK_MONITOR_PATHS
+  ?? "/,/var/lib/lumina-crm/docker,/var/lib/lumina-crm/deployments")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);

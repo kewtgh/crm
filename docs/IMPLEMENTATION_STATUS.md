@@ -1,55 +1,60 @@
-# Implementation status — v3.7.0 release candidate
+# Implementation status — v3.8.0 release candidate
 
 ## Scope
 
-v3.7.0 changes production deployment/operations only. CRM business behavior, schema semantics,
-authentication, RLS, Worker leases/idempotency/retry logic, and pages were not redesigned.
+v3.8.0 closes the production shared-host isolation, disaster-recovery evidence, and selected shared
+UI correctness gaps found in the 2026-07-30 audit. It does not change database schema semantics or
+introduce a speculative CRM module.
 
-The target is an isolated Docker Compose project on a server shared with HunterAI: PostgreSQL 18.4,
-Web, and a controlled Worker loop are Lumina containers. Cloudflare Worker is user-facing; host
-Caddy is an authenticated origin gateway only.
+The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
+Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
+the `lumina-crm` host user. Cloudflare Worker remains user-facing; host Caddy is an authenticated
+origin gateway only.
 
 ## Implemented repository assets
 
-- multi-stage Node 24.18 application and PostgreSQL-18-client operations images;
-- fixed `lumina-crm` Compose topology with internal backend and separate edge network;
-- external database/object/backup volumes and audited provisioning script;
-- Web/Worker/bootstrap/migration/backup/restore secret-file boundaries;
-- Worker schema gate, four-minute deadline, advisory lock, and heartbeat/queue health;
-- explicit database bootstrap, migration verification/migration, and CRM admin bootstrap tasks;
-- encrypted database/local-object backup and isolated restore test;
-- image deployment, application-only rollback, accepted-state recovery, and Lumina-only cleanup;
-- Cloudflare proxy source/config/tests and authenticated Caddy origin gateway;
-- Compose-only startup/backup/restore systemd units and current production runbooks.
+- version-controlled rootless Docker daemon configuration with a Lumina-only data root;
+- exact rootless socket, security option, systemd cgroup, and data-root deployment gates;
+- Docker-using systemd units that neither require the rootful daemon nor hide `/run/user`;
+- non-root storage preparation/cleanup through the fixed root-owned maintenance program;
+- corrected Compose/rootless disk monitoring with strict threshold configuration;
+- strict remote/local backup retention and paired encrypted database/object verification;
+- CSRF-aware secure sign-out with pending, error, fallback redirect, and Chromium coverage;
+- immediate stale-search clearing and finite, consistently clamped progress semantics;
+- current Compose-only deployment core and contracts, without obsolete v3.6 release logic;
+- minimal application image script set, excluding deploy, QA, and smoke controllers;
+- synchronized application, integration-image, package, lockfile, and documentation version 3.8.0.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
+| Initial TypeScript / ESLint | Pass |
+| Initial business/security contracts | Pass: 47/47 |
+| `npm audit --audit-level=low` | Pass: 0 known vulnerabilities at execution time |
+| v3.8 targeted implementation contracts | Pass: 12/12 |
+| `npm run test:deploy` | Pass: 9/9 current rootless Compose/deploy contracts |
+| `npm run typecheck` | Pass |
+| `npm run lint` | Pass |
+| `npm run test:contracts` | Pass: 44 application contracts + 6 CAPTCHA contracts |
+| `npm run db:migrations:verify` | Pass: 74 ordered checksum-managed migrations |
 | `docker compose -f compose.production.yml --profile ops config --quiet` | Pass |
-| Rendered Compose boundary assertions | Pass: project `lumina-crm`; PostgreSQL has no port and only backend; Web binds loopback; external database volume; all restart policies |
-| Dedicated builder | Pass: `lumina-crm-buildkit`, `docker-container` driver |
-| Docker `application` target | Pass: deterministic install and vinext production build |
-| Docker `operations` target | Pass: PostgreSQL client 18.4 and Node 24.18 |
-| Docker `verification` target | Pass after including the read-only migration archive in build context: TypeScript, ESLint, 47 business/contracts, 23 deploy contracts, 5 Cloudflare contracts |
-| Migration manifest | Pass: 74 ordered checksum-managed files |
-| Empty PostgreSQL 18.4 Compose bootstrap/migration | Pass in unique project; 74/74 applied |
-| Backup credential boundary | Pass: `crm_backup` write attempt rejected; custom-format dump succeeded |
-| Backup encryption/restore | Pass: AES-256-GCM round trip; `pg_restore --exit-on-error` into `lumina_restore_*`; verification and cleanup passed |
-| Runtime Compose integration | Pass in unique project: missing/stale heartbeat rejection, Web liveness, database-aware readiness, Worker health, PostgreSQL stop/recovery |
-| Application image rollback drill | Pass: prior image tag restored; readiness passed; PostgreSQL container and external volume unchanged; schema remained forward |
-| Cleanup contracts | Pass: exact label/tag/in-use/protected-version decisions and forbidden global command allowlist |
-| Cloudflare Worker proxy contracts | Pass: no-cache, header replacement, loop prevention, POST body, Cookie/Set-Cookie and origin status |
-| Public health configuration dry-run | Pass: `crm.ewaya.com` and a distinct HTTPS origin; no request sent |
-| dependency audit | Pass: 0 known vulnerabilities at execution time |
+| `npm run build` | Pass: one production vinext build |
+| Chromium 1228 `08-notification` | Pass: security-channel invariant and CSRF-authenticated sign-out; identity cleanup 1/1 |
+| `git diff --check` | Pass before release commit |
 
-All Compose integration resources used unique `lumina-crm-it-*` or `lumina-crm-rt-*` names and were
-removed by exact name/label after the test. These are local Docker tests, not production validation.
+Chromium evidence is retained under the Git-ignored
+`work/browser-qa-chromium-1228/v380-audit/phases/08-notification/` path and records the exact
+`ms-playwright/chromium-1228` executable and browser version.
 
-## Not performed
+## Not performed / external release gates
 
-No production SSH/deployment, DNS, Cloudflare, Caddy, systemd, firewall, or real production Docker
-resource changed. No development or production host/Docker daemon was rebooted. No real
-`crm.ewaya.com` or origin request was sent. Backup S3 upload, notification delivery, provider remote
-lifecycle, real TLS/origin routing, and server reboot recovery require provisioned infrastructure.
-HunterAI and Temporal were not accessed.
+No production SSH/deployment, DNS, Cloudflare, Caddy, systemd, firewall, rootless daemon, or real
+production Docker resource changed. No full ten-phase Chromium matrix, complete database suite,
+runtime Compose integration, Docker image build, real encrypted S3 lifecycle, provider delivery,
+TLS/origin route, server reboot, or production recovery drill was run in this scoped implementation.
+
+Before production deployment, operators must provision non-overlapping subordinate UID/GID ranges,
+the lingering rootless user service, cgroup v2 delegation, exact file ownership, real secrets,
+independent object-store lifecycle, DNS/TLS/origin authentication, and a real recovery exercise.
+Any rootful Docker result is a release blocker; there is no fallback.

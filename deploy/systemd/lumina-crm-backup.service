@@ -1,7 +1,6 @@
 [Unit]
 Description=Lumina CRM encrypted Compose backup task
-Requires=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -10,7 +9,8 @@ User=lumina-crm
 Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/source
 EnvironmentFile=/etc/lumina-crm/deploy.env
-UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy NODE_OPTIONS
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy NODE_OPTIONS DOCKER_CONTEXT
+ExecStartPre=/usr/bin/docker info
 ExecStart=/usr/bin/docker compose --project-name lumina-crm --profile ops --env-file /var/lib/lumina-crm/deployments/compose.env -f /opt/lumina-crm/source/compose.production.yml run --rm backup
 TimeoutStartSec=1h
 TimeoutStopSec=30s
