@@ -504,6 +504,18 @@ async function main(){
         if(!await lastChannel.isDisabled())report.errors.push({kind:"interaction",url:"/settings/notifications",message:"The final security notification channel is not protected"});
       }
       process.stdout.write("[QA] pass security notification invariant\n");
+      await page.locator(".profile-trigger").click();
+      const signOut=page.locator(".profile-signout");
+      if(!await signOut.isVisible()){
+        report.errors.push({kind:"interaction",url:"/settings/notifications",message:"Secure sign-out action is unavailable"});
+      }else{
+        const responsePromise=page.waitForResponse(response=>response.url().includes("/api/auth/logout")&&response.request().method()==="POST",{timeout:8_000});
+        await signOut.click();
+        const response=await responsePromise;
+        if(response.status()!==204)report.errors.push({kind:"interaction",url:"/api/auth/logout",message:`Secure sign-out returned ${response.status()} instead of 204`});
+        await page.waitForURL(url=>url.pathname==="/login",{timeout:8_000}).catch(()=>report.errors.push({kind:"interaction",url:"/api/auth/logout",message:"Secure sign-out did not navigate to login"}));
+      }
+      process.stdout.write("[QA] pass CSRF-authenticated secure sign-out\n");
       await context.close();
     }else if(env.QA_SCOPE==="workflows"){
       const identity=await createIdentity("SALES_MANAGER","workflows");identities.push(identity);

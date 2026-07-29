@@ -1,7 +1,6 @@
 [Unit]
 Description=Lumina CRM isolated Docker Compose application
-Requires=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -10,7 +9,8 @@ User=lumina-crm
 Group=lumina-crm
 WorkingDirectory=/opt/lumina-crm/source
 EnvironmentFile=/etc/lumina-crm/deploy.env
-UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy NODE_OPTIONS
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy NODE_OPTIONS DOCKER_CONTEXT
+ExecStartPre=/usr/bin/docker info
 ExecStart=/usr/bin/docker compose --project-name lumina-crm --env-file /var/lib/lumina-crm/deployments/compose.env -f /opt/lumina-crm/source/compose.production.yml up -d postgres web worker
 ExecReload=/usr/bin/docker compose --project-name lumina-crm --env-file /var/lib/lumina-crm/deployments/compose.env -f /opt/lumina-crm/source/compose.production.yml up -d --no-deps web worker
 RemainAfterExit=yes
@@ -21,6 +21,8 @@ PrivateTmp=true
 ProtectHome=read-only
 ProtectSystem=strict
 ReadWritePaths=/var/lib/lumina-crm
+Restart=on-failure
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target

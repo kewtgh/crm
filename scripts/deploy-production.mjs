@@ -281,6 +281,8 @@ function dryRun() {
   const compose = readFileSync(path.join(sourceRoot, "compose.production.yml"), "utf8");
   const dockerfile = readFileSync(path.join(sourceRoot, "Dockerfile"), "utf8");
   const runner = readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8");
+  const deployUnit = readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-deploy.service"), "utf8");
+  const deployEnvironment = readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8");
   const caddy = readFileSync(path.join(sourceRoot, "deploy", "caddy", "Caddyfile"), "utf8");
   const worker = readFileSync(path.join(sourceRoot, "deploy", "cloudflare-worker", "src", "index.mjs"), "utf8");
   const required = [
@@ -290,6 +292,9 @@ function dryRun() {
     [dockerfile, /com\.lumina\.crm\.managed="true"/, "image ownership label"],
     [runner, /lumina-crm-buildkit/, "isolated BuildKit builder"],
     [runner, /apply locked forward migration/, "forward migration gate"],
+    [runner, /assertRootlessDockerInfo/, "rootless Docker runtime gate"],
+    [deployUnit, /EnvironmentFile=\/etc\/lumina-crm\/deploy\.env/, "rootless Docker environment boundary"],
+    [deployEnvironment, /DOCKER_HOST=unix:\/\/\/run\/user\/1001\/docker\.sock/, "rootless Docker socket template"],
     [caddy, /X-Lumina-Origin-Auth/, "origin authentication"],
     [worker, /cacheEverything: false/, "Worker no-cache contract"],
   ];
@@ -302,7 +307,8 @@ Compose file: ${path.join(deployRoot, "source", "compose.production.yml")}
 state root: ${stateRoot}
 log root: ${logRoot}
 storage gate: /, configured Docker data root, ${stateRoot}
-BuildKit builder: lumina-crm-buildkit (fixed root-owned maintenance unit)
+BuildKit builder: lumina-crm-buildkit (fixed root-owned program, non-root maintenance unit)
+Docker daemon: dedicated lumina-crm rootless user service; rootful fallback forbidden
 storage report: /var/lib/lumina-crm/storage-maintenance/latest.json
 local health: http://127.0.0.1:3200/api/health
 public health: configured LUMINA_PUBLIC_HEALTH_URL through Cloudflare Worker

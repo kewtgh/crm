@@ -1,18 +1,20 @@
 [Unit]
 Description=Lumina CRM post-success project storage cleanup
-After=docker.service
-Requires=docker.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=root
+User=lumina-crm
 Group=lumina-crm
+EnvironmentFile=/etc/lumina-crm/deploy.env
+UnsetEnvironment=DOCKER_CONTEXT
 ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs cleanup
 TimeoutStartSec=360s
 UMask=0027
 PrivateTmp=true
 PrivateDevices=true
-ProtectHome=true
+ProtectHome=read-only
 ProtectSystem=strict
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -30,4 +32,4 @@ StateDirectory=lumina-crm/storage-maintenance
 StateDirectoryMode=0750
 LogsDirectory=lumina-crm/storage-maintenance
 LogsDirectoryMode=0750
-ReadWritePaths=/run/docker.sock
+ReadWritePaths=/var/lib/lumina-crm /var/log/lumina-crm

@@ -11,6 +11,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { encryptBackup } from "./lib/backup-crypto.mjs";
+import { backupRetentionPolicy } from "./lib/backup-policy.mjs";
 
 const required = [
   "BACKUP_DATABASE_URL",
@@ -28,7 +29,7 @@ const localRoot = path.resolve(process.env.BACKUP_LOCAL_ROOT);
 if (!path.isAbsolute(process.env.BACKUP_LOCAL_ROOT)) {
   throw new Error("BACKUP_LOCAL_ROOT_MUST_BE_ABSOLUTE");
 }
-const retentionDays = Math.min(365, Math.max(14, Number(process.env.BACKUP_RETENTION_DAYS ?? 30)));
+const retention = backupRetentionPolicy();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 const finalName = `lumina-crm-${timestamp}.dump.enc`;
 const finalPath = path.join(localRoot, finalName);
@@ -128,14 +129,20 @@ try {
     objects = { objectKey: objectsKey, bytes: encryptedObjects.size };
   }
 
-  const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - retention.localRetentionHours * 60 * 60 * 1000;
   for (const entry of await readdir(localRoot, { withFileTypes: true })) {
     if (!entry.isFile()
       || !/^lumina-crm-\d{8}T\d{6}Z\.(?:dump|objects\.tar)\.enc$/.test(entry.name)) continue;
     const candidate = path.join(localRoot, entry.name);
     if ((await stat(candidate)).mtimeMs < cutoff) await rm(candidate, { force: true });
   }
-  await notify("SUCCEEDED", { objectKey, bytes: encrypted.size, objects, retentionDays });
+  await notify("SUCCEEDED", {
+    objectKey,
+    bytes: encrypted.size,
+    objects,
+    remoteRetentionDays: retention.remoteRetentionDays,
+    localRetentionHours: retention.localRetentionHours,
+  });
   process.stdout.write(
     `[db:backup] uploaded encrypted database${objects ? " and local objects" : ""} backup (${encrypted.size} database bytes).\n`,
   );

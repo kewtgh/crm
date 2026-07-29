@@ -14,6 +14,11 @@ import path from "node:path";
 import process from "node:process";
 import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
+import {
+  assertRootlessDockerHost,
+  assertRootlessDockerInfo,
+  LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
+} from "./lib/rootless-docker.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -36,11 +41,13 @@ const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
   "http_proxy", "https_proxy", "all_proxy",
   "NODE_OPTIONS",
+  "DOCKER_CONTEXT",
 ];
 
 if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() === 0) {
   throw new Error("Production deployment runner must run as non-root lumina-crm on Linux");
 }
+assertRootlessDockerHost();
 if (sourceRoot !== expectedSourceRoot) throw new Error(`Runner must execute from ${expectedSourceRoot}`);
 if (!existsSync(requestPath)) throw new Error("Deployment request is missing");
 mkdirSync(stateRoot, { recursive: true, mode: 0o750 });
@@ -317,6 +324,21 @@ async function prepareBuilderAndCapacity() {
   if (!/^Driver:\s+docker-container$/m.test(inspected.stdout)) {
     throw new Error(`${builder} is not a docker-container builder`);
   }
+  const securityOptions = await run("verify rootless Docker security mode", "docker", [
+    "info", "--format", "{{json .SecurityOptions}}",
+  ], { timeoutMs: 30_000, quiet: true });
+  const cgroupDriver = await run("verify rootless Docker cgroup driver", "docker", [
+    "info", "--format", "{{.CgroupDriver}}",
+  ], { timeoutMs: 30_000, quiet: true });
+  const dockerRoot = await run("verify rootless Docker data root", "docker", [
+    "info", "--format", "{{.DockerRootDir}}",
+  ], { timeoutMs: 30_000, quiet: true });
+  assertRootlessDockerInfo({
+    securityOptions: securityOptions.stdout,
+    cgroupDriver: cgroupDriver.stdout,
+    dockerRoot: dockerRoot.stdout,
+    expectedDockerRoot: LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
+  });
 }
 
 async function updateSource() {

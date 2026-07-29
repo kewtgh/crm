@@ -1,4 +1,4 @@
-# Lumina CRM v3.7 production deployment
+# Lumina CRM v3.8 production deployment
 
 This is the only current production runbook. Documents describing host-installed PostgreSQL,
 host Node Web/Worker processes, immutable npm release directories, or Caddy as the user-facing
@@ -6,7 +6,8 @@ endpoint are historical v3.6-and-earlier records.
 
 Lumina's fixed Compose project is `lumina-crm`; its databases, networks, volumes, images, builder,
 logs, backups, and release state must remain separate from HunterAI, Temporal, and every other
-project.
+project. Lumina uses its own **rootless Docker daemon**. It must never connect to the shared rootful
+daemon or `/var/run/docker.sock`.
 
 ## Architecture and inventory
 
@@ -33,6 +34,9 @@ crm.ewaya.com
 | Local objects volume | external `lumina-crm-objects` |
 | Encrypted backup volume | external `lumina-crm-backups` |
 | Builder | `lumina-crm-buildkit` only |
+| Docker daemon | rootless user service owned by host user `lumina-crm` |
+| Docker data root | `/var/lib/lumina-crm/docker` |
+| Docker socket | `/run/user/<lumina uid>/docker.sock` |
 | Host Web publication | `127.0.0.1:3200:3200` |
 
 PostgreSQL 18.4 joins only backend and publishes no host port. Web and Worker join backend plus edge
@@ -41,7 +45,12 @@ and never use host networking. Database URLs use the `postgres` service DNS name
 ## HunterAI isolation and prohibited operations
 
 Do not join, reuse, stop, restart, or clean any HunterAI, Temporal, or foreign container, network,
-volume, image, database, or builder. Do not add Lumina to another Compose project.
+volume, image, database, daemon, or builder. Do not add Lumina to another Compose project.
+
+Compose labels are an operational allowlist, not a security boundary for a shared rootful Docker
+socket. Membership in the host `docker` group is root-equivalent. The `lumina-crm` host user must
+not belong to that group and must not have permission to read/write the rootful socket. All Lumina
+units receive one exact `DOCKER_HOST` pointing to the user's rootless socket.
 
 Never run these for Lumina:
 
@@ -62,8 +71,10 @@ container, network, or volume.
 
 ## Host provisioning
 
-Provision Ubuntu with Docker Engine, Compose, Buildx, Caddy, Git, and Node 24 only for the
-deployment controller. Do not install/run PostgreSQL or CRM Web/Worker with host systemd.
+Provision Ubuntu with Docker Engine, the rootless extras, Compose, Buildx, `uidmap`, Caddy, Git,
+and Node 24 only for the deployment controller. Do not install/run PostgreSQL or CRM Web/Worker
+with host systemd. Rootless mode requires cgroup v2 + systemd so Compose memory/CPU/PID limits are
+actually enforced, plus at least 65,536 subordinate UIDs and GIDs for `lumina-crm`.
 
 ```text
 /opt/lumina-crm/source                    checked-out kewtgh/crm main
@@ -71,21 +82,50 @@ deployment controller. Do not install/run PostgreSQL or CRM Web/Worker with host
 /etc/lumina-crm/origin.env                Caddy origin hostname/secret
 /etc/lumina-crm/secrets/                  root-owned Compose secret sources
 /var/lib/lumina-crm/deployments/          accepted image/deployment state
+/var/lib/lumina-crm/docker/               Lumina rootless Docker data root
 /var/lib/lumina-crm/docker-config/        Lumina-only Buildx configuration
 /var/lib/lumina-crm/storage-maintenance/  builder ownership/cleanup state
 /var/log/lumina-crm/                      deployment/maintenance logs
 ```
 
+Set the `lumina-crm` account home to `/var/lib/lumina-crm`, assign non-overlapping ranges in
+`/etc/subuid` and `/etc/subgid`, then install the rootless user service using Docker's supported
+`dockerd-rootless-setuptool.sh install --force` flow. Use a real PAM/systemd login or
+`machinectl shell lumina-crm@`; `sudo su` does not create the required user manager. Enable linger:
+
+```sh
+sudo loginctl enable-linger lumina-crm
+sudo gpasswd -d lumina-crm docker 2>/dev/null || true
+```
+
+Install `deploy/rootless-docker/daemon.json` as
+`/var/lib/lumina-crm/.config/docker/daemon.json`, owned by `lumina-crm`, then restart the user's
+Docker service. Set this exact value in `/etc/lumina-crm/deploy.env`, replacing the example UID:
+
+```sh
+lumina_uid="$(id -u lumina-crm)"
+export DOCKER_HOST="unix:///run/user/${lumina_uid}/docker.sock"
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" docker info
+```
+
+The server section of `docker info` must list `rootless`, cgroup driver `systemd`, and Docker root
+dir `/var/lib/lumina-crm/docker`. A rootful result, missing cgroup delegation, wrong data root, or
+wrong socket is a deployment blocker. Do not fall back to the rootful daemon. See Docker's official
+rootless documentation: <https://docs.docker.com/engine/security/rootless/>.
+
 Install the reviewed systemd, sudoers, Caddy, BuildKit, and maintenance assets from `deploy/`.
 `lumina-crm.service` invokes only fixed Compose startup/reload commands. Backup/restore timers invoke
 only their fixed Lumina Compose task. The deploy service holds
-`/var/lib/lumina-crm/deploy.lock`.
+`/var/lib/lumina-crm/deploy.lock`. Docker-using units keep `/run/user` read-only but visible so the
+rootless Unix socket remains reachable; the application unit retries if the lingering user service
+has not finished starting at boot.
 
 Ensure the pinned PostgreSQL 18.4 image is present, then create the three explicit external volumes:
 
 ```sh
-docker pull postgres:18.4-bookworm
-sudo -u lumina-crm /opt/lumina-crm/source/deploy/scripts/provision-volumes.sh
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" docker pull postgres:18.4-bookworm
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" \
+  /opt/lumina-crm/source/deploy/scripts/provision-volumes.sh
 ```
 
 The script verifies exact labels before adopting an existing volume and refuses foreign volumes.
@@ -104,7 +144,8 @@ Install each `deploy/*.env.example` secret template as its basename without `.ex
 Compose mounts the files under `/run/secrets`; the entrypoint exports only the selected file to its
 child process. Secret values are not placed in Compose YAML or image build arguments.
 
-Run the storage prepare unit once. It verifies host/Docker/state capacity and creates or verifies
+Run the storage prepare unit once. The fixed root-owned program executes as non-root
+`lumina-crm`; it verifies the rootless socket/security/cgroup/data-root contract, capacity, and
 only the marked `lumina-crm-buildkit` builder:
 
 ```sh
@@ -178,8 +219,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.7.0 `
-  -OperationsImage lumina-crm-ops-validation:3.7.0
+  -ApplicationImage lumina-crm-validation:3.8.0 `
+  -OperationsImage lumina-crm-ops-validation:3.8.0
 ```
 
 They are local integration tests, not production deployment commands.
@@ -273,8 +314,9 @@ local persistence/upload. Local-object mode also encrypts an archive of the exte
 volume. Runtime and backup S3 bucket/account/prefix authorization must be independent. Remote
 lifecycle is provider-managed. Images/releases never contain or delete object bytes.
 
-PostgreSQL, Web, and Worker use `restart: unless-stopped`. Docker restores them after reboot; Web
-and Worker wait for PostgreSQL health, and Worker refuses consumption until migrations are current.
+PostgreSQL, Web, and Worker use `restart: unless-stopped`. The linger-enabled rootless Docker user
+service restores them after reboot; Web and Worker wait for PostgreSQL health, and Worker refuses
+consumption until migrations are current.
 External volumes retain data. Backup/restore timers still call fixed Compose tasks. Validate reboot
 behavior only with an isolated test project/container recreation, never by rebooting development or
 production during repository testing.

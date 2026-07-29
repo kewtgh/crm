@@ -1,16 +1,23 @@
 # Lumina Education CRM
 
-Current release candidate: **v3.7.0**
+Current release candidate: **v3.8.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.7 moves production to the fixed, isolated `lumina-crm` Docker Compose project. PostgreSQL,
-Web, Worker, migrations, encrypted backup/restore, commit-tagged image release, application-only
-rollback, and Lumina-only cleanup now have explicit container and credential boundaries. A
-Cloudflare Worker fronts a distinct authenticated Caddy origin; HunterAI and Temporal resources are
-never shared or managed by Lumina.
+Version 3.8 closes the shared-host isolation gap by moving every Lumina controller, Compose task,
+builder and maintenance command to a dedicated rootless Docker user service. Deployment gates
+verify the exact user socket, rootless security mode, systemd cgroups and a Lumina-only data root.
+It also verifies each encrypted database backup with its matching encrypted local-object archive,
+fixes the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims
+the runtime image to required scripts.
+
+Version 3.7 moved production to the fixed `lumina-crm` Docker Compose project. PostgreSQL, Web,
+Worker, migrations, encrypted backup/restore, commit-tagged image release, application-only
+rollback, and Lumina-only cleanup have explicit container and credential boundaries. A Cloudflare
+Worker fronts a distinct authenticated Caddy origin; HunterAI and Temporal resources are never
+shared or managed by Lumina.
 
 Version 3.5 closed the organization-wide business-date architecture gate. Each workspace now has a
 constrained, audited business timezone that administrators can change only with AAL2; user and
@@ -103,7 +110,7 @@ phase relevant to a scoped change, or the staged matrix when preparing an author
 On an initialized Linux VPS, the persistent deployment runner performs:
 
 ```text
-root/Docker/state capacity gate
+rootless Docker/state capacity gate
 -> isolated Lumina BuildKit verification
 -> one exact Git fetch and fast-forward
 -> containerized checks and commit-tagged app/ops images

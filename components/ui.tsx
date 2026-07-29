@@ -17,11 +17,12 @@ export function StatusBadge({ tone = "gray", children }: { tone?: string; childr
 }
 
 export function ProgressBar({ value, label }: { value: number; label?: string }) {
-  const normalized=Math.min(100,Math.max(0,value));
+  const normalized=Number.isFinite(value)?Math.min(100,Math.max(0,value)):0;
+  const renderedLabel=label??`${Math.round(normalized)}%`;
   return (
-    <span className="progress-with-label" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(normalized)} aria-label={label??`${Math.round(normalized)}%`}>
+    <span className="progress-with-label" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(normalized)} aria-label={renderedLabel}>
       <span className="progress-track" aria-hidden="true"><span style={{ width: `${normalized}%` }} /></span>
-      {label ?? `${value}%`}
+      {renderedLabel}
     </span>
   );
 }

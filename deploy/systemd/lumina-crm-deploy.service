@@ -1,7 +1,6 @@
 [Unit]
 Description=Lumina CRM image-based Compose deployment runner
-Requires=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -12,7 +11,7 @@ WorkingDirectory=/opt/lumina-crm/source
 EnvironmentFile=/etc/lumina-crm/deploy.env
 Environment=DOCKER_CONFIG=/var/lib/lumina-crm/docker-config
 Environment=BUILDX_CONFIG=/var/lib/lumina-crm/docker-config/buildx
-UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY RSYNC_PROXY http_proxy https_proxy all_proxy no_proxy ftp_proxy rsync_proxy LUMINA_HTTPS_PROXY NODE_OPTIONS NODE_USE_ENV_PROXY GIT_PROXY_COMMAND NPM_CONFIG_PROXY NPM_CONFIG_HTTPS_PROXY NPM_CONFIG_NOPROXY GLOBAL_AGENT_HTTP_PROXY GLOBAL_AGENT_HTTPS_PROXY GLOBAL_AGENT_NO_PROXY
+UnsetEnvironment=HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY RSYNC_PROXY http_proxy https_proxy all_proxy no_proxy ftp_proxy rsync_proxy LUMINA_HTTPS_PROXY NODE_OPTIONS NODE_USE_ENV_PROXY GIT_PROXY_COMMAND NPM_CONFIG_PROXY NPM_CONFIG_HTTPS_PROXY NPM_CONFIG_NOPROXY GLOBAL_AGENT_HTTP_PROXY GLOBAL_AGENT_HTTPS_PROXY GLOBAL_AGENT_NO_PROXY DOCKER_CONTEXT
 ExecStart=/usr/bin/flock --nonblock --exclusive --conflict-exit-code=73 /var/lib/lumina-crm/deploy.lock /usr/bin/node /opt/lumina-crm/source/scripts/deploy-production-runner.mjs
 TimeoutStartSec=infinity
 TimeoutStopSec=30s

@@ -141,6 +141,8 @@ export const zhCN: Messages = {
   "nav.profileSettings": "个人与账户设置",
   "nav.support": "帮助与支持",
   "nav.signOut": "安全退出",
+  "nav.signingOut": "正在安全退出…",
+  "nav.signOutFailed": "退出失败，请重试。",
   "nav.verified": "已验证",
   "nav.mfaEnabled": "MFA 已启用",
   "nav.globalSearch": "搜索机构、联系人、学生、家庭或线索…",
