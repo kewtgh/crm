@@ -50,16 +50,18 @@ export async function issueEmailToken({
     : purpose === "DEVICE_VERIFICATION"
       ? "device-verification"
       : "email-verification";
+  const deliveryId = crypto.randomUUID();
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "idempotency-key": deliveryId,
       ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
         ? { authorization: `Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` }
         : {}),
     },
     body: JSON.stringify({
-      id: crypto.randomUUID(),
+      id: deliveryId,
       to: email,
       template,
       payload: {

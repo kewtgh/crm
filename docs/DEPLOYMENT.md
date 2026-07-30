@@ -168,6 +168,7 @@ sudo systemctl status lumina-crm-storage-prepare.service
 | --- | --- |
 | `production.env` / Web | `crm_app`, `crm_system`, auth and object-signing secrets |
 | `worker.env` / Worker | `crm_worker`, delivery/integration and object-store credentials |
+| Email delivery Cloudflare Worker | CRM webhook token plus Worker-only Resend API key |
 | `database-bootstrap.env` | PostgreSQL administrator plus five role passwords |
 | `migration.env` | `crm_migrator` only |
 | `bootstrap-admin.env` | `crm_system` plus one-shot CRM admin input |
@@ -245,8 +246,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.2 `
-  -OperationsImage lumina-crm-ops-validation:3.8.2
+  -ApplicationImage lumina-crm-validation:3.8.3 `
+  -OperationsImage lumina-crm-ops-validation:3.8.3
 ```
 
 They are local integration tests, not production deployment commands.
@@ -261,6 +262,45 @@ overlap while the advisory lock is held.
 
 Worker health queries the real schema version, database readiness, required heartbeat freshness,
 and failed/stuck queue counts. A live Node process alone is not healthy.
+
+## Independent email delivery Worker
+
+The independently deployed Worker under `infrastructure/email-delivery-worker/` is the only
+production Resend adapter. It is not a CRM Web route, is not built into the application image, and
+is not deployed by `deploy:production`. Its Custom Domain and endpoint are:
+
+```text
+https://crm-mail.ewaya.com
+https://crm-mail.ewaya.com/crm-delivery
+```
+
+Set that endpoint as `EMAIL_DELIVERY_WEBHOOK_URL` in the root-owned production `worker.env`.
+`EMAIL_DELIVERY_WEBHOOK_TOKEN` must exactly match the Worker's
+`CRM_DELIVERY_WEBHOOK_TOKEN` secret. The Resend API key exists only as the Worker's
+`RESEND_API_KEY` secret and must never be copied to the CRM host. Neither secret belongs in Git,
+Wrangler variables, build output, logs, or status files.
+
+The adapter forwards the CRM `Idempotency-Key`, accepts only the mechanically derived template
+allow-list, escapes all payload values, creates both HTML and text bodies, and never accepts
+client-provided sender/envelope HTML. Supported keys are:
+
+```text
+reminder
+password-reset
+device-verification
+email-verification
+staff-account-created
+communication-message
+calendar-invite
+calendar-update
+calendar-cancel
+```
+
+The actual database calendar delivery types are `INVITE`, `UPDATE`, and `CANCEL`; the CRM produces
+the corresponding `calendar-*` keys above. See the subproject README for `npm ci`, tests, secret
+installation, DNS conflict checks, health verification, controlled delivery testing, and the
+explicit `npx wrangler deploy` operator command. Repository validation does not execute that
+deployment.
 
 ## Cloudflare Tunnel and loopback Caddy gateway
 

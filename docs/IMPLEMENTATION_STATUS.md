@@ -1,10 +1,10 @@
-# Implementation status — v3.8.2 release candidate
+# Implementation status — v3.8.3 release candidate
 
 ## Scope
 
-v3.8.2 retains the production shared-host isolation and disaster-recovery evidence completed in
-v3.8.0, and adds a fail-closed, persistent first-install mode for the self-hosted PostgreSQL
-environment. It does not change database schema semantics or introduce a speculative CRM module.
+v3.8.3 retains the production shared-host isolation and persistent first-install flow, and adds an
+independently deployed Cloudflare Worker adapter for the existing CRM email-delivery protocol. It
+does not change database schema semantics or add a CRM Web mail route.
 
 The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
 Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
@@ -26,12 +26,20 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - Tunnel/Caddy Host, public-readiness, forwarding-header, liveness, and rollback contracts;
 - explicit `initialize` request mode with accepted-state gates, repeat-safe recovery, bootstrap
   credential boundaries, forward-only failure state, and first-release null rollback images;
-- synchronized application, integration-image, package, lockfile, and documentation version 3.8.2.
+- zero-runtime-dependency email adapter with fixed-time token verification, bounded JSON input,
+  nine explicit escaped HTML/text templates, Resend idempotency, stable provider errors, and safe
+  logs;
+- a fixed `crm-mail.ewaya.com` Custom Domain with `workers.dev` disabled and secrets excluded from
+  Git/Wrangler variables;
+- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.3.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
+| Email delivery Worker `npm ci` | Pass: 0 installed dependency vulnerabilities |
+| Email delivery Worker `npm test` | Pass: 44/44 |
+| Email delivery Worker `npm run lint` | Pass |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
 | `npm run test:deploy:raw` | Pass: 35/35 rootless Compose/deploy contracts |
@@ -42,10 +50,11 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 
 ## Not performed / external release gates
 
-No production SSH/deployment, DNS, Cloudflare Tunnel, Caddy, systemd, firewall, rootless daemon, or real
-production Docker resource changed. No full ten-phase Chromium matrix, complete database suite,
-runtime Compose integration, Docker image build, real encrypted S3 lifecycle, provider delivery,
-Tunnel route, server reboot, or production recovery drill was run in this scoped implementation.
+No production SSH/deployment, Cloudflare Worker deployment, DNS, Cloudflare Tunnel, Caddy, systemd,
+firewall, rootless daemon, or real production Docker resource changed. No full ten-phase Chromium
+matrix, complete database suite, runtime Compose integration, Docker image build, real Resend
+delivery, encrypted S3 lifecycle, Tunnel route, server reboot, or production recovery drill was run
+in this scoped implementation.
 
 Before production deployment, operators must provision non-overlapping subordinate UID/GID ranges,
 the lingering rootless user service, cgroup v2 delegation, exact file ownership, real secrets,

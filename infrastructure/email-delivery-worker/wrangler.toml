@@ -1,0 +1,13 @@
+name = "lumina-crm-email-delivery"
+main = "src/index.js"
+compatibility_date = "2026-07-30"
+workers_dev = false
+
+[[routes]]
+pattern = "crm-mail.ewaya.com"
+custom_domain = true
+
+[vars]
+LUMINA_EMAIL_FROM = "configure-a-verified-resend-sender"
+LUMINA_APP_URL = "https://crm.ewaya.com"
+LUMINA_BRAND_NAME = "Lumina Education CRM"
