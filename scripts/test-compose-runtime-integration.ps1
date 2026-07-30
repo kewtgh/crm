@@ -1,7 +1,7 @@
 param(
   [string]$Suffix = ([guid]::NewGuid().ToString("N").Substring(0, 10)),
-  [string]$ApplicationImage = "lumina-crm-validation:3.8.1",
-  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.1"
+  [string]$ApplicationImage = "lumina-crm-validation:3.8.12",
+  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.12"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,8 +16,8 @@ $postgresVolume = "$project-postgres-data"
 $objectsVolume = "$project-objects"
 $backupsVolume = "$project-backups"
 $secretRoot = Join-Path $repositoryRoot "work\$project-secrets"
-$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.1"
-$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.1"
+$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.12"
+$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.12"
 $workspaceId = "00000000-0000-4000-8000-000000000001"
 
 foreach ($value in @($project, $backendNetwork, $edgeNetwork, $postgresVolume, $objectsVolume, $backupsVolume)) {

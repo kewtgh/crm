@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.11**
+Current release candidate: **v3.8.12**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
