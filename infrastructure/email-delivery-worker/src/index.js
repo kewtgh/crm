@@ -129,9 +129,9 @@ async function readJsonBody(request) {
 }
 
 function validatedConfiguration(env) {
-  const from = typeof env.LUMINA_EMAIL_FROM === "string" ? env.LUMINA_EMAIL_FROM.trim() : "";
-  const replyTo = typeof env.LUMINA_EMAIL_REPLY_TO === "string"
-    ? env.LUMINA_EMAIL_REPLY_TO.trim()
+  const from = typeof env.EMAIL_FROM === "string" ? env.EMAIL_FROM.trim() : "";
+  const replyTo = typeof env.EMAIL_REPLY_TO === "string"
+    ? env.EMAIL_REPLY_TO.trim()
     : "";
   const brandName = typeof env.LUMINA_BRAND_NAME === "string"
     ? env.LUMINA_BRAND_NAME.trim()
@@ -139,7 +139,7 @@ function validatedConfiguration(env) {
   const apiKey = typeof env.RESEND_API_KEY === "string" ? env.RESEND_API_KEY : "";
   let applicationUrl;
   try {
-    applicationUrl = new URL(env.LUMINA_APP_URL);
+    applicationUrl = new URL(env.CRM_APP_URL);
   } catch {
     return null;
   }
@@ -199,7 +199,7 @@ async function deliver(request, env, {
   logger,
   providerTimeoutMs,
 }) {
-  if (!await authorized(request, env.CRM_DELIVERY_WEBHOOK_TOKEN)) {
+  if (!await authorized(request, env.LUMINA_WEBHOOK_TOKEN)) {
     return errorResponse(401, "UNAUTHORIZED");
   }
 
@@ -333,7 +333,7 @@ export function createEmailDeliveryWorker({
         }
         return errorResponse(404, "NOT_FOUND");
       }
-      if (url.pathname !== "/crm-delivery") return errorResponse(404, "NOT_FOUND");
+      if (url.pathname !== "/lumina-crm/delivery") return errorResponse(404, "NOT_FOUND");
       if (request.method !== "POST") return errorResponse(405, "METHOD_NOT_ALLOWED");
       return deliver(request, env, {
         fetchImplementation,

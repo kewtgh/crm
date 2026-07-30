@@ -1,42 +1,57 @@
 # Lumina CRM email delivery Worker
 
-This is an independently deployed Cloudflare Worker. It accepts Lumina's existing internal email
-delivery protocol only at `https://crm-mail.ewaya.com/crm-delivery`, renders an allow-listed
-brand template, and calls the Resend Send Email API with the same idempotency key. It is not a CRM
-Web route and has no root-application runtime dependency.
+This directory is the canonical source for Lumina's route on the existing production Cloudflare
+Worker at `mail-api.ewaya.com`. It accepts Lumina's internal email-delivery protocol only at
+`https://mail-api.ewaya.com/lumina-crm/delivery`, renders an allow-listed brand template, and calls
+the Resend Send Email API with the same idempotency key. It is not a CRM Web route and has no
+root-application runtime dependency.
 
 ## Configuration
 
-`wrangler.toml` disables `workers.dev` and attaches the Worker as the Custom Domain
-`crm-mail.ewaya.com`. A Custom Domain owns the hostname, so remove any conflicting CNAME or other
-DNS record before deployment. Do not add a Cloudflare account ID to the repository.
+`wrangler.toml` disables `workers.dev`, keeps existing plaintext variables, and references the
+already-bound Custom Domain `mail-api.ewaya.com`. It deliberately omits the Worker `name`. Before
+deploying, open Cloudflare Dashboard, confirm the exact Worker currently bound to that hostname,
+and use that existing name as the explicit `--name` deployment input.
 
-Set the non-secret variables before deployment:
+Do not invent a Worker name, create a second Worker, create another Custom Domain, or change the
+existing DNS binding. Do not add a Cloudflare account ID to the repository.
 
-- `LUMINA_EMAIL_FROM`: a verified Resend sender, replacing the intentionally invalid checked-in
-  placeholder;
-- `LUMINA_EMAIL_REPLY_TO`: optional, configured as a normal Wrangler variable only when required;
-- `LUMINA_APP_URL=https://crm.ewaya.com`;
+The existing non-secret variables are:
+
+- `EMAIL_FROM=Lumina CRM <notifications@notify.ewaya.com>`;
+- `EMAIL_REPLY_TO`: optional;
+- `CRM_APP_URL=https://crm.ewaya.com`;
 - `LUMINA_BRAND_NAME=Lumina Education CRM`.
 
-Set secrets interactively. Never place their values in Git, `wrangler.toml`, build arguments, shell
-history, or CRM logs:
+The existing secret bindings are `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY`. Retain the current
+webhook token when possible. Do not regenerate, replace, upload, print, or otherwise modify the
+Resend API key as part of this code deployment. Never place either value in Git, `wrangler.toml`,
+build arguments, shell history, or CRM logs.
+
+Install and verify locally:
 
 ```sh
 cd infrastructure/email-delivery-worker
 npm ci
 npm test
 npm run lint
-npx wrangler secret put CRM_DELIVERY_WEBHOOK_TOKEN
-npx wrangler secret put RESEND_API_KEY
-npx wrangler deploy
 ```
 
-`CRM_DELIVERY_WEBHOOK_TOKEN` must exactly match `EMAIL_DELIVERY_WEBHOOK_TOKEN` in the production
-CRM `worker.env`. Set:
+After confirming the existing Worker name and reviewing the current Dashboard bindings, the
+operator deployment command is:
+
+```sh
+npx wrangler deploy --name <EXISTING_MAIL_API_WORKER_NAME> --keep-vars
+```
+
+The placeholder must be replaced with the exact existing Worker name. Do not run `wrangler secret
+put` for this release.
+
+`LUMINA_WEBHOOK_TOKEN` must exactly match `EMAIL_DELIVERY_WEBHOOK_TOKEN` in the production CRM
+`worker.env`. Set:
 
 ```text
-EMAIL_DELIVERY_WEBHOOK_URL=https://crm-mail.ewaya.com/crm-delivery
+EMAIL_DELIVERY_WEBHOOK_URL=https://mail-api.ewaya.com/lumina-crm/delivery
 ```
 
 No secret is shared with Resend except `RESEND_API_KEY`, which remains bound only to this Worker.
@@ -46,29 +61,28 @@ No secret is shared with Resend except `RESEND_API_KEY`, which remains bound onl
 Confirm the public health response without sending or exposing any secret:
 
 ```sh
-curl --fail --silent --show-error https://crm-mail.ewaya.com/health
+curl --fail --silent --show-error https://mail-api.ewaya.com/health
 ```
 
-For a controlled delivery check, generate the webhook token locally, pipe it to
-`wrangler secret put`, and keep both it and the operator-supplied test recipient only in shell
-variables. The example uses no production secret or checked-in email address:
+For a controlled delivery check, read the already-matching webhook token locally without printing
+it, and keep both it and the operator-supplied test recipient only in shell variables. The example
+contains no production secret or checked-in recipient:
 
 ```sh
-TEST_TOKEN="$(openssl rand -hex 32)"
-printf '%s' "$TEST_TOKEN" | npx wrangler secret put CRM_DELIVERY_WEBHOOK_TOKEN
+read -s LUMINA_TEST_TOKEN
 read -r TEST_RECIPIENT
 TEST_ID="delivery-smoke-$(date +%s)"
 curl --fail --silent --show-error \
-  -X POST https://crm-mail.ewaya.com/crm-delivery \
+  -X POST https://mail-api.ewaya.com/lumina-crm/delivery \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer ${TEST_TOKEN}" \
+  -H "Authorization: Bearer ${LUMINA_TEST_TOKEN}" \
   -H "Idempotency-Key: ${TEST_ID}" \
   --data "{\"id\":\"${TEST_ID}\",\"to\":\"${TEST_RECIPIENT}\",\"template\":\"device-verification\",\"payload\":{\"code\":\"123456\",\"expiresInSeconds\":600}}"
-unset TEST_TOKEN TEST_RECIPIENT TEST_ID
+unset LUMINA_TEST_TOKEN TEST_RECIPIENT TEST_ID
 ```
 
-After the check, install the same generated webhook token in the root-owned CRM `worker.env`
-without printing it. A later retry must reuse the same idempotency key.
+The CRM host's root-owned `EMAIL_DELIVERY_WEBHOOK_TOKEN` must already contain that same token. A
+later retry must reuse the same idempotency key.
 
 ## Supported templates
 
