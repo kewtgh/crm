@@ -36,12 +36,23 @@ import {
 } from "../scripts/lib/backup-policy.mjs";
 import {
   assertAllowedDockerArguments,
+  builderCreateArguments,
   dockerEnvironment,
+  dockerProxyMarkerContract,
   ensureCanonicalDockerConfigDirectory,
   LUMINA_BUILDX_CONFIG_ROOT,
   LUMINA_DOCKER_CONFIG_ROOT,
+  parseDockerProxy,
+  redactMaintenance,
   selectLuminaImageCandidates,
+  validateBuilderMarker,
 } from "../deploy/libexec/lumina-crm-storage-maintenance.mjs";
+import {
+  DOCKER_BUILD_PROXY_KEYS,
+  dockerBuildEnvironment,
+  dockerBuildProxyArguments,
+  parseDockerBuildProxy,
+} from "../scripts/lib/docker-build-proxy.mjs";
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
@@ -684,6 +695,124 @@ test("Docker maintenance allowlist rejects host-global destructive commands", ()
   }
 });
 
+test("optional Docker proxy accepts only credential-free HTTP(S) URLs", () => {
+  for (const parse of [parseDockerProxy, parseDockerBuildProxy]) {
+    assert.equal(parse(undefined), "");
+    assert.equal(parse("  "), "");
+    assert.equal(parse("http://proxy.example.invalid:8080"), "http://proxy.example.invalid:8080");
+    assert.equal(parse("https://proxy.example.invalid/build"), "https://proxy.example.invalid/build");
+    for (const value of [
+      "socks5://proxy.example.invalid:1080",
+      "http://user@proxy.example.invalid",
+      "http://user:password@proxy.example.invalid",
+      "http://proxy.example.invalid?mode=build",
+      "http://proxy.example.invalid#build",
+      "proxy.example.invalid:8080",
+    ]) assert.throws(() => parse(value), /LUMINA_DOCKER_PROXY_INVALID/);
+  }
+});
+
+test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", () => {
+  const proxy = "http://proxy.example.invalid:8080";
+  const direct = builderCreateArguments("");
+  assert.equal(assertAllowedDockerArguments(direct), true);
+  assert.equal(direct.includes("--driver-opt"), false);
+
+  const proxied = builderCreateArguments(proxy);
+  assert.equal(assertAllowedDockerArguments(proxied), true);
+  assert.deepEqual(proxied.slice(8), DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
+    "--driver-opt", `env.${key}=${proxy}`,
+  ]));
+  assert.throws(() => assertAllowedDockerArguments([
+    ...proxied,
+    "--driver-opt", "network=host",
+  ]), (error) => {
+    assert.match(error.message, /outside the Lumina maintenance allowlist/);
+    assert.doesNotMatch(error.message, /proxy\.example\.invalid|8080/);
+    assert.match(error.message, /env\.HTTP_PROXY=\[REDACTED\]/);
+    return true;
+  });
+
+  const fingerprint = "a".repeat(64);
+  const proxyContract = dockerProxyMarkerContract(proxy);
+  const marker = {
+    owner: "kewtgh/crm",
+    builder: "lumina-crm-buildkit",
+    configSha256: fingerprint,
+    dockerProxyEnabled: proxyContract.enabled,
+    dockerProxySha256: proxyContract.sha256,
+  };
+  assert.equal(JSON.stringify(marker).includes(proxy), false);
+  assert.equal(validateBuilderMarker(marker, { fingerprint, dockerProxy: proxy }), true);
+  assert.throws(
+    () => validateBuilderMarker(marker, { fingerprint, dockerProxy: "" }),
+    /LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH/,
+  );
+  assert.equal(validateBuilderMarker({
+    owner: "kewtgh/crm",
+    builder: "lumina-crm-buildkit",
+    configSha256: fingerprint,
+  }, { fingerprint, dockerProxy: "" }), true);
+});
+
+test("only buildx builds receive the optional Docker proxy and value-free predefined args", async () => {
+  const proxy = "http://proxy.example.invalid:8080";
+  const inherited = {
+    DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+    HTTP_PROXY: "http://inherited.example.invalid:9000",
+    ALL_PROXY: "socks5://inherited.example.invalid:1080",
+    LUMINA_DOCKER_PROXY: proxy,
+    LUMINA_COMPOSE_PROJECT: "lumina-crm",
+  };
+  const direct = dockerBuildEnvironment(inherited, "");
+  for (const key of [...DOCKER_BUILD_PROXY_KEYS, "ALL_PROXY", "all_proxy", "LUMINA_DOCKER_PROXY"]) {
+    assert.equal(Object.hasOwn(direct, key), false);
+  }
+  const build = dockerBuildEnvironment(inherited, proxy);
+  for (const key of DOCKER_BUILD_PROXY_KEYS) assert.equal(build[key], proxy);
+  assert.equal(Object.hasOwn(build, "ALL_PROXY"), false);
+  assert.equal(Object.hasOwn(build, "LUMINA_DOCKER_PROXY"), false);
+  assert.deepEqual(dockerBuildProxyArguments(""), []);
+  assert.deepEqual(dockerBuildProxyArguments(proxy), DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
+    "--build-arg", key,
+  ]));
+  assert.equal(dockerBuildProxyArguments(proxy).some((argument) => argument.includes(proxy)), false);
+
+  const [runner, gitSource, compose] = await Promise.all([
+    source("scripts/deploy-production-runner.mjs"),
+    source("scripts/lib/git-source-update.mjs"),
+    source("compose.production.yml"),
+  ]);
+  assert.equal((runner.match(/"buildx", "build"/g) ?? []).length, 3);
+  assert.equal((runner.match(/environment: buildEnvironment/g) ?? []).length, 3);
+  assert.match(runner, /\.\.\.dockerBuildProxyArguments\(configuredDockerProxy\)/);
+  assert.match(runner, /"LUMINA_GIT_PROXY", "LUMINA_DOCKER_PROXY"/);
+  assert.match(gitSource, /environment\.HTTP_PROXY = proxy/);
+  assert.doesNotMatch(gitSource, /LUMINA_DOCKER_PROXY/);
+  assert.match(compose, /^\s+HTTP_PROXY: ""$/m);
+  assert.match(compose, /^\s+HTTPS_PROXY: ""$/m);
+  assert.match(compose, /^\s+http_proxy: ""$/m);
+  assert.match(compose, /^\s+https_proxy: ""$/m);
+  assert.doesNotMatch(compose, /LUMINA_DOCKER_PROXY/);
+});
+
+test("Docker proxy values are redacted from runner and maintenance error/state payloads", () => {
+  const proxy = "http://proxy.example.invalid:8080/build";
+  const encoded = encodeURIComponent(proxy);
+  const runnerPayload = redactDeploymentSecrets(
+    JSON.stringify({ error: `failed via ${proxy} and ${encoded}` }),
+    [proxy],
+  );
+  const maintenancePayload = redactMaintenance(
+    JSON.stringify({ error: `failed via ${proxy} and ${encoded}` }),
+    new Set([proxy]),
+  );
+  for (const payload of [runnerPayload, maintenancePayload]) {
+    assert.doesNotMatch(payload, /proxy\.example\.invalid|8080|%3A%2F%2F/);
+    assert.match(payload, /\[REDACTED\]/);
+  }
+});
+
 test("storage maintenance and all production units share one canonical Buildx namespace", async () => {
   assert.equal(LUMINA_DOCKER_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config");
   assert.equal(LUMINA_BUILDX_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config/buildx");
@@ -704,7 +833,7 @@ test("storage maintenance and all production units share one canonical Buildx na
   assert.doesNotMatch(maintenance, /\/var\/lib\/lumina-crm\/storage-maintenance\/docker-config/);
   assert.match(
     maintenance,
-    /"buildx", "inspect", LUMINA_BUILDER_NAME[\s\S]+?"buildx",[\s\S]+?"create"[\s\S]+?"buildx", "inspect", LUMINA_BUILDER_NAME/,
+    /"buildx", "inspect", LUMINA_BUILDER_NAME[\s\S]+?builderCreateArguments\(policy\.dockerProxy\)[\s\S]+?"buildx", "inspect", LUMINA_BUILDER_NAME/,
   );
   assert.match(
     runner,

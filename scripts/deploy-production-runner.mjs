@@ -20,6 +20,11 @@ import {
 } from "./lib/rootless-docker.mjs";
 import { updateProductionSource } from "./lib/git-source-update.mjs";
 import {
+  dockerBuildEnvironment,
+  dockerBuildProxyArguments,
+  parseDockerBuildProxy,
+} from "./lib/docker-build-proxy.mjs";
+import {
   acceptedReleaseMatchesRequest,
   assertReleaseModeAllowed,
   createAcceptedRelease,
@@ -50,7 +55,7 @@ const allowedOrigins = new Set([
 const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
   "http_proxy", "https_proxy", "all_proxy",
-  "LUMINA_GIT_PROXY",
+  "LUMINA_GIT_PROXY", "LUMINA_DOCKER_PROXY",
   "NODE_OPTIONS",
   "DOCKER_CONTEXT",
 ];
@@ -78,8 +83,10 @@ const statusPath = path.join(stateRoot, `${deploymentId}.json`);
 writeFileSync(logPath, "", { flag: "wx", mode: 0o640 });
 
 const configuredGitProxy = process.env.LUMINA_GIT_PROXY?.trim() ?? "";
+const configuredDockerProxy = parseDockerBuildProxy(process.env.LUMINA_DOCKER_PROXY);
 const secretValues = [
   ...(configuredGitProxy ? [configuredGitProxy] : []),
+  ...(configuredDockerProxy ? [configuredDockerProxy] : []),
   ...deploymentSecretValues(),
 ];
 let switched = false;
@@ -393,10 +400,12 @@ async function updateSource() {
 }
 
 async function buildImages(release) {
+  const buildEnvironment = dockerBuildEnvironment(directEnvironment(), configuredDockerProxy);
   const common = [
     "--builder", builder,
     "--file", "Dockerfile",
     "--build-arg", `LUMINA_VCS_REF=${release.commit}`,
+    ...dockerBuildProxyArguments(configuredDockerProxy),
     "--provenance=true",
   ];
   await run("containerized type, lint and contract verification", "docker", [
@@ -404,21 +413,21 @@ async function buildImages(release) {
     "--target", "verification",
     "--output", "type=cacheonly",
     ".",
-  ], { timeoutMs: 900_000 });
+  ], { timeoutMs: 900_000, environment: buildEnvironment });
   await run("build immutable application image", "docker", [
     "buildx", "build", ...common,
     "--target", "application",
     "--tag", release.currentImage,
     "--load",
     ".",
-  ], { timeoutMs: 900_000 });
+  ], { timeoutMs: 900_000, environment: buildEnvironment });
   await run("build immutable operations image", "docker", [
     "buildx", "build", ...common,
     "--target", "operations",
     "--tag", release.operationsImage,
     "--load",
     ".",
-  ], { timeoutMs: 900_000 });
+  ], { timeoutMs: 900_000, environment: buildEnvironment });
 }
 
 async function startPostgres(candidateEnv) {

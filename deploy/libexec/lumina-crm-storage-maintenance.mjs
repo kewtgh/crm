@@ -42,6 +42,36 @@ const LATEST_REPORT_PATH = `${STATE_ROOT}/latest.json`;
 const GIBIBYTE = 1024 ** 3;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const LUMINA_TAG_PATTERN = /(?:^|\/)lumina-crm(?:-ops)?:[0-9a-f]{40}$/;
+const DOCKER_PROXY_ENV_KEYS = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
+const maintenanceRedactions = new Set();
+
+export function parseDockerProxy(value) {
+  const proxy = String(value ?? "").trim();
+  if (!proxy) return "";
+  let parsed;
+  try {
+    parsed = new URL(proxy);
+  } catch {
+    throw new Error("LUMINA_DOCKER_PROXY_INVALID");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)
+    || !parsed.hostname
+    || parsed.username
+    || parsed.password
+    || proxy.includes("?")
+    || proxy.includes("#")) {
+    throw new Error("LUMINA_DOCKER_PROXY_INVALID");
+  }
+  return proxy;
+}
+
+export function dockerProxyMarkerContract(proxyValue) {
+  const proxy = parseDockerProxy(proxyValue);
+  return {
+    enabled: Boolean(proxy),
+    sha256: proxy ? createHash("sha256").update(proxy).digest("hex") : null,
+  };
+}
 
 function boundedInteger(value, { name, minimum, maximum, fallback }) {
   const source = String(value ?? fallback);
@@ -78,6 +108,7 @@ export function parseStoragePolicy(environment = {}) {
     throw new Error("LUMINA_BUILDKIT_RESERVED_CACHE_GB must be lower than LUMINA_BUILDKIT_MAX_CACHE_GB");
   }
   return {
+    dockerProxy: parseDockerProxy(environment.LUMINA_DOCKER_PROXY),
     dockerDataRoot: specificAbsolutePath(
       environment.LUMINA_DOCKER_DATA_ROOT ?? LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
       "LUMINA_DOCKER_DATA_ROOT",
@@ -192,7 +223,22 @@ export function ensureCanonicalDockerConfigDirectory({
 
 function loadPolicy() {
   assertRegularRootFile(DEPLOY_ENV_PATH, "deploy.env");
-  return parseStoragePolicy(parseEnv(readFileSync(DEPLOY_ENV_PATH, "utf8")));
+  const policy = parseStoragePolicy(parseEnv(readFileSync(DEPLOY_ENV_PATH, "utf8")));
+  if (policy.dockerProxy) maintenanceRedactions.add(policy.dockerProxy);
+  return policy;
+}
+
+export function redactMaintenance(value, redactions = maintenanceRedactions) {
+  let safe = String(value ?? "");
+  for (const secret of redactions) {
+    safe = safe.replaceAll(secret, "[REDACTED]");
+    try {
+      safe = safe.replaceAll(encodeURIComponent(secret), "[REDACTED]");
+    } catch {
+      // Literal redaction remains authoritative.
+    }
+  }
+  return safe;
 }
 
 function diskSnapshot(label, targetPath, minimumAvailableBytes, minimumFreePercent) {
@@ -244,6 +290,27 @@ function isContainerId(value) {
   return /^[0-9a-f]{12,64}$/.test(String(value));
 }
 
+export function builderCreateArguments(proxyValue) {
+  const proxy = parseDockerProxy(proxyValue);
+  return [
+    "buildx",
+    "create",
+    "--name", LUMINA_BUILDER_NAME,
+    "--driver", "docker-container",
+    "--buildkitd-config", BUILDKIT_CONFIG_PATH,
+    ...(proxy ? DOCKER_PROXY_ENV_KEYS.flatMap((key) => [
+      "--driver-opt", `env.${key}=${proxy}`,
+    ]) : []),
+  ];
+}
+
+function safeDockerArguments(args) {
+  return args.map((argument) => argument.replace(
+    /^(env\.(?:HTTP_PROXY|HTTPS_PROXY|http_proxy|https_proxy)=).+$/,
+    "$1[REDACTED]",
+  )).join(" ");
+}
+
 export function assertAllowedDockerArguments(args) {
   if (!Array.isArray(args) || !args.length || args.some((item) => typeof item !== "string" || !item)) {
     throw new Error("Docker arguments are required");
@@ -255,7 +322,7 @@ export function assertAllowedDockerArguments(args) {
     || (category === "container" && action !== "ls" && action !== "inspect")
     || (category === "image" && !["ls", "inspect", "rm"].includes(action))
     || (action === "prune" && category !== "buildx");
-  if (forbidden) throw new Error(`Forbidden Docker command: docker ${args.join(" ")}`);
+  if (forbidden) throw new Error(`Forbidden Docker command: docker ${safeDockerArguments(args)}`);
 
   if (category === "info") {
     if (args.length === 3 && action === "--format" && [
@@ -265,11 +332,18 @@ export function assertAllowedDockerArguments(args) {
     ].includes(rest[0])) return true;
   } else if (category === "buildx") {
     if (action === "inspect" && rest.length === 1 && rest[0] === LUMINA_BUILDER_NAME) return true;
-    if (action === "create"
-      && rest.includes("--name") && rest[rest.indexOf("--name") + 1] === LUMINA_BUILDER_NAME
-      && rest.includes("--driver") && rest[rest.indexOf("--driver") + 1] === "docker-container"
-      && rest.includes("--buildkitd-config") && rest[rest.indexOf("--buildkitd-config") + 1] === BUILDKIT_CONFIG_PATH) {
-      return true;
+    if (action === "create") {
+      let proxy = "";
+      if (args.length === 16
+        && args[8] === "--driver-opt"
+        && args[9].startsWith("env.HTTP_PROXY=")) {
+        proxy = args[9].slice("env.HTTP_PROXY=".length);
+      }
+      try {
+        if (JSON.stringify(args) === JSON.stringify(builderCreateArguments(proxy))) return true;
+      } catch {
+        // Invalid proxy-bearing arguments remain outside the allowlist.
+      }
     }
     if (action === "--builder" && rest[0] === LUMINA_BUILDER_NAME
       && ["du", "prune"].includes(rest[1])) return true;
@@ -286,7 +360,9 @@ export function assertAllowedDockerArguments(args) {
     if (action === "ls" && rest.length === 2 && rest.includes("--all") && rest.includes("--quiet")) return true;
     if (action === "inspect" && rest.length > 0 && rest.every(isContainerId)) return true;
   }
-  throw new Error(`Docker command is outside the Lumina maintenance allowlist: docker ${args.join(" ")}`);
+  throw new Error(
+    `Docker command is outside the Lumina maintenance allowlist: docker ${safeDockerArguments(args)}`,
+  );
 }
 
 export function dockerEnvironment(environment = process.env) {
@@ -318,14 +394,15 @@ function runDocker(args, { allowFailure = false, timeoutMs = 120_000 } = {}) {
     maxBuffer: MAX_OUTPUT_BYTES,
   });
   if (result.error) {
-    if (allowFailure) return { ok: false, status: null, stdout: "", stderr: result.error.message };
-    throw result.error;
+    const message = redactMaintenance(result.error.message);
+    if (allowFailure) return { ok: false, status: null, stdout: "", stderr: message };
+    throw new Error(message);
   }
   const output = {
     ok: result.status === 0,
     status: result.status,
-    stdout: String(result.stdout ?? "").trim(),
-    stderr: String(result.stderr ?? "").trim(),
+    stdout: redactMaintenance(String(result.stdout ?? "").trim()),
+    stderr: redactMaintenance(String(result.stderr ?? "").trim()),
   };
   if (!output.ok && !allowFailure) {
     throw new Error(`Docker command failed (${args.slice(0, 3).join(" ")}): ${(output.stderr || output.stdout).slice(-1_000)}`);
@@ -394,27 +471,41 @@ function validateBuilderInspect(output) {
   }
 }
 
+export function validateBuilderMarker(marker, { fingerprint, dockerProxy }) {
+  if (!marker
+    || marker.owner !== LUMINA_REPOSITORY_VALUE
+    || marker.builder !== LUMINA_BUILDER_NAME
+    || marker.configSha256 !== fingerprint) {
+    throw new Error("Lumina BuildKit ownership marker does not match the reviewed builder/configuration");
+  }
+  const expectedProxy = dockerProxyMarkerContract(dockerProxy);
+  const recordedProxy = {
+    enabled: marker.dockerProxyEnabled ?? false,
+    sha256: marker.dockerProxySha256 ?? null,
+  };
+  if (recordedProxy.enabled !== expectedProxy.enabled
+    || recordedProxy.sha256 !== expectedProxy.sha256) {
+    throw new Error("LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH");
+  }
+  return true;
+}
+
 function ensureBuilder(policy) {
   const fingerprint = configFingerprint(policy);
   const marker = existsSync(BUILDER_MARKER_PATH) ? readJson(BUILDER_MARKER_PATH) : null;
-  if (marker && (marker.owner !== LUMINA_REPOSITORY_VALUE
-    || marker.builder !== LUMINA_BUILDER_NAME
-    || marker.configSha256 !== fingerprint)) {
-    throw new Error("Lumina BuildKit ownership marker does not match the reviewed builder/configuration");
-  }
+  if (marker) validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   const inspected = runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], { allowFailure: true });
   if (inspected.ok) {
     if (!marker) throw new Error(`Refusing to adopt unmarked existing builder ${LUMINA_BUILDER_NAME}`);
     validateBuilderInspect(inspected.stdout);
-    return { created: false, builder: LUMINA_BUILDER_NAME, configSha256: fingerprint };
+    return {
+      created: false,
+      builder: LUMINA_BUILDER_NAME,
+      configSha256: fingerprint,
+      dockerProxyEnabled: Boolean(policy.dockerProxy),
+    };
   }
-  runDocker([
-    "buildx",
-    "create",
-    "--name", LUMINA_BUILDER_NAME,
-    "--driver", "docker-container",
-    "--buildkitd-config", BUILDKIT_CONFIG_PATH,
-  ]);
+  runDocker(builderCreateArguments(policy.dockerProxy));
   const created = runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME]);
   validateBuilderInspect(created.stdout);
   writeAtomicJson(BUILDER_MARKER_PATH, {
@@ -422,9 +513,16 @@ function ensureBuilder(policy) {
     builder: LUMINA_BUILDER_NAME,
     driver: "docker-container",
     configSha256: fingerprint,
+    dockerProxyEnabled: dockerProxyMarkerContract(policy.dockerProxy).enabled,
+    dockerProxySha256: dockerProxyMarkerContract(policy.dockerProxy).sha256,
     createdAt: new Date().toISOString(),
   }, 0o600);
-  return { created: true, builder: LUMINA_BUILDER_NAME, configSha256: fingerprint };
+  return {
+    created: true,
+    builder: LUMINA_BUILDER_NAME,
+    configSha256: fingerprint,
+    dockerProxyEnabled: Boolean(policy.dockerProxy),
+  };
 }
 
 function validateCleanupRequest() {
@@ -518,10 +616,7 @@ function buildkitUsage() {
 function cleanupDocker(policy, request) {
   const marker = existsSync(BUILDER_MARKER_PATH) ? readJson(BUILDER_MARKER_PATH) : null;
   const fingerprint = configFingerprint(policy);
-  if (!marker || marker.owner !== LUMINA_REPOSITORY_VALUE
-    || marker.builder !== LUMINA_BUILDER_NAME || marker.configSha256 !== fingerprint) {
-    throw new Error("Lumina BuildKit ownership marker is missing or invalid; refusing cleanup");
-  }
+  validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   validateBuilderInspect(runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME]).stdout);
 
   const images = listLuminaImages();
@@ -714,7 +809,7 @@ async function main() {
       mode: mode ?? null,
       startedAt,
       finishedAt: new Date().toISOString(),
-      error: error instanceof Error ? error.message : String(error),
+      error: redactMaintenance(error instanceof Error ? error.message : String(error)),
       ...(error?.maintenanceContext ?? {}),
       disk: error?.disk ?? null,
     });

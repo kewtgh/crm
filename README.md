@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.8**
+Current release candidate: **v3.8.9**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -158,6 +158,13 @@ The configured Git proxy, when present, is used for the first and only fetch; ot
 fetch is direct. It is never persisted as Git, Docker, or systemd configuration. Containers clear
 proxy variables. Database migration is forward-only; application rollback never claims to reverse
 an applied schema migration.
+
+Hosts that require a separate proxy for image construction can set the optional server-local
+`LUMINA_DOCKER_PROXY`. It is validated as a credential-free HTTP(S) URL and is exposed only to the
+isolated BuildKit container and the three `buildx build` processes. Git continues to use only
+`LUMINA_GIT_PROXY`; Compose services, migrations, health probes, and runtime containers remain
+proxy-free. Logs and deployment state redact the configured Docker proxy, while the builder marker
+stores only its enabled state and SHA-256 fingerprint.
 
 ```bash
 npm run deploy:production:dry-run
