@@ -1,10 +1,11 @@
-# Implementation status — v3.8.3 release candidate
+# Implementation status — v3.8.4 release candidate
 
 ## Scope
 
-v3.8.3 retains the production shared-host isolation and persistent first-install flow, and adds an
-independently deployed Cloudflare Worker adapter for the existing CRM email-delivery protocol. It
-does not change database schema semantics or add a CRM Web mail route.
+v3.8.4 retains the production shared-host isolation and persistent first-install flow, and makes
+the repository adapter the canonical Lumina route source for the existing
+`mail-api.ewaya.com` Cloudflare Worker. It does not change database schema semantics, add a CRM Web
+mail route, create a second Worker, or create another Custom Domain.
 
 The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
 Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
@@ -29,9 +30,10 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - zero-runtime-dependency email adapter with fixed-time token verification, bounded JSON input,
   nine explicit escaped HTML/text templates, Resend idempotency, stable provider errors, and safe
   logs;
-- a fixed `crm-mail.ewaya.com` Custom Domain with `workers.dev` disabled and secrets excluded from
+- reuse of the existing `mail-api.ewaya.com/lumina-crm/delivery` production entrypoint with
+  `workers.dev` disabled, an explicit existing-Worker deployment name, and secrets excluded from
   Git/Wrangler variables;
-- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.3.
+- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.4.
 
 ## Local verification recorded
 

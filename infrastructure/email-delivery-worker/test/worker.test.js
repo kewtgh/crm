@@ -20,10 +20,10 @@ const repositoryRoot = path.resolve(workerRoot, "..", "..");
 
 function environment(overrides = {}) {
   return {
-    CRM_DELIVERY_WEBHOOK_TOKEN: CRM_TOKEN,
+    LUMINA_WEBHOOK_TOKEN: CRM_TOKEN,
     RESEND_API_KEY: RESEND_KEY,
-    LUMINA_EMAIL_FROM: "Lumina Test <sender@example.invalid>",
-    LUMINA_APP_URL: APPLICATION_URL,
+    EMAIL_FROM: "Lumina Test <sender@example.invalid>",
+    CRM_APP_URL: APPLICATION_URL,
     LUMINA_BRAND_NAME: "Lumina Education CRM",
     ...overrides,
   };
@@ -100,7 +100,7 @@ function deliveryBody(overrides = {}) {
 }
 
 function deliveryRequest({
-  pathName = "/crm-delivery",
+  pathName = "/lumina-crm/delivery",
   method = "POST",
   token = CRM_TOKEN,
   idempotencyKey = "job-123",
@@ -159,7 +159,7 @@ test("GET /health succeeds without inspecting or leaking environment values", as
   assert.equal(provider.calls.length, 0);
 });
 
-test("wrong paths return 404 for both GET and POST", async () => {
+test("wrong paths and the retired /crm-delivery path return 404", async () => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   assert.equal((await worker.fetch(
     deliveryRequest({ pathName: "/missing", method: "GET" }),
@@ -167,6 +167,10 @@ test("wrong paths return 404 for both GET and POST", async () => {
   )).status, 404);
   assert.equal((await worker.fetch(
     deliveryRequest({ pathName: "/missing", method: "POST" }),
+    environment(),
+  )).status, 404);
+  assert.equal((await worker.fetch(
+    deliveryRequest({ pathName: "/crm-delivery", method: "POST" }),
     environment(),
   )).status, 404);
 });
@@ -208,7 +212,7 @@ test("empty configured webhook secret fails closed with 401", async () => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   const response = await worker.fetch(
     deliveryRequest(),
-    environment({ CRM_DELIVERY_WEBHOOK_TOKEN: "" }),
+    environment({ LUMINA_WEBHOOK_TOKEN: "" }),
   );
   assert.equal(response.status, 401);
   assert.deepEqual(await responseJson(response), { error: { code: "UNAUTHORIZED" } });
@@ -391,7 +395,7 @@ test("CRM cannot override Resend from, subject, html, or reply-to", async () => 
   assert.equal(provider.calls.length, 0);
 
   await worker.fetch(deliveryRequest(), environment({
-    LUMINA_EMAIL_REPLY_TO: "reply@example.invalid",
+    EMAIL_REPLY_TO: "reply@example.invalid",
   }));
   const providerBody = JSON.parse(provider.calls[0].init.body);
   assert.equal(providerBody.from, "Lumina Test <sender@example.invalid>");
@@ -562,14 +566,26 @@ test("every repository email template key has an explicit tested mapping", async
   assert.equal(provider.calls.length, TEMPLATE_KEYS.length);
 });
 
-test("wrangler fixes the production Custom Domain and disables workers.dev", async () => {
+test("wrangler reuses mail-api Custom Domain without guessing the existing Worker name", async () => {
   const wrangler = await readFile(path.join(workerRoot, "wrangler.toml"), "utf8");
-  assert.match(wrangler, /^name = "lumina-crm-email-delivery"$/m);
+  const deploymentReadme = await readFile(path.join(workerRoot, "README.md"), "utf8");
+  assert.doesNotMatch(wrangler, /^name\s*=/m);
   assert.match(wrangler, /^main = "src\/index\.js"$/m);
   assert.match(wrangler, /^compatibility_date = "2026-07-30"$/m);
   assert.match(wrangler, /^workers_dev = false$/m);
-  assert.match(wrangler, /pattern = "crm-mail\.ewaya\.com"\s+custom_domain = true/m);
-  assert.doesNotMatch(wrangler, /account_id|CRM_DELIVERY_WEBHOOK_TOKEN\s*=|RESEND_API_KEY\s*=/);
+  assert.match(wrangler, /^keep_vars = true$/m);
+  assert.match(wrangler, /pattern = "mail-api\.ewaya\.com"\s+custom_domain = true/m);
+  assert.match(wrangler, /^EMAIL_FROM = "Lumina CRM <notifications@notify\.ewaya\.com>"$/m);
+  assert.match(wrangler, /^CRM_APP_URL = "https:\/\/crm\.ewaya\.com"$/m);
+  assert.doesNotMatch(
+    wrangler,
+    /crm-mail\.ewaya\.com|account_id|LUMINA_WEBHOOK_TOKEN\s*=|RESEND_API_KEY\s*=/,
+  );
+  assert.match(
+    deploymentReadme,
+    /npx wrangler deploy --name <EXISTING_MAIL_API_WORKER_NAME> --keep-vars/,
+  );
+  assert.doesNotMatch(deploymentReadme, /wrangler secret put|crm-mail\.ewaya\.com/);
 });
 
 test("responses are non-cacheable, nosniff, and expose no CORS policy", async () => {
