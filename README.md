@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.5**
+Current release candidate: **v3.8.6**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -100,8 +100,11 @@ a production Wrangler deployment. Ubuntu alone stores production deployment conf
 dry-run, deploys the existing Worker in place, and checks only its health endpoint. The tracked
 Wrangler configuration contains no Worker name, domain, route, account ID, sender, or production
 URL; Custom Domain routing and the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` bindings
-remain Dashboard-managed. CRM application initialization and email Worker deployment are separate
-stages.
+remain Dashboard-managed. The tracked Observability policy preserves full-sampling persisted
+invocation logs with traces disabled, so strict deployment does not erase the accepted remote
+behavior. Sanitized Wrangler failures retain a bounded diagnostic tail while all server-supplied
+deployment values remain redacted. CRM application initialization and email Worker deployment are
+separate stages.
 
 ## Verification and deployment
 

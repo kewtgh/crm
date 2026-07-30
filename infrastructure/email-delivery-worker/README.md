@@ -29,8 +29,9 @@ fails closed with `SERVICE_NOT_CONFIGURED`.
 
 The committed `wrangler.toml` contains no Worker name, routes, Custom Domain, account ID, or
 plaintext production variables. It disables `workers.dev`, preserves remote plaintext variables,
-and declares only the two required secret binding names. Custom Domain routing remains managed in
-Cloudflare Dashboard.
+declares the two required secret binding names, and explicitly preserves the accepted
+Observability behavior: full-sampling persisted invocation logs are enabled while traces remain
+disabled. Custom Domain routing remains managed in Cloudflare Dashboard.
 
 ## Ubuntu production configuration
 
@@ -97,8 +98,10 @@ search or inferred deployment workspace.
 
 The Node controller always passes `--name`, `--keep-vars`, and `--strict`, sends only the six
 plaintext Worker bindings through Wrangler, and never passes a route, Custom Domain, or secret. A
-real deployment performs a GET against `WORKER_PUBLIC_BASE_URL + HEALTH_PATH` and accepts only the
-generic `{ "status": "ok", "service": "lumina-email-delivery" }` contract. It does not send mail.
+failed Wrangler invocation retains at most 8 KB of its already-sanitized diagnostic tail; literal
+and URL-encoded server values remain redacted. A real deployment performs a GET against
+`WORKER_PUBLIC_BASE_URL + HEALTH_PATH` and accepts only the generic
+`{ "status": "ok", "service": "lumina-email-delivery" }` contract. It does not send mail.
 
 Do not run secret upload/delete commands during a routine code deployment. If a required secret is
 missing, the declared Wrangler secret contract fails the deployment; restore it through the

@@ -1,7 +1,22 @@
 main = "src/index.js"
-compatibility_date = "2026-07-30"
+compatibility_date = "2026-07-27"
 workers_dev = false
 keep_vars = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
 
 [secrets]
 required = [ "LUMINA_WEBHOOK_TOKEN", "RESEND_API_KEY" ]
