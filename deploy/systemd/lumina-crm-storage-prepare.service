@@ -8,6 +8,8 @@ Type=oneshot
 User=lumina-crm
 Group=lumina-crm
 EnvironmentFile=/etc/lumina-crm/deploy.env
+Environment=DOCKER_CONFIG=/var/lib/lumina-crm/docker-config
+Environment=BUILDX_CONFIG=/var/lib/lumina-crm/docker-config/buildx
 UnsetEnvironment=DOCKER_CONTEXT
 ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs prepare
 TimeoutStartSec=180s

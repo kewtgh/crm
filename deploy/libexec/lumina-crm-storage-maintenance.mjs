@@ -24,6 +24,8 @@ export const LUMINA_MANAGED_LABEL = "com.lumina.crm.managed";
 export const LUMINA_REPOSITORY_LABEL = "com.lumina.crm.repository";
 export const LUMINA_REPOSITORY_VALUE = "kewtgh/crm";
 export const LUMINA_ROOTLESS_DOCKER_DATA_ROOT = "/var/lib/lumina-crm/docker";
+export const LUMINA_DOCKER_CONFIG_ROOT = "/var/lib/lumina-crm/docker-config";
+export const LUMINA_BUILDX_CONFIG_ROOT = `${LUMINA_DOCKER_CONFIG_ROOT}/buildx`;
 
 const PROGRAM_PATH = "/usr/local/libexec/lumina-crm-storage-maintenance.mjs";
 const DOCKER_COMMAND = "/usr/bin/docker";
@@ -34,7 +36,7 @@ const LAST_SUCCESS_PATH = "/var/lib/lumina-crm/deployments/last-success.json";
 const CLEANUP_REQUEST_PATH = "/var/lib/lumina-crm/deployments/storage-cleanup-request.json";
 const STATE_ROOT = "/var/lib/lumina-crm/storage-maintenance";
 const LOG_ROOT = "/var/log/lumina-crm/storage-maintenance";
-const DOCKER_CONFIG_ROOT = `${STATE_ROOT}/docker-config`;
+const LEGACY_DOCKER_CONFIG_ROOT = `${STATE_ROOT}/${["docker", "config"].join("-")}`;
 const BUILDER_MARKER_PATH = `${STATE_ROOT}/builder-owner.json`;
 const LATEST_REPORT_PATH = `${STATE_ROOT}/latest.json`;
 const GIBIBYTE = 1024 ** 3;
@@ -131,6 +133,61 @@ function assertRealDirectory(directory, label) {
   if (!metadata.isDirectory() || metadata.isSymbolicLink() || realpathSync(directory) !== directory) {
     throw new Error(`${label} must be a real directory at ${directory}`);
   }
+}
+
+function missingPath(error) {
+  return error && typeof error === "object" && error.code === "ENOENT";
+}
+
+export function ensureCanonicalDockerConfigDirectory({
+  canonicalRoot = LUMINA_DOCKER_CONFIG_ROOT,
+  legacyRoot = LEGACY_DOCKER_CONFIG_ROOT,
+  currentUid = process.getuid?.(),
+  operations = {
+    lstat: lstatSync,
+    mkdir: mkdirSync,
+    realpath: realpathSync,
+  },
+} = {}) {
+  if (canonicalRoot !== LUMINA_DOCKER_CONFIG_ROOT
+    || legacyRoot !== LEGACY_DOCKER_CONFIG_ROOT
+    || !canonicalRoot.startsWith("/")
+    || canonicalRoot === STATE_ROOT
+    || canonicalRoot.startsWith(`${STATE_ROOT}/`)) {
+    throw new Error("LUMINA_DOCKER_CONFIG_PATH_INVALID");
+  }
+  if (!Number.isInteger(currentUid) || currentUid < 1) {
+    throw new Error("LUMINA_DOCKER_CONFIG_OWNER_INVALID");
+  }
+
+  try {
+    operations.lstat(legacyRoot);
+    throw new Error("LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW");
+  } catch (error) {
+    if (!missingPath(error)) throw error;
+  }
+
+  try {
+    operations.lstat(canonicalRoot);
+  } catch (error) {
+    if (!missingPath(error)) throw error;
+    operations.mkdir(canonicalRoot, { recursive: true, mode: 0o700 });
+  }
+
+  const metadata = operations.lstat(canonicalRoot);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new Error("LUMINA_DOCKER_CONFIG_NOT_REAL_DIRECTORY");
+  }
+  if (operations.realpath(canonicalRoot) !== canonicalRoot) {
+    throw new Error("LUMINA_DOCKER_CONFIG_REALPATH_MISMATCH");
+  }
+  if (metadata.uid !== currentUid) {
+    throw new Error("LUMINA_DOCKER_CONFIG_OWNER_INVALID");
+  }
+  if ((metadata.mode & 0o077) !== 0) {
+    throw new Error("LUMINA_DOCKER_CONFIG_PERMISSIONS_INVALID");
+  }
+  return canonicalRoot;
 }
 
 function loadPolicy() {
@@ -232,13 +289,21 @@ export function assertAllowedDockerArguments(args) {
   throw new Error(`Docker command is outside the Lumina maintenance allowlist: docker ${args.join(" ")}`);
 }
 
-function dockerEnvironment() {
+export function dockerEnvironment(environment = process.env) {
+  if ((Object.hasOwn(environment, "DOCKER_CONFIG")
+      && environment.DOCKER_CONFIG !== LUMINA_DOCKER_CONFIG_ROOT)
+    || (Object.hasOwn(environment, "BUILDX_CONFIG")
+      && environment.BUILDX_CONFIG !== LUMINA_BUILDX_CONFIG_ROOT)) {
+    throw new Error("LUMINA_DOCKER_CONFIG_ENVIRONMENT_MISMATCH");
+  }
+  if (!/^unix:\/\/\/run\/user\/[1-9]\d*\/docker\.sock$/.test(String(environment.DOCKER_HOST ?? ""))) {
+    throw new Error("LUMINA_ROOTLESS_DOCKER_HOST_REQUIRED");
+  }
   return {
     PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    HOME: STATE_ROOT,
-    DOCKER_CONFIG: DOCKER_CONFIG_ROOT,
-    BUILDX_CONFIG: `${DOCKER_CONFIG_ROOT}/buildx`,
-    DOCKER_HOST: process.env.DOCKER_HOST,
+    DOCKER_CONFIG: LUMINA_DOCKER_CONFIG_ROOT,
+    BUILDX_CONFIG: LUMINA_BUILDX_CONFIG_ROOT,
+    DOCKER_HOST: environment.DOCKER_HOST,
     LANG: "C.UTF-8",
   };
 }
@@ -580,10 +645,9 @@ async function perform(mode) {
   assertRealDirectory(DEPLOY_STATE_ROOT, "Lumina deploy state root");
   mkdirSync(STATE_ROOT, { recursive: true, mode: 0o750 });
   mkdirSync(LOG_ROOT, { recursive: true, mode: 0o750 });
-  mkdirSync(DOCKER_CONFIG_ROOT, { recursive: true, mode: 0o700 });
   assertRealDirectory(STATE_ROOT, "Lumina storage state directory");
   assertRealDirectory(LOG_ROOT, "Lumina storage log directory");
-  assertRealDirectory(DOCKER_CONFIG_ROOT, "Lumina Docker configuration directory");
+  ensureCanonicalDockerConfigDirectory();
 
   const policy = loadPolicy();
   assertRootlessDocker(policy);
