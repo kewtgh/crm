@@ -41,10 +41,12 @@ import {
   dockerProxyMarkerContract,
   ensureCanonicalDockerConfigDirectory,
   LUMINA_BUILDX_CONFIG_ROOT,
+  LUMINA_BUILDKIT_NETWORK_MODE,
   LUMINA_DOCKER_CONFIG_ROOT,
   parseDockerProxy,
   redactMaintenance,
   selectLuminaImageCandidates,
+  validateBuilderInspect,
   validateBuilderMarker,
 } from "../deploy/libexec/lumina-crm-storage-maintenance.mjs";
 import {
@@ -52,7 +54,15 @@ import {
   dockerBuildEnvironment,
   dockerBuildProxyArguments,
   parseDockerBuildProxy,
+  validateBuildxInspectContract,
 } from "../scripts/lib/docker-build-proxy.mjs";
+import {
+  assertProductionSecretSources,
+  LUMINA_CONFIGURATION_ROOT,
+  LUMINA_REQUIRED_SECRET_SOURCE_FILES,
+  LUMINA_SECRET_SOURCES_ROOT,
+  validateSecretSourceMetadata,
+} from "../scripts/lib/production-secret-sources.mjs";
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
@@ -105,6 +115,7 @@ function releaseWorkflowDouble({ failAt } = {}) {
       resolveTarget: operation("resolve-target", target),
       buildImages: operation("build"),
       writeCandidateEnvironment: operation("candidate-env", "candidate.env"),
+      preflightSecretSources: operation("secret-preflight"),
       startPostgres: operation("postgres"),
       bootstrapDatabase: operation("db-bootstrap"),
       verifyMigrations: operation("migration-verify"),
@@ -186,6 +197,7 @@ test("initialize follows the explicit first-install order", async () => {
     "prepare",
     "fetch",
     "resolve-target",
+    "secret-preflight",
     "build",
     "candidate-env",
     "postgres",
@@ -199,6 +211,15 @@ test("initialize follows the explicit first-install order", async () => {
   ]);
   assert.equal(result.migrationMayHaveChanged, true);
   assert.equal(result.switched, true);
+});
+
+test("unsafe secret metadata stops initialize before image build and PostgreSQL", async () => {
+  const { calls, operations } = releaseWorkflowDouble({ failAt: "secret-preflight" });
+  await assert.rejects(
+    runProductionReleaseWorkflow({ mode: "initialize", operations }),
+    /failed at secret-preflight/,
+  );
+  assert.deepEqual(calls, ["prepare", "fetch", "resolve-target", "secret-preflight"]);
 });
 
 test("exposes initialize through package scripts, controller help, and the runbook", async () => {
@@ -709,6 +730,166 @@ test("verification build context includes only the deployment contract from docs
   );
 });
 
+function secretMetadataDouble({ overrides = {}, realpaths = {}, missing = new Set() } = {}) {
+  const calls = [];
+  const directory = {
+    uid: 0,
+    gid: 1001,
+    mode: 0o40750,
+    isDirectory: () => true,
+    isFile: () => false,
+    isSymbolicLink: () => false,
+  };
+  const file = {
+    uid: 0,
+    gid: 1001,
+    mode: 0o100644,
+    isDirectory: () => false,
+    isFile: () => true,
+    isSymbolicLink: () => false,
+  };
+  return {
+    calls,
+    operations: {
+      lstat(target) {
+        calls.push(["lstat", target]);
+        if (missing.has(target)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return overrides[target] ?? (target.endsWith("lumina-crm") || target.endsWith("secrets")
+          ? directory
+          : file);
+      },
+      realpath(target) {
+        calls.push(["realpath", target]);
+        return realpaths[target] ?? target;
+      },
+      readFile() {
+        throw new Error("secret contents must not be read by metadata preflight");
+      },
+    },
+  };
+}
+
+test("production secret metadata preflight checks exact directories and all eight source files", () => {
+  assert.deepEqual(LUMINA_REQUIRED_SECRET_SOURCE_FILES, [
+    "production.env",
+    "worker.env",
+    "database-bootstrap.env",
+    "migration.env",
+    "bootstrap-admin.env",
+    "backup.env",
+    "restore.env",
+    "postgres-superuser-password.txt",
+  ]);
+  const mock = secretMetadataDouble();
+  const result = validateSecretSourceMetadata({
+    configurationRoot: LUMINA_CONFIGURATION_ROOT,
+    secretsRoot: LUMINA_SECRET_SOURCES_ROOT,
+    expectedGroupId: 1001,
+    operations: mock.operations,
+  });
+  assert.deepEqual(result.checkedFiles, LUMINA_REQUIRED_SECRET_SOURCE_FILES);
+  assert.equal(mock.calls.filter(([operation]) => operation === "lstat").length, 10);
+  assert.equal(mock.calls.filter(([operation]) => operation === "realpath").length, 10);
+  assert.equal(mock.calls.some(([operation]) => operation === "readFile"), false);
+  assert.throws(() => assertProductionSecretSources({
+    environment: { LUMINA_SECRETS_DIR: "/tmp/not-production" },
+    currentGroupId: 1001,
+    operations: mock.operations,
+  }), /NON_CANONICAL_PATH/);
+});
+
+test("production secret metadata preflight fails closed on unsafe directory or file metadata", () => {
+  const firstSecret = `${LUMINA_SECRET_SOURCES_ROOT}/production.env`;
+  const cases = [
+    {
+      overrides: { [LUMINA_CONFIGURATION_ROOT]: {
+        uid: 0, gid: 1001, mode: 0o40750,
+        isDirectory: () => true, isFile: () => false, isSymbolicLink: () => true,
+      } },
+      expected: /configuration-directory:NOT_REAL_DIRECTORY/,
+    },
+    {
+      overrides: { [LUMINA_SECRET_SOURCES_ROOT]: {
+        uid: 0, gid: 1002, mode: 0o40750,
+        isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false,
+      } },
+      expected: /secrets-directory:OWNER_MISMATCH/,
+    },
+    {
+      overrides: { [LUMINA_SECRET_SOURCES_ROOT]: {
+        uid: 0, gid: 1001, mode: 0o40755,
+        isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false,
+      } },
+      expected: /secrets-directory:MODE_MISMATCH/,
+    },
+    {
+      overrides: { [firstSecret]: {
+        uid: 0, gid: 1001, mode: 0o100644,
+        isDirectory: () => false, isFile: () => true, isSymbolicLink: () => true,
+      } },
+      expected: /production\.env:NOT_REGULAR_FILE/,
+    },
+    {
+      overrides: { [firstSecret]: {
+        uid: 1001, gid: 1001, mode: 0o100644,
+        isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false,
+      } },
+      expected: /production\.env:OWNER_MISMATCH/,
+    },
+    {
+      overrides: { [firstSecret]: {
+        uid: 0, gid: 1001, mode: 0o100640,
+        isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false,
+      } },
+      expected: /production\.env:MODE_MISMATCH/,
+    },
+    {
+      realpaths: { [firstSecret]: `${firstSecret}.redirected` },
+      expected: /production\.env:REALPATH_MISMATCH/,
+    },
+    {
+      missing: new Set([firstSecret]),
+      expected: /production\.env:MISSING_OR_UNREADABLE/,
+    },
+  ];
+  for (const { expected, ...options } of cases) {
+    const mock = secretMetadataDouble(options);
+    assert.throws(() => validateSecretSourceMetadata({
+      configurationRoot: LUMINA_CONFIGURATION_ROOT,
+      secretsRoot: LUMINA_SECRET_SOURCES_ROOT,
+      expectedGroupId: 1001,
+      operations: mock.operations,
+    }), expected);
+    assert.equal(mock.calls.some(([operation]) => operation === "readFile"), false);
+  }
+});
+
+test("secret preflight, documentation, Compose sources, and runtime UID remain consistent", async () => {
+  const [workflow, runner, compose, dockerfile, deployment] = await Promise.all([
+    source("scripts/lib/production-deploy-workflow.mjs"),
+    source("scripts/deploy-production-runner.mjs"),
+    source("compose.production.yml"),
+    source("Dockerfile"),
+    source("docs/DEPLOYMENT.md"),
+  ]);
+  assert.match(
+    workflow,
+    /resolveTarget\(commit\)[\s\S]+preflightSecretSources\(\)[\s\S]+buildImages\(target\)[\s\S]+startPostgres\(candidateEnvironment\)/,
+  );
+  assert.match(runner, /preflightSecretSources,\s+startPostgres,/);
+  assert.equal((dockerfile.match(/USER 10001:10001/g) ?? []).length, 2);
+  for (const name of LUMINA_REQUIRED_SECRET_SOURCE_FILES) {
+    assert.equal(
+      compose.includes(`file: \${LUMINA_SECRETS_DIR:-./deploy/secrets}/${name}`),
+      true,
+    );
+  }
+  assert.match(deployment, /root:lumina-crm` with exact\s+mode `0750`/);
+  assert.match(deployment, /root:lumina-crm` with exact mode\s+`0644`/);
+  assert.match(deployment, /fixed container UID\/GID `10001:10001`/);
+  assert.match(deployment, /without\s+reading or printing secret contents/);
+});
+
 test("optional Docker proxy accepts only credential-free HTTP(S) URLs", () => {
   for (const parse of [parseDockerProxy, parseDockerBuildProxy]) {
     assert.equal(parse(undefined), "");
@@ -730,16 +911,21 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
   const proxy = "http://proxy.example.invalid:8080";
   const direct = builderCreateArguments("");
   assert.equal(assertAllowedDockerArguments(direct), true);
-  assert.equal(direct.includes("--driver-opt"), false);
+  assert.deepEqual(direct.slice(8), ["--driver-opt", "network=host"]);
+  assert.equal(LUMINA_BUILDKIT_NETWORK_MODE, "host");
 
   const proxied = builderCreateArguments(proxy);
   assert.equal(assertAllowedDockerArguments(proxied), true);
-  assert.deepEqual(proxied.slice(8), DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
-    "--driver-opt", `env.${key}=${proxy}`,
-  ]));
-  assert.throws(() => assertAllowedDockerArguments([
-    ...proxied,
+  assert.deepEqual(proxied.slice(8), [
     "--driver-opt", "network=host",
+    ...DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
+      "--driver-opt", `env.${key}=${proxy}`,
+    ]),
+  ]);
+  assert.throws(() => assertAllowedDockerArguments([
+    ...proxied.slice(0, 9),
+    "network=bridge",
+    ...proxied.slice(10),
   ]), (error) => {
     assert.match(error.message, /outside the Lumina maintenance allowlist/);
     assert.doesNotMatch(error.message, /proxy\.example\.invalid|8080/);
@@ -752,6 +938,7 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
   const marker = {
     owner: "kewtgh/crm",
     builder: "lumina-crm-buildkit",
+    builderNetworkMode: "host",
     configSha256: fingerprint,
     dockerProxyEnabled: proxyContract.enabled,
     dockerProxySha256: proxyContract.sha256,
@@ -762,11 +949,64 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
     () => validateBuilderMarker(marker, { fingerprint, dockerProxy: "" }),
     /LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH/,
   );
-  assert.equal(validateBuilderMarker({
+  assert.throws(() => validateBuilderMarker({
     owner: "kewtgh/crm",
     builder: "lumina-crm-buildkit",
     configSha256: fingerprint,
-  }, { fingerprint, dockerProxy: "" }), true);
+  }, { fingerprint, dockerProxy: "" }), /LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH/);
+  assert.throws(() => validateBuilderMarker({
+    ...marker,
+    builderNetworkMode: "bridge",
+  }, { fingerprint, dockerProxy: proxy }), /LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH/);
+});
+
+test("BuildKit inspect requires host networking and exact direct or proxied driver options", () => {
+  const proxy = "http://proxy.example.invalid:8080";
+  const direct = [
+    "Name:          lumina-crm-buildkit",
+    "Driver:        docker-container",
+    "Driver Options: network=\"host\"",
+  ].join("\n");
+  const proxied = direct.replace('network="host"', [
+    'network="host"',
+    ...DOCKER_BUILD_PROXY_KEYS.map((key) => `env.${key}="${proxy}"`),
+  ].join(" "));
+  assert.equal(validateBuilderInspect(direct, ""), true);
+  assert.equal(validateBuilderInspect(proxied, proxy), true);
+  assert.equal(validateBuildxInspectContract(direct, {
+    builderName: "lumina-crm-buildkit",
+    dockerProxy: "",
+  }), true);
+  assert.equal(validateBuildxInspectContract(proxied, {
+    builderName: "lumina-crm-buildkit",
+    dockerProxy: proxy,
+  }), true);
+  for (const output of [
+    direct.replace('network="host"', 'network="bridge"'),
+    direct.replace('network="host"', 'network="default"'),
+    direct.replace(/^Driver Options:.*$/m, ""),
+  ]) {
+    assert.throws(
+      () => validateBuilderInspect(output, ""),
+      /LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH/,
+    );
+    assert.throws(() => validateBuildxInspectContract(output, {
+      builderName: "lumina-crm-buildkit",
+      dockerProxy: "",
+    }), /LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH/);
+  }
+  assert.throws(
+    () => validateBuilderInspect(direct, proxy),
+    /LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH/,
+  );
+  assert.throws(
+    () => validateBuilderInspect(proxied, ""),
+    /LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH/,
+  );
+  assert.doesNotMatch(JSON.stringify({
+    builderNetworkMode: "host",
+    ...dockerProxyMarkerContract(proxy),
+  }), /proxy\.example\.invalid|8080/);
 });
 
 test("only buildx builds receive the optional Docker proxy and value-free predefined args", async () => {
@@ -853,6 +1093,10 @@ test("storage maintenance and all production units share one canonical Buildx na
     runner,
     /start", "lumina-crm-storage-prepare\.service"[\s\S]+?"buildx", "inspect", builder/,
   );
+  assert.match(runner, /validateBuildxInspectContract[\s\S]+builderNetworkMode !== "host"/);
+  assert.match(maintenance, /builderNetworkMode: LUMINA_BUILDKIT_NETWORK_MODE/);
+  assert.match(runner, /createHash\("sha256"\)\.update\(configuredDockerProxy\)/);
+  assert.doesNotMatch(maintenance, /builderNetworkMode:\s*policy\./);
 
   const environment = dockerEnvironment({
     DOCKER_HOST: "unix:///run/user/1001/docker.sock",

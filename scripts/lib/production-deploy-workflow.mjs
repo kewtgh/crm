@@ -122,6 +122,7 @@ export async function runProductionReleaseWorkflow({ mode, operations }) {
     await operations.prepare();
     const commit = await operations.updateSource();
     const target = await operations.resolveTarget(commit);
+    await operations.preflightSecretSources();
     await operations.buildImages(target);
     const candidateEnvironment = await operations.writeCandidateEnvironment(target);
     await operations.startPostgres(candidateEnvironment);

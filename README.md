@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.10**
+Current release candidate: **v3.8.11**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -135,6 +135,7 @@ The persistent deployment runner performs:
 rootless Docker/state capacity gate
 -> isolated Lumina BuildKit verification
 -> one exact Git fetch and fast-forward
+-> metadata-only Compose secret-source permission gate
 -> containerized checks and commit-tagged app/ops images
 -> migration verification and locked forward migration
 -> Compose Web/Worker image switch
@@ -161,10 +162,13 @@ an applied schema migration.
 
 Hosts that require a separate proxy for image construction can set the optional server-local
 `LUMINA_DOCKER_PROXY`. It is validated as a credential-free HTTP(S) URL and is exposed only to the
-isolated BuildKit container and the three `buildx build` processes. Git continues to use only
+isolated BuildKit container and the three `buildx build` processes. The fixed builder uses
+`network=host` inside Lumina's rootless Docker/RootlessKit network namespace so it can reach the
+same host-loopback proxy entry as the rootless daemon; this is not the physical host/rootful Docker
+network and never connects to HunterAI resources. Git continues to use only
 `LUMINA_GIT_PROXY`; Compose services, migrations, health probes, and runtime containers remain
 proxy-free. Logs and deployment state redact the configured Docker proxy, while the builder marker
-stores only its enabled state and SHA-256 fingerprint.
+stores only its enabled state, SHA-256 fingerprint, and non-sensitive `host` network contract.
 
 ```bash
 npm run deploy:production:dry-run
