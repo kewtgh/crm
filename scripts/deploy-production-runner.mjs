@@ -18,6 +18,7 @@ import {
   assertRootlessDockerInfo,
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "./lib/rootless-docker.mjs";
+import { updateProductionSource } from "./lib/git-source-update.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -39,6 +40,7 @@ const allowedOrigins = new Set([
 const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
   "http_proxy", "https_proxy", "all_proxy",
+  "LUMINA_GIT_PROXY",
   "NODE_OPTIONS",
   "DOCKER_CONTEXT",
 ];
@@ -65,7 +67,8 @@ const logPath = path.join(logRoot, `${deploymentId}.log`);
 const statusPath = path.join(stateRoot, `${deploymentId}.json`);
 writeFileSync(logPath, "", { flag: "wx", mode: 0o640 });
 
-let secretValues = [];
+const configuredGitProxy = process.env.LUMINA_GIT_PROXY?.trim() ?? "";
+let secretValues = configuredGitProxy ? [configuredGitProxy] : [];
 let switched = false;
 let migrationMayHaveChanged = false;
 const priorLatest = readJson(latestPath);
@@ -341,36 +344,14 @@ async function prepareBuilderAndCapacity() {
 }
 
 async function updateSource() {
-  const branch = (await git("verify deployment branch", ["branch", "--show-current"], { quiet: true })).stdout;
-  if (branch !== expectedBranch) throw new Error(`Expected branch ${expectedBranch}, found ${branch}`);
-  const origin = (await git("verify deployment origin", ["remote", "get-url", "origin"], { quiet: true })).stdout;
-  if (!allowedOrigins.has(origin)) throw new Error("Git origin does not exactly match kewtgh/crm");
-  if ((await git("verify clean source", ["status", "--porcelain"], { quiet: true })).stdout) {
-    throw new Error("Deployment source worktree is not clean");
-  }
-  const direct = await git("fetch origin main", ["fetch", "--prune", "origin", expectedBranch], {
-    allowFailure: true,
-    quiet: true,
+  return updateProductionSource({
+    git,
+    baseEnvironment: directEnvironment(),
+    configuredProxy: configuredGitProxy,
+    expectedBranch,
+    allowedOrigins,
+    onConfiguredProxy: () => log("INFO", "Git fetch is using the configured Git proxy"),
   });
-  if (direct.code !== 0) {
-    const fallbackProxy = process.env.LUMINA_GIT_FALLBACK_PROXY?.trim();
-    if (!fallbackProxy) throw new Error("Direct git fetch failed and no one-shot fallback is configured");
-    secretValues.push(fallbackProxy);
-    const fallbackEnvironment = directEnvironment();
-    fallbackEnvironment.HTTPS_PROXY = fallbackProxy;
-    fallbackEnvironment.HTTP_PROXY = fallbackProxy;
-    await git("one-shot proxied fetch origin main", ["fetch", "--prune", "origin", expectedBranch], {
-      environment: fallbackEnvironment,
-      quiet: true,
-    });
-  }
-  await git("fast-forward source", ["merge", "--ff-only", `origin/${expectedBranch}`], { quiet: true });
-  const commit = (await git("resolve exact target commit", ["rev-parse", "HEAD"], { quiet: true })).stdout;
-  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("Git did not return a full commit");
-  if ((await git("verify final clean source", ["status", "--porcelain"], { quiet: true })).stdout) {
-    throw new Error("Deployment source changed during fetch");
-  }
-  return commit;
 }
 
 async function buildImages(release) {

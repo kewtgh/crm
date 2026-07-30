@@ -175,8 +175,12 @@ every write-capable database URL. No normal runtime service receives migration, 
 PostgreSQL administrator credentials.
 
 All containers clear uppercase/lowercase proxy variables and set `NO_PROXY` for `postgres` and
-local services. The deploy runner tries one direct Git fetch. Only after failure may its single
-retry receive `LUMINA_GIT_FALLBACK_PROXY`; it never writes Git proxy configuration.
+local services. Set `LUMINA_GIT_PROXY=http://127.0.0.1:20271` in
+`/etc/lumina-crm/deploy.env` when the production host requires the controlled Git proxy. The
+deploy runner injects that value as `HTTP_PROXY` and `HTTPS_PROXY` only into its first and only
+Git fetch subprocess. When it is unset or empty, the runner makes one direct fetch. It performs no
+fallback retry, never writes Git proxy configuration, redacts the configured value from deployment
+logs and errors, and never places it in Compose or container environments.
 
 ## First database start
 

@@ -296,6 +296,7 @@ function dryRun() {
     [runner, /Cloudflare Tunnel public liveness/, "mandatory Tunnel public liveness"],
     [deployUnit, /EnvironmentFile=\/etc\/lumina-crm\/deploy\.env/, "rootless Docker environment boundary"],
     [deployEnvironment, /DOCKER_HOST=unix:\/\/\/run\/user\/1001\/docker\.sock/, "rootless Docker socket template"],
+    [deployEnvironment, /LUMINA_GIT_PROXY=http:\/\/127\.0\.0\.1:20271/, "canonical Git proxy setting"],
     [caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m, "loopback Caddy Tunnel listener"],
     [caddy, /@public_host host \{\$LUMINA_PUBLIC_HOSTNAME\}/, "Caddy public Host allowlist"],
     [caddy, /respond @detailed_readiness 404/, "public readiness rejection"],
