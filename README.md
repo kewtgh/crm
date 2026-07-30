@@ -93,11 +93,11 @@ capacity planning must account for all enabled categories. Mail providers must h
 
 Production email delivery is isolated in
 [`infrastructure/email-delivery-worker`](infrastructure/email-delivery-worker/README.md). The
-repository implementation is the canonical source for the existing Cloudflare Worker's
-authenticated `/lumina-crm/delivery` route, renders one of nine explicit templates, and calls
-Resend without exposing its API key to the CRM server. Production reuses the existing
-`mail-api.ewaya.com` Custom Domain; `workers.dev` is disabled. The subproject has its own
-package/lockfile and no root runtime dependency.
+generic Cloudflare Worker reads its public base URL, application URL, sender, brand, delivery path,
+and health path only from an ignored local production Env file and runtime bindings. The tracked
+Wrangler configuration contains no Worker name, domain, route, account ID, sender, or production
+URL; Custom Domain routing remains Dashboard-managed. The adapter renders nine explicit templates
+and calls Resend without exposing its API key to the CRM server.
 
 ## Verification and deployment
 

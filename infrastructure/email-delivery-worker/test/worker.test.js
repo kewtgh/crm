@@ -14,7 +14,9 @@ import {
 const CRM_TOKEN = "unit-test-crm-delivery-token";
 const RESEND_KEY = "unit-test-resend-api-key";
 const RECIPIENT = "recipient@example.test";
-const APPLICATION_URL = "https://crm.ewaya.com";
+const APPLICATION_URL = "https://crm.example.test";
+const DELIVERY_PATH = "/test-delivery";
+const HEALTH_PATH = "/test-health";
 const workerRoot = fileURLToPath(new URL("..", import.meta.url));
 const repositoryRoot = path.resolve(workerRoot, "..", "..");
 
@@ -22,9 +24,11 @@ function environment(overrides = {}) {
   return {
     LUMINA_WEBHOOK_TOKEN: CRM_TOKEN,
     RESEND_API_KEY: RESEND_KEY,
-    EMAIL_FROM: "Lumina Test <sender@example.invalid>",
+    EMAIL_FROM: "Lumina Test <sender@example.test>",
     CRM_APP_URL: APPLICATION_URL,
-    LUMINA_BRAND_NAME: "Lumina Education CRM",
+    EMAIL_BRAND_NAME: "Lumina Education CRM",
+    DELIVERY_PATH,
+    HEALTH_PATH,
     ...overrides,
   };
 }
@@ -100,7 +104,7 @@ function deliveryBody(overrides = {}) {
 }
 
 function deliveryRequest({
-  pathName = "/lumina-crm/delivery",
+  pathName = DELIVERY_PATH,
   method = "POST",
   token = CRM_TOKEN,
   idempotencyKey = "job-123",
@@ -141,12 +145,12 @@ async function responseJson(response) {
   return JSON.parse(await response.text());
 }
 
-test("GET /health succeeds without inspecting or leaking environment values", async () => {
+test("configured health path succeeds without leaking environment values", async () => {
   const provider = providerDouble();
   const worker = createEmailDeliveryWorker({ fetchImplementation: provider.fetchImplementation });
   const secrets = environment();
   const response = await worker.fetch(
-    deliveryRequest({ pathName: "/health", method: "GET" }),
+    deliveryRequest({ pathName: HEALTH_PATH, method: "GET" }),
     secrets,
   );
   assert.equal(response.status, 200);
@@ -159,7 +163,7 @@ test("GET /health succeeds without inspecting or leaking environment values", as
   assert.equal(provider.calls.length, 0);
 });
 
-test("wrong paths and the retired /crm-delivery path return 404", async () => {
+test("unconfigured paths return 404 for both GET and POST", async () => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   assert.equal((await worker.fetch(
     deliveryRequest({ pathName: "/missing", method: "GET" }),
@@ -167,10 +171,6 @@ test("wrong paths and the retired /crm-delivery path return 404", async () => {
   )).status, 404);
   assert.equal((await worker.fetch(
     deliveryRequest({ pathName: "/missing", method: "POST" }),
-    environment(),
-  )).status, 404);
-  assert.equal((await worker.fetch(
-    deliveryRequest({ pathName: "/crm-delivery", method: "POST" }),
     environment(),
   )).status, 404);
 });
@@ -208,14 +208,83 @@ test("wrong Bearer token returns 401", async () => {
   assert.deepEqual(await responseJson(response), { error: { code: "UNAUTHORIZED" } });
 });
 
-test("empty configured webhook secret fails closed with 401", async () => {
+test("missing configured webhook secret fails closed", async () => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   const response = await worker.fetch(
     deliveryRequest(),
     environment({ LUMINA_WEBHOOK_TOKEN: "" }),
   );
-  assert.equal(response.status, 401);
-  assert.deepEqual(await responseJson(response), { error: { code: "UNAUTHORIZED" } });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await responseJson(response), {
+    error: { code: "SERVICE_NOT_CONFIGURED" },
+  });
+});
+
+test("missing required runtime configuration fails closed", async (t) => {
+  const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
+  for (const key of [
+    "CRM_APP_URL",
+    "EMAIL_FROM",
+    "DELIVERY_PATH",
+    "HEALTH_PATH",
+    "RESEND_API_KEY",
+    "EMAIL_BRAND_NAME",
+  ]) {
+    await t.test(key, async () => {
+      const response = await worker.fetch(
+        deliveryRequest(),
+        environment({ [key]: "" }),
+      );
+      assert.equal(response.status, 503);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "SERVICE_NOT_CONFIGURED" },
+      });
+    });
+  }
+});
+
+test("invalid URL, mailbox, and route configuration fails closed", async (t) => {
+  const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
+  const invalidConfigurations = [
+    { CRM_APP_URL: "http://crm.example.test" },
+    { EMAIL_FROM: "not-a-mailbox" },
+    { EMAIL_REPLY_TO: "not-a-mailbox" },
+    { DELIVERY_PATH: "https://worker.example.test/delivery" },
+    { DELIVERY_PATH: "/delivery?mode=test" },
+    { HEALTH_PATH: "/health#details" },
+    { HEALTH_PATH: DELIVERY_PATH },
+  ];
+  for (const overrides of invalidConfigurations) {
+    await t.test(Object.keys(overrides)[0], async () => {
+      const response = await worker.fetch(deliveryRequest(), environment(overrides));
+      assert.equal(response.status, 503);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "SERVICE_NOT_CONFIGURED" },
+      });
+    });
+  }
+});
+
+test("delivery and health paths are controlled only by environment bindings", async () => {
+  const provider = providerDouble();
+  const worker = createEmailDeliveryWorker({ fetchImplementation: provider.fetchImplementation });
+  const configured = environment({
+    DELIVERY_PATH: "/configured-delivery",
+    HEALTH_PATH: "/configured-health",
+  });
+  const oldDelivery = await worker.fetch(deliveryRequest(), configured);
+  const configuredDelivery = await worker.fetch(
+    deliveryRequest({ pathName: "/configured-delivery" }),
+    configured,
+  );
+  const configuredHealth = await worker.fetch(
+    deliveryRequest({ pathName: "/configured-health", method: "GET" }),
+    configured,
+  );
+  assert.equal(oldDelivery.status, 404);
+  assert.equal(configuredDelivery.status, 200);
+  assert.equal(configuredHealth.status, 200);
+  assert.equal(provider.calls.length, 1);
 });
 
 test("non-JSON delivery requests return 415", async () => {
@@ -395,11 +464,11 @@ test("CRM cannot override Resend from, subject, html, or reply-to", async () => 
   assert.equal(provider.calls.length, 0);
 
   await worker.fetch(deliveryRequest(), environment({
-    EMAIL_REPLY_TO: "reply@example.invalid",
+    EMAIL_REPLY_TO: "reply@example.test",
   }));
   const providerBody = JSON.parse(provider.calls[0].init.body);
-  assert.equal(providerBody.from, "Lumina Test <sender@example.invalid>");
-  assert.equal(providerBody.reply_to, "reply@example.invalid");
+  assert.equal(providerBody.from, "Lumina Test <sender@example.test>");
+  assert.equal(providerBody.reply_to, "reply@example.test");
   assert.equal(providerBody.subject, "Your Lumina CRM verification code");
   assert.match(providerBody.html, /Lumina Education CRM/);
 });
@@ -566,7 +635,7 @@ test("every repository email template key has an explicit tested mapping", async
   assert.equal(provider.calls.length, TEMPLATE_KEYS.length);
 });
 
-test("wrangler reuses mail-api Custom Domain without guessing the existing Worker name", async () => {
+test("tracked Wrangler config contains only generic deployment settings and required secrets", async () => {
   const wrangler = await readFile(path.join(workerRoot, "wrangler.toml"), "utf8");
   const deploymentReadme = await readFile(path.join(workerRoot, "README.md"), "utf8");
   assert.doesNotMatch(wrangler, /^name\s*=/m);
@@ -574,18 +643,19 @@ test("wrangler reuses mail-api Custom Domain without guessing the existing Worke
   assert.match(wrangler, /^compatibility_date = "2026-07-30"$/m);
   assert.match(wrangler, /^workers_dev = false$/m);
   assert.match(wrangler, /^keep_vars = true$/m);
-  assert.match(wrangler, /pattern = "mail-api\.ewaya\.com"\s+custom_domain = true/m);
-  assert.match(wrangler, /^EMAIL_FROM = "Lumina CRM <notifications@notify\.ewaya\.com>"$/m);
-  assert.match(wrangler, /^CRM_APP_URL = "https:\/\/crm\.ewaya\.com"$/m);
+  assert.match(
+    wrangler,
+    /^\[secrets\]\s+required = \[ "LUMINA_WEBHOOK_TOKEN", "RESEND_API_KEY" \]$/m,
+  );
   assert.doesNotMatch(
     wrangler,
-    /crm-mail\.ewaya\.com|account_id|LUMINA_WEBHOOK_TOKEN\s*=|RESEND_API_KEY\s*=/,
+    /(?:^|\s)(?:route|routes|vars|account_id)\s*=|custom_domain|LUMINA_WEBHOOK_TOKEN\s*=|RESEND_API_KEY\s*=/m,
   );
   assert.match(
     deploymentReadme,
-    /npx wrangler deploy --name <EXISTING_MAIL_API_WORKER_NAME> --keep-vars/,
+    /npm run deploy:production/,
   );
-  assert.doesNotMatch(deploymentReadme, /wrangler secret put|crm-mail\.ewaya\.com/);
+  assert.doesNotMatch(deploymentReadme, /wrangler secret put/);
 });
 
 test("responses are non-cacheable, nosniff, and expose no CORS policy", async () => {
@@ -622,7 +692,7 @@ test("template links reject external and non-HTTPS URLs", async (t) => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   for (const url of [
     "https://external.example.test/reset?token=test",
-    "http://crm.ewaya.com/reset?token=test",
+    "http://crm.example.test/reset?token=test",
   ]) {
     await t.test(url, async () => {
       const response = await worker.fetch(
@@ -640,6 +710,25 @@ test("template links reject external and non-HTTPS URLs", async (t) => {
       });
     });
   }
+  await t.test("external staff login URL", async () => {
+    const payload = {
+      ...samplePayloads()["staff-account-created"],
+      loginUrl: "https://external.example.test/login",
+    };
+    const response = await worker.fetch(
+      deliveryRequest({
+        body: deliveryBody({
+          template: "staff-account-created",
+          payload,
+        }),
+      }),
+      environment(),
+    );
+    assert.equal(response.status, 422);
+    assert.deepEqual(await responseJson(response), {
+      error: { code: "TEMPLATE_URL_INVALID" },
+    });
+  });
 });
 
 test("provider authorization is isolated from the CRM Bearer token", async () => {
@@ -662,9 +751,9 @@ test("email footer contains only the configured brand and exact application orig
   const body = JSON.parse(provider.calls[0].init.body);
   assert.match(
     body.html,
-    /<footer[^>]*>Lumina Education CRM<br><a href="https:\/\/crm\.ewaya\.com"[^>]*>https:\/\/crm\.ewaya\.com<\/a><\/footer>/,
+    /<footer[^>]*>Lumina Education CRM<br><a href="https:\/\/crm\.example\.test"[^>]*>https:\/\/crm\.example\.test<\/a><\/footer>/,
   );
-  assert.match(body.text, /Lumina Education CRM\nhttps:\/\/crm\.ewaya\.com$/);
+  assert.match(body.text, /Lumina Education CRM\nhttps:\/\/crm\.example\.test$/);
   assert.doesNotMatch(body.html, /Shanghai|address|telephone|phone/i);
 });
 

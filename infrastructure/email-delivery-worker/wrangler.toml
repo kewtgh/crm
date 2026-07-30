@@ -3,11 +3,5 @@ compatibility_date = "2026-07-30"
 workers_dev = false
 keep_vars = true
 
-[[routes]]
-pattern = "mail-api.ewaya.com"
-custom_domain = true
-
-[vars]
-EMAIL_FROM = "Lumina CRM <notifications@notify.ewaya.com>"
-CRM_APP_URL = "https://crm.ewaya.com"
-LUMINA_BRAND_NAME = "Lumina Education CRM"
+[secrets]
+required = [ "LUMINA_WEBHOOK_TOKEN", "RESEND_API_KEY" ]

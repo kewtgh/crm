@@ -42,7 +42,7 @@ test("Tunnel ingress targets only loopback Caddy with matching Host and a 404 ca
   const tunnel = await source("deploy/cloudflare-tunnel/config.yml.example");
   assert.match(
     tunnel,
-    /- hostname: crm\.example\.com[\s\S]*service: http:\/\/127\.0\.0\.1:3211[\s\S]*httpHostHeader: crm\.example\.com/,
+    /- hostname: crm\.example\.invalid[\s\S]*service: http:\/\/127\.0\.0\.1:3211[\s\S]*httpHostHeader: crm\.example\.invalid/,
   );
   assert.match(tunnel, /- service: http_status:404/);
 });
@@ -52,8 +52,8 @@ test("deployment examples require only the configured public hostname", async ()
     source("deploy/deploy.env.example"),
     source("deploy/caddy/caddy.env.example"),
   ]);
-  assert.match(deployEnvironment, /^LUMINA_PUBLIC_HOSTNAME=crm\.example\.com$/m);
-  assert.match(caddyEnvironment, /^LUMINA_PUBLIC_HOSTNAME=crm\.example\.com$/m);
+  assert.match(deployEnvironment, /^LUMINA_PUBLIC_HOSTNAME=crm\.example\.invalid$/m);
+  assert.match(caddyEnvironment, /^LUMINA_PUBLIC_HOSTNAME=crm\.example\.invalid$/m);
   assert.doesNotMatch(
     `${deployEnvironment}\n${caddyEnvironment}`,
     /LUMINA_PUBLIC_HEALTH_URL|LUMINA_ORIGIN_|AUTH_SECRET/,
@@ -90,9 +90,9 @@ test("one-click deployment dry-run validates Tunnel assets and its public gate",
 
 test("Tunnel configuration verification needs no origin hostname or secret", () => {
   const result = verifyPublicHealthConfig({
-    environment: { LUMINA_PUBLIC_HOSTNAME: "crm.example.com" },
+    environment: { LUMINA_PUBLIC_HOSTNAME: "crm.example.invalid" },
   });
-  assert.equal(result.publicHealthUrl, "https://crm.example.com/api/health");
+  assert.equal(result.publicHealthUrl, "https://crm.example.invalid/api/health");
 });
 
 test("Tunnel configuration verification rejects weakened installed edge contracts", async () => {
@@ -101,7 +101,7 @@ test("Tunnel configuration verification rejects weakened installed edge contract
     source("deploy/cloudflare-tunnel/config.yml.example"),
   ]);
   const verifyWith = (caddySource, tunnelSource = tunnel) => verifyPublicHealthConfig({
-    environment: { LUMINA_PUBLIC_HOSTNAME: "crm.example.com" },
+    environment: { LUMINA_PUBLIC_HOSTNAME: "crm.example.invalid" },
     readFile: (file) => file.endsWith("Caddyfile") ? caddySource : tunnelSource,
   });
   assert.throws(
