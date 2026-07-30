@@ -1,9 +1,10 @@
-# Implementation status — v3.8.5 release candidate
+# Implementation status — v3.8.6 release candidate
 
 ## Scope
 
-v3.8.5 retains the production shared-host isolation and persistent first-install flow, and corrects
-the email Worker environment boundary. Windows is development-only and holds no production Worker
+v3.8.6 retains the production shared-host isolation and persistent first-install flow, and makes
+the email Worker strict deployment preserve its accepted Observability policy. Windows is
+development-only and holds no production Worker
 configuration or Cloudflare credentials; Ubuntu alone stores the server Env, performs the in-place
 deployment, and verifies health. Public source does not identify the production Worker, Custom
 Domain, CRM hostname, sender domain, webhook URL, route, or Cloudflare account.
@@ -32,20 +33,21 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   nine explicit escaped HTML/text templates, Resend idempotency, stable provider errors, and safe
   logs;
 - a generic tracked Wrangler contract with `workers.dev` disabled, no route/name/production vars,
-  Dashboard-managed Custom Domain routing, and two declared required secret binding names;
+  Dashboard-managed Custom Domain routing, two declared required secret binding names, and explicit
+  full-sampling persisted invocation logs with traces disabled;
 - a Linux-only Node production controller using the fixed root-owned Ubuntu Env contract, strict
-  route-free deployment, no-upload cross-platform fictitious dry-run, redacted child output, and
-  generic health acceptance;
+  route-free deployment, no-upload cross-platform fictitious dry-run, bounded sanitized Wrangler
+  failure detail, and generic health acceptance;
 - explicit separation between CRM application initialization and email Worker deployment;
-- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.5.
+- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.6.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
-| Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 3 high-severity development-dependency advisories |
+| Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
-| Email delivery Worker `npm run test:deployment` | Pass: 28/28, including no-upload Wrangler dry-run, Ubuntu Env permission contracts, and full output redaction |
+| Email delivery Worker `npm run test:deployment` | Pass: 29/29, including Wrangler 4.102.0 no-upload dry-run, accepted Observability parity, Ubuntu Env permission contracts, and bounded full-value output redaction |
 | Email delivery Worker `npm run lint` | Pass |
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |

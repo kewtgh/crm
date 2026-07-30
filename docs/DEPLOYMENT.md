@@ -246,8 +246,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.5 `
-  -OperationsImage lumina-crm-ops-validation:3.8.5
+  -ApplicationImage lumina-crm-validation:3.8.6 `
+  -OperationsImage lumina-crm-ops-validation:3.8.6
 ```
 
 They are local integration tests, not production deployment commands.
@@ -285,10 +285,14 @@ account ID, and Cloudflare API token. The account ID is server-only even though 
 password; the API token is a production deployment secret. Values must never be printed.
 
 The committed Wrangler configuration has no `name`, `routes`, `route`, or production `vars`.
-Custom Domain routing remains managed in Cloudflare Dashboard. The deployment controller passes
-the Ubuntu-supplied Worker name, preserves remote plaintext bindings, enables strict mode, and
-sends only the six runtime plaintext variables. It never reads, uploads, replaces, or deletes
-Cloudflare secrets.
+Custom Domain routing remains managed in Cloudflare Dashboard. The tracked Observability contract
+keeps full-sampling persisted invocation logs enabled and traces disabled, matching the accepted
+remote behavior instead of allowing an implicit deployment reset. The deployment controller passes
+the Ubuntu-supplied Worker name, preserves remote plaintext bindings, keeps strict mode enabled,
+and sends only the six runtime plaintext variables. It never reads, uploads, replaces, or deletes
+Cloudflare secrets. A Wrangler failure reports at most 8 KB of already-sanitized diagnostic tail;
+the Worker name, URLs, mailboxes, paths, brand, account ID, and API token remain redacted in both
+literal and URL-encoded forms.
 
 The Worker requires the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` secret binding names.
 Neither belongs in the deployment Env: both remain only in Cloudflare Worker secret bindings, and

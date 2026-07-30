@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildWranglerArguments,
   DEFAULT_PRODUCTION_ENV_FILE,
+  formatControllerFailure,
   loadProductionValues,
   parseArguments,
   ProductionConfigurationError,
@@ -100,11 +101,24 @@ const secureFileOptions = {
 };
 
 test("production deployment is Linux-only with a stable error code", async () => {
+  let envValidationCalls = 0;
+  let wranglerCalls = 0;
   await assert.rejects(
-    runDeployment({ platform: "win32" }),
+    runDeployment({
+      platform: "win32",
+      validateEnvFileImplementation: async () => {
+        envValidationCalls += 1;
+      },
+      spawnImplementation: () => {
+        wranglerCalls += 1;
+        throw new Error("must not start Wrangler");
+      },
+    }),
     (error) => error instanceof ProductionConfigurationError
       && error.code === "PRODUCTION_DEPLOY_REQUIRES_LINUX",
   );
+  assert.equal(envValidationCalls, 0);
+  assert.equal(wranglerCalls, 0);
 });
 
 test("production mode uses the fixed Ubuntu Env path", () => {
@@ -196,7 +210,48 @@ test("Wrangler arguments are strict, route-free, secret-free, and Env-driven", (
     "DELIVERY_PATH",
     "HEALTH_PATH",
   ]) assert.match(serialized, new RegExp(`${key}:`));
-  assert.doesNotMatch(serialized, /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY|WORKER_PUBLIC_BASE_URL/);
+  assert.doesNotMatch(
+    serialized,
+    /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY|WORKER_PUBLIC_BASE_URL|\bsecret\b|\bdelete\b/i,
+  );
+});
+
+test("tracked observability matches the fields supported by Wrangler 4.102.0", async () => {
+  const packageManifest = JSON.parse(await readFile(path.join(workerRoot, "package.json"), "utf8"));
+  assert.equal(packageManifest.devDependencies.wrangler, "4.102.0");
+
+  const schema = JSON.parse(await readFile(
+    path.join(workerRoot, "node_modules", "wrangler", "config-schema.json"),
+    "utf8",
+  ));
+  const observabilitySchema = schema.definitions?.Observability;
+  assert.ok(observabilitySchema);
+  assert.equal(observabilitySchema.additionalProperties, false);
+  assert.deepEqual(Object.keys(observabilitySchema.properties), [
+    "enabled",
+    "head_sampling_rate",
+    "logs",
+    "traces",
+  ]);
+  assert.ok(observabilitySchema.properties.logs.properties.persist);
+  assert.ok(observabilitySchema.properties.logs.properties.invocation_logs);
+  assert.ok(observabilitySchema.properties.traces.properties.persist);
+
+  const wrangler = await readFile(path.join(workerRoot, "wrangler.toml"), "utf8");
+  const sections = Object.fromEntries(wrangler.split(/\r?\n(?=\[)/).map((block) => {
+    const match = block.match(/^\[([^\]]+)\]\r?\n/);
+    return match ? [match[1], block.slice(match[0].length)] : ["root", block];
+  }));
+  assert.match(sections.root, /^compatibility_date = "2026-07-27"$/m);
+  assert.match(sections.observability, /^enabled = true$/m);
+  assert.match(sections.observability, /^head_sampling_rate = 1$/m);
+  assert.match(sections["observability.logs"], /^enabled = true$/m);
+  assert.match(sections["observability.logs"], /^head_sampling_rate = 1$/m);
+  assert.match(sections["observability.logs"], /^persist = true$/m);
+  assert.match(sections["observability.logs"], /^invocation_logs = true$/m);
+  assert.match(sections["observability.traces"], /^enabled = false$/m);
+  assert.match(sections["observability.traces"], /^head_sampling_rate = 1$/m);
+  assert.match(sections["observability.traces"], /^persist = true$/m);
 });
 
 test("cross-platform dry-run uses an explicit fictitious Env, does not upload, and skips health", async () => {
@@ -253,10 +308,25 @@ test("deployment strips runtime secrets from Wrangler environment and health-che
   });
 });
 
-test("failed Wrangler output redacts every deployment identifier", async () => {
+test("top-level failure includes bounded sanitized Wrangler detail", async () => {
   await withTemporaryEnv(async (envFile) => {
     const values = fakeProductionValues();
-    const exposed = Object.values(values).filter(Boolean).join(" ");
+    const sensitiveValues = Object.values(values).filter(Boolean);
+    const encodedValues = sensitiveValues.flatMap((value) => [
+      encodeURIComponent(value),
+      encodeURIComponent(value).replaceAll("%20", "+"),
+      encodeURIComponent(value).replaceAll("%20", "+").replace(
+        /%[0-9A-F]{2}/g,
+        (escape) => escape.toLowerCase(),
+      ),
+      encodeURI(value),
+    ]);
+    const exposed = [
+      "x".repeat(9_000),
+      ...sensitiveValues,
+      ...encodedValues,
+      "Wrangler conflict detail remains visible after sanitization.",
+    ].join("\n");
     await assert.rejects(
       runDeployment({
         dryRun: true,
@@ -264,9 +334,13 @@ test("failed Wrangler output redacts every deployment identifier", async () => {
         spawnImplementation: failingSpawn(exposed),
       }),
       (error) => {
-        assert.match(error.message, /^WRANGLER_FAILED/);
-        for (const value of Object.values(values).filter(Boolean)) {
-          assert.equal(error.message.includes(value), false);
+        const rendered = formatControllerFailure(error);
+        assert.match(rendered, /^Worker production controller failed: WRANGLER_FAILED$/m);
+        assert.match(rendered, /Wrangler conflict detail remains visible after sanitization\./);
+        assert.match(rendered, /<redacted>/);
+        assert.ok(Buffer.byteLength(rendered, "utf8") <= 8_100);
+        for (const value of [...sensitiveValues, ...encodedValues]) {
+          assert.equal(rendered.includes(value), false);
         }
         return true;
       },

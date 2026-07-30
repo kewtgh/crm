@@ -29,6 +29,7 @@ const supportedKeys = new Set([
 ]);
 const requiredKeys = [...supportedKeys].filter((key) => key !== "EMAIL_REPLY_TO");
 const placeholderWords = /(?:^|[._\s/-])(example|placeholder|replace|change-me)(?:$|[._\s/-])/i;
+const maxWranglerErrorDetailBytes = 8_000;
 const require = createRequire(import.meta.url);
 
 export class ProductionConfigurationError extends Error {
@@ -36,6 +37,15 @@ export class ProductionConfigurationError extends Error {
     super(code);
     this.name = "ProductionConfigurationError";
     this.code = code;
+  }
+}
+
+class WranglerExecutionError extends Error {
+  constructor(detail) {
+    super("WRANGLER_FAILED");
+    this.name = "WranglerExecutionError";
+    this.code = "WRANGLER_FAILED";
+    this.detail = detail;
   }
 }
 
@@ -220,8 +230,26 @@ export function buildWranglerArguments(configuration, { dryRun = false } = {}) {
   return args;
 }
 
+function encodedVariants(value) {
+  const componentEncoded = encodeURIComponent(value);
+  const uriEncoded = encodeURI(value);
+  const lowerPercentEscapes = (encoded) => encoded.replace(
+    /%[0-9A-F]{2}/g,
+    (escape) => escape.toLowerCase(),
+  );
+  return [
+    value,
+    componentEncoded,
+    componentEncoded.replaceAll("%20", "+"),
+    uriEncoded,
+    lowerPercentEscapes(componentEncoded),
+    lowerPercentEscapes(componentEncoded.replaceAll("%20", "+")),
+    lowerPercentEscapes(uriEncoded),
+  ];
+}
+
 function sanitizedOutput(value, configuration) {
-  const redactions = [
+  const sensitiveValues = [
     configuration.CLOUDFLARE_API_TOKEN,
     configuration.CLOUDFLARE_ACCOUNT_ID,
     configuration.WORKER_NAME,
@@ -233,10 +261,32 @@ function sanitizedOutput(value, configuration) {
     configuration.EMAIL_BRAND_NAME,
     configuration.DELIVERY_PATH,
     configuration.HEALTH_PATH,
-  ].filter(Boolean).sort((left, right) => right.length - left.length);
+  ].filter(Boolean);
+  const redactions = [...new Set(sensitiveValues.flatMap(encodedVariants))]
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
   let safe = value;
   for (const redaction of redactions) safe = safe.replaceAll(redaction, "<redacted>");
   return safe;
+}
+
+function limitedUtf8Tail(value, maximumBytes = maxWranglerErrorDetailBytes) {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length <= maximumBytes) return value;
+  return bytes.subarray(bytes.length - maximumBytes).toString("utf8").replace(/^\uFFFD+/, "");
+}
+
+export function formatControllerFailure(error) {
+  if (error instanceof WranglerExecutionError) {
+    const detail = limitedUtf8Tail(error.detail).trim();
+    return `Worker production controller failed: ${error.code}${detail ? `\n${detail}` : ""}\n`;
+  }
+  const stableErrorCode = typeof error?.message === "string"
+    && /^[A-Z][A-Z0-9_]{1,100}$/.test(error.message)
+    ? error.message
+    : "UNEXPECTED_FAILURE";
+  const code = error instanceof ProductionConfigurationError ? error.code : stableErrorCode;
+  return `Worker production controller failed: ${code}\n`;
 }
 
 async function runWrangler(configuration, { dryRun, spawnImplementation = spawn }) {
@@ -268,7 +318,9 @@ async function runWrangler(configuration, { dryRun, spawnImplementation = spawn 
     child.on("error", () => reject(new Error("WRANGLER_START_FAILED")));
     child.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`WRANGLER_FAILED\n${sanitizedOutput(output, configuration).slice(-8_000)}`));
+      else reject(new WranglerExecutionError(
+        limitedUtf8Tail(sanitizedOutput(output, configuration)),
+      ));
     });
   });
 }
@@ -347,8 +399,7 @@ async function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    const code = error instanceof ProductionConfigurationError ? error.code : error.message;
-    process.stderr.write(`Worker production controller failed: ${String(code).split("\n", 1)[0]}\n`);
+    process.stderr.write(formatControllerFailure(error));
     process.exitCode = 1;
   });
 }

@@ -640,7 +640,7 @@ test("tracked Wrangler config contains only generic deployment settings and requ
   const deploymentReadme = await readFile(path.join(workerRoot, "README.md"), "utf8");
   assert.doesNotMatch(wrangler, /^name\s*=/m);
   assert.match(wrangler, /^main = "src\/index\.js"$/m);
-  assert.match(wrangler, /^compatibility_date = "2026-07-30"$/m);
+  assert.match(wrangler, /^compatibility_date = "2026-07-27"$/m);
   assert.match(wrangler, /^workers_dev = false$/m);
   assert.match(wrangler, /^keep_vars = true$/m);
   assert.match(
