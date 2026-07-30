@@ -294,8 +294,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.9 `
-  -OperationsImage lumina-crm-ops-validation:3.8.9
+  -ApplicationImage lumina-crm-validation:3.8.10 `
+  -OperationsImage lumina-crm-ops-validation:3.8.10
 ```
 
 They are local integration tests, not production deployment commands.

@@ -9,7 +9,8 @@ archive/supabase/*
 !archive/supabase/migrations/
 !archive/supabase/migrations/**
 dist
-docs
+docs/*
+!docs/DEPLOYMENT.md
 node_modules
 planning-source
 work

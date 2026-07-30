@@ -695,6 +695,20 @@ test("Docker maintenance allowlist rejects host-global destructive commands", ()
   }
 });
 
+test("verification build context includes only the deployment contract from docs", async () => {
+  const dockerIgnore = (await source(".dockerignore"))
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  assert.equal(dockerIgnore.includes("docs"), false);
+  assert.equal(dockerIgnore.includes("docs/*"), true);
+  assert.equal(dockerIgnore.includes("!docs/DEPLOYMENT.md"), true);
+  assert.deepEqual(
+    dockerIgnore.filter((line) => line.startsWith("!docs/")),
+    ["!docs/DEPLOYMENT.md"],
+  );
+});
+
 test("optional Docker proxy accepts only credential-free HTTP(S) URLs", () => {
   for (const parse of [parseDockerProxy, parseDockerBuildProxy]) {
     assert.equal(parse(undefined), "");
