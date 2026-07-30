@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -19,10 +20,12 @@ import {
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "./lib/rootless-docker.mjs";
 import { updateProductionSource } from "./lib/git-source-update.mjs";
+import { assertProductionSecretSources } from "./lib/production-secret-sources.mjs";
 import {
   dockerBuildEnvironment,
   dockerBuildProxyArguments,
   parseDockerBuildProxy,
+  validateBuildxInspectContract,
 } from "./lib/docker-build-proxy.mjs";
 import {
   acceptedReleaseMatchesRequest,
@@ -44,6 +47,7 @@ const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const composeEnvPath = path.join(stateRoot, "compose.env");
 const cleanupRequestPath = path.join(stateRoot, "storage-cleanup-request.json");
+const builderMarkerPath = "/var/lib/lumina-crm/storage-maintenance/builder-owner.json";
 const composeFile = path.join(sourceRoot, "compose.production.yml");
 const project = "lumina-crm";
 const builder = "lumina-crm-buildkit";
@@ -201,6 +205,7 @@ function run(label, command, args, {
   environment = directEnvironment(),
   allowFailure = false,
   quiet = false,
+  validateStdout,
 } = {}) {
   stage(label);
   return new Promise((resolve, reject) => {
@@ -227,6 +232,12 @@ function run(label, command, args, {
       const result = { code, stdout: stdout.trim(), stderr: stderr.trim() };
       if (code !== 0 && !allowFailure) {
         reject(new Error(`${label} failed: ${redact(stderr || stdout || signal || code).slice(-1200)}`));
+        return;
+      }
+      try {
+        if (code === 0 && validateStdout) validateStdout(result.stdout);
+      } catch (error) {
+        reject(error);
         return;
       }
       if (!quiet && stdout.trim()) log("OUTPUT", stdout.trim().slice(-20_000));
@@ -362,14 +373,29 @@ async function prepareBuilderAndCapacity() {
     ["-n", "/usr/bin/systemctl", "start", "lumina-crm-storage-prepare.service"],
     { timeoutMs: 300_000 },
   );
-  const inspected = await run(
+  await run(
     "verify isolated Lumina builder",
     "docker",
     ["buildx", "inspect", builder],
-    { timeoutMs: 30_000, quiet: true },
+    {
+      timeoutMs: 30_000,
+      quiet: true,
+      validateStdout: (output) => validateBuildxInspectContract(output, {
+        builderName: builder,
+        dockerProxy: configuredDockerProxy,
+      }),
+    },
   );
-  if (!/^Driver:\s+docker-container$/m.test(inspected.stdout)) {
-    throw new Error(`${builder} is not a docker-container builder`);
+  const marker = readJson(builderMarkerPath);
+  const proxySha256 = configuredDockerProxy
+    ? createHash("sha256").update(configuredDockerProxy).digest("hex")
+    : null;
+  if (marker?.builderNetworkMode !== "host") {
+    throw new Error("LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH");
+  }
+  if ((marker?.dockerProxyEnabled ?? false) !== Boolean(configuredDockerProxy)
+    || (marker?.dockerProxySha256 ?? null) !== proxySha256) {
+    throw new Error("LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH");
   }
   const securityOptions = await run("verify rootless Docker security mode", "docker", [
     "info", "--format", "{{json .SecurityOptions}}",
@@ -433,6 +459,12 @@ async function buildImages(release) {
 async function startPostgres(candidateEnv) {
   await compose("start or verify PostgreSQL", candidateEnv, ["up", "-d", "postgres"], { timeoutMs: 180_000 });
   await waitForContainerHealth(candidateEnv, "postgres", 120_000);
+}
+
+async function preflightSecretSources() {
+  stage("verify production secret source metadata");
+  const result = assertProductionSecretSources();
+  log("INFO", `Verified metadata for ${result.checkedFiles.length} production secret source files`);
 }
 
 async function bootstrapDatabase(candidateEnv) {
@@ -626,6 +658,7 @@ try {
             atomicWrite(candidateEnv, composeEnvironment(release));
             return candidateEnv;
           },
+          preflightSecretSources,
           startPostgres,
           bootstrapDatabase,
           verifyMigrations,

@@ -163,15 +163,22 @@ the objects and encrypted-backup volume roots writable by runtime UID/GID 10001.
 or changes the PostgreSQL volume in that helper. Never replace the PostgreSQL volume during update
 or rollback.
 
-Install each `deploy/*.env.example` secret template as its basename without `.example` under
-`/etc/lumina-crm/secrets`, root-owned and mode `0640`. Install the PostgreSQL password alone at:
+Keep both `/etc/lumina-crm` and `/etc/lumina-crm/secrets` owned by `root:lumina-crm` with exact
+mode `0750`. Install each application/ops `deploy/*.env.example` secret template as its basename
+without `.example` under `/etc/lumina-crm/secrets`, owned by `root:lumina-crm` with exact mode
+`0644`. Install the PostgreSQL password with the same ownership and mode at:
 
 ```text
 /etc/lumina-crm/secrets/postgres-superuser-password.txt
 ```
 
-Compose mounts the files under `/run/secrets`; the entrypoint exports only the selected file to its
-child process. Secret values are not placed in Compose YAML or image build arguments.
+Compose implements these `file:` secrets as bind mounts and cannot remap their uid/gid/mode.
+Mode `0644` therefore allows the fixed container UID/GID `10001:10001` to read the mounted file,
+while the non-world-traversable `0750` host directories retain the host access boundary. Before
+building images or starting PostgreSQL, the deployment runner checks both directories and all eight
+required source files using metadata only: it rejects symlinks, wrong realpaths, ownership, type,
+or mode without reading or printing secret contents. The entrypoint exports only the selected file
+to its child process. Secret values are not placed in Compose YAML or image build arguments.
 
 Run the storage prepare unit once. The fixed root-owned program executes as non-root
 `lumina-crm`; it verifies the rootless socket/security/cgroup/data-root contract, capacity, and
@@ -223,19 +230,28 @@ build networking. The value must be an absolute `http://` or `https://` URL with
 query, or fragment. Do not reuse this variable as the Git proxy and do not commit the production
 value.
 
-When enabled, storage prepare creates the fixed `docker-container` builder with four exact
+Storage prepare always creates the fixed `docker-container` builder with the exact driver option
+`network=host`. In rootless Docker this means the Lumina daemon's RootlessKit network namespace,
+whose host-loopback entry is reachable by both the daemon and builder; it does not mean the
+physical host/rootful Docker namespace and does not join or modify any HunterAI daemon, container,
+network, or proxy relay. When the proxy is enabled, builder creation also uses four exact
 `env.HTTP_PROXY`/`env.HTTPS_PROXY` driver options in uppercase and lowercase. The deploy runner
 sets the same four variables only for its three `buildx build` subprocesses and supplies the
 predefined proxy build arguments by name without placing their values on the command line. The
 proxy never reaches `docker compose`, migration, health, backup, or application runtime
 environments. Logs, errors, and state redact its value. `builder-owner.json` records only whether
-the proxy is enabled and its SHA-256 fingerprint; it never stores the URL.
+the proxy is enabled, its SHA-256 fingerprint, and `builderNetworkMode: "host"`; it never stores
+the URL.
 
-Changing the proxy setting or value for an already marked builder causes
-`LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH`. The maintenance program never silently adopts,
-reconfigures, removes, or recreates that builder. Stop deployment and perform an operator-reviewed
-audit of the exact Lumina builder and ownership marker before any explicit replacement; never
-touch another project, the rootful daemon, or HunterAI resources.
+Storage prepare and the deploy runner both require the inspected driver to be `docker-container`,
+the inspected Driver Options to contain exactly `network="host"` plus the four proxy options when
+enabled, and the marker proxy fingerprint to agree with server-local `deploy.env`. A missing or
+different marker/inspect network fails with `LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH`;
+changing the proxy setting or value causes `LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH`. The
+maintenance program never silently adopts, reconfigures, removes, or recreates that builder. Stop
+deployment and perform an operator-reviewed audit of the exact Lumina builder and ownership marker
+before any explicit replacement; never touch another project, the rootful daemon, or HunterAI
+resources.
 
 ## First database start
 
@@ -294,8 +310,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.10 `
-  -OperationsImage lumina-crm-ops-validation:3.8.10
+  -ApplicationImage lumina-crm-validation:3.8.11 `
+  -OperationsImage lumina-crm-ops-validation:3.8.11
 ```
 
 They are local integration tests, not production deployment commands.
