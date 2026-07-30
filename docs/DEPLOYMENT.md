@@ -217,6 +217,26 @@ Git fetch subprocess. When it is unset or empty, the runner makes one direct fet
 fallback retry, never writes Git proxy configuration, redacts the configured value from deployment
 logs and errors, and never places it in Compose or container environments.
 
+If the host requires a proxy for BuildKit image pulls or Dockerfile `RUN` network access, set
+`LUMINA_DOCKER_PROXY` in the server-local `/etc/lumina-crm/deploy.env`. Leave it empty for direct
+build networking. The value must be an absolute `http://` or `https://` URL without credentials,
+query, or fragment. Do not reuse this variable as the Git proxy and do not commit the production
+value.
+
+When enabled, storage prepare creates the fixed `docker-container` builder with four exact
+`env.HTTP_PROXY`/`env.HTTPS_PROXY` driver options in uppercase and lowercase. The deploy runner
+sets the same four variables only for its three `buildx build` subprocesses and supplies the
+predefined proxy build arguments by name without placing their values on the command line. The
+proxy never reaches `docker compose`, migration, health, backup, or application runtime
+environments. Logs, errors, and state redact its value. `builder-owner.json` records only whether
+the proxy is enabled and its SHA-256 fingerprint; it never stores the URL.
+
+Changing the proxy setting or value for an already marked builder causes
+`LUMINA_BUILDKIT_PROXY_CONFIGURATION_MISMATCH`. The maintenance program never silently adopts,
+reconfigures, removes, or recreates that builder. Stop deployment and perform an operator-reviewed
+audit of the exact Lumina builder and ownership marker before any explicit replacement; never
+touch another project, the rootful daemon, or HunterAI resources.
+
 ## First database start
 
 After installing all secret files and provisioning the external volumes, initialize a new
@@ -274,8 +294,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.8 `
-  -OperationsImage lumina-crm-ops-validation:3.8.8
+  -ApplicationImage lumina-crm-validation:3.8.9 `
+  -OperationsImage lumina-crm-ops-validation:3.8.9
 ```
 
 They are local integration tests, not production deployment commands.

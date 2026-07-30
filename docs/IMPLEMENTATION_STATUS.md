@@ -1,10 +1,11 @@
-# Implementation status — v3.8.8 release candidate
+# Implementation status — v3.8.9 release candidate
 
 ## Scope
 
-v3.8.8 retains the production shared-host isolation, persistent first-install flow, and complete
-email Worker strict deployment configuration. It also unifies storage prepare, cleanup, and the
-deployment runner on one canonical rootless Docker/Buildx client configuration namespace. Windows is
+v3.8.9 retains the production shared-host isolation, persistent first-install flow, complete email
+Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
+adds an optional, server-local, build-only Docker proxy contract without weakening Git, Compose,
+runtime-container, or HunterAI isolation. Windows is
 development-only and holds no production Worker
 configuration or Cloudflare credentials; Ubuntu alone stores the server Env, performs the in-place
 deployment, and verifies health. Public source does not identify the production Worker, Custom
@@ -23,6 +24,9 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - non-root storage preparation/cleanup through the fixed root-owned maintenance program;
 - one owner-checked, non-symlink Docker configuration root shared by deploy, prepare, and cleanup,
   with fail-closed handling for the obsolete maintenance-local configuration path;
+- a credential-free HTTP(S) Docker build proxy allowlist, four exact BuildKit driver environment
+  options, value-free predefined build arguments, buildx-only subprocess environment, redaction,
+  and marker fingerprint drift detection;
 - corrected Compose/rootless disk monitoring with strict threshold configuration;
 - strict remote/local backup retention and paired encrypted database/object verification;
 - CSRF-aware secure sign-out with pending, error, fallback redirect, and Chromium coverage;
@@ -44,14 +48,14 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   generic health acceptance;
 - explicit separation between CRM application initialization and email Worker deployment;
 - synchronized application, Worker subproject metadata, package, lockfile, and documentation
-  version 3.8.8; the Worker runtime logic is unchanged in this release.
+  version 3.8.9; the Worker runtime logic is unchanged in this release.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
 | Root `npm ci` | Pass: 566 packages installed, 572 audited, 0 vulnerabilities |
-| Storage maintenance / Buildx targeted contracts | Pass: 31/31, including canonical namespace, directory metadata, legacy-path fail-closed behavior, builder visibility, and existing cleanup/rootless boundaries |
+| Production deploy / Buildx targeted contracts | Pass: 35/35, including optional proxy validation, driver options, build-only environment, value-free build arguments, marker drift, redaction, canonical namespace, and existing cleanup/rootless boundaries |
 | Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
 | Email delivery Worker `npm run test:deployment` | Pass: 54/54, including Wrangler 4.102.0 no-upload strict dry-run, complete generated config parity, Custom Domain preflight, 0700/0600 owner/symlink contracts, cleanup, and bounded full-value output redaction |
@@ -59,7 +63,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 40/40 rootless Compose/deploy/Tunnel contracts |
+| `npm run test:deploy:raw` | Pass: 44/44 rootless Compose/deploy/Buildx proxy/Tunnel contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
 | `npm run test:contracts:raw` | Pass: 44 application contracts + 6 CAPTCHA contracts |
