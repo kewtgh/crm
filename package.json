@@ -1,6 +1,6 @@
 {
-  "name": "lumina-education-crm",
-  "version": "3.8.0",
+  "name": "lumina-crm",
+  "version": "3.8.1",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -22,7 +22,7 @@
     "test:contracts": "node scripts/run-bounded.mjs --label contracts --timeout-seconds 120 --idle-seconds 60 -- npm run test:contracts:raw",
     "test:contracts:raw": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
-    "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs",
+    "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs tests/cloudflare-tunnel-caddy.test.mjs",
     "typecheck": "node scripts/run-bounded.mjs --label typecheck --timeout-seconds 120 --idle-seconds 60 -- npm run typecheck:raw",
     "typecheck:raw": "tsc --noEmit",
     "lint": "node scripts/run-bounded.mjs --label lint --timeout-seconds 180 --idle-seconds 90 -- npm run lint:raw",
@@ -62,8 +62,8 @@
     "workers:loop": "node --env-file-if-exists=.env.local scripts/run-worker-loop.mjs",
     "workers:health": "node --env-file-if-exists=.env.local scripts/worker-healthcheck.mjs",
     "compose:config": "docker compose -f compose.production.yml config",
-    "cloudflare:test": "node --test --test-isolation=none tests/cloudflare-worker-proxy.test.mjs",
-    "cloudflare:config:verify": "node scripts/verify-public-health-config.mjs",
+    "tunnel:test": "node --test --test-isolation=none tests/cloudflare-tunnel-caddy.test.mjs",
+    "tunnel:config:verify": "node scripts/verify-public-health-config.mjs",
     "qa:assets": "node scripts/run-bounded.mjs --label production-assets --timeout-seconds 90 --idle-seconds 45 -- npm run qa:assets:raw",
     "qa:assets:raw": "node scripts/check-production-assets.mjs",
     "qa:server:start": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs start",

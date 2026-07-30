@@ -1,4 +1,4 @@
-# Lumina Education CRM v1.0.0 完整修改计划
+# Lumina CRM v1.0.0 完整修改计划
 
 计划日期：2026-07-18  
 输入：`AUDIT_2026-07-18_V091.md`  

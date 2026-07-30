@@ -107,7 +107,7 @@ services:
       <<: *proxy-free-environment
       LUMINA_ENV_FILES: /run/secrets/web_runtime_env
       VINEXT_TRUST_PROXY: "1"
-      VINEXT_TRUSTED_HOSTS: ${LUMINA_PUBLIC_HOSTNAME:-crm.ewaya.com}
+      VINEXT_TRUSTED_HOSTS: ${LUMINA_PUBLIC_HOSTNAME:-crm.example.com}
     ports:
       - "${LUMINA_WEB_BIND:-127.0.0.1:3200}:3200"
     networks:

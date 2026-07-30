@@ -1,9 +1,9 @@
-{$LUMINA_ORIGIN_HOSTNAME} {
+http://127.0.0.1:3211 {
 	encode zstd gzip
 
 	route {
-		@origin_authorized header X-Lumina-Origin-Auth {$LUMINA_ORIGIN_AUTH_SECRET}
-		handle @origin_authorized {
+		@public_host host {$LUMINA_PUBLIC_HOSTNAME}
+		handle @public_host {
 			@detailed_readiness {
 				path /api/health
 				query mode=ready
@@ -11,22 +11,21 @@
 			respond @detailed_readiness 404
 
 			reverse_proxy 127.0.0.1:3200 {
-				header_up -X-Lumina-Origin-Auth
-				header_up -X-Forwarded-For
-				header_up -X-Forwarded-Host
-				header_up -X-Forwarded-Proto
+				header_up -Forwarded
+				header_up -X-Forwarded-*
 				header_up -X-Real-IP
-				header_up -CF-Connecting-IP
-				header_up X-Forwarded-For {http.request.header.X-Lumina-Client-IP}
-				header_up CF-Connecting-IP {http.request.header.X-Lumina-Client-IP}
+				header_up -True-Client-IP
+				header_up -X-Lumina-*
+				header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+				header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+				header_up CF-Connecting-IP {http.request.header.CF-Connecting-IP}
 				header_up X-Forwarded-Host {$LUMINA_PUBLIC_HOSTNAME}
 				header_up X-Forwarded-Proto https
 				header_up Host {$LUMINA_PUBLIC_HOSTNAME}
-				header_up -X-Lumina-Client-IP
 			}
 		}
 
-		respond 403
+		respond 404
 	}
 
 	header {

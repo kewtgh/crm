@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.5.0 最终遗漏复审
+# Lumina CRM v2.5.0 最终遗漏复审
 
 - 复审日期：2026-07-26
 - 输入：`AUDIT_2026-07-26_V2.5.0.md` 与

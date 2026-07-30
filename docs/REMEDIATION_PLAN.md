@@ -1,4 +1,4 @@
-# Lumina Education CRM 整改计划与完成记录
+# Lumina CRM 整改计划与完成记录
 
 计划日期：2026-07-17
 完成版本：0.8.0

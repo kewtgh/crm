@@ -1,4 +1,4 @@
-# Lumina Education CRM 1.2.0
+# Lumina CRM 1.2.0
 
 > 历史发布记录，已由 v2.0.0 实现状态和 Chromium 1228 最终证据取代。
 

@@ -1,6 +1,6 @@
-# Lumina Education CRM
+# Lumina CRM
 
-Current release candidate: **v3.8.0**
+Current release candidate: **v3.8.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -10,14 +10,14 @@ Version 3.8 closes the shared-host isolation gap by moving every Lumina controll
 builder and maintenance command to a dedicated rootless Docker user service. Deployment gates
 verify the exact user socket, rootless security mode, systemd cgroups and a Lumina-only data root.
 It also verifies each encrypted database backup with its matching encrypted local-object archive,
-fixes the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims
-the runtime image to required scripts.
+replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
+the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
+runtime image to required scripts.
 
 Version 3.7 moved production to the fixed `lumina-crm` Docker Compose project. PostgreSQL, Web,
 Worker, migrations, encrypted backup/restore, commit-tagged image release, application-only
-rollback, and Lumina-only cleanup have explicit container and credential boundaries. A Cloudflare
-Worker fronts a distinct authenticated Caddy origin; HunterAI and Temporal resources are never
-shared or managed by Lumina.
+rollback, and Lumina-only cleanup have explicit container and credential boundaries. HunterAI and
+Temporal resources are never shared or managed by Lumina.
 
 Version 3.5 closed the organization-wide business-date architecture gate. Each workspace now has a
 constrained, audited business timezone that administrators can change only with AAL2; user and
@@ -30,12 +30,11 @@ password recovery then enforce the self-hosted ALTCHA verifier instead of bypass
 The production runtime remains designed for one shared VPS:
 
 ```text
-crm.ewaya.com
-  -> Cloudflare Worker
-     -> distinct Lumina origin hostname
-        -> authenticated host Caddy gateway
-           -> 127.0.0.1:3200
-              -> Compose Web / Worker / private PostgreSQL
+configured public hostname
+  -> Cloudflare Tunnel
+     -> Caddy 127.0.0.1:3211
+        -> Web 127.0.0.1:3200
+           -> Compose Web / Worker / private PostgreSQL
 ```
 
 The application has no managed-platform SDK or API dependency. It uses separate application,
@@ -117,7 +116,7 @@ rootless Docker/state capacity gate
 -> migration verification and locked forward migration
 -> Compose Web/Worker image switch
 -> independent PostgreSQL/Web/Worker health
--> loopback readiness and Cloudflare/origin liveness
+-> loopback readiness and Cloudflare Tunnel public liveness
 -> persist accepted/rollback images
 -> Lumina-only image/BuildKit cleanup
 post-switch failure -> application-image rollback; database stays forward

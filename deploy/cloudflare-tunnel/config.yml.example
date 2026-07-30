@@ -1,0 +1,9 @@
+tunnel: replace-with-cloudflare-tunnel-uuid
+credentials-file: /etc/cloudflared/replace-with-cloudflare-tunnel-uuid.json
+
+ingress:
+  - hostname: crm.example.com
+    service: http://127.0.0.1:3211
+    originRequest:
+      httpHostHeader: crm.example.com
+  - service: http_status:404

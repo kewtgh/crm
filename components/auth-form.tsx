@@ -336,7 +336,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       <section className="auth-form-panel">
         <div className="language-chip"><LocaleSwitcher compact /></div>
         {children}
-        <p className="auth-help">{t("auth.help")} <a href="mailto:support@ewaya.comm">{t("auth.helpEmail")}</a></p>
+        <p className="auth-help">{t("auth.help")} <a href="mailto:support@example.com">{t("auth.helpEmail")}</a></p>
       </section>
     </main>
   );

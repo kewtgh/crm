@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.0.0 完整改造与扩展计划
+# Lumina CRM v2.0.0 完整改造与扩展计划
 
 - 计划日期：2026-07-19
 - 审计输入：`AUDIT_2026-07-19_CHROMIUM_1228.md`

@@ -1,4 +1,4 @@
-# Lumina Education CRM 实机综合审计
+# Lumina CRM 实机综合审计
 
 - 审计日期：2026-07-19
 - 审计基线：`cca30365e24708cba8577ea39b44d930f83e8527`

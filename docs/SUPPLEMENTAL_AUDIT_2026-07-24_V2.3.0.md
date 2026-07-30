@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.3.0 补充遗漏与基础 UX 审计
+# Lumina CRM v2.3.0 补充遗漏与基础 UX 审计
 
 - 审计日期：2026-07-24
 - 基线提交：`64b1f44 feat: release v2.3.0 audit remediation`

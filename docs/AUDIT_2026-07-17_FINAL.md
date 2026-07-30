@@ -1,4 +1,4 @@
-# Lumina Education CRM 综合审计报告
+# Lumina CRM 综合审计报告
 
 审计日期：2026-07-17  
 审计基线：v0.8.0 / `e7a6a6a`  

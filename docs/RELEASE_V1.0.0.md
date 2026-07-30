@@ -1,4 +1,4 @@
-# Lumina Education CRM 1.0.0
+# Lumina CRM 1.0.0
 
 Release date: 2026-07-18
 

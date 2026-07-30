@@ -1,4 +1,4 @@
-# Lumina Education CRM v1.2.0 完整改造计划
+# Lumina CRM v1.2.0 完整改造计划
 
 > 历史计划，已由 `REMEDIATION_AND_EXPANSION_PLAN_V2.0.0.md` 取代。
 
