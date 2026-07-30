@@ -642,6 +642,7 @@ test("tracked Wrangler config contains only generic deployment settings and requ
   assert.match(wrangler, /^main = "src\/index\.js"$/m);
   assert.match(wrangler, /^compatibility_date = "2026-07-27"$/m);
   assert.match(wrangler, /^workers_dev = false$/m);
+  assert.match(wrangler, /^preview_urls = false$/m);
   assert.match(wrangler, /^keep_vars = true$/m);
   assert.match(
     wrangler,

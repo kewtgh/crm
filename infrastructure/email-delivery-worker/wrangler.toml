@@ -1,6 +1,7 @@
 main = "src/index.js"
 compatibility_date = "2026-07-27"
 workers_dev = false
+preview_urls = false
 keep_vars = true
 
 [observability]
