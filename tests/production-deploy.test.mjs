@@ -9,6 +9,7 @@ import {
   classifyPersistedDeployment,
   isSystemdServiceInProgress,
   PRODUCTION_DEPLOY_LOCK_PATH,
+  validatePendingRequestForRecovery,
   validateDirectoryMetadata,
   writeExclusiveRequest,
 } from "../scripts/lib/production-deploy-core.mjs";
@@ -19,6 +20,16 @@ import {
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "../scripts/lib/rootless-docker.mjs";
 import { updateProductionSource } from "../scripts/lib/git-source-update.mjs";
+import {
+  acceptedReleaseMatchesRequest,
+  assertReleaseModeAllowed,
+  createAcceptedRelease,
+  extractSensitiveEnvironmentValues,
+  ProductionReleaseWorkflowError,
+  redactDeploymentSecrets,
+  releaseFailureRollbackPlan,
+  runProductionReleaseWorkflow,
+} from "../scripts/lib/production-deploy-workflow.mjs";
 import {
   backupRetentionPolicy,
   matchingEncryptedObjectsPath,
@@ -55,6 +66,40 @@ function sourceGitDouble({ fetchError } = {}) {
     throw new Error(`Unexpected Git invocation: ${args.join(" ")}`);
   };
   return { calls, commit, git };
+}
+
+function releaseWorkflowDouble({ failAt } = {}) {
+  const calls = [];
+  const target = {
+    commit: "a".repeat(40),
+    version: "3.8.2",
+    currentImage: `lumina-crm:${"a".repeat(40)}`,
+    operationsImage: `lumina-crm-ops:${"a".repeat(40)}`,
+  };
+  const operation = (name, result) => async () => {
+    calls.push(name);
+    if (failAt === name) throw new Error(`failed at ${name}`);
+    return result;
+  };
+  return {
+    calls,
+    target,
+    operations: {
+      prepare: operation("prepare"),
+      updateSource: operation("fetch", target.commit),
+      resolveTarget: operation("resolve-target", target),
+      buildImages: operation("build"),
+      writeCandidateEnvironment: operation("candidate-env", "candidate.env"),
+      startPostgres: operation("postgres"),
+      bootstrapDatabase: operation("db-bootstrap"),
+      verifyMigrations: operation("migration-verify"),
+      markMigrationMayHaveChanged: operation("migration-may-have-changed"),
+      migrate: operation("migrate"),
+      bootstrapAdmin: operation("bootstrap-admin"),
+      switchApplication: operation("switch"),
+      acceptRuntime: operation("acceptance"),
+    },
+  };
 }
 
 test("keeps controller paths and request state inside exact deployment roots", async () => {
@@ -117,6 +162,251 @@ test("classifies every active systemd oneshot state and fixed deployment lock", 
   for (const state of ["inactive", "failed", "dead", ""]) {
     assert.equal(isSystemdServiceInProgress(state), false);
   }
+});
+
+test("initialize follows the explicit first-install order", async () => {
+  const { calls, operations } = releaseWorkflowDouble();
+  const result = await runProductionReleaseWorkflow({ mode: "initialize", operations });
+  assert.deepEqual(calls, [
+    "prepare",
+    "fetch",
+    "resolve-target",
+    "build",
+    "candidate-env",
+    "postgres",
+    "db-bootstrap",
+    "migration-verify",
+    "migration-may-have-changed",
+    "migrate",
+    "bootstrap-admin",
+    "switch",
+    "acceptance",
+  ]);
+  assert.equal(result.migrationMayHaveChanged, true);
+  assert.equal(result.switched, true);
+});
+
+test("exposes initialize through package scripts, controller help, and the runbook", async () => {
+  const [packageText, controller, runbook] = await Promise.all([
+    source("package.json"),
+    source("scripts/deploy-production.mjs"),
+    source("docs/DEPLOYMENT.md"),
+  ]);
+  const packageJson = JSON.parse(packageText);
+  assert.equal(
+    packageJson.scripts["deploy:production:initialize"],
+    "node scripts/deploy-production.mjs initialize",
+  );
+  assert.equal(
+    packageJson.scripts["deploy:production:initialize:detach"],
+    "node scripts/deploy-production.mjs initialize --detach",
+  );
+  assert.match(controller, /npm run deploy:production:initialize/);
+  assert.match(controller, /await start\("initialize"/);
+  assert.match(runbook, /Initialization is explicit and is never inferred/);
+});
+
+test("initialize never reaches migration before db-bootstrap succeeds", async () => {
+  const { calls, operations } = releaseWorkflowDouble({ failAt: "db-bootstrap" });
+  await assert.rejects(
+    () => runProductionReleaseWorkflow({ mode: "initialize", operations }),
+    ProductionReleaseWorkflowError,
+  );
+  assert.equal(calls.includes("migrate"), false);
+  assert.ok(calls.indexOf("postgres") < calls.indexOf("db-bootstrap"));
+});
+
+test("first initialize acceptance records explicit mode and null rollback images", () => {
+  const request = {
+    requestId: "12345678-1234-1234-1234-123456789abc",
+    mode: "initialize",
+  };
+  const { target } = releaseWorkflowDouble();
+  const accepted = createAcceptedRelease({
+    deploymentId: "initialize-release",
+    request,
+    target,
+    previousAccepted: null,
+    acceptedAt: "2026-07-30T12:00:00.000Z",
+  });
+  assert.equal(accepted.mode, "initialize");
+  assert.equal(accepted.requestId, request.requestId);
+  assert.equal(accepted.rollbackCommit, null);
+  assert.equal(accepted.rollbackVersion, null);
+  assert.equal(accepted.rollbackImage, null);
+  assert.equal(accepted.rollbackOperationsImage, null);
+});
+
+test("release mode gates fail closed before build or database work", () => {
+  const work = [];
+  assert.throws(
+    () => assertReleaseModeAllowed({
+      mode: "initialize",
+      acceptedStateExists: true,
+      acceptedRelease: { currentImage: "lumina-crm:accepted" },
+    }),
+    /last-success\.json already exists/,
+  );
+  assert.throws(
+    () => assertReleaseModeAllowed({
+      mode: "deploy",
+      acceptedStateExists: false,
+      acceptedRelease: null,
+    }),
+    /npm run deploy:production:initialize/,
+  );
+  assert.deepEqual(work, []);
+});
+
+test("ordinary deploy migrates but never runs either initialization bootstrap", async () => {
+  const { calls, operations } = releaseWorkflowDouble();
+  await runProductionReleaseWorkflow({ mode: "deploy", operations });
+  assert.equal(calls.includes("db-bootstrap"), false);
+  assert.equal(calls.includes("bootstrap-admin"), false);
+  assert.ok(calls.indexOf("migration-verify") < calls.indexOf("migrate"));
+  assert.ok(calls.indexOf("migrate") < calls.indexOf("switch"));
+});
+
+test("initialize failures retain forward-only migration and rollback semantics", async (t) => {
+  const cases = [
+    {
+      name: "before db-bootstrap",
+      failAt: "postgres",
+      migrationMayHaveChanged: false,
+      switched: false,
+      rollback: null,
+    },
+    {
+      name: "after db-bootstrap and before migrate",
+      failAt: "migration-verify",
+      migrationMayHaveChanged: false,
+      switched: false,
+      rollback: null,
+    },
+    {
+      name: "after migrate and before switch",
+      failAt: "bootstrap-admin",
+      migrationMayHaveChanged: true,
+      switched: false,
+      rollback: null,
+    },
+    {
+      name: "after switch",
+      failAt: "acceptance",
+      migrationMayHaveChanged: true,
+      switched: true,
+      rollback: {
+        status: "UNAVAILABLE",
+        reason: "No accepted application image exists",
+      },
+    },
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async () => {
+      const { operations } = releaseWorkflowDouble({ failAt: scenario.failAt });
+      await assert.rejects(
+        () => runProductionReleaseWorkflow({ mode: "initialize", operations }),
+        (error) => {
+          assert.equal(error.migrationMayHaveChanged, scenario.migrationMayHaveChanged);
+          assert.equal(error.switched, scenario.switched);
+          assert.deepEqual(
+            releaseFailureRollbackPlan({
+              switched: error.switched,
+              previousAccepted: null,
+            }),
+            scenario.rollback,
+          );
+          return true;
+        },
+      );
+    });
+  }
+  assert.deepEqual(
+    releaseFailureRollbackPlan({
+      switched: true,
+      previousAccepted: {
+        currentImage: "lumina-crm:previous",
+        operationsImage: "lumina-crm-ops:previous",
+      },
+    }),
+    { status: "REQUIRED" },
+  );
+});
+
+test("an interrupted initialize recovers the same request and safely repeats its steps", async () => {
+  const request = {
+    requestId: "12345678-1234-1234-1234-123456789abc",
+    mode: "initialize",
+    requestedAt: "2026-07-30T11:00:00.000Z",
+  };
+  assert.strictEqual(
+    validatePendingRequestForRecovery({
+      request,
+      mode: "initialize",
+      nowMs: Date.parse("2026-07-30T12:00:00.000Z"),
+    }),
+    request,
+  );
+  const first = releaseWorkflowDouble();
+  const second = releaseWorkflowDouble();
+  await runProductionReleaseWorkflow({ mode: "initialize", operations: first.operations });
+  await runProductionReleaseWorkflow({ mode: "initialize", operations: second.operations });
+  assert.deepEqual(second.calls, first.calls);
+
+  const acceptedRelease = createAcceptedRelease({
+    deploymentId: "accepted-before-interruption",
+    request,
+    target: first.target,
+    previousAccepted: null,
+    acceptedAt: "2026-07-30T12:00:00.000Z",
+  });
+  assert.equal(acceptedReleaseMatchesRequest({
+    request,
+    priorLatest: {
+      requestId: request.requestId,
+      targetImage: first.target.currentImage,
+      applicationAccepted: false,
+    },
+    acceptedRelease,
+  }), true);
+});
+
+test("deployment logs and JSON state redact every configured secret boundary", () => {
+  const environment = `
+ADMIN_PASSWORD=temporary-admin-password
+DATABASE_ADMIN_URL=postgresql://postgres:superuser-password@postgres:5432/lumina_crm
+CRM_APP_DB_PASSWORD=application-role-password
+CRM_SYSTEM_DB_PASSWORD=system-role-password
+CRM_WORKER_DB_PASSWORD=worker-role-password
+CRM_MIGRATOR_DB_PASSWORD=migrator-role-password
+CRM_BACKUP_DB_PASSWORD=backup-role-password
+TURNSTILE_SECRET_KEY=turnstile-secret-value
+EMAIL_DELIVERY_WEBHOOK_TOKEN=mail-delivery-token
+BACKUP_ENCRYPTION_KEY=backup-encryption-key
+`;
+  const secrets = extractSensitiveEnvironmentValues(environment);
+  const rawError = `command failed: ${secrets.join(" ")}`;
+  const safeError = redactDeploymentSecrets(rawError, secrets);
+  const acceptedState = createAcceptedRelease({
+    deploymentId: "safe-state",
+    request: {
+      requestId: "12345678-1234-1234-1234-123456789abc",
+      mode: "initialize",
+    },
+    target: releaseWorkflowDouble().target,
+    previousAccepted: null,
+    acceptedAt: "2026-07-30T12:00:00.000Z",
+  });
+  const stateJson = JSON.stringify({
+    ...acceptedState,
+    error: safeError,
+    migrationMayHaveChanged: true,
+  });
+  for (const secret of secrets) {
+    assert.equal(safeError.includes(secret), false);
+    assert.equal(stateJson.includes(secret), false);
+  }
+  assert.match(safeError, /\[REDACTED\]/);
 });
 
 test("requires the deployment user's exact rootless socket and enforced cgroup limits", () => {
@@ -263,6 +553,7 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
     workerEnvironment,
     migrationEnvironment,
     backupEnvironment,
+    workflow,
   ] = await Promise.all([
     source("scripts/deploy-production-runner.mjs"),
     source("scripts/lib/git-source-update.mjs"),
@@ -275,6 +566,7 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
     source("deploy/worker.env.example"),
     source("deploy/migration.env.example"),
     source("deploy/backup.env.example"),
+    source("scripts/lib/production-deploy-workflow.mjs"),
   ]);
 
   const productionContract = [
@@ -289,8 +581,8 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
   assert.match(runner, /configuredGitProxy \? \[configuredGitProxy\] : \[\]/);
   assert.match(runner, /"LUMINA_GIT_PROXY"/);
   assert.match(
-    runner,
-    /const commit = await updateSource\(\);[\s\S]+await buildImages\(target\);/,
+    workflow,
+    /await operations\.updateSource\(\);[\s\S]+await operations\.buildImages\(target\);/,
   );
 
   for (const containerInput of [
@@ -453,6 +745,7 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
     migrationEnvironment,
     backupEnvironment,
     runner,
+    workflow,
     caddy,
     tunnel,
   ] = await Promise.all([
@@ -463,6 +756,7 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
     source("deploy/migration.env.example"),
     source("deploy/backup.env.example"),
     source("scripts/deploy-production-runner.mjs"),
+    source("scripts/lib/production-deploy-workflow.mjs"),
     source("deploy/caddy/Caddyfile"),
     source("deploy/cloudflare-tunnel/config.yml.example"),
   ]);
@@ -490,7 +784,10 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
   );
   assert.match(migrationEnvironment, /crm_migrator:.*@postgres:5432\/lumina_crm/);
   assert.match(backupEnvironment, /crm_backup:.*@postgres:5432\/lumina_crm/);
-  assert.match(runner, /await buildImages\(target\);[\s\S]+await migrate\(candidateEnv\);[\s\S]+await switchApplication\(candidateEnv\)/);
+  assert.match(
+    workflow,
+    /await operations\.buildImages\(target\);[\s\S]+await operations\.migrate\(candidateEnvironment\);[\s\S]+await operations\.switchApplication\(candidateEnvironment\)/,
+  );
   assert.match(runner, /database remains on the forward schema/);
   assert.match(caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m);
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:3200/);

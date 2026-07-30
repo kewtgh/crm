@@ -19,9 +19,11 @@ import {
   classifyPersistedDeployment,
   isSystemdServiceInProgress,
   PRODUCTION_DEPLOY_LOCK_PATH,
+  validatePendingRequestForRecovery,
   validateDirectoryMetadata,
   writeExclusiveRequest,
 } from "./lib/production-deploy-core.mjs";
+import { assertReleaseModeAllowed } from "./lib/production-deploy-workflow.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const deployRoot = path.resolve("/opt/lumina-crm");
@@ -29,6 +31,7 @@ const stateRoot = path.resolve("/var/lib/lumina-crm/deployments");
 const logRoot = path.resolve("/var/log/lumina-crm/deployments");
 const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
+const acceptedPath = path.join(stateRoot, "last-success.json");
 const deployService = "lumina-crm-deploy.service";
 const terminalResults = new Set(["SUCCESS", "FAILED", "ROLLBACK_OK", "ROLLBACK_FAILED"]);
 const terminalMarkers = {
@@ -44,6 +47,9 @@ function help() {
 Usage:
   npm run deploy:production              Start and follow one safe production update
   npm run deploy:production:detach       Start an update and return after the runner accepts it
+  npm run deploy:production:initialize   Initialize a new self-hosted PostgreSQL installation
+  npm run deploy:production:initialize:detach
+                                         Start initialization and return after runner acceptance
   npm run deploy:production:status       Show the persisted deployment state
   npm run deploy:production:logs         Print the latest deployment log
   npm run deploy:production:rollback     Restore the recorded immutable application images
@@ -144,6 +150,7 @@ function printSummary(status) {
   }
   const lines = [
     `state: ${status.result ?? "UNKNOWN"}`,
+    `mode: ${status.mode ?? "unknown"}`,
     `deployment ID: ${status.deploymentId ?? "pending"}`,
     `request ID: ${status.requestId ?? "unknown"}`,
     `stage: ${status.stage ?? "unknown"}`,
@@ -201,16 +208,16 @@ async function start(mode, { detached = false } = {}) {
     if (latest?.requestId === request.requestId && terminalResults.has(latest.result)) {
       throw new Error(`Completed request ${request.requestId} could not be archived; inspect ${requestPath} before starting another deployment`);
     }
-    if (request.mode !== mode) {
-      throw new Error(`Pending ${request.mode} request ${request.requestId} must be recovered before starting ${mode}`);
-    }
-    const requestedAt = Date.parse(request.requestedAt ?? "");
-    if (!Number.isFinite(requestedAt)) throw new Error(`Pending request ${request.requestId} has an invalid timestamp`);
-    if (Date.now() - requestedAt < 5_000) {
-      throw new Error(`A production deployment request is already pending (${request.requestId})`);
-    }
+    validatePendingRequestForRecovery({ request, mode });
     process.stdout.write(`Recovering pending request ${request.requestId}\n`);
   } else {
+    if (mode === "deploy" || mode === "initialize") {
+      assertReleaseModeAllowed({
+        mode,
+        acceptedStateExists: existsSync(acceptedPath),
+        acceptedRelease: readJson(acceptedPath),
+      });
+    }
     mkdirSync(stateRoot, { recursive: true, mode: 0o750 });
     request = {
       requestId: randomUUID(),
@@ -246,13 +253,21 @@ function status() {
   const displayed = requestIsNotAccepted
     ? {
         requestId: request.requestId,
+        mode: request.mode,
         result: classification.state,
         stage: "queued",
         startedAt: request.requestedAt,
       }
     : latest;
   process.stdout.write(`controller state: ${classification.state}\n`);
-  printSummary(displayed ?? (request ? { requestId: request.requestId, result: "PENDING", stage: "queued" } : null));
+  printSummary(displayed ?? (request
+    ? {
+        requestId: request.requestId,
+        mode: request.mode,
+        result: "PENDING",
+        stage: "queued",
+      }
+    : null));
 }
 
 async function logs({ follow = false } = {}) {
@@ -281,6 +296,10 @@ function dryRun() {
   const compose = readFileSync(path.join(sourceRoot, "compose.production.yml"), "utf8");
   const dockerfile = readFileSync(path.join(sourceRoot, "Dockerfile"), "utf8");
   const runner = readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8");
+  const workflow = readFileSync(
+    path.join(sourceRoot, "scripts", "lib", "production-deploy-workflow.mjs"),
+    "utf8",
+  );
   const deployUnit = readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-deploy.service"), "utf8");
   const deployEnvironment = readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8");
   const caddy = readFileSync(path.join(sourceRoot, "deploy", "caddy", "Caddyfile"), "utf8");
@@ -292,6 +311,10 @@ function dryRun() {
     [dockerfile, /com\.lumina\.crm\.managed="true"/, "image ownership label"],
     [runner, /lumina-crm-buildkit/, "isolated BuildKit builder"],
     [runner, /apply locked forward migration/, "forward migration gate"],
+    [runner, /assertReleaseModeAllowed/, "accepted release mode gate"],
+    [workflow, /mode === "initialize"/, "explicit initialization mode"],
+    [workflow, /operations\.bootstrapDatabase/, "database bootstrap initialization step"],
+    [workflow, /operations\.bootstrapAdmin/, "administrator bootstrap initialization step"],
     [runner, /assertRootlessDockerInfo/, "rootless Docker runtime gate"],
     [runner, /Cloudflare Tunnel public liveness/, "mandatory Tunnel public liveness"],
     [deployUnit, /EnvironmentFile=\/etc\/lumina-crm\/deploy\.env/, "rootless Docker environment boundary"],
@@ -337,6 +360,9 @@ if (action === "--help" || action === "-h" || action === "help" || options.inclu
     if (action === "start") {
       assertOptions(["--detach"]);
       await start("deploy", { detached: options.includes("--detach") });
+    } else if (action === "initialize") {
+      assertOptions(["--detach"]);
+      await start("initialize", { detached: options.includes("--detach") });
     } else if (action === "status") {
       assertOptions([]);
       status();

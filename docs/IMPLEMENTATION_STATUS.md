@@ -1,10 +1,10 @@
-# Implementation status — v3.8.1 release candidate
+# Implementation status — v3.8.2 release candidate
 
 ## Scope
 
-v3.8.1 retains the production shared-host isolation and disaster-recovery evidence completed in
-v3.8.0, and replaces the public Worker/distinct-origin path with Cloudflare Tunnel to loopback
-Caddy. It does not change database schema semantics or introduce a speculative CRM module.
+v3.8.2 retains the production shared-host isolation and disaster-recovery evidence completed in
+v3.8.0, and adds a fail-closed, persistent first-install mode for the self-hosted PostgreSQL
+environment. It does not change database schema semantics or introduce a speculative CRM module.
 
 The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
 Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
@@ -24,30 +24,21 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - current Compose-only deployment core and contracts, without obsolete v3.6 release logic;
 - minimal application image script set, excluding deploy, QA, and smoke controllers;
 - Tunnel/Caddy Host, public-readiness, forwarding-header, liveness, and rollback contracts;
-- synchronized application, integration-image, package, lockfile, and documentation version 3.8.1.
+- explicit `initialize` request mode with accepted-state gates, repeat-safe recovery, bootstrap
+  credential boundaries, forward-only failure state, and first-release null rollback images;
+- synchronized application, integration-image, package, lockfile, and documentation version 3.8.2.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
-| Initial TypeScript / ESLint | Pass |
-| Initial business/security contracts | Pass: 47/47 |
-| `npm audit --audit-level=low` | Pass: 0 known vulnerabilities at execution time |
-| v3.8 targeted implementation contracts | Pass: 12/12 |
+| Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 18/18 rootless Compose/deploy contracts |
+| `npm run test:deploy:raw` | Pass: 35/35 rootless Compose/deploy contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
 | `npm run test:contracts:raw` | Pass: 44 application contracts + 6 CAPTCHA contracts |
-| `npm run db:migrations:verify` | Pass: 74 ordered checksum-managed migrations |
-| `docker compose -f compose.production.yml --profile ops config --quiet` | Pass |
-| `npm run build` | Pass: one production vinext build |
-| Chromium 1228 `08-notification` | Pass: security-channel invariant and CSRF-authenticated sign-out; identity cleanup 1/1 |
 | `git diff --check` | Pass before release commit |
-
-Chromium evidence is retained under the Git-ignored
-`work/browser-qa-chromium-1228/v380-audit/phases/08-notification/` path and records the exact
-`ms-playwright/chromium-1228` executable and browser version.
 
 ## Not performed / external release gates
 

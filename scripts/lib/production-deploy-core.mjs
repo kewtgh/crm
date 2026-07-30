@@ -65,6 +65,27 @@ export function classifyPersistedDeployment({ serviceActive, request, latest }) 
   return { state: "IDLE", deploymentId: null };
 }
 
+export function validatePendingRequestForRecovery({
+  request,
+  mode,
+  nowMs = Date.now(),
+  minimumAgeMs = 5_000,
+}) {
+  if (request.mode !== mode) {
+    throw new Error(
+      `Pending ${request.mode} request ${request.requestId} must be recovered before starting ${mode}`,
+    );
+  }
+  const requestedAt = Date.parse(request.requestedAt ?? "");
+  if (!Number.isFinite(requestedAt)) {
+    throw new Error(`Pending request ${request.requestId} has an invalid timestamp`);
+  }
+  if (nowMs - requestedAt < minimumAgeMs) {
+    throw new Error(`A production deployment request is already pending (${request.requestId})`);
+  }
+  return request;
+}
+
 export function isSystemdServiceInProgress(activeState) {
   return ["activating", "active", "reloading", "deactivating"]
     .includes(String(activeState ?? "").trim());

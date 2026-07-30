@@ -19,6 +19,16 @@ import {
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "./lib/rootless-docker.mjs";
 import { updateProductionSource } from "./lib/git-source-update.mjs";
+import {
+  acceptedReleaseMatchesRequest,
+  assertReleaseModeAllowed,
+  createAcceptedRelease,
+  extractSensitiveEnvironmentValues,
+  ProductionReleaseWorkflowError,
+  redactDeploymentSecrets,
+  releaseFailureRollbackPlan,
+  runProductionReleaseWorkflow,
+} from "./lib/production-deploy-workflow.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -56,7 +66,7 @@ mkdirSync(logRoot, { recursive: true, mode: 0o750 });
 
 const request = JSON.parse(readFileSync(requestPath, "utf8"));
 if (!/^[0-9a-f-]{36}$/i.test(request.requestId ?? "")
-  || !["deploy", "rollback"].includes(request.mode)
+  || !["deploy", "initialize", "rollback"].includes(request.mode)
   || path.resolve(request.sourceRoot ?? "") !== sourceRoot) {
   throw new Error("Deployment request is invalid");
 }
@@ -68,10 +78,14 @@ const statusPath = path.join(stateRoot, `${deploymentId}.json`);
 writeFileSync(logPath, "", { flag: "wx", mode: 0o640 });
 
 const configuredGitProxy = process.env.LUMINA_GIT_PROXY?.trim() ?? "";
-let secretValues = configuredGitProxy ? [configuredGitProxy] : [];
+const secretValues = [
+  ...(configuredGitProxy ? [configuredGitProxy] : []),
+  ...deploymentSecretValues(),
+];
 let switched = false;
 let migrationMayHaveChanged = false;
 const priorLatest = readJson(latestPath);
+const acceptedStateExists = existsSync(acceptedPath);
 let previousAccepted = readJson(acceptedPath);
 let target = null;
 let persisted = {
@@ -117,17 +131,41 @@ function persist(update = {}) {
   atomicWrite(latestPath, text);
 }
 
-function redact(value) {
-  let safe = String(value);
-  for (const secret of secretValues.filter((item) => item && item.length >= 8)) {
-    safe = safe.replaceAll(secret, "[REDACTED]");
+function deploymentSecretValues() {
+  const secretsDirectory = process.env.LUMINA_SECRETS_DIR || "/etc/lumina-crm/secrets";
+  const values = [];
+  for (const name of [
+    "production.env",
+    "worker.env",
+    "database-bootstrap.env",
+    "migration.env",
+    "bootstrap-admin.env",
+    "backup.env",
+    "restore.env",
+  ]) {
+    const secretFile = path.join(secretsDirectory, name);
+    if (!existsSync(secretFile)) continue;
     try {
-      safe = safe.replaceAll(encodeURIComponent(secret), "[REDACTED]");
+      values.push(...extractSensitiveEnvironmentValues(
+        readFileSync(secretFile, "utf8"),
+      ));
     } catch {
-      // The literal replacement remains in effect.
+      throw new Error(`Cannot safely load deployment log redactions from ${name}`);
     }
   }
-  return safe;
+  const postgresPasswordFile = path.join(secretsDirectory, "postgres-superuser-password.txt");
+  if (!existsSync(postgresPasswordFile)) return values;
+  try {
+    const postgresPassword = readFileSync(postgresPasswordFile, "utf8").trim();
+    if (postgresPassword) values.push(postgresPassword);
+  } catch {
+    throw new Error("Cannot safely load deployment log redactions from postgres-superuser-password.txt");
+  }
+  return values;
+}
+
+function redact(value) {
+  return redactDeploymentSecrets(value, secretValues);
 }
 
 function log(level, message) {
@@ -383,15 +421,32 @@ async function buildImages(release) {
   ], { timeoutMs: 900_000 });
 }
 
-async function migrate(candidateEnv) {
+async function startPostgres(candidateEnv) {
   await compose("start or verify PostgreSQL", candidateEnv, ["up", "-d", "postgres"], { timeoutMs: 180_000 });
   await waitForContainerHealth(candidateEnv, "postgres", 120_000);
+}
+
+async function bootstrapDatabase(candidateEnv) {
+  await compose("bootstrap PostgreSQL roles and extensions", candidateEnv, [
+    "--profile", "ops", "run", "--rm", "--no-deps", "db-bootstrap",
+  ]);
+}
+
+async function verifyMigrations(candidateEnv) {
   await compose("verify migration manifest", candidateEnv, [
     "--profile", "ops", "run", "--rm", "--no-deps", "migration-verify",
   ]);
-  migrationMayHaveChanged = true;
+}
+
+async function applyMigrations(candidateEnv) {
   await compose("apply locked forward migration", candidateEnv, [
     "--profile", "ops", "run", "--rm", "--no-deps", "migrate",
+  ]);
+}
+
+async function bootstrapAdmin(candidateEnv) {
+  await compose("bootstrap first CRM administrator", candidateEnv, [
+    "--profile", "ops", "run", "--rm", "--no-deps", "bootstrap-admin",
   ]);
 }
 
@@ -467,6 +522,7 @@ async function finish(result, update = {}) {
 try {
   publicHostname();
   persist();
+  log("INFO", `Accepted persistent request mode=${request.mode}`);
   if (request.mode === "rollback") {
     if (!previousAccepted?.rollbackImage || !previousAccepted?.rollbackOperationsImage) {
       throw new Error("No explicit rollback image is recorded");
@@ -484,6 +540,8 @@ try {
     const acceptedAt = new Date().toISOString();
     const accepted = {
       deploymentId,
+      requestId: request.requestId,
+      mode: request.mode,
       commit: old.rollbackCommit,
       version: old.rollbackVersion,
       currentImage: old.rollbackImage,
@@ -510,59 +568,103 @@ try {
     log("WARN", "Application rolled back; database remains on the forward schema.");
   } else {
     const interrupted = priorLatest;
-    if (interrupted?.requestId === request.requestId
-      && interrupted.applicationAccepted === true
-      && previousAccepted?.currentImage === interrupted.targetImage) {
+    if (acceptedReleaseMatchesRequest({
+      request,
+      priorLatest: interrupted,
+      acceptedRelease: previousAccepted,
+    })) {
       const cleanup = await requestCleanup(previousAccepted);
-      await finish("SUCCESS", { ...interrupted, cleanup });
-    } else {
-      await prepareBuilderAndCapacity();
-      const commit = await updateSource();
-      const packageJson = JSON.parse(readFileSync(path.join(sourceRoot, "package.json"), "utf8"));
-      target = { ...imageReferences(commit), version: String(packageJson.version) };
-      persist({
-        targetCommit: commit,
-        applicationVersion: target.version,
-        targetImage: target.currentImage,
+      if (request.mode === "initialize") {
+        log(
+          "WARN",
+          "Initialization succeeded; delete or clear ADMIN_PASSWORD in "
+          + "bootstrap-admin.env. The runner did not modify the root-owned secret file.",
+        );
+      }
+      await finish("SUCCESS", {
+        targetCommit: interrupted?.targetCommit ?? previousAccepted.commit,
+        applicationVersion: interrupted?.applicationVersion ?? previousAccepted.version,
+        targetImage: interrupted?.targetImage ?? previousAccepted.currentImage,
+        migrationMayHaveChanged: interrupted?.migrationMayHaveChanged ?? true,
+        applicationAccepted: true,
+        acceptedAt: previousAccepted.acceptedAt,
+        cleanup,
       });
-      await buildImages(target);
-      const candidateEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
-      atomicWrite(candidateEnv, composeEnvironment(target));
-      await migrate(candidateEnv);
-      await switchApplication(candidateEnv);
-      await acceptRuntime(composeEnvPath);
+    } else {
+      assertReleaseModeAllowed({
+        mode: request.mode,
+        acceptedStateExists,
+        acceptedRelease: previousAccepted,
+      });
+      const workflow = await runProductionReleaseWorkflow({
+        mode: request.mode,
+        operations: {
+          prepare: prepareBuilderAndCapacity,
+          updateSource,
+          resolveTarget: async (commit) => {
+            const packageJson = JSON.parse(readFileSync(path.join(sourceRoot, "package.json"), "utf8"));
+            target = { ...imageReferences(commit), version: String(packageJson.version) };
+            persist({
+              targetCommit: commit,
+              applicationVersion: target.version,
+              targetImage: target.currentImage,
+            });
+            return target;
+          },
+          buildImages,
+          writeCandidateEnvironment: async (release) => {
+            const candidateEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
+            atomicWrite(candidateEnv, composeEnvironment(release));
+            return candidateEnv;
+          },
+          startPostgres,
+          bootstrapDatabase,
+          verifyMigrations,
+          markMigrationMayHaveChanged: async () => {
+            migrationMayHaveChanged = true;
+            persist({ migrationMayHaveChanged });
+          },
+          migrate: applyMigrations,
+          bootstrapAdmin,
+          switchApplication,
+          acceptRuntime: async () => acceptRuntime(composeEnvPath),
+        },
+      });
+      migrationMayHaveChanged = workflow.migrationMayHaveChanged;
+      switched = workflow.switched;
+      const { candidateEnvironment: candidateEnv, commit } = workflow;
 
       const acceptedAt = new Date().toISOString();
-      const accepted = {
+      const accepted = createAcceptedRelease({
         deploymentId,
-        commit,
-        version: target.version,
-        currentImage: target.currentImage,
-        operationsImage: target.operationsImage,
-        rollbackCommit: previousAccepted?.commit ?? null,
-        rollbackVersion: previousAccepted?.version ?? null,
-        rollbackImage: previousAccepted?.currentImage ?? null,
-        rollbackOperationsImage: previousAccepted?.operationsImage ?? null,
-        recentImages: [...new Set([
-          target.currentImage,
-          target.operationsImage,
-          ...(previousAccepted?.recentImages ?? []),
-        ])].slice(0, 10),
+        request,
+        target: { ...target, commit },
+        previousAccepted,
         acceptedAt,
-        database: "FORWARD_ONLY",
-      };
+      });
       atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
       persist({ applicationAccepted: true, acceptedAt });
       const cleanup = await requestCleanup(accepted);
+      log("INFO", `Accepted immutable application image ${target.currentImage}`);
+      if (request.mode === "initialize") {
+        log(
+          "WARN",
+          "Initialization succeeded; delete or clear ADMIN_PASSWORD in "
+          + "bootstrap-admin.env. The runner did not modify the root-owned secret file.",
+        );
+      }
       await finish("SUCCESS", { applicationAccepted: true, acceptedAt, cleanup });
       rmSync(candidateEnv, { force: true });
-      log("INFO", `Accepted immutable application image ${target.currentImage}`);
     }
   }
 } catch (error) {
+  if (error instanceof ProductionReleaseWorkflowError) {
+    migrationMayHaveChanged = error.migrationMayHaveChanged;
+    switched = error.switched;
+  }
   log("ERROR", error instanceof Error ? error.message : String(error));
-  let rollback = null;
-  if (switched) {
+  let rollback = releaseFailureRollbackPlan({ switched, previousAccepted });
+  if (rollback?.status === "REQUIRED") {
     try {
       rollback = await rollbackApplication("POST_SWITCH_ACCEPTANCE_FAILED");
     } catch (rollbackError) {
