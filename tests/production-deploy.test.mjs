@@ -18,6 +18,7 @@ import {
   expectedRootlessDockerHost,
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "../scripts/lib/rootless-docker.mjs";
+import { updateProductionSource } from "../scripts/lib/git-source-update.mjs";
 import {
   backupRetentionPolicy,
   matchingEncryptedObjectsPath,
@@ -29,6 +30,32 @@ import {
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
+
+function sourceGitDouble({ fetchError } = {}) {
+  const calls = [];
+  const commit = "a".repeat(40);
+  const git = async (label, args, options = {}) => {
+    calls.push({
+      label,
+      args: [...args],
+      options: {
+        ...options,
+        environment: options.environment ? { ...options.environment } : undefined,
+      },
+    });
+    if (args[0] === "branch") return { stdout: "main" };
+    if (args[0] === "remote") return { stdout: "git@github.com:kewtgh/crm.git" };
+    if (args[0] === "status") return { stdout: "" };
+    if (args[0] === "fetch") {
+      if (fetchError) throw fetchError;
+      return { stdout: "" };
+    }
+    if (args[0] === "merge") return { stdout: "Already up to date." };
+    if (args[0] === "rev-parse") return { stdout: commit };
+    throw new Error(`Unexpected Git invocation: ${args.join(" ")}`);
+  };
+  return { calls, commit, git };
+}
 
 test("keeps controller paths and request state inside exact deployment roots", async () => {
   const root = path.resolve("deployment-state");
@@ -123,6 +150,159 @@ test("requires the deployment user's exact rootless socket and enforced cgroup l
     cgroupDriver: "none",
     dockerRoot: LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
   }), /CGROUP_V2_SYSTEMD_REQUIRED/);
+});
+
+test("configured Git proxy is used by the first and only fetch before fast-forward", async () => {
+  const configuredProxy = "http://proxy-user:proxy-password@127.0.0.1:20271";
+  const messages = [];
+  const { calls, commit, git } = sourceGitDouble();
+  const result = await updateProductionSource({
+    git,
+    baseEnvironment: {
+      SAFE_MARKER: "preserved",
+      LUMINA_GIT_PROXY: configuredProxy,
+      HTTP_PROXY: "http://inherited.invalid:1",
+      HTTPS_PROXY: "http://inherited.invalid:2",
+      ALL_PROXY: "socks5://inherited.invalid:3",
+      http_proxy: "http://lowercase.invalid:4",
+      https_proxy: "http://lowercase.invalid:5",
+      all_proxy: "socks5://lowercase.invalid:6",
+    },
+    configuredProxy,
+    allowedOrigins: new Set(["git@github.com:kewtgh/crm.git"]),
+    onConfiguredProxy: () => messages.push("Git fetch is using the configured Git proxy"),
+  });
+
+  assert.equal(result, commit);
+  const fetches = calls.filter(({ args }) => args[0] === "fetch");
+  assert.equal(fetches.length, 1);
+  assert.match(fetches[0].label, /configured Git proxy/);
+  assert.doesNotMatch(fetches[0].label, /direct/i);
+  assert.equal(fetches[0].options.environment.HTTP_PROXY, configuredProxy);
+  assert.equal(fetches[0].options.environment.HTTPS_PROXY, configuredProxy);
+  assert.equal(fetches[0].options.environment.SAFE_MARKER, "preserved");
+  for (const key of [
+    "LUMINA_GIT_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+  ]) {
+    assert.equal(Object.hasOwn(fetches[0].options.environment, key), false);
+  }
+  assert.deepEqual(
+    calls.find(({ args }) => args[0] === "merge")?.args,
+    ["merge", "--ff-only", "origin/main"],
+  );
+  assert.equal(messages.join("\n").includes(configuredProxy), false);
+});
+
+test("unconfigured Git proxy performs one direct fetch without retry", async () => {
+  let proxyAnnouncements = 0;
+  const { calls, git } = sourceGitDouble();
+  await updateProductionSource({
+    git,
+    baseEnvironment: {
+      HTTP_PROXY: "http://inherited.invalid:1",
+      HTTPS_PROXY: "http://inherited.invalid:2",
+    },
+    configuredProxy: "  ",
+    allowedOrigins: new Set(["git@github.com:kewtgh/crm.git"]),
+    onConfiguredProxy: () => { proxyAnnouncements += 1; },
+  });
+
+  const fetches = calls.filter(({ args }) => args[0] === "fetch");
+  assert.equal(fetches.length, 1);
+  assert.match(fetches[0].label, /directly/);
+  assert.equal(proxyAnnouncements, 0);
+  assert.equal(Object.hasOwn(fetches[0].options.environment, "HTTP_PROXY"), false);
+  assert.equal(Object.hasOwn(fetches[0].options.environment, "HTTPS_PROXY"), false);
+});
+
+test("failed Git fetch is redacted and stops before worktree or deployment changes", async () => {
+  const configuredProxy = "http://proxy-user:proxy-password@127.0.0.1:20271";
+  const messages = [];
+  const { calls, git } = sourceGitDouble({
+    fetchError: new Error(`unable to reach ${configuredProxy}`),
+  });
+  await assert.rejects(
+    () => updateProductionSource({
+      git,
+      baseEnvironment: { LUMINA_GIT_PROXY: configuredProxy },
+      configuredProxy,
+      allowedOrigins: new Set(["git@github.com:kewtgh/crm.git"]),
+      onConfiguredProxy: () => messages.push("Git fetch is using the configured Git proxy"),
+    }),
+    (error) => {
+      assert.match(error.message, /configured Git proxy failed; source update stopped/);
+      assert.equal(error.message.includes(configuredProxy), false);
+      return true;
+    },
+  );
+
+  assert.deepEqual(calls.map(({ args }) => args[0]), [
+    "branch",
+    "remote",
+    "status",
+    "fetch",
+  ]);
+  assert.equal(calls.some(({ args }) => args.includes("config")), false);
+  assert.equal(messages.join("\n").includes(configuredProxy), false);
+});
+
+test("Git proxy production contract is canonical, redacted, and container-isolated", async () => {
+  const [
+    runner,
+    sourceUpdate,
+    deploymentController,
+    deployEnvironment,
+    deploymentDocumentation,
+    compose,
+    dockerfile,
+    productionEnvironment,
+    workerEnvironment,
+    migrationEnvironment,
+    backupEnvironment,
+  ] = await Promise.all([
+    source("scripts/deploy-production-runner.mjs"),
+    source("scripts/lib/git-source-update.mjs"),
+    source("scripts/deploy-production.mjs"),
+    source("deploy/deploy.env.example"),
+    source("docs/DEPLOYMENT.md"),
+    source("compose.production.yml"),
+    source("Dockerfile"),
+    source("deploy/production.env.example"),
+    source("deploy/worker.env.example"),
+    source("deploy/migration.env.example"),
+    source("deploy/backup.env.example"),
+  ]);
+
+  const productionContract = [
+    runner,
+    sourceUpdate,
+    deploymentController,
+    deployEnvironment,
+    deploymentDocumentation,
+  ].join("\n");
+  assert.doesNotMatch(productionContract, /LUMINA_GIT_FALLBACK_PROXY/);
+  assert.match(deployEnvironment, /^LUMINA_GIT_PROXY=http:\/\/127\.0\.0\.1:20271$/m);
+  assert.match(runner, /configuredGitProxy \? \[configuredGitProxy\] : \[\]/);
+  assert.match(runner, /"LUMINA_GIT_PROXY"/);
+  assert.match(
+    runner,
+    /const commit = await updateSource\(\);[\s\S]+await buildImages\(target\);/,
+  );
+
+  for (const containerInput of [
+    compose,
+    dockerfile,
+    productionEnvironment,
+    workerEnvironment,
+    migrationEnvironment,
+    backupEnvironment,
+  ]) {
+    assert.doesNotMatch(containerInput, /LUMINA_GIT_PROXY/);
+  }
 });
 
 test("validates explicit remote and local backup retention and pairs object archives", () => {
