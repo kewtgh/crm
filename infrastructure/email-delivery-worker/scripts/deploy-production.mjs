@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { parseEnv } from "node:util";
+import { lstat, readFile, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
+import path from "node:path";
+import { parseEnv } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import {
   parseHttpsUrl,
@@ -13,7 +13,7 @@ import {
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workerDirectory = path.resolve(scriptDirectory, "..");
-const defaultEnvFile = path.join(workerDirectory, ".env.production.local");
+export const DEFAULT_PRODUCTION_ENV_FILE = "/etc/lumina-crm/secrets/email-worker-deploy.env";
 const dryRunOutputDirectory = path.join(workerDirectory, ".wrangler", "production-dry-run");
 const supportedKeys = new Set([
   "WORKER_NAME",
@@ -27,16 +27,8 @@ const supportedKeys = new Set([
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_API_TOKEN",
 ]);
-const requiredKeys = [
-  "WORKER_NAME",
-  "WORKER_PUBLIC_BASE_URL",
-  "CRM_APP_URL",
-  "EMAIL_FROM",
-  "EMAIL_BRAND_NAME",
-  "DELIVERY_PATH",
-  "HEALTH_PATH",
-];
-const placeholderWords = /(?:^|[._\s-])(example|placeholder|replace|change-me)(?:$|[._\s-])/i;
+const requiredKeys = [...supportedKeys].filter((key) => key !== "EMAIL_REPLY_TO");
+const placeholderWords = /(?:^|[._\s/-])(example|placeholder|replace|change-me)(?:$|[._\s/-])/i;
 const require = createRequire(import.meta.url);
 
 export class ProductionConfigurationError extends Error {
@@ -70,14 +62,12 @@ function mailboxDomain(value) {
 }
 
 function validateAuthentication(values) {
-  if (values.CLOUDFLARE_ACCOUNT_ID
-    && !/^[a-f0-9]{32}$/i.test(values.CLOUDFLARE_ACCOUNT_ID)) {
+  if (!/^[a-f0-9]{32}$/i.test(values.CLOUDFLARE_ACCOUNT_ID)) {
     fail("CLOUDFLARE_ACCOUNT_ID_INVALID");
   }
-  if (values.CLOUDFLARE_API_TOKEN
-    && (values.CLOUDFLARE_API_TOKEN.length < 20
-      || values.CLOUDFLARE_API_TOKEN.length > 512
-      || /\s/.test(values.CLOUDFLARE_API_TOKEN))) {
+  if (values.CLOUDFLARE_API_TOKEN.length < 20
+    || values.CLOUDFLARE_API_TOKEN.length > 512
+    || /\s/.test(values.CLOUDFLARE_API_TOKEN)) {
     fail("CLOUDFLARE_API_TOKEN_INVALID");
   }
 }
@@ -93,31 +83,29 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
   if (!/^[a-z0-9](?:[a-z0-9-]{0,253}[a-z0-9])?$/.test(values.WORKER_NAME)) {
     fail("WORKER_NAME_INVALID");
   }
-  if (!allowTestValues && placeholderWords.test(values.WORKER_NAME)) {
-    fail("WORKER_NAME_PLACEHOLDER");
-  }
 
   const publicBaseUrl = parseHttpsUrl(values.WORKER_PUBLIC_BASE_URL, { originOnly: true });
   const applicationUrl = parseHttpsUrl(values.CRM_APP_URL);
   if (!publicBaseUrl) fail("WORKER_PUBLIC_BASE_URL_INVALID");
   if (!applicationUrl) fail("CRM_APP_URL_INVALID");
-  if (!allowTestValues
-    && (placeholderHostname(publicBaseUrl.hostname)
-      || placeholderHostname(applicationUrl.hostname))) {
-    fail("URL_PLACEHOLDER_FORBIDDEN");
+  if (!allowTestValues && (
+    [...supportedKeys].some((key) => values[key] && placeholderWords.test(values[key]))
+    || placeholderHostname(publicBaseUrl.hostname)
+    || placeholderHostname(applicationUrl.hostname)
+  )) {
+    fail("PLACEHOLDER_FORBIDDEN");
   }
   if (!validMailbox(values.EMAIL_FROM)) fail("EMAIL_FROM_INVALID");
   if (values.EMAIL_REPLY_TO && !validMailbox(values.EMAIL_REPLY_TO)) {
     fail("EMAIL_REPLY_TO_INVALID");
   }
-  if (!allowTestValues
-    && (placeholderHostname(mailboxDomain(values.EMAIL_FROM))
-      || (values.EMAIL_REPLY_TO && placeholderHostname(mailboxDomain(values.EMAIL_REPLY_TO))))) {
+  if (!allowTestValues && (
+    placeholderHostname(mailboxDomain(values.EMAIL_FROM))
+    || (values.EMAIL_REPLY_TO && placeholderHostname(mailboxDomain(values.EMAIL_REPLY_TO)))
+  )) {
     fail("EMAIL_PLACEHOLDER_FORBIDDEN");
   }
-  if (!values.EMAIL_BRAND_NAME
-    || values.EMAIL_BRAND_NAME.length > 120
-    || /[\r\n]/.test(values.EMAIL_BRAND_NAME)) {
+  if (values.EMAIL_BRAND_NAME.length > 120 || /[\r\n]/.test(values.EMAIL_BRAND_NAME)) {
     fail("EMAIL_BRAND_NAME_INVALID");
   }
   if (!validRoutePath(values.DELIVERY_PATH)
@@ -134,10 +122,54 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
   };
 }
 
-export async function loadProductionValues(
-  envFile = defaultEnvFile,
-  options = {},
-) {
+function gidForGroup(groupFileContents, groupName) {
+  for (const line of groupFileContents.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const [name, , gid] = line.split(":");
+    if (name === groupName && /^\d+$/.test(gid)) return Number(gid);
+  }
+  fail("PRODUCTION_ENV_GROUP_UNAVAILABLE");
+}
+
+export async function validateProductionEnvFile(envFile, {
+  lstatImplementation = lstat,
+  statImplementation = stat,
+  readFileImplementation = readFile,
+  groupFile = "/etc/group",
+} = {}) {
+  let fileStatus;
+  try {
+    fileStatus = await lstatImplementation(envFile);
+  } catch (error) {
+    if (error?.code === "ENOENT") fail("PRODUCTION_ENV_FILE_MISSING");
+    fail("PRODUCTION_ENV_FILE_UNREADABLE");
+  }
+  if (fileStatus.isSymbolicLink()) fail("PRODUCTION_ENV_FILE_SYMLINK_FORBIDDEN");
+  if (!fileStatus.isFile()) fail("PRODUCTION_ENV_FILE_NOT_REGULAR");
+  if (fileStatus.uid !== 0) fail("PRODUCTION_ENV_FILE_OWNER_INVALID");
+  if ((fileStatus.mode & 0o777 & ~0o640) !== 0) fail("PRODUCTION_ENV_FILE_MODE_TOO_OPEN");
+
+  let groupContents;
+  try {
+    groupContents = await readFileImplementation(groupFile, "utf8");
+  } catch {
+    fail("PRODUCTION_ENV_GROUP_UNAVAILABLE");
+  }
+  if (fileStatus.gid !== gidForGroup(groupContents, "lumina-crm")) {
+    fail("PRODUCTION_ENV_FILE_GROUP_INVALID");
+  }
+
+  let parentStatus;
+  try {
+    parentStatus = await statImplementation(path.dirname(envFile));
+  } catch {
+    fail("PRODUCTION_ENV_DIRECTORY_UNREADABLE");
+  }
+  if (!parentStatus.isDirectory()) fail("PRODUCTION_ENV_DIRECTORY_INVALID");
+  if ((parentStatus.mode & 0o004) !== 0) fail("PRODUCTION_ENV_DIRECTORY_WORLD_READABLE");
+}
+
+export async function loadProductionValues(envFile, options = {}) {
   let contents;
   try {
     contents = await readFile(envFile, "utf8");
@@ -172,9 +204,7 @@ export function buildWranglerArguments(configuration, { dryRun = false } = {}) {
     ["DELIVERY_PATH", configuration.DELIVERY_PATH],
     ["HEALTH_PATH", configuration.HEALTH_PATH],
   ];
-  if (configuration.EMAIL_REPLY_TO) {
-    variables.push(["EMAIL_REPLY_TO", configuration.EMAIL_REPLY_TO]);
-  }
+  if (configuration.EMAIL_REPLY_TO) variables.push(["EMAIL_REPLY_TO", configuration.EMAIL_REPLY_TO]);
   const args = [
     wranglerExecutable(),
     "deploy",
@@ -185,16 +215,8 @@ export function buildWranglerArguments(configuration, { dryRun = false } = {}) {
     "--keep-vars",
     "--strict",
   ];
-  for (const [key, value] of variables) {
-    args.push("--var", `${key}:${value}`);
-  }
-  if (dryRun) {
-    args.push(
-      "--dry-run",
-      "--outdir",
-      dryRunOutputDirectory,
-    );
-  }
+  for (const [key, value] of variables) args.push("--var", `${key}:${value}`);
+  if (dryRun) args.push("--dry-run", "--outdir", dryRunOutputDirectory);
   return args;
 }
 
@@ -202,8 +224,10 @@ function sanitizedOutput(value, configuration) {
   const redactions = [
     configuration.CLOUDFLARE_API_TOKEN,
     configuration.CLOUDFLARE_ACCOUNT_ID,
+    configuration.WORKER_NAME,
     configuration.WORKER_PUBLIC_BASE_URL,
     configuration.CRM_APP_URL,
+    configuration.CRM_APP_URL.replace(/\/$/, ""),
     configuration.EMAIL_FROM,
     configuration.EMAIL_REPLY_TO,
     configuration.EMAIL_BRAND_NAME,
@@ -220,10 +244,8 @@ async function runWrangler(configuration, { dryRun, spawnImplementation = spawn 
   const childEnvironment = { ...process.env };
   delete childEnvironment.LUMINA_WEBHOOK_TOKEN;
   delete childEnvironment.RESEND_API_KEY;
-  for (const key of ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"]) {
-    if (configuration[key]) childEnvironment[key] = configuration[key];
-    else delete childEnvironment[key];
-  }
+  childEnvironment.CLOUDFLARE_ACCOUNT_ID = configuration.CLOUDFLARE_ACCOUNT_ID;
+  childEnvironment.CLOUDFLARE_API_TOKEN = configuration.CLOUDFLARE_API_TOKEN;
 
   await new Promise((resolve, reject) => {
     const child = spawnImplementation(process.execPath, args, {
@@ -246,9 +268,7 @@ async function runWrangler(configuration, { dryRun, spawnImplementation = spawn 
     child.on("error", () => reject(new Error("WRANGLER_START_FAILED")));
     child.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(
-        `WRANGLER_FAILED\n${sanitizedOutput(output, configuration).slice(-8_000)}`,
-      ));
+      else reject(new Error(`WRANGLER_FAILED\n${sanitizedOutput(output, configuration).slice(-8_000)}`));
     });
   });
 }
@@ -267,20 +287,25 @@ async function verifyHealth(configuration, fetchImplementation = globalThis.fetc
     throw new Error("HEALTH_CHECK_UNAVAILABLE");
   }
   const body = await response.json().catch(() => null);
-  if (response.status !== 200
-    || body?.status !== "ok"
-    || body?.service !== "lumina-email-delivery") {
+  if (response.status !== 200 || body?.status !== "ok" || body?.service !== "lumina-email-delivery") {
     throw new Error("HEALTH_CHECK_FAILED");
   }
 }
 
 export async function runDeployment({
   dryRun = false,
-  envFile = defaultEnvFile,
-  allowTestValues = false,
+  envFile = dryRun ? undefined : DEFAULT_PRODUCTION_ENV_FILE,
+  allowTestValues = dryRun,
+  platform = process.platform,
   fetchImplementation = globalThis.fetch,
   spawnImplementation = spawn,
+  validateEnvFileImplementation = validateProductionEnvFile,
 } = {}) {
+  if (!dryRun && platform !== "linux") fail("PRODUCTION_DEPLOY_REQUIRES_LINUX");
+  if (!envFile) fail("DRY_RUN_ENV_FILE_REQUIRED");
+  if (!path.isAbsolute(envFile)) fail("ENV_FILE_PATH_MUST_BE_ABSOLUTE");
+  if (!dryRun) await validateEnvFileImplementation(envFile);
+
   const configuration = await loadProductionValues(envFile, { allowTestValues });
   try {
     await runWrangler(configuration, { dryRun, spawnImplementation });
@@ -291,12 +316,31 @@ export async function runDeployment({
   return { dryRun, workerName: configuration.WORKER_NAME };
 }
 
+export function parseArguments(argumentsList) {
+  let dryRun = false;
+  let envFile;
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index];
+    if (argument === "--dry-run") {
+      if (dryRun) fail("ARGUMENT_UNSUPPORTED");
+      dryRun = true;
+    } else if (argument === "--env-file") {
+      if (envFile || !argumentsList[index + 1]) fail("ARGUMENT_UNSUPPORTED");
+      envFile = argumentsList[index + 1];
+      index += 1;
+    } else {
+      fail("ARGUMENT_UNSUPPORTED");
+    }
+  }
+  if (dryRun && !envFile) fail("DRY_RUN_ENV_FILE_REQUIRED");
+  if (envFile && !path.isAbsolute(envFile)) fail("ENV_FILE_PATH_MUST_BE_ABSOLUTE");
+  return { dryRun, envFile: envFile ?? DEFAULT_PRODUCTION_ENV_FILE };
+}
+
 async function main() {
-  const unknownArguments = process.argv.slice(2).filter((argument) => argument !== "--dry-run");
-  if (unknownArguments.length > 0) fail("ARGUMENT_UNSUPPORTED");
-  const dryRun = process.argv.includes("--dry-run");
-  await runDeployment({ dryRun });
-  process.stdout.write(dryRun
+  const options = parseArguments(process.argv.slice(2));
+  await runDeployment(options);
+  process.stdout.write(options.dryRun
     ? "Worker production dry-run completed without upload.\n"
     : "Worker deployment and health check completed.\n");
 }

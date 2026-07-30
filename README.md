@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.4**
+Current release candidate: **v3.8.5**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -93,11 +93,15 @@ capacity planning must account for all enabled categories. Mail providers must h
 
 Production email delivery is isolated in
 [`infrastructure/email-delivery-worker`](infrastructure/email-delivery-worker/README.md). The
-generic Cloudflare Worker reads its public base URL, application URL, sender, brand, delivery path,
-and health path only from an ignored local production Env file and runtime bindings. The tracked
+generic Cloudflare Worker is developed and tested on Windows, but Windows never stores its real
+name, domain, URL, sender, Cloudflare account ID/API token, or any production Env and never performs
+a production Wrangler deployment. Ubuntu alone stores production deployment configuration at
+`/etc/lumina-crm/secrets/email-worker-deploy.env`, pulls the audited commit, runs the explicit
+dry-run, deploys the existing Worker in place, and checks only its health endpoint. The tracked
 Wrangler configuration contains no Worker name, domain, route, account ID, sender, or production
-URL; Custom Domain routing remains Dashboard-managed. The adapter renders nine explicit templates
-and calls Resend without exposing its API key to the CRM server.
+URL; Custom Domain routing and the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` bindings
+remain Dashboard-managed. CRM application initialization and email Worker deployment are separate
+stages.
 
 ## Verification and deployment
 

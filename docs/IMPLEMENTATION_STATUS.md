@@ -1,11 +1,12 @@
-# Implementation status — v3.8.4 release candidate
+# Implementation status — v3.8.5 release candidate
 
 ## Scope
 
-v3.8.4 retains the production shared-host isolation and persistent first-install flow, and makes
-the repository email adapter fully local-Env-driven. Public source no longer identifies the
-production Worker, Custom Domain, CRM hostname, sender domain, webhook URL, or route. It does not
-change database schema semantics or add a CRM Web mail route.
+v3.8.5 retains the production shared-host isolation and persistent first-install flow, and corrects
+the email Worker environment boundary. Windows is development-only and holds no production Worker
+configuration or Cloudflare credentials; Ubuntu alone stores the server Env, performs the in-place
+deployment, and verifies health. Public source does not identify the production Worker, Custom
+Domain, CRM hostname, sender domain, webhook URL, route, or Cloudflare account.
 
 The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
 Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
@@ -32,24 +33,28 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   logs;
 - a generic tracked Wrangler contract with `workers.dev` disabled, no route/name/production vars,
   Dashboard-managed Custom Domain routing, and two declared required secret binding names;
-- a cross-platform Node production controller with ignored local Env validation, strict
-  route-free deployment, no-upload dry-run, redacted child output, and generic health acceptance;
-- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.4.
+- a Linux-only Node production controller using the fixed root-owned Ubuntu Env contract, strict
+  route-free deployment, no-upload cross-platform fictitious dry-run, redacted child output, and
+  generic health acceptance;
+- explicit separation between CRM application initialization and email Worker deployment;
+- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.5.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
-| Email delivery Worker `npm ci` | Pass: 0 installed dependency vulnerabilities |
+| Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 3 high-severity development-dependency advisories |
 | Email delivery Worker `npm test` | Pass: 61/61 |
-| Email delivery Worker `npm run test:deployment` | Pass: 20/20, including no-upload Wrangler dry-run |
+| Email delivery Worker `npm run test:deployment` | Pass: 28/28, including no-upload Wrangler dry-run, Ubuntu Env permission contracts, and full output redaction |
 | Email delivery Worker `npm run lint` | Pass |
+| Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
 | `npm run test:deploy:raw` | Pass: 35/35 rootless Compose/deploy contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
 | `npm run test:contracts:raw` | Pass: 44 application contracts + 6 CAPTCHA contracts |
+| Tracked-tree production identifier / retired Env / deployment-command scans | Pass |
 | `git diff --check` | Pass before release commit |
 
 ## Not performed / external release gates

@@ -1,9 +1,11 @@
 # Lumina email delivery Worker
 
 This directory contains the generic, independently deployed Cloudflare Worker that adapts Lumina's
-internal delivery protocol to Resend. Public source contains no production Worker name, hostname,
-sender, route, account identifier, or deployment URL. All production-specific values come from a
-local, ignored Env file and existing Cloudflare bindings.
+internal delivery protocol to Resend. Windows is the development environment: it may edit source,
+run tests and lint, and run a no-upload dry-run with an explicit fictitious fixture. It must not
+hold production identifiers or Cloudflare credentials and must not perform a production deploy.
+Ubuntu is the production environment and is the only place that stores deployment configuration,
+holds Cloudflare deployment credentials, deploys the existing Worker in place, and checks health.
 
 ## Runtime bindings
 
@@ -30,48 +32,33 @@ plaintext production variables. It disables `workers.dev`, preserves remote plai
 and declares only the two required secret binding names. Custom Domain routing remains managed in
 Cloudflare Dashboard.
 
-## Local production configuration
+## Ubuntu production configuration
 
-Copy the empty tracked template to the ignored local filename:
+After Windows development has pushed an audited commit, Ubuntu pulls that exact commit and installs
+`deploy/email-worker-deploy.env.example` as:
 
-```sh
-cd infrastructure/email-delivery-worker
-cp .env.production.example .env.production.local
+```text
+/etc/lumina-crm/secrets/email-worker-deploy.env
 ```
 
-PowerShell equivalent:
+Create `/etc/lumina-crm/secrets` as `root:lumina-crm` with mode `0750`. The installed file must be
+owned by `root:lumina-crm`, have mode `0640`, never be world-readable, and never be tracked by Git.
+All real values are filled only on the Ubuntu production server. `CLOUDFLARE_API_TOKEN` is a
+production deployment secret; `CLOUDFLARE_ACCOUNT_ID` is not a password but remains server-only.
+The controller never prints Worker names, URLs, mailboxes, paths, account IDs, or tokens.
 
-```powershell
-Set-Location infrastructure/email-delivery-worker
-Copy-Item .env.production.example .env.production.local
-```
+Do not add `LUMINA_WEBHOOK_TOKEN` or `RESEND_API_KEY` to this file. They remain exclusively in the
+existing Cloudflare Worker secret bindings. Deployment code does not read, upload, replace, or
+delete either runtime secret. It also does not read the CRM server's `worker.env`.
 
-Fill `.env.production.local` locally:
-
-```dotenv
-WORKER_NAME=
-WORKER_PUBLIC_BASE_URL=
-CRM_APP_URL=
-EMAIL_FROM=
-EMAIL_REPLY_TO=
-EMAIL_BRAND_NAME=
-DELIVERY_PATH=
-HEALTH_PATH=
-CLOUDFLARE_ACCOUNT_ID=
-CLOUDFLARE_API_TOKEN=
-```
-
-The final two Wrangler authentication values are optional. Do not place
-`LUMINA_WEBHOOK_TOKEN` or `RESEND_API_KEY` in this file: production secrets remain in Cloudflare
-Dashboard and are neither read nor uploaded by the deployment controller.
-
-The controller rejects missing values, placeholder domains, non-HTTPS URLs, invalid mailboxes,
-invalid paths, unsupported Env keys, and invalid optional Cloudflare authentication values. It
-does not print local emails, URLs, paths, tokens, or account IDs.
+The controller fails closed unless the Env is a regular non-symlink file, owned by root, assigned
+to the `lumina-crm` group, no more permissive than `0640`, and located under a parent directory that
+is not world-readable. It rejects missing values, placeholders, non-HTTPS URLs, invalid Worker
+names or mailboxes, invalid/equal paths, unsupported keys, and invalid Cloudflare authentication.
 
 ## Verification and deployment
 
-Install and verify:
+On Windows, install and verify development source:
 
 ```sh
 npm ci
@@ -80,17 +67,33 @@ npm run test:deployment
 npm run lint
 ```
 
-Validate, bundle, and perform a Wrangler dry-run without uploading or changing Dashboard state:
+Windows dry-run tests must use an absolute path to a completely fictitious temporary Env file:
 
 ```sh
-npm run deploy:production:dry-run
+npm run deploy:production:dry-run -- --env-file <absolute-test-file>
 ```
 
-After confirming the local Worker name matches the existing Dashboard Worker, deploy with:
+The dry-run requires `--dry-run`, creates no upload, skips the production health endpoint, and
+removes its generated bundle. It never falls back to a repository or current-directory Env file.
+
+On Ubuntu, after pulling and reviewing the intended commit, operators may validate the real
+server-only configuration without upload:
+
+```sh
+npm run deploy:production:dry-run -- \
+  --env-file /etc/lumina-crm/secrets/email-worker-deploy.env
+```
+
+Only Ubuntu may perform the production deployment. The default Env path is fixed, so no argument
+is needed:
 
 ```sh
 npm run deploy:production
 ```
+
+Non-Linux production execution fails with `PRODUCTION_DEPLOY_REQUIRES_LINUX`. `--env-file` is
+accepted only with an absolute path for controlled operations; there is no current-directory
+search or inferred deployment workspace.
 
 The Node controller always passes `--name`, `--keep-vars`, and `--strict`, sends only the six
 plaintext Worker bindings through Wrangler, and never passes a route, Custom Domain, or secret. A
@@ -101,8 +104,8 @@ Do not run secret upload/delete commands during a routine code deployment. If a 
 missing, the declared Wrangler secret contract fails the deployment; restore it through the
 approved Cloudflare operator procedure.
 
-For the CRM host, construct `EMAIL_DELIVERY_WEBHOOK_URL` from the locally configured
-`WORKER_PUBLIC_BASE_URL` and `DELIVERY_PATH`. Its root-owned
+CRM application initialization and email Worker deployment are separate stages. On the CRM host,
+construct `EMAIL_DELIVERY_WEBHOOK_URL` from the server-side Worker base URL and delivery path. Its root-owned
 `EMAIL_DELIVERY_WEBHOOK_TOKEN` must match the Worker's `LUMINA_WEBHOOK_TOKEN`. Never place either
 production value in Git or documentation.
 
