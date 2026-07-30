@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.4.0 最终遗漏复审
+# Lumina CRM v2.4.0 最终遗漏复审
 
 > **Archived / obsolete production architecture:** this point-in-time review predates the v3.7
 > Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.

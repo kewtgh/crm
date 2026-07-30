@@ -284,7 +284,7 @@ function dryRun() {
   const deployUnit = readFileSync(path.join(sourceRoot, "deploy", "systemd", "lumina-crm-deploy.service"), "utf8");
   const deployEnvironment = readFileSync(path.join(sourceRoot, "deploy", "deploy.env.example"), "utf8");
   const caddy = readFileSync(path.join(sourceRoot, "deploy", "caddy", "Caddyfile"), "utf8");
-  const worker = readFileSync(path.join(sourceRoot, "deploy", "cloudflare-worker", "src", "index.mjs"), "utf8");
+  const tunnel = readFileSync(path.join(sourceRoot, "deploy", "cloudflare-tunnel", "config.yml.example"), "utf8");
   const required = [
     [compose, /name: \$\{LUMINA_COMPOSE_PROJECT:-lumina-crm\}/, "fixed Compose project"],
     [compose, /127\.0\.0\.1:3200/, "loopback Web publication"],
@@ -293,10 +293,16 @@ function dryRun() {
     [runner, /lumina-crm-buildkit/, "isolated BuildKit builder"],
     [runner, /apply locked forward migration/, "forward migration gate"],
     [runner, /assertRootlessDockerInfo/, "rootless Docker runtime gate"],
+    [runner, /Cloudflare Tunnel public liveness/, "mandatory Tunnel public liveness"],
     [deployUnit, /EnvironmentFile=\/etc\/lumina-crm\/deploy\.env/, "rootless Docker environment boundary"],
     [deployEnvironment, /DOCKER_HOST=unix:\/\/\/run\/user\/1001\/docker\.sock/, "rootless Docker socket template"],
-    [caddy, /X-Lumina-Origin-Auth/, "origin authentication"],
-    [worker, /cacheEverything: false/, "Worker no-cache contract"],
+    [caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m, "loopback Caddy Tunnel listener"],
+    [caddy, /@public_host host \{\$LUMINA_PUBLIC_HOSTNAME\}/, "Caddy public Host allowlist"],
+    [caddy, /respond @detailed_readiness 404/, "public readiness rejection"],
+    [caddy, /header_up X-Forwarded-For \{http\.request\.header\.CF-Connecting-IP\}/, "trusted client IP reconstruction"],
+    [caddy, /reverse_proxy 127\.0\.0\.1:3200/, "Caddy Web proxy"],
+    [tunnel, /service: http:\/\/127\.0\.0\.1:3211/, "Cloudflare Tunnel ingress"],
+    [tunnel, /service: http_status:404/, "Cloudflare Tunnel catch-all"],
   ];
   const missing = required.filter(([text, pattern]) => !pattern.test(text)).map(([, , label]) => label);
   if (missing.length) throw new Error(`Deployment assets are incomplete: ${missing.join(", ")}`);
@@ -311,7 +317,7 @@ BuildKit builder: lumina-crm-buildkit (fixed root-owned program, non-root mainte
 Docker daemon: dedicated lumina-crm rootless user service; rootful fallback forbidden
 storage report: /var/lib/lumina-crm/storage-maintenance/latest.json
 local health: http://127.0.0.1:3200/api/health
-public health: configured LUMINA_PUBLIC_HEALTH_URL through Cloudflare Worker
+public health: https://<LUMINA_PUBLIC_HOSTNAME>/api/health through Cloudflare Tunnel
 Database migrations: project-owned PostgreSQL chain in db/migrations
 No files, services, images, containers, databases, or network resources were changed.
 `);

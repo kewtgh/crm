@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.3.0 补充整改计划
+# Lumina CRM v2.3.0 补充整改计划
 
 > **Archived / obsolete production architecture:** this point-in-time plan predates the v3.7
 > Docker Compose deployment. Use `docs/DEPLOYMENT.md` for current production operations.

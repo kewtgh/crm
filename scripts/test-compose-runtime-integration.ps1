@@ -1,7 +1,7 @@
 param(
   [string]$Suffix = ([guid]::NewGuid().ToString("N").Substring(0, 10)),
-  [string]$ApplicationImage = "lumina-crm-validation:3.8.0",
-  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.0"
+  [string]$ApplicationImage = "lumina-crm-validation:3.8.1",
+  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,8 +16,8 @@ $postgresVolume = "$project-postgres-data"
 $objectsVolume = "$project-objects"
 $backupsVolume = "$project-backups"
 $secretRoot = Join-Path $repositoryRoot "work\$project-secrets"
-$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.0"
-$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.0"
+$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.1"
+$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.1"
 $workspaceId = "00000000-0000-4000-8000-000000000001"
 
 foreach ($value in @($project, $backendNetwork, $edgeNetwork, $postgresVolume, $objectsVolume, $backupsVolume)) {
@@ -135,7 +135,7 @@ DATABASE_SSL=false
 "@
   Write-SecretFile "bootstrap-admin.env" @"
 SYSTEM_DATABASE_URL=postgresql://crm_system:$systemPassword@postgres:5432/lumina_crm
-ADMIN_EMAIL=runtime-$Suffix@ewaya.com
+ADMIN_EMAIL=runtime-$Suffix@example.com
 ADMIN_PASSWORD=$(New-TestSecret)
 ADMIN_USERNAME=runtime.$Suffix
 CRM_WORKSPACE_ID=$workspaceId
@@ -173,7 +173,7 @@ CRM_WORKSPACE_ID=$workspaceId
 WORKER_ID=runtime-$Suffix
 OBJECT_STORAGE_PROVIDER=local
 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/lumina-crm/objects
-EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.ewaya.com/crm-delivery
+EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.com/crm-delivery
 EMAIL_DELIVERY_WEBHOOK_TOKEN=$(New-TestSecret)
 WORKER_JOB_CONCURRENCY=4
 OUTBOX_BATCH_SIZE=20

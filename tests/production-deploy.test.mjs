@@ -274,7 +274,7 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
     backupEnvironment,
     runner,
     caddy,
-    cloudflareWorker,
+    tunnel,
   ] = await Promise.all([
     source("compose.production.yml"),
     source("Dockerfile"),
@@ -284,7 +284,7 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
     source("deploy/backup.env.example"),
     source("scripts/deploy-production-runner.mjs"),
     source("deploy/caddy/Caddyfile"),
-    source("deploy/cloudflare-worker/src/index.mjs"),
+    source("deploy/cloudflare-tunnel/config.yml.example"),
   ]);
   assert.match(compose, /^name: \$\{LUMINA_COMPOSE_PROJECT:-lumina-crm\}$/m);
   assert.match(compose, /image: postgres:18\.4-bookworm/);
@@ -312,8 +312,11 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
   assert.match(backupEnvironment, /crm_backup:.*@postgres:5432\/lumina_crm/);
   assert.match(runner, /await buildImages\(target\);[\s\S]+await migrate\(candidateEnv\);[\s\S]+await switchApplication\(candidateEnv\)/);
   assert.match(runner, /database remains on the forward schema/);
-  assert.match(caddy, /X-Lumina-Origin-Auth/);
-  assert.match(cloudflareWorker, /cacheEverything: false/);
+  assert.match(caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m);
+  assert.match(caddy, /reverse_proxy 127\.0\.0\.1:3200/);
+  assert.doesNotMatch(caddy, /Origin-Auth|ORIGIN_AUTH_SECRET/);
+  assert.match(tunnel, /service: http:\/\/127\.0\.0\.1:3211/);
+  assert.match(tunnel, /service: http_status:404/);
 });
 
 test("restore verification includes matching encrypted local objects without extracting them", async () => {

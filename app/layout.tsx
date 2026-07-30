@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = translate(locale, "meta.description");
   return {
     metadataBase: baseUrl,
-    title: { default: "Lumina Education CRM", template: "%s · Lumina CRM" },
+    title: { default: "Lumina CRM", template: "%s · Lumina CRM" },
     description,
     icons: {
       icon: [
@@ -29,12 +29,12 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: [{ url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" }],
     },
     openGraph: {
-      title: "Lumina Education CRM",
+      title: "Lumina CRM",
       description,
       type: "website",
       images: [{ url: new URL("/og-v280.png", baseUrl).toString(), width: 1726, height: 911, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "Lumina Education CRM", description, images: [new URL("/og-v280.png", baseUrl).toString()] },
+    twitter: { card: "summary_large_image", title: "Lumina CRM", description, images: [new URL("/og-v280.png", baseUrl).toString()] },
   };
 }
 

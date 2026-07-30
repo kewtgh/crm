@@ -1,4 +1,4 @@
-# Lumina Education CRM 第二阶段完整性审计
+# Lumina CRM 第二阶段完整性审计
 
 审计日期：2026-07-17
 基线版本：0.7.0

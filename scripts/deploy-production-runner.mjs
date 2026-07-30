@@ -12,7 +12,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   assertRootlessDockerHost,
@@ -222,12 +221,23 @@ function imageReferences(commit) {
   };
 }
 
+function publicHostname() {
+  const hostname = process.env.LUMINA_PUBLIC_HOSTNAME?.trim().toLowerCase();
+  if (!hostname) throw new Error("LUMINA_PUBLIC_HOSTNAME is required");
+  if (hostname.length > 253
+    || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(hostname)
+    || /(?:^|\.)example\.(?:com|net|org)$|(?:^|\.)invalid$/.test(hostname)) {
+    throw new Error("LUMINA_PUBLIC_HOSTNAME must be the configured production DNS hostname");
+  }
+  return hostname;
+}
+
 function composeEnvironment(release) {
   const lines = {
     LUMINA_COMPOSE_PROJECT: project,
     LUMINA_IMAGE: release.currentImage,
     LUMINA_OPS_IMAGE: release.operationsImage,
-    LUMINA_PUBLIC_HOSTNAME: process.env.LUMINA_PUBLIC_HOSTNAME || "crm.ewaya.com",
+    LUMINA_PUBLIC_HOSTNAME: publicHostname(),
     LUMINA_WEB_BIND: "127.0.0.1:3200",
     LUMINA_SECRETS_DIR: process.env.LUMINA_SECRETS_DIR || "/etc/lumina-crm/secrets",
     LUMINA_POSTGRES_VOLUME: process.env.LUMINA_POSTGRES_VOLUME || "lumina-crm-postgres-data",
@@ -292,19 +302,8 @@ async function acceptRuntime(envFile, { publicChecks = true } = {}) {
   );
   if (!publicChecks) return;
   await fetchHealth(
-    "Cloudflare Worker public liveness",
-    process.env.LUMINA_PUBLIC_HEALTH_URL || "https://crm.ewaya.com/api/health",
-  );
-  const originEnvironmentPath = process.env.LUMINA_ORIGIN_ENV_FILE;
-  if (!originEnvironmentPath) throw new Error("LUMINA_ORIGIN_ENV_FILE is required");
-  const originEnvironment = parseEnv(readFileSync(originEnvironmentPath, "utf8"));
-  const originSecret = originEnvironment.LUMINA_ORIGIN_AUTH_SECRET?.trim();
-  if (!originSecret) throw new Error("LUMINA_ORIGIN_AUTH_SECRET is missing");
-  secretValues.push(originSecret);
-  await fetchHealth(
-    "authenticated origin liveness",
-    process.env.LUMINA_ORIGIN_HEALTH_URL,
-    { headers: { "x-lumina-origin-auth": originSecret } },
+    "Cloudflare Tunnel public liveness",
+    `https://${publicHostname()}/api/health`,
   );
 }
 
@@ -485,6 +484,7 @@ async function finish(result, update = {}) {
 }
 
 try {
+  publicHostname();
   persist();
   if (request.mode === "rollback") {
     if (!previousAccepted?.rollbackImage || !previousAccepted?.rollbackOperationsImage) {

@@ -12,11 +12,10 @@ daemon or `/var/run/docker.sock`.
 ## Architecture and inventory
 
 ```text
-crm.ewaya.com
-  -> Cloudflare Worker (public hostname)
-  -> configurable, distinct Lumina origin hostname
-  -> host Caddy origin gateway + shared-secret verification
-  -> 127.0.0.1:3200
+configured public hostname
+  -> Cloudflare Tunnel
+  -> host Caddy on 127.0.0.1:3211
+  -> Web on 127.0.0.1:3200
   -> lumina-crm Web container
   -> lumina-crm PostgreSQL on the internal backend network
 ```
@@ -37,6 +36,7 @@ crm.ewaya.com
 | Docker daemon | rootless user service owned by host user `lumina-crm` |
 | Docker data root | `/var/lib/lumina-crm/docker` |
 | Docker socket | `/run/user/<lumina uid>/docker.sock` |
+| Host Caddy listener | `127.0.0.1:3211` |
 | Host Web publication | `127.0.0.1:3200:3200` |
 
 PostgreSQL 18.4 joins only backend and publishes no host port. Web and Worker join backend plus edge
@@ -71,15 +71,18 @@ container, network, or volume.
 
 ## Host provisioning
 
-Provision Ubuntu with Docker Engine, the rootless extras, Compose, Buildx, `uidmap`, Caddy, Git,
-and Node 24 only for the deployment controller. Do not install/run PostgreSQL or CRM Web/Worker
-with host systemd. Rootless mode requires cgroup v2 + systemd so Compose memory/CPU/PID limits are
-actually enforced, plus at least 65,536 subordinate UIDs and GIDs for `lumina-crm`.
+Provision Ubuntu with Docker Engine, the rootless extras, Compose, Buildx, `uidmap`, Caddy,
+`cloudflared`, Git, and Node 24 only for the deployment controller. Do not install/run PostgreSQL
+or CRM Web/Worker with host systemd. Rootless mode requires cgroup v2 + systemd so Compose
+memory/CPU/PID limits are actually enforced, plus at least 65,536 subordinate UIDs and GIDs for
+`lumina-crm`.
 
 ```text
 /opt/lumina-crm/source                    checked-out kewtgh/crm main
 /etc/lumina-crm/deploy.env                non-secret deployment settings
-/etc/lumina-crm/origin.env                Caddy origin hostname/secret
+/etc/lumina-crm/caddy.env                 Caddy public Host allowlist
+/etc/cloudflared/config.yml               Tunnel ingress configuration
+/etc/cloudflared/<tunnel-id>.json         Tunnel credential managed outside Git
 /etc/lumina-crm/secrets/                  root-owned Compose secret sources
 /var/lib/lumina-crm/deployments/          accepted image/deployment state
 /var/lib/lumina-crm/docker/               Lumina rootless Docker data root
@@ -164,8 +167,8 @@ sudo systemctl status lumina-crm-storage-prepare.service
 | `bootstrap-admin.env` | `crm_system` plus one-shot CRM admin input |
 | `backup.env` | read-only `crm_backup`, encryption/off-host credentials |
 | `restore.env` | restore administrator plus encryption key |
-| Cloudflare Worker | `ORIGIN_AUTH_SECRET` only |
-| Caddy | matching origin secret and two distinct hostnames |
+| Cloudflare Tunnel | tunnel credential file managed by `cloudflared` |
+| Caddy | no shared authentication secret; configured public Host only |
 
 Web/Worker reject migration, backup, restore, and database-administrator variables. Backup rejects
 every write-capable database URL. No normal runtime service receives migration, backup, or
@@ -219,8 +222,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.0 `
-  -OperationsImage lumina-crm-ops-validation:3.8.0
+  -ApplicationImage lumina-crm-validation:3.8.1 `
+  -OperationsImage lumina-crm-ops-validation:3.8.1
 ```
 
 They are local integration tests, not production deployment commands.
@@ -236,24 +239,47 @@ overlap while the advisory lock is held.
 Worker health queries the real schema version, database readiness, required heartbeat freshness,
 and failed/stuck queue counts. A live Node process alone is not healthy.
 
-## Cloudflare Worker and origin gateway
+## Cloudflare Tunnel and loopback Caddy gateway
 
-See `deploy/cloudflare-worker/README.md` and `deploy/caddy/Caddyfile`. Configure public
-`crm.ewaya.com`, a distinct origin URL/hostname, and the same independent origin secret in
-Cloudflare secret storage and Caddy's protected environment.
+Set one production hostname in `/etc/lumina-crm/deploy.env` and
+`/etc/lumina-crm/caddy.env`. Configure the same value as both `hostname` and `httpHostHeader` in
+`/etc/cloudflared/config.yml`; use `deploy/cloudflare-tunnel/config.yml.example` as the template.
+The Tunnel service must target `http://127.0.0.1:3211` and end with an `http_status:404` catch-all.
+There is no independent public origin hostname and no shared origin secret.
 
-The Worker rejects hostname loops, removes client forwarding/internal-auth headers, injects the
-secret, forwards method/query/body/content headers/Cookie/Set-Cookie/status, and forces `no-store`.
-Caddy rejects a wrong/missing secret, reconstructs trusted proxy headers, and proxies only to
-`127.0.0.1:3200`. Both layers reject detailed readiness; public monitoring uses only `/api/health`.
-Cloudflare Access does not replace CRM login, MFA, CAPTCHA, rate limiting, or trusted-device logic.
+Install `deploy/caddy/Caddyfile` and load `/etc/lumina-crm/caddy.env` from the Caddy systemd unit.
+Caddy listens only on `127.0.0.1:3211`, accepts only the configured Host, returns 404 for public
+`/api/health?mode=ready`, and proxies all other accepted requests to `127.0.0.1:3200`. It discards
+incoming forwarding headers and rebuilds the client address from Cloudflare's `CF-Connecting-IP`.
+Create a Caddy systemd drop-in containing the following, then validate and restart both services:
 
-```sh
-LUMINA_ORIGIN_URL=https://distinct-origin.example.com npm run cloudflare:config:verify
-npm run cloudflare:test
+```ini
+[Service]
+EnvironmentFile=/etc/lumina-crm/caddy.env
 ```
 
-Worker deployment, DNS, Caddy, and production secrets are separate production actions.
+```sh
+caddy validate --config /etc/caddy/Caddyfile
+cloudflared tunnel ingress validate
+sudo systemctl daemon-reload
+sudo systemctl restart caddy cloudflared
+```
+
+Remove any Worker route bound to the production hostname before routing DNS to the Tunnel. Keep
+the host firewall closed to inbound Web/Caddy ports; `cloudflared` reaches Caddy over loopback.
+Cloudflare Access and Tunnel transport do not replace Lumina CRM login, MFA, CAPTCHA, rate
+limiting, trusted-device logic, or the other application-layer controls.
+
+```sh
+LUMINA_PUBLIC_HOSTNAME=crm.example.com \
+LUMINA_CADDYFILE=/etc/caddy/Caddyfile \
+LUMINA_TUNNEL_CONFIG_FILE=/etc/cloudflared/config.yml \
+npm run tunnel:config:verify
+npm run tunnel:test
+```
+
+Replace `crm.example.com` with the production hostname. Tunnel creation/credentials, DNS routing,
+Caddy installation, and application deployment are separate production actions.
 
 ## Image deployment and rollback
 
@@ -278,7 +304,7 @@ exclusive Lumina lock
 -> Compose up Web/Worker (never down)
 -> independent PostgreSQL/Web/Worker health
 -> loopback detailed readiness
--> Cloudflare public and authenticated origin liveness
+-> Cloudflare Tunnel public liveness at https://<LUMINA_PUBLIC_HOSTNAME>/api/health
 -> persist accepted state
 -> Lumina-only cleanup
 ```
@@ -300,12 +326,12 @@ docker compose --project-name lumina-crm \
   -f /opt/lumina-crm/source/compose.production.yml logs --tail=200 web worker postgres
 curl -fsS http://127.0.0.1:3200/api/health
 curl -fsS 'http://127.0.0.1:3200/api/health?mode=ready'
-curl -fsS https://crm.ewaya.com/api/health
+curl -fsS "https://${LUMINA_PUBLIC_HOSTNAME}/api/health"
 ```
 
 Detailed loopback readiness independently reports Web environment, auth schema, database, Worker
 heartbeats, and queues. A live Web with failed database is not ready. Public acceptance traverses
-the Cloudflare Worker.
+the Cloudflare Tunnel and remains a mandatory release condition.
 
 ## Backup, object storage, reboot, and diagnosis
 

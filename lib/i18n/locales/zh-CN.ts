@@ -203,7 +203,7 @@ export const zhCN: Messages = {
   "auth.trust.bilingualData": "多语言客户资料",
   "auth.trust.rules": "规则有证据，决策由人确认",
   "auth.help": "需要帮助？",
-  "auth.helpEmail": "support@ewaya.comm",
+  "auth.helpEmail": "support@example.com",
   "auth.brandFooter": "© 2026 Lumina Education · 台北 / 上海 / 新加坡",
   "auth.error.retry": "操作未完成，请重试",
   "auth.error.checkField": "请检查此项",

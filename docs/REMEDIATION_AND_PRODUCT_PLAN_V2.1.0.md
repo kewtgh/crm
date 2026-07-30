@@ -1,4 +1,4 @@
-# Lumina Education CRM v2.1.0 整改与产品闭环计划
+# Lumina CRM v2.1.0 整改与产品闭环计划
 
 - 计划日期：2026-07-20
 - 输入：`AUDIT_2026-07-20_V2.1.0.md`

@@ -23,8 +23,7 @@ FROM build AS verification
 RUN npm run typecheck:raw \
     && npm run lint:raw \
     && npm run test:contracts:raw \
-    && npm run test:deploy:raw \
-    && npm run cloudflare:test
+    && npm run test:deploy:raw
 
 FROM node-toolchain AS production-dependencies
 WORKDIR /app

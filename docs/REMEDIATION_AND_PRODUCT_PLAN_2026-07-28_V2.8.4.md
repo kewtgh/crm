@@ -25,7 +25,7 @@
 - 将共享 session helper 改为所有成功登录统一保存 30 天 refresh/persistence cookie。
 - 更新密码、设备 OTP、MFA、SSO、refresh 调用，确保 checkbox 只负责设备信任。
 - 在登录页展示 session 至少保留 30 天的说明。
-- 将登录页和产品帮助中心邮箱统一为 `support@ewaya.comm` 并提供 `mailto:`。
+- 将登录页和产品帮助中心邮箱统一为 `support@example.com` 并提供 `mailto:`。
 - 更新认证源码契约和真实 device-auth smoke 的 cookie 断言。
 
 验收：密码、设备、MFA、SSO 与 rotation 都使用统一 helper；未勾选设备记忆时 session 仍为

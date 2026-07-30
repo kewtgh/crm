@@ -31,7 +31,7 @@ systemd、数据库、运行证据和文档后，没有发现仓库范围内遗�
 | --- | --- | --- |
 | 所有登录至少 30 天 | 统一 session helper；密码、设备、MFA、SSO、rotation；真实 device-auth smoke | 完成 |
 | 记住设备不控制 session | checkbox 只写 trusted-device 选择；未勾选仍有 30 天 refresh | 完成 |
-| 登录与帮助中心邮箱 | 中英文 `support@ewaya.comm` 与 `mailto:` | 完成 |
+| 登录与帮助中心邮箱 | 中英文 `support@example.com` 与 `mailto:` | 完成 |
 | Web/Worker/readiness/runner 默认直连 | 三个 unit 的 `UnsetEnvironment`、direct child env、release gate 清理 | 完成 |
 | 仅 Git pull 使用代理 | 单次临时 `git -c core.sshCommand=... pull --ff-only origin main` | 完成 |
 | 不持久写 Git 代理 | 无 `git config`；无 fetch/merge、reset、force 或 rebase | 完成 |
