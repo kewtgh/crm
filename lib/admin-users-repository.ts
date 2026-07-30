@@ -166,16 +166,18 @@ async function deliverTemporaryCredentials(
       "Account email delivery is not configured",
     );
   }
+  const deliveryId = crypto.randomUUID();
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "idempotency-key": deliveryId,
       ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
         ? { authorization: `Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` }
         : {}),
     },
     body: JSON.stringify({
-      id: crypto.randomUUID(),
+      id: deliveryId,
       to: input.email.trim().toLowerCase(),
       template: "staff-account-created",
       payload: {

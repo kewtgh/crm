@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.2**
+Current release candidate: **v3.8.3**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -90,6 +90,13 @@ category to 1–8 jobs (default 4); the runtime also validates each batch/concur
 against a 210-second external-I/O budget. `WORKER_DATABASE_POOL_MAX` is a per-process ceiling, so
 capacity planning must account for all enabled categories. Mail providers must honor the stable
 `Idempotency-Key` header before production delivery is enabled.
+
+Production email delivery is isolated in
+[`infrastructure/email-delivery-worker`](infrastructure/email-delivery-worker/README.md). The
+Cloudflare Worker accepts only Lumina's authenticated `/crm-delivery` protocol, renders one of nine
+explicit templates, and calls Resend without exposing its API key to the CRM server. Its production
+Custom Domain is `crm-mail.ewaya.com`; `workers.dev` is disabled. The subproject has its own
+package/lockfile and no root runtime dependency.
 
 ## Verification and deployment
 
