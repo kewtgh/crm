@@ -246,8 +246,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.4 `
-  -OperationsImage lumina-crm-ops-validation:3.8.4
+  -ApplicationImage lumina-crm-validation:3.8.5 `
+  -OperationsImage lumina-crm-ops-validation:3.8.5
 ```
 
 They are local integration tests, not production deployment commands.
@@ -269,22 +269,33 @@ The independently deployed source under `infrastructure/email-delivery-worker/` 
 generic Resend adapter. It is not a CRM Web route, is not built into the application image, and is
 not deployed by the application `deploy:production` controller.
 
-No production Worker name, Custom Domain, sender, route, application hostname, account ID, or
-public URL belongs in tracked source. Copy the subproject's empty `.env.production.example` to the
-ignored `.env.production.local` and supply `WORKER_NAME`, `WORKER_PUBLIC_BASE_URL`, `CRM_APP_URL`,
-`EMAIL_FROM`, optional `EMAIL_REPLY_TO`, `EMAIL_BRAND_NAME`, `DELIVERY_PATH`, and `HEALTH_PATH`
-locally. Optional Wrangler authentication values may also remain in that ignored file.
+No production Worker name, Custom Domain, sender, route, application hostname, account ID, API
+token, or public URL belongs in tracked source or on the Windows development machine. Windows is
+limited to source development, tests, lint/typecheck, and Wrangler dry-run with an explicit
+absolute path to a completely fictitious fixture. It must not run a production Wrangler deploy or
+modify Cloudflare Dashboard, Worker configuration, Custom Domain routing, or secrets.
+
+Ubuntu is the production environment. After pulling an audited commit, install the empty tracked
+template `deploy/email-worker-deploy.env.example` as
+`/etc/lumina-crm/secrets/email-worker-deploy.env`, then fill real values only on that server. The
+directory `/etc/lumina-crm/secrets` must be `root:lumina-crm` mode `0750`; the file must be
+`root:lumina-crm` mode `0640`, must not be world-readable, and must never be tracked. It contains
+the Worker name/base URL, CRM URL, sender/reply-to/brand, delivery and health paths, Cloudflare
+account ID, and Cloudflare API token. The account ID is server-only even though it is not a
+password; the API token is a production deployment secret. Values must never be printed.
 
 The committed Wrangler configuration has no `name`, `routes`, `route`, or production `vars`.
 Custom Domain routing remains managed in Cloudflare Dashboard. The deployment controller passes
-the locally supplied Worker name, preserves remote plaintext bindings, enables strict mode, and
+the Ubuntu-supplied Worker name, preserves remote plaintext bindings, enables strict mode, and
 sends only the six runtime plaintext variables. It never reads, uploads, replaces, or deletes
 Cloudflare secrets.
 
 The Worker requires the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` secret binding names.
-`EMAIL_DELIVERY_WEBHOOK_TOKEN` in the root-owned CRM `worker.env` must exactly match
-`LUMINA_WEBHOOK_TOKEN`; `RESEND_API_KEY` remains only in Cloudflare. Construct
-`EMAIL_DELIVERY_WEBHOOK_URL` locally from `WORKER_PUBLIC_BASE_URL + DELIVERY_PATH`. Both repository
+Neither belongs in the deployment Env: both remain only in Cloudflare Worker secret bindings, and
+the controller does not read, upload, replace, or delete them. The controller also never reads the
+CRM server's `worker.env`. CRM initialization separately ensures that its root-owned
+`EMAIL_DELIVERY_WEBHOOK_TOKEN` matches `LUMINA_WEBHOOK_TOKEN` and constructs
+`EMAIL_DELIVERY_WEBHOOK_URL` from the production Worker base URL and delivery path. Both repository
 example values remain empty:
 
 ```dotenv
@@ -312,9 +323,23 @@ calendar-cancel
 ```
 
 The actual database calendar delivery types are `INVITE`, `UPDATE`, and `CANCEL`; the CRM produces
-the corresponding `calendar-*` keys above. See the subproject README for local Env validation,
-tests, the no-upload Wrangler dry-run, Dashboard-owned route boundaries, deployment, and generic
-health acceptance. Repository validation does not execute a production deployment or send mail.
+the corresponding `calendar-*` keys above. See the subproject README for Env validation, tests,
+Dashboard-owned route boundaries, deployment, and generic health acceptance. Production execution
+is Linux-only and defaults strictly to `/etc/lumina-crm/secrets/email-worker-deploy.env`. An
+explicit `--env-file` must be absolute. Dry-run requires that option, never uploads, never checks
+the production health endpoint, and cleans its bundle:
+
+```sh
+cd infrastructure/email-delivery-worker
+npm run deploy:production:dry-run -- \
+  --env-file /etc/lumina-crm/secrets/email-worker-deploy.env
+npm run deploy:production
+```
+
+The first command is the Ubuntu real-configuration dry-run; the second performs the in-place
+deployment and checks only `WORKER_PUBLIC_BASE_URL + HEALTH_PATH`. It sends no test email. Windows
+tests use an absolute temporary fictitious Env path instead. CRM application initialization and
+email Worker deployment remain independent stages.
 
 ## Cloudflare Tunnel and loopback Caddy gateway
 
