@@ -1,22 +1,28 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { PassThrough } from "node:stream";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
+  buildProductionWranglerConfig,
   buildWranglerArguments,
+  createTemporaryWranglerConfig,
+  DEFAULT_PRODUCTION_CONFIG_ROOT,
   DEFAULT_PRODUCTION_ENV_FILE,
   formatControllerFailure,
   loadProductionValues,
   parseArguments,
+  preflightCustomDomain,
   ProductionConfigurationError,
+  removeTemporaryWranglerConfig,
   runDeployment,
+  validateProductionConfigRoot,
   validateProductionEnvFile,
   validateProductionValues,
 } from "../scripts/deploy-production.mjs";
@@ -41,19 +47,75 @@ function fakeProductionValues(overrides = {}) {
   };
 }
 
+function validatedValues(overrides = {}) {
+  return validateProductionValues(fakeProductionValues(overrides), { allowTestValues: true });
+}
+
+function fakeDomain(overrides = {}) {
+  return {
+    id: "00000000-0000-4000-8000-000000000001",
+    hostname: "worker.example.invalid",
+    service: "unit-test-worker",
+    zone_name: "example.invalid",
+    ...overrides,
+  };
+}
+
 function asEnvFile(values) {
   return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n");
 }
 
-async function withTemporaryEnv(callback) {
+async function withTemporaryEnv(callback, values = fakeProductionValues()) {
   const directory = await mkdtemp(path.join(tmpdir(), "email-worker-test-"));
   const envFile = path.join(directory, "worker-fixture.env");
-  await writeFile(envFile, asEnvFile(fakeProductionValues()), "utf8");
+  await writeFile(envFile, asEnvFile(values), "utf8");
   try {
-    return await callback(envFile);
+    return await callback(envFile, directory);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
+}
+
+function jsonResponse(status, payload) {
+  return { status, json: async () => payload };
+}
+
+function domainAndHealthFetch({
+  domains = [fakeDomain()],
+  status = 200,
+  payload,
+  invalidJson = false,
+  healthStatus = 200,
+  capture = {},
+} = {}) {
+  return async (input, options = {}) => {
+    const url = new URL(input);
+    capture.requests ??= [];
+    capture.requests.push({ options, url: url.toString() });
+    if (url.hostname === "api.cloudflare.com") {
+      if (invalidJson) return { status, json: async () => { throw new Error("invalid"); } };
+      if (payload !== undefined) return jsonResponse(status, payload);
+      let result = domains;
+      if (url.searchParams.has("hostname")) {
+        result = result.filter((domain) => domain.hostname === url.searchParams.get("hostname"));
+      }
+      if (url.searchParams.has("service")) {
+        result = result.filter((domain) => domain.service === url.searchParams.get("service"));
+      }
+      return jsonResponse(status, {
+        success: true,
+        errors: [],
+        messages: [],
+        result,
+        result_info: { total_count: result.length },
+      });
+    }
+    capture.healthRequests = (capture.healthRequests ?? 0) + 1;
+    return {
+      status: healthStatus,
+      json: async () => ({ status: "ok", service: "lumina-email-delivery" }),
+    };
+  };
 }
 
 function successfulSpawn(capture = {}) {
@@ -70,7 +132,7 @@ function successfulSpawn(capture = {}) {
   };
 }
 
-function failingSpawn(output) {
+function failingSpawn(output = "safe Wrangler failure detail") {
   return () => {
     const child = new EventEmitter();
     child.stdout = new PassThrough();
@@ -84,57 +146,104 @@ function failingSpawn(output) {
   };
 }
 
-function fileStatus({ symlink = false, file = true, uid = 0, gid = 4242, mode = 0o640 } = {}) {
+function erroringSpawn() {
+  return () => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => {};
+    queueMicrotask(() => child.emit("error", new Error("spawn failed")));
+    return child;
+  };
+}
+
+function fileStatus({
+  symlink = false,
+  file = true,
+  directory = false,
+  uid = 0,
+  gid = 4242,
+  mode = 0o640,
+} = {}) {
   return {
     uid,
     gid,
     mode,
+    isDirectory: () => directory,
     isSymbolicLink: () => symlink,
     isFile: () => file,
   };
 }
 
-const secureFileOptions = {
+const secureEnvFileOptions = {
   lstatImplementation: async () => fileStatus(),
   statImplementation: async () => ({ mode: 0o750, isDirectory: () => true }),
   readFileImplementation: async () => "lumina-crm:x:4242:\n",
 };
 
-test("production deployment is Linux-only with a stable error code", async () => {
-  let envValidationCalls = 0;
-  let wranglerCalls = 0;
-  await assert.rejects(
-    runDeployment({
+function temporaryHarness(capture = {}) {
+  return {
+    createTemporaryConfigImplementation: async (configuration, customDomain, { runtimeRoot }) => {
+      capture.created = (capture.created ?? 0) + 1;
+      capture.generated = buildProductionWranglerConfig(configuration, customDomain);
+      return {
+        configPath: path.join(runtimeRoot, "wrangler-random", "wrangler.production.json"),
+        directory: path.join(runtimeRoot, "wrangler-random"),
+        dryRunOutputDirectory: path.join(runtimeRoot, "wrangler-random", "dry-run-output"),
+        runtimeRoot,
+      };
+    },
+    removeTemporaryConfigImplementation: async () => {
+      capture.cleaned = (capture.cleaned ?? 0) + 1;
+    },
+  };
+}
+
+async function runFixture(envFile, {
+  capture = {},
+  dryRun = false,
+  fetchImplementation = domainAndHealthFetch({ capture }),
+  spawnImplementation = successfulSpawn(capture),
+  ...overrides
+} = {}) {
+  return runDeployment({
+    dryRun,
+    envFile,
+    runtimeRoot: path.join(tmpdir(), "fictitious-email-worker-runtime"),
+    platform: "linux",
+    allowTestValues: true,
+    fetchImplementation,
+    spawnImplementation,
+    validateEnvFileImplementation: async () => {},
+    ...temporaryHarness(capture),
+    ...overrides,
+  });
+}
+
+test("all production controller modes are Linux-only before Env, API, temp config, or Wrangler", async () => {
+  for (const dryRun of [false, true]) {
+    const calls = { env: 0, preflight: 0, temporary: 0, wrangler: 0 };
+    await assert.rejects(runDeployment({
+      dryRun,
       platform: "win32",
-      validateEnvFileImplementation: async () => {
-        envValidationCalls += 1;
-      },
-      spawnImplementation: () => {
-        wranglerCalls += 1;
-        throw new Error("must not start Wrangler");
-      },
-    }),
-    (error) => error instanceof ProductionConfigurationError
-      && error.code === "PRODUCTION_DEPLOY_REQUIRES_LINUX",
-  );
-  assert.equal(envValidationCalls, 0);
-  assert.equal(wranglerCalls, 0);
+      validateEnvFileImplementation: async () => { calls.env += 1; },
+      preflightCustomDomainImplementation: async () => { calls.preflight += 1; },
+      createTemporaryConfigImplementation: async () => { calls.temporary += 1; },
+      spawnImplementation: () => { calls.wrangler += 1; },
+    }), { code: "PRODUCTION_DEPLOY_REQUIRES_LINUX" });
+    assert.deepEqual(calls, { env: 0, preflight: 0, temporary: 0, wrangler: 0 });
+  }
 });
 
-test("production mode uses the fixed Ubuntu Env path", () => {
+test("production and dry-run use only the fixed Ubuntu Env path", () => {
   assert.equal(DEFAULT_PRODUCTION_ENV_FILE, "/etc/lumina-crm/secrets/email-worker-deploy.env");
-  assert.deepEqual(parseArguments([]), {
-    dryRun: false,
+  assert.equal(DEFAULT_PRODUCTION_CONFIG_ROOT, "/var/lib/lumina-crm/email-worker-deployments");
+  assert.deepEqual(parseArguments([]), { dryRun: false, envFile: DEFAULT_PRODUCTION_ENV_FILE });
+  assert.deepEqual(parseArguments(["--dry-run"]), {
+    dryRun: true,
     envFile: DEFAULT_PRODUCTION_ENV_FILE,
   });
-});
-
-test("dry-run requires an explicit absolute Env file", () => {
-  assert.throws(() => parseArguments(["--dry-run"]), { code: "DRY_RUN_ENV_FILE_REQUIRED" });
-  assert.throws(
-    () => parseArguments(["--dry-run", "--env-file", "fixture.env"]),
-    { code: "ENV_FILE_PATH_MUST_BE_ABSOLUTE" },
-  );
+  assert.throws(() => parseArguments(["--env-file", "fixture.env"]), { code: "ARGUMENT_UNSUPPORTED" });
 });
 
 test("missing Env file fails closed before Wrangler", async () => {
@@ -152,153 +261,337 @@ test("Linux production Env metadata rejects unsafe files", async (t) => {
   ];
   for (const [name, overrides, code] of cases) {
     await t.test(name, async () => {
-      await assert.rejects(
-        validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, {
-          ...secureFileOptions,
-          lstatImplementation: async () => fileStatus(overrides),
-        }),
-        { code },
-      );
+      await assert.rejects(validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, {
+        ...secureEnvFileOptions,
+        lstatImplementation: async () => fileStatus(overrides),
+      }), { code });
     });
   }
   await t.test("world-readable parent", async () => {
-    await assert.rejects(
-      validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, {
-        ...secureFileOptions,
-        statImplementation: async () => ({ mode: 0o754, isDirectory: () => true }),
-      }),
-      { code: "PRODUCTION_ENV_DIRECTORY_WORLD_READABLE" },
-    );
+    await assert.rejects(validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, {
+      ...secureEnvFileOptions,
+      statImplementation: async () => ({ mode: 0o754, isDirectory: () => true }),
+    }), { code: "PRODUCTION_ENV_DIRECTORY_WORLD_READABLE" });
   });
-  await validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, secureFileOptions);
+  await validateProductionEnvFile(DEFAULT_PRODUCTION_ENV_FILE, secureEnvFileOptions);
 });
 
-test("production Env validation requires all deployment values and rejects unknown keys", async (t) => {
-  for (const key of Object.keys(fakeProductionValues()).filter((key) => key !== "EMAIL_REPLY_TO")) {
-    await t.test(`missing ${key}`, () => {
+test("production Env rejects invalid or unsafe Custom Domain origins", async (t) => {
+  const cases = [
+    "https://worker.example.invalid/path",
+    "https://worker.example.invalid?query=yes",
+    "https://worker.example.invalid#fragment",
+    "https://user:password@worker.example.invalid",
+    "https://*.example.invalid",
+    "https://localhost",
+    "https://127.0.0.1",
+    "https://worker.example.invalid:8443",
+  ];
+  for (const value of cases) {
+    await t.test(value, () => {
       assert.throws(
-        () => validateProductionValues(fakeProductionValues({ [key]: "" }), { allowTestValues: true }),
+        () => validateProductionValues(fakeProductionValues({ WORKER_PUBLIC_BASE_URL: value }), {
+          allowTestValues: true,
+        }),
         ProductionConfigurationError,
       );
     });
   }
   assert.throws(
-    () => validateProductionValues({ ...fakeProductionValues(), UNKNOWN_KEY: "x" }, { allowTestValues: true }),
-    { code: "ENV_KEY_UNSUPPORTED" },
-  );
-  assert.throws(() => validateProductionValues(fakeProductionValues()), { code: "PLACEHOLDER_FORBIDDEN" });
-});
-
-test("Wrangler arguments are strict, route-free, secret-free, and Env-driven", () => {
-  const configuration = validateProductionValues(fakeProductionValues({
-    EMAIL_REPLY_TO: "user@example.test",
-  }), { allowTestValues: true });
-  const args = buildWranglerArguments(configuration, { dryRun: true });
-  assert.ok(args.includes("--name"));
-  assert.ok(args.includes("--keep-vars"));
-  assert.ok(args.includes("--strict"));
-  assert.ok(args.includes("--dry-run"));
-  assert.equal(args.includes("--route"), false);
-  assert.equal(args.includes("--routes"), false);
-  assert.equal(args.includes("--domain"), false);
-  const serialized = args.join("\n");
-  for (const key of [
-    "CRM_APP_URL",
-    "EMAIL_FROM",
-    "EMAIL_REPLY_TO",
-    "EMAIL_BRAND_NAME",
-    "DELIVERY_PATH",
-    "HEALTH_PATH",
-  ]) assert.match(serialized, new RegExp(`${key}:`));
-  assert.doesNotMatch(
-    serialized,
-    /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY|WORKER_PUBLIC_BASE_URL|\bsecret\b|\bdelete\b/i,
+    () => validateProductionValues(fakeProductionValues()),
+    { code: "WORKER_PUBLIC_HOSTNAME_INVALID" },
   );
 });
 
-test("tracked observability matches the fields supported by Wrangler 4.102.0", async () => {
-  const packageManifest = JSON.parse(await readFile(path.join(workerRoot, "package.json"), "utf8"));
-  assert.equal(packageManifest.devDependencies.wrangler, "4.102.0");
+test("generated production JSON contains the complete strict comparison surface", () => {
+  const configuration = validatedValues({ EMAIL_REPLY_TO: "reply@example.test" });
+  const generated = buildProductionWranglerConfig(configuration, {
+    hostname: "worker.example.invalid",
+    zoneName: "example.invalid",
+  });
+  assert.equal(generated.name, "unit-test-worker");
+  assert.equal(path.resolve(generated.main), path.join(workerRoot, "src", "index.js"));
+  assert.equal(generated.compatibility_date, "2026-07-27");
+  assert.equal(generated.workers_dev, false);
+  assert.equal(generated.preview_urls, false);
+  assert.equal(generated.keep_vars, true);
+  assert.deepEqual(generated.routes, [{
+    pattern: "worker.example.invalid",
+    zone_name: "example.invalid",
+    custom_domain: true,
+    enabled: true,
+    previews_enabled: false,
+  }]);
+  assert.deepEqual(generated.vars, {
+    CRM_APP_URL: "https://crm.example.invalid/",
+    EMAIL_FROM: "Test Mail <user@example.test>",
+    EMAIL_BRAND_NAME: "Fictitious Test Brand",
+    DELIVERY_PATH: "/delivery-test",
+    HEALTH_PATH: "/health-test",
+    EMAIL_REPLY_TO: "reply@example.test",
+  });
+  assert.deepEqual(generated.observability, {
+    enabled: true,
+    head_sampling_rate: 1,
+    logs: {
+      enabled: true,
+      head_sampling_rate: 1,
+      persist: true,
+      invocation_logs: true,
+    },
+    traces: { enabled: false, head_sampling_rate: 1, persist: true },
+  });
+  assert.deepEqual(generated.secrets.required, ["LUMINA_WEBHOOK_TOKEN", "RESEND_API_KEY"]);
+});
 
-  const schema = JSON.parse(await readFile(
-    path.join(workerRoot, "node_modules", "wrangler", "config-schema.json"),
-    "utf8",
-  ));
-  const observabilitySchema = schema.definitions?.Observability;
-  assert.ok(observabilitySchema);
-  assert.equal(observabilitySchema.additionalProperties, false);
-  assert.deepEqual(Object.keys(observabilitySchema.properties), [
-    "enabled",
-    "head_sampling_rate",
-    "logs",
-    "traces",
-  ]);
-  assert.ok(observabilitySchema.properties.logs.properties.persist);
-  assert.ok(observabilitySchema.properties.logs.properties.invocation_logs);
-  assert.ok(observabilitySchema.properties.traces.properties.persist);
-
-  const wrangler = await readFile(path.join(workerRoot, "wrangler.toml"), "utf8");
-  const sections = Object.fromEntries(wrangler.split(/\r?\n(?=\[)/).map((block) => {
-    const match = block.match(/^\[([^\]]+)\]\r?\n/);
-    return match ? [match[1], block.slice(match[0].length)] : ["root", block];
+test("optional reply-to is absent when empty and no credential value enters generated JSON", () => {
+  const configuration = validatedValues();
+  const serialized = JSON.stringify(buildProductionWranglerConfig(configuration, {
+    hostname: "worker.example.invalid",
+    zoneName: "example.invalid",
   }));
-  assert.match(sections.root, /^compatibility_date = "2026-07-27"$/m);
-  assert.match(sections.observability, /^enabled = true$/m);
-  assert.match(sections.observability, /^head_sampling_rate = 1$/m);
-  assert.match(sections["observability.logs"], /^enabled = true$/m);
-  assert.match(sections["observability.logs"], /^head_sampling_rate = 1$/m);
-  assert.match(sections["observability.logs"], /^persist = true$/m);
-  assert.match(sections["observability.logs"], /^invocation_logs = true$/m);
-  assert.match(sections["observability.traces"], /^enabled = false$/m);
-  assert.match(sections["observability.traces"], /^head_sampling_rate = 1$/m);
-  assert.match(sections["observability.traces"], /^persist = true$/m);
+  assert.equal(Object.hasOwn(JSON.parse(serialized).vars, "EMAIL_REPLY_TO"), false);
+  for (const forbidden of [
+    configuration.CLOUDFLARE_ACCOUNT_ID,
+    configuration.CLOUDFLARE_API_TOKEN,
+    "fictitious-webhook-secret",
+    "fictitious-resend-secret",
+    "DATABASE_URL",
+    "R2_ACCESS_KEY",
+    "EMAIL_DELIVERY_WEBHOOK_TOKEN",
+  ]) assert.equal(serialized.includes(forbidden), false);
 });
 
-test("cross-platform dry-run uses an explicit fictitious Env, does not upload, and skips health", async () => {
-  await withTemporaryEnv(async (envFile) => {
-    let healthRequests = 0;
-    const result = await runDeployment({
-      dryRun: true,
-      envFile,
-      fetchImplementation: async () => {
-        healthRequests += 1;
-        throw new Error("dry-run must not issue health traffic");
-      },
+test("Wrangler arguments use only the temporary config and strict deployment surface", () => {
+  const temporaryConfig = {
+    configPath: path.join(tmpdir(), "runtime", "wrangler.production.json"),
+    dryRunOutputDirectory: path.join(tmpdir(), "runtime", "dry-run-output"),
+  };
+  const productionArgs = buildWranglerArguments(temporaryConfig);
+  const dryRunArgs = buildWranglerArguments(temporaryConfig, { dryRun: true });
+  for (const args of [productionArgs, dryRunArgs]) {
+    assert.ok(args.includes("--strict"));
+    assert.equal(args[args.indexOf("--config") + 1], temporaryConfig.configPath);
+    assert.doesNotMatch(
+      args.join("\n"),
+      /--name|--var|--route|--domain|--keep-vars|\bsecret\b|\bdelete\b|\bbulk\b/i,
+    );
+  }
+  assert.ok(dryRunArgs.includes("--dry-run"));
+  assert.equal(dryRunArgs[dryRunArgs.indexOf("--outdir") + 1], temporaryConfig.dryRunOutputDirectory);
+  assert.equal(productionArgs.includes("--dry-run"), false);
+});
+
+test("runtime root is a real 0700 directory owned by the lumina-crm execution user", async (t) => {
+  const root = path.join(path.parse(process.cwd()).root, "var", "lib", "lumina-test-runtime");
+  const options = {
+    expectedUid: 1001,
+    readFileImplementation: async () => "lumina-crm:x:1001:1001::/var/lib/lumina-crm:/bin/bash\n",
+  };
+  await validateProductionConfigRoot(root, {
+    ...options,
+    lstatImplementation: async () => fileStatus({ directory: true, file: false, uid: 1001, mode: 0o700 }),
+  });
+  const cases = [
+    [{ symlink: true, directory: true, file: false, uid: 1001, mode: 0o700 }, "PRODUCTION_CONFIG_ROOT_SYMLINK_FORBIDDEN"],
+    [{ directory: false, file: true, uid: 1001, mode: 0o700 }, "PRODUCTION_CONFIG_ROOT_NOT_DIRECTORY"],
+    [{ directory: true, file: false, uid: 1002, mode: 0o700 }, "PRODUCTION_CONFIG_ROOT_OWNER_INVALID"],
+    [{ directory: true, file: false, uid: 1001, mode: 0o750 }, "PRODUCTION_CONFIG_ROOT_MODE_INVALID"],
+  ];
+  for (const [status, code] of cases) {
+    await t.test(code, async () => {
+      await assert.rejects(validateProductionConfigRoot(root, {
+        ...options,
+        lstatImplementation: async () => fileStatus(status),
+      }), { code });
     });
-    assert.deepEqual(result, { dryRun: true, workerName: "unit-test-worker" });
-    assert.equal(healthRequests, 0);
-    await assert.rejects(access(path.join(workerRoot, ".wrangler", "production-dry-run")));
+  }
+  await assert.rejects(validateProductionConfigRoot(root, {
+    ...options,
+    expectedUid: 1002,
+    lstatImplementation: async () => fileStatus({ directory: true, file: false, uid: 1001, mode: 0o700 }),
+  }), { code: "PRODUCTION_RUNTIME_USER_INVALID" });
+});
+
+test("temporary JSON directory is 0700, file is 0600, owner is lumina-crm, and name is unpredictable", async () => {
+  const root = path.join(path.parse(process.cwd()).root, "var", "lib", "lumina-test-runtime");
+  const directory = path.join(root, "wrangler-r4nd0m");
+  const chmodCalls = [];
+  let written;
+  const result = await createTemporaryWranglerConfig(validatedValues(), {
+    hostname: "worker.example.invalid",
+    zoneName: "example.invalid",
+  }, {
+    runtimeRoot: root,
+    expectedUid: 1001,
+    readFileImplementation: async () => "lumina-crm:x:1001:1001::/var/lib/lumina-crm:/bin/bash\n",
+    mkdtempImplementation: async (prefix) => {
+      assert.equal(prefix, path.join(root, "wrangler-"));
+      return directory;
+    },
+    chmodImplementation: async (target, mode) => { chmodCalls.push([target, mode]); },
+    writeFileImplementation: async (target, contents, options) => { written = { target, contents, options }; },
+    lstatImplementation: async (target) => {
+      if (target === root) return fileStatus({ directory: true, file: false, uid: 1001, mode: 0o700 });
+      if (target === directory) return fileStatus({ directory: true, file: false, uid: 1001, mode: 0o700 });
+      return fileStatus({ directory: false, file: true, uid: 1001, mode: 0o600 });
+    },
+  });
+  assert.equal(result.directory, directory);
+  assert.equal(path.dirname(result.configPath), directory);
+  assert.deepEqual(chmodCalls, [[directory, 0o700], [result.configPath, 0o600]]);
+  assert.equal(written.target, result.configPath);
+  assert.deepEqual(written.options, { encoding: "utf8", flag: "wx", mode: 0o600 });
+  assert.equal(JSON.parse(written.contents).name, "unit-test-worker");
+});
+
+test("temporary config rejects symlinks and removes every partially created directory", async (t) => {
+  const root = path.join(path.parse(process.cwd()).root, "var", "lib", "lumina-test-runtime");
+  const directory = path.join(root, "wrangler-r4nd0m");
+  for (const [kind, code] of [
+    ["directory", "TEMP_CONFIG_DIRECTORY_SYMLINK_FORBIDDEN"],
+    ["file", "TEMP_CONFIG_FILE_SYMLINK_FORBIDDEN"],
+  ]) {
+    await t.test(kind, async () => {
+      const removed = [];
+      await assert.rejects(createTemporaryWranglerConfig(validatedValues(), {
+        hostname: "worker.example.invalid",
+        zoneName: "example.invalid",
+      }, {
+        runtimeRoot: root,
+        expectedUid: 1001,
+        readFileImplementation: async () => "lumina-crm:x:1001:1001::/var/lib/lumina-crm:/bin/bash\n",
+        mkdtempImplementation: async () => directory,
+        chmodImplementation: async () => {},
+        writeFileImplementation: async () => {},
+        rmImplementation: async (target) => { removed.push(target); },
+        lstatImplementation: async (target) => {
+          if (target === root) return fileStatus({ directory: true, file: false, uid: 1001, mode: 0o700 });
+          if (target === directory) return fileStatus({
+            directory: true,
+            file: false,
+            uid: 1001,
+            mode: 0o700,
+            symlink: kind === "directory",
+          });
+          return fileStatus({ file: true, uid: 1001, mode: 0o600, symlink: kind === "file" });
+        },
+      }), { code });
+      assert.deepEqual(removed, [directory]);
+    });
+  }
+});
+
+test("temporary cleanup only recursively removes a direct unpredictable runtime child", async () => {
+  const root = path.join(path.parse(process.cwd()).root, "var", "lib", "lumina-test-runtime");
+  const directory = path.join(root, "wrangler-r4nd0m");
+  const calls = [];
+  await removeTemporaryWranglerConfig({ runtimeRoot: root, directory }, {
+    rmImplementation: async (...args) => { calls.push(args); },
+  });
+  assert.deepEqual(calls, [[directory, { force: true, recursive: true }]]);
+  await assert.rejects(removeTemporaryWranglerConfig({
+    runtimeRoot: root,
+    directory: path.dirname(root),
+  }), { code: "TEMP_CONFIG_CLEANUP_TARGET_INVALID" });
+});
+
+test("Custom Domain preflight requires an exact hostname and sole target Worker association", async () => {
+  const capture = {};
+  const result = await preflightCustomDomain(validatedValues(), domainAndHealthFetch({ capture }));
+  assert.deepEqual(result, { hostname: "worker.example.invalid", zoneName: "example.invalid" });
+  assert.equal(capture.requests.length, 2);
+  assert.match(capture.requests[0].url, /hostname=worker\.example\.invalid/);
+  assert.match(capture.requests[1].url, /service=unit-test-worker/);
+  for (const request of capture.requests) {
+    assert.equal(request.options.method, "GET");
+    assert.equal(request.options.headers.Authorization, "Bearer fictitious-test-token-00000000");
+  }
+});
+
+test("Custom Domain preflight fails closed for missing, foreign, or additional domains", async (t) => {
+  const cases = [
+    ["missing", [], "CUSTOM_DOMAIN_NOT_FOUND"],
+    ["foreign", [fakeDomain({ service: "other-test-worker" })], "CUSTOM_DOMAIN_OWNERSHIP_MISMATCH"],
+    ["additional", [fakeDomain(), fakeDomain({ hostname: "extra.example.invalid" })], "CUSTOM_DOMAIN_SET_MISMATCH"],
+  ];
+  for (const [name, domains, code] of cases) {
+    await t.test(name, async () => {
+      await assert.rejects(preflightCustomDomain(
+        validatedValues(),
+        domainAndHealthFetch({ domains }),
+      ), { code });
+    });
+  }
+});
+
+test("Custom Domain preflight rejects API failure, invalid JSON, and invalid contracts", async (t) => {
+  const cases = [
+    ["non-200", domainAndHealthFetch({ status: 503 }), "CUSTOM_DOMAIN_PREFLIGHT_UNAVAILABLE"],
+    ["invalid JSON", domainAndHealthFetch({ invalidJson: true }), "CUSTOM_DOMAIN_PREFLIGHT_INVALID_RESPONSE"],
+    ["invalid contract", domainAndHealthFetch({ payload: { success: true, result: [{}] } }), "CUSTOM_DOMAIN_PREFLIGHT_INVALID_RESPONSE"],
+  ];
+  for (const [name, fetchImplementation, code] of cases) {
+    await t.test(name, async () => {
+      await assert.rejects(preflightCustomDomain(validatedValues(), fetchImplementation), { code });
+    });
+  }
+});
+
+test("production and dry-run use the same generated config and always clean it", async () => {
+  await withTemporaryEnv(async (envFile) => {
+    const generated = [];
+    for (const dryRun of [false, true]) {
+      const capture = {};
+      const result = await runFixture(envFile, { capture, dryRun });
+      assert.deepEqual(result, { dryRun, workerName: "unit-test-worker" });
+      assert.equal(capture.created, 1);
+      assert.equal(capture.cleaned, 1);
+      assert.equal(capture.generated.preview_urls, false);
+      generated.push(capture.generated);
+      if (dryRun) assert.equal(capture.healthRequests ?? 0, 0);
+      else assert.equal(capture.healthRequests, 1);
+    }
+    assert.deepEqual(generated[0], generated[1]);
   });
 });
 
-test("deployment strips runtime secrets from Wrangler environment and health-checks only production", async () => {
+test("Wrangler nonzero exit, spawn error, and health rejection all clean temporary config", async (t) => {
+  await withTemporaryEnv(async (envFile) => {
+    const cases = [
+      ["Wrangler failure", failingSpawn(), domainAndHealthFetch()],
+      ["spawn error", erroringSpawn(), domainAndHealthFetch()],
+      ["health failure", successfulSpawn(), domainAndHealthFetch({ healthStatus: 503 })],
+    ];
+    for (const [name, spawnImplementation, fetchImplementation] of cases) {
+      await t.test(name, async () => {
+        const capture = {};
+        await assert.rejects(runFixture(envFile, {
+          capture,
+          fetchImplementation,
+          spawnImplementation,
+        }));
+        assert.equal(capture.created, 1);
+        assert.equal(capture.cleaned, 1);
+      });
+    }
+  });
+});
+
+test("deployment strips runtime secrets and keeps Cloudflare authentication only in process environment", async () => {
   await withTemporaryEnv(async (envFile) => {
     const capture = {};
-    let requestedUrl;
     const previousWebhook = process.env.LUMINA_WEBHOOK_TOKEN;
     const previousResend = process.env.RESEND_API_KEY;
-    process.env.LUMINA_WEBHOOK_TOKEN = "must-not-leak";
-    process.env.RESEND_API_KEY = "must-not-leak";
+    process.env.LUMINA_WEBHOOK_TOKEN = "must-not-leak-webhook";
+    process.env.RESEND_API_KEY = "must-not-leak-resend";
     try {
-      const result = await runDeployment({
-        envFile,
-        platform: "linux",
-        allowTestValues: true,
-        validateEnvFileImplementation: async () => {},
-        spawnImplementation: successfulSpawn(capture),
-        fetchImplementation: async (url) => {
-          requestedUrl = url.toString();
-          return {
-            status: 200,
-            json: async () => ({ status: "ok", service: "lumina-email-delivery" }),
-          };
-        },
-      });
-      assert.deepEqual(result, { dryRun: false, workerName: "unit-test-worker" });
+      await runFixture(envFile, { capture });
       assert.equal(capture.options.env.LUMINA_WEBHOOK_TOKEN, undefined);
       assert.equal(capture.options.env.RESEND_API_KEY, undefined);
-      assert.doesNotMatch(capture.args.join("\n"), /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY/);
-      assert.equal(requestedUrl, "https://worker.example.invalid/health-test");
+      assert.equal(capture.options.env.CLOUDFLARE_ACCOUNT_ID, fakeProductionValues().CLOUDFLARE_ACCOUNT_ID);
+      assert.equal(capture.options.env.CLOUDFLARE_API_TOKEN, fakeProductionValues().CLOUDFLARE_API_TOKEN);
+      assert.doesNotMatch(capture.args.join("\n"), /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY|secret/i);
     } finally {
       if (previousWebhook === undefined) delete process.env.LUMINA_WEBHOOK_TOKEN;
       else process.env.LUMINA_WEBHOOK_TOKEN = previousWebhook;
@@ -308,9 +601,14 @@ test("deployment strips runtime secrets from Wrangler environment and health-che
   });
 });
 
-test("top-level failure includes bounded sanitized Wrangler detail", async () => {
+test("top-level Wrangler failure exposes bounded detail and redacts every generated production value", async () => {
+  const fixtureValues = fakeProductionValues({ EMAIL_REPLY_TO: "reply@example.test" });
   await withTemporaryEnv(async (envFile) => {
-    const values = fakeProductionValues();
+    const values = {
+      ...fixtureValues,
+      CUSTOM_DOMAIN_HOSTNAME: "worker.example.invalid",
+      CUSTOM_DOMAIN_ZONE_NAME: "example.invalid",
+    };
     const sensitiveValues = Object.values(values).filter(Boolean);
     const encodedValues = sensitiveValues.flatMap((value) => [
       encodeURIComponent(value),
@@ -325,27 +623,82 @@ test("top-level failure includes bounded sanitized Wrangler detail", async () =>
       "x".repeat(9_000),
       ...sensitiveValues,
       ...encodedValues,
-      "Wrangler conflict detail remains visible after sanitization.",
+      "Wrangler strict conflict detail remains visible.",
     ].join("\n");
-    await assert.rejects(
-      runDeployment({
-        dryRun: true,
-        envFile,
+    let rejected;
+    try {
+      await runFixture(envFile, {
         spawnImplementation: failingSpawn(exposed),
-      }),
-      (error) => {
-        const rendered = formatControllerFailure(error);
-        assert.match(rendered, /^Worker production controller failed: WRANGLER_FAILED$/m);
-        assert.match(rendered, /Wrangler conflict detail remains visible after sanitization\./);
-        assert.match(rendered, /<redacted>/);
-        assert.ok(Buffer.byteLength(rendered, "utf8") <= 8_100);
-        for (const value of [...sensitiveValues, ...encodedValues]) {
-          assert.equal(rendered.includes(value), false);
-        }
-        return true;
-      },
-    );
+      });
+    } catch (error) {
+      rejected = error;
+    }
+    const rendered = formatControllerFailure(rejected);
+    assert.match(rendered, /^Worker production controller failed: WRANGLER_FAILED$/m);
+    assert.match(rendered, /Wrangler strict conflict detail remains visible\./);
+    assert.ok(Buffer.byteLength(rendered, "utf8") <= 8_100);
+    for (const value of [...sensitiveValues, ...encodedValues]) {
+      assert.equal(rendered.includes(value), false);
+    }
+  }, fixtureValues);
+});
+
+test("Cloudflare API failures surface only stable redacted controller codes", async () => {
+  const values = validatedValues();
+  let rejected;
+  try {
+    await preflightCustomDomain(values, async () => {
+      throw new Error(Object.values(values).join(" "));
+    });
+  } catch (error) {
+    rejected = error;
+  }
+  const rendered = formatControllerFailure(rejected);
+  assert.equal(
+    rendered,
+    "Worker production controller failed: CUSTOM_DOMAIN_PREFLIGHT_UNAVAILABLE\n",
+  );
+  for (const value of Object.values(values).filter(Boolean)) {
+    assert.equal(rendered.includes(value), false);
+  }
+});
+
+test("Wrangler 4.102.0 accepts the generated JSON in no-upload strict dry-run", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "email-worker-wrangler-dry-run-"));
+  try {
+    const configPath = path.join(directory, "wrangler.production.json");
+    const outputDirectory = path.join(directory, "output");
+    const generated = buildProductionWranglerConfig(validatedValues(), {
+      hostname: "worker.example.invalid",
+      zoneName: "example.invalid",
+    });
+    await writeFile(configPath, `${JSON.stringify(generated, null, 2)}\n`, "utf8");
+    const packageJsonPath = path.join(workerRoot, "node_modules", "wrangler", "package.json");
+    const packageManifest = JSON.parse(await readFile(packageJsonPath, "utf8"));
+    assert.equal(packageManifest.version, "4.102.0");
+    const wranglerBin = path.resolve(path.dirname(packageJsonPath), packageManifest.bin.wrangler);
+    await execFileAsync(process.execPath, [
+      wranglerBin,
+      "deploy",
+      "--config",
+      configPath,
+      "--strict",
+      "--dry-run",
+      "--outdir",
+      outputDirectory,
+    ], { cwd: workerRoot, maxBuffer: 10 * 1024 * 1024 });
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("dry-run and cleanup leave the Git worktree unchanged", async () => {
+  const before = await execFileAsync("git", ["status", "--porcelain"], { cwd: repositoryRoot });
+  await withTemporaryEnv(async (envFile) => {
+    await runFixture(envFile, { dryRun: true });
   });
+  const after = await execFileAsync("git", ["status", "--porcelain"], { cwd: repositoryRoot });
+  assert.equal(after.stdout, before.stdout);
 });
 
 test("server template is empty and excludes runtime secrets", async () => {
@@ -356,20 +709,15 @@ test("server template is empty and excludes runtime secrets", async () => {
   assert.doesNotMatch(template, /LUMINA_WEBHOOK_TOKEN|RESEND_API_KEY|example\.com/);
 });
 
-test("tracked contracts preserve the Windows-development and Ubuntu-production boundary", async () => {
+test("tracked contracts keep Windows development-only and Ubuntu production-only", async () => {
   const { stdout } = await execFileAsync("git", ["ls-files", "-z"], {
     cwd: repositoryRoot,
     encoding: "buffer",
     maxBuffer: 10 * 1024 * 1024,
   });
   const files = stdout.toString("utf8").split("\0").filter(Boolean);
-  const retiredLocalName = [".env", "production", "local"].join(".");
-  const violations = [];
-  for (const file of files) {
-    const contents = await readFile(path.join(repositoryRoot, file));
-    if (contents.includes(Buffer.from(retiredLocalName))) violations.push(file);
-  }
-  assert.deepEqual(violations, []);
+  assert.equal(files.some((file) => /wrangler\.production\.json$/i.test(file)), false);
+  assert.equal(files.some((file) => /email-worker-deploy\.env$/i.test(file)), false);
 
   const contractFiles = [
     "README.md",
@@ -384,10 +732,11 @@ test("tracked contracts preserve the Windows-development and Ubuntu-production b
   assert.match(contracts, /Windows[^\n]*development|Windows[^\n]*开发/i);
   assert.match(contracts, /Ubuntu[^\n]*production|Ubuntu[^\n]*生产/i);
   assert.match(contracts, /\/etc\/lumina-crm\/secrets\/email-worker-deploy\.env/);
+  assert.match(contracts, /\/var\/lib\/lumina-crm\/email-worker-deployments/);
   assert.doesNotMatch(contracts, /```powershell[\s\S]{0,500}deploy:production/i);
 });
 
-test("tracked public tree and Wrangler config contain no production identifiers", async () => {
+test("tracked public tree contains no production identifiers or generated production config", async () => {
   const { stdout } = await execFileAsync("git", ["ls-files", "-z"], {
     cwd: repositoryRoot,
     encoding: "buffer",
@@ -412,6 +761,8 @@ test("tracked public tree and Wrangler config contain no production identifiers"
   assert.deepEqual(violations, []);
 
   const wrangler = await readFile(path.join(workerRoot, "wrangler.toml"), "utf8");
+  assert.match(wrangler, /^workers_dev = false$/m);
+  assert.match(wrangler, /^preview_urls = false$/m);
   assert.doesNotMatch(wrangler, /^\s*(?:name|route|routes|vars|account_id)\s*=/m);
   assert.doesNotMatch(wrangler, /https:\/\/|@/);
 });

@@ -1,9 +1,9 @@
-# Implementation status — v3.8.6 release candidate
+# Implementation status — v3.8.7 release candidate
 
 ## Scope
 
-v3.8.6 retains the production shared-host isolation and persistent first-install flow, and makes
-the email Worker strict deployment preserve its accepted Observability policy. Windows is
+v3.8.7 retains the production shared-host isolation and persistent first-install flow, and makes
+the email Worker strict deployment compare a complete server-local production configuration. Windows is
 development-only and holds no production Worker
 configuration or Cloudflare credentials; Ubuntu alone stores the server Env, performs the in-place
 deployment, and verifies health. Public source does not identify the production Worker, Custom
@@ -33,13 +33,14 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   nine explicit escaped HTML/text templates, Resend idempotency, stable provider errors, and safe
   logs;
 - a generic tracked Wrangler contract with `workers.dev` disabled, no route/name/production vars,
-  Dashboard-managed Custom Domain routing, two declared required secret binding names, and explicit
-  full-sampling persisted invocation logs with traces disabled;
+  Preview URLs disabled, two declared required secret binding names, and explicit full-sampling
+  persisted invocation logs with traces disabled;
 - a Linux-only Node production controller using the fixed root-owned Ubuntu Env contract, strict
-  route-free deployment, no-upload cross-platform fictitious dry-run, bounded sanitized Wrangler
-  failure detail, and generic health acceptance;
+  deployment from a complete mode-0600 temporary JSON, a mode-0700 owner-checked runtime directory,
+  read-only Custom Domain ownership/set preflight, bounded sanitized Wrangler failure detail, and
+  generic health acceptance;
 - explicit separation between CRM application initialization and email Worker deployment;
-- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.6.
+- synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.7.
 
 ## Local verification recorded
 
@@ -47,7 +48,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | --- | --- |
 | Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
-| Email delivery Worker `npm run test:deployment` | Pass: 29/29, including Wrangler 4.102.0 no-upload dry-run, accepted Observability parity, Ubuntu Env permission contracts, and bounded full-value output redaction |
+| Email delivery Worker `npm run test:deployment` | Pass: 54/54, including Wrangler 4.102.0 no-upload strict dry-run, complete generated config parity, Custom Domain preflight, 0700/0600 owner/symlink contracts, cleanup, and bounded full-value output redaction |
 | Email delivery Worker `npm run lint` | Pass |
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |

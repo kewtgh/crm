@@ -2,8 +2,9 @@
 
 This directory contains the generic, independently deployed Cloudflare Worker that adapts Lumina's
 internal delivery protocol to Resend. Windows is the development environment: it may edit source,
-run tests and lint, and run a no-upload dry-run with an explicit fictitious fixture. It must not
-hold production identifiers or Cloudflare credentials and must not perform a production deploy.
+run tests and lint, including the no-upload Wrangler test with a fictitious generated config. It
+must not hold production identifiers or Cloudflare credentials and the production controller fails
+before reading Env on Windows.
 Ubuntu is the production environment and is the only place that stores deployment configuration,
 holds Cloudflare deployment credentials, deploys the existing Worker in place, and checks health.
 
@@ -28,10 +29,10 @@ dot segment, be at most 200 characters, and be different. Missing or invalid run
 fails closed with `SERVICE_NOT_CONFIGURED`.
 
 The committed `wrangler.toml` contains no Worker name, routes, Custom Domain, account ID, or
-plaintext production variables. It disables `workers.dev`, preserves remote plaintext variables,
-declares the two required secret binding names, and explicitly preserves the accepted
-Observability behavior: full-sampling persisted invocation logs are enabled while traces remain
-disabled. Custom Domain routing remains managed in Cloudflare Dashboard.
+plaintext production variables. It explicitly disables both `workers.dev` and Preview URLs,
+preserves remote plaintext variables, declares the two required secret binding names, and preserves
+the accepted Observability behavior: full-sampling persisted invocation logs are enabled while
+traces remain disabled.
 
 ## Ubuntu production configuration
 
@@ -47,6 +48,18 @@ owned by `root:lumina-crm`, have mode `0640`, never be world-readable, and never
 All real values are filled only on the Ubuntu production server. `CLOUDFLARE_API_TOKEN` is a
 production deployment secret; `CLOUDFLARE_ACCOUNT_ID` is not a password but remains server-only.
 The controller never prints Worker names, URLs, mailboxes, paths, account IDs, or tokens.
+
+Provision the isolated transient configuration root once, with no group or world access:
+
+```sh
+sudo install -d -o lumina-crm -g lumina-crm -m 0700 \
+  /var/lib/lumina-crm/email-worker-deployments
+```
+
+The controller must run as `lumina-crm`. It creates an unpredictable direct child directory with
+mode `0700`, writes `wrangler.production.json` with mode `0600`, verifies both owners and rejects
+symlinks. The entire child directory, including dry-run output, is removed in `finally` after
+success, Wrangler failure, spawn failure, or health rejection.
 
 Do not add `LUMINA_WEBHOOK_TOKEN` or `RESEND_API_KEY` to this file. They remain exclusively in the
 existing Cloudflare Worker secret bindings. Deployment code does not read, upload, replace, or
@@ -68,21 +81,14 @@ npm run test:deployment
 npm run lint
 ```
 
-Windows dry-run tests must use an absolute path to a completely fictitious temporary Env file:
-
-```sh
-npm run deploy:production:dry-run -- --env-file <absolute-test-file>
-```
-
-The dry-run requires `--dry-run`, creates no upload, skips the production health endpoint, and
-removes its generated bundle. It never falls back to a repository or current-directory Env file.
+`npm run test:deployment` exercises Wrangler 4.102.0 with a completely fictitious generated JSON
+and `--dry-run`; it does not invoke the production controller or upload anything.
 
 On Ubuntu, after pulling and reviewing the intended commit, operators may validate the real
 server-only configuration without upload:
 
 ```sh
-npm run deploy:production:dry-run -- \
-  --env-file /etc/lumina-crm/secrets/email-worker-deploy.env
+npm run deploy:production:dry-run
 ```
 
 Only Ubuntu may perform the production deployment. The default Env path is fixed, so no argument
@@ -92,14 +98,22 @@ is needed:
 npm run deploy:production
 ```
 
-Non-Linux production execution fails with `PRODUCTION_DEPLOY_REQUIRES_LINUX`. `--env-file` is
-accepted only with an absolute path for controlled operations; there is no current-directory
-search or inferred deployment workspace.
+Non-Linux execution fails with `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access. Both modes use
+only the fixed root-owned Env; there is no argument or current-directory fallback.
 
-The Node controller always passes `--name`, `--keep-vars`, and `--strict`, sends only the six
-plaintext Worker bindings through Wrangler, and never passes a route, Custom Domain, or secret. A
-failed Wrangler invocation retains at most 8 KB of its already-sanitized diagnostic tail; literal
-and URL-encoded server values remain redacted. A real deployment performs a GET against
+Before Wrangler starts, the controller uses the read-only Workers Domains API twice: the configured
+hostname must belong to the configured Worker, and that Worker must have exactly that one Custom
+Domain. Missing domains, ownership conflicts, extra domains, API errors, and malformed responses
+fail closed. Dashboard remains available for initial creation, inspection, and emergency rollback;
+the normal deployment source of truth is the Ubuntu server-local Env hostname rendered into the
+temporary Wrangler JSON. No deployment silently takes over another Worker's domain.
+
+The generated JSON contains the Worker name, disabled workers.dev/Preview URLs, the sole Custom
+Domain route, complete plaintext vars, Observability, `keep_vars=true`, and required secret names.
+Wrangler receives only `deploy --config <temporary-file> --strict`, plus `--dry-run --outdir` for
+dry-run; name, vars, routes, and secrets are not sent as CLI overrides. A failed invocation retains
+at most 8 KB of its already-sanitized diagnostic tail; literal and URL-encoded server values remain
+redacted. A real deployment performs a GET against
 `WORKER_PUBLIC_BASE_URL + HEALTH_PATH` and accepts only the generic
 `{ "status": "ok", "service": "lumina-email-delivery" }` contract. It does not send mail.
 

@@ -246,8 +246,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.6 `
-  -OperationsImage lumina-crm-ops-validation:3.8.6
+  -ApplicationImage lumina-crm-validation:3.8.7 `
+  -OperationsImage lumina-crm-ops-validation:3.8.7
 ```
 
 They are local integration tests, not production deployment commands.
@@ -271,9 +271,10 @@ not deployed by the application `deploy:production` controller.
 
 No production Worker name, Custom Domain, sender, route, application hostname, account ID, API
 token, or public URL belongs in tracked source or on the Windows development machine. Windows is
-limited to source development, tests, lint/typecheck, and Wrangler dry-run with an explicit
-absolute path to a completely fictitious fixture. It must not run a production Wrangler deploy or
-modify Cloudflare Dashboard, Worker configuration, Custom Domain routing, or secrets.
+limited to source development, tests, and lint/typecheck. The deployment test runs Wrangler against
+a completely fictitious generated JSON with `--dry-run`; the production controller itself rejects
+Windows before Env access. Windows must not modify Cloudflare Dashboard, Worker configuration,
+Custom Domain routing, or secrets.
 
 Ubuntu is the production environment. After pulling an audited commit, install the empty tracked
 template `deploy/email-worker-deploy.env.example` as
@@ -284,15 +285,33 @@ the Worker name/base URL, CRM URL, sender/reply-to/brand, delivery and health pa
 account ID, and Cloudflare API token. The account ID is server-only even though it is not a
 password; the API token is a production deployment secret. Values must never be printed.
 
+Provision the transient production-config root once and run the controller as `lumina-crm`:
+
+```sh
+sudo install -d -o lumina-crm -g lumina-crm -m 0700 \
+  /var/lib/lumina-crm/email-worker-deployments
+```
+
+Each invocation creates an unpredictable direct child at mode `0700`, writes the generated JSON at
+mode `0600`, verifies `lumina-crm` ownership and rejects symlinks. The child also holds dry-run
+output and is removed in `finally` on success and every failure path.
+
 The committed Wrangler configuration has no `name`, `routes`, `route`, or production `vars`.
-Custom Domain routing remains managed in Cloudflare Dashboard. The tracked Observability contract
-keeps full-sampling persisted invocation logs enabled and traces disabled, matching the accepted
-remote behavior instead of allowing an implicit deployment reset. The deployment controller passes
-the Ubuntu-supplied Worker name, preserves remote plaintext bindings, keeps strict mode enabled,
-and sends only the six runtime plaintext variables. It never reads, uploads, replaces, or deletes
-Cloudflare secrets. A Wrangler failure reports at most 8 KB of already-sanitized diagnostic tail;
-the Worker name, URLs, mailboxes, paths, brand, account ID, and API token remain redacted in both
-literal and URL-encoded forms.
+It explicitly sets `workers_dev=false`, `preview_urls=false`, `keep_vars=true`, and the accepted
+Observability contract. Before deployment, the controller performs read-only Workers Domains API
+queries by hostname and Worker name. The configured hostname must already belong to the configured
+Worker, and that Worker must have no second Custom Domain. Missing, foreign, additional, or malformed
+domain state fails closed; the controller never takes over another Worker's domain.
+
+Dashboard remains the operator surface for initial Custom Domain creation, inspection, and emergency
+rollback. For routine strict deployments, the source of truth is the hostname derived from the
+Ubuntu server-local `WORKER_PUBLIC_BASE_URL`. The controller renders it, the API-confirmed zone name,
+the Worker name, disabled Preview URLs, complete plaintext vars, Observability, and required secret
+names into the temporary JSON. It then runs only `wrangler deploy --config <temporary-file>
+--strict`; dry-run adds only its no-upload/output arguments. No name, var, route, or secret CLI
+override remains. A Wrangler failure reports at most 8 KB of already-sanitized diagnostic tail;
+the Worker name, Custom Domain, URLs, mailboxes, paths, brand, account ID, and API token remain
+redacted in literal and URL-encoded forms.
 
 The Worker requires the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` secret binding names.
 Neither belongs in the deployment Env: both remain only in Cloudflare Worker secret bindings, and
@@ -328,22 +347,20 @@ calendar-cancel
 
 The actual database calendar delivery types are `INVITE`, `UPDATE`, and `CANCEL`; the CRM produces
 the corresponding `calendar-*` keys above. See the subproject README for Env validation, tests,
-Dashboard-owned route boundaries, deployment, and generic health acceptance. Production execution
-is Linux-only and defaults strictly to `/etc/lumina-crm/secrets/email-worker-deploy.env`. An
-explicit `--env-file` must be absolute. Dry-run requires that option, never uploads, never checks
-the production health endpoint, and cleans its bundle:
+the Custom Domain boundary, deployment, and generic health acceptance. Production and production
+dry-run are Linux-only and always read `/etc/lumina-crm/secrets/email-worker-deploy.env`. Dry-run
+never uploads or checks the health endpoint and always removes its generated JSON and bundle:
 
 ```sh
 cd infrastructure/email-delivery-worker
-npm run deploy:production:dry-run -- \
-  --env-file /etc/lumina-crm/secrets/email-worker-deploy.env
+npm run deploy:production:dry-run
 npm run deploy:production
 ```
 
 The first command is the Ubuntu real-configuration dry-run; the second performs the in-place
 deployment and checks only `WORKER_PUBLIC_BASE_URL + HEALTH_PATH`. It sends no test email. Windows
-tests use an absolute temporary fictitious Env path instead. CRM application initialization and
-email Worker deployment remain independent stages.
+tests use only fictitious generated input. CRM application initialization and email Worker
+deployment remain independent stages.
 
 ## Cloudflare Tunnel and loopback Caddy gateway
 

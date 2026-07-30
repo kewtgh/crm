@@ -1,6 +1,15 @@
 import { spawn } from "node:child_process";
-import { lstat, readFile, rm, stat } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { createRequire } from "node:module";
+import { isIP } from "node:net";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -14,7 +23,12 @@ import {
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workerDirectory = path.resolve(scriptDirectory, "..");
 export const DEFAULT_PRODUCTION_ENV_FILE = "/etc/lumina-crm/secrets/email-worker-deploy.env";
-const dryRunOutputDirectory = path.join(workerDirectory, ".wrangler", "production-dry-run");
+export const DEFAULT_PRODUCTION_CONFIG_ROOT = "/var/lib/lumina-crm/email-worker-deployments";
+const productionCompatibilityDate = "2026-07-27";
+const temporaryDirectoryPrefix = "wrangler-";
+const temporaryConfigFilename = "wrangler.production.json";
+const workerEntrypoint = path.join(workerDirectory, "src", "index.js");
+const requiredSecretNames = ["LUMINA_WEBHOOK_TOKEN", "RESEND_API_KEY"];
 const supportedKeys = new Set([
   "WORKER_NAME",
   "WORKER_PUBLIC_BASE_URL",
@@ -65,6 +79,27 @@ function placeholderHostname(hostname) {
     || normalized === "::1";
 }
 
+function validCustomDomainHostname(url, { allowTestValues }) {
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (url.port
+    || hostname.length > 253
+    || !hostname.includes(".")
+    || hostname.includes("*")
+    || isIP(hostname) !== 0
+    || hostname === "localhost") {
+    return false;
+  }
+  const labels = hostname.split(".");
+  if (!labels.every((label) => (
+    label.length >= 1
+    && label.length <= 63
+    && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+  ))) {
+    return false;
+  }
+  return allowTestValues || !placeholderHostname(hostname);
+}
+
 function mailboxDomain(value) {
   const bracketed = value.match(/<([^<>]+)>$/);
   const address = (bracketed?.[1] ?? value).trim();
@@ -97,6 +132,9 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
   const publicBaseUrl = parseHttpsUrl(values.WORKER_PUBLIC_BASE_URL, { originOnly: true });
   const applicationUrl = parseHttpsUrl(values.CRM_APP_URL);
   if (!publicBaseUrl) fail("WORKER_PUBLIC_BASE_URL_INVALID");
+  if (!validCustomDomainHostname(publicBaseUrl, { allowTestValues })) {
+    fail("WORKER_PUBLIC_HOSTNAME_INVALID");
+  }
   if (!applicationUrl) fail("CRM_APP_URL_INVALID");
   if (!allowTestValues && (
     [...supportedKeys].some((key) => values[key] && placeholderWords.test(values[key]))
@@ -127,6 +165,7 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
 
   return {
     ...values,
+    CUSTOM_DOMAIN_HOSTNAME: publicBaseUrl.hostname,
     CRM_APP_URL: applicationUrl.toString(),
     WORKER_PUBLIC_BASE_URL: publicBaseUrl.origin,
   };
@@ -196,6 +235,254 @@ export async function loadProductionValues(envFile, options = {}) {
   return validateProductionValues(parsed, options);
 }
 
+function uidForUser(passwdFileContents, username) {
+  for (const line of passwdFileContents.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const [name, , uid] = line.split(":");
+    if (name === username && /^\d+$/.test(uid)) return Number(uid);
+  }
+  fail("PRODUCTION_RUNTIME_USER_UNAVAILABLE");
+}
+
+export async function validateProductionConfigRoot(runtimeRoot, {
+  expectedUid = process.getuid?.(),
+  lstatImplementation = lstat,
+  readFileImplementation = readFile,
+  passwdFile = "/etc/passwd",
+} = {}) {
+  if (!path.isAbsolute(runtimeRoot)) fail("PRODUCTION_CONFIG_ROOT_INVALID");
+  if (!Number.isSafeInteger(expectedUid) || expectedUid < 0) {
+    fail("PRODUCTION_RUNTIME_USER_UNAVAILABLE");
+  }
+  let passwdContents;
+  try {
+    passwdContents = await readFileImplementation(passwdFile, "utf8");
+  } catch {
+    fail("PRODUCTION_RUNTIME_USER_UNAVAILABLE");
+  }
+  const luminaUid = uidForUser(passwdContents, "lumina-crm");
+  if (expectedUid !== luminaUid) fail("PRODUCTION_RUNTIME_USER_INVALID");
+
+  let rootStatus;
+  try {
+    rootStatus = await lstatImplementation(runtimeRoot);
+  } catch (error) {
+    if (error?.code === "ENOENT") fail("PRODUCTION_CONFIG_ROOT_MISSING");
+    fail("PRODUCTION_CONFIG_ROOT_UNREADABLE");
+  }
+  if (rootStatus.isSymbolicLink()) fail("PRODUCTION_CONFIG_ROOT_SYMLINK_FORBIDDEN");
+  if (!rootStatus.isDirectory()) fail("PRODUCTION_CONFIG_ROOT_NOT_DIRECTORY");
+  if (rootStatus.uid !== luminaUid) fail("PRODUCTION_CONFIG_ROOT_OWNER_INVALID");
+  if ((rootStatus.mode & 0o777) !== 0o700) fail("PRODUCTION_CONFIG_ROOT_MODE_INVALID");
+  return luminaUid;
+}
+
+function domainRecord(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.hostname === "string"
+    && typeof value.service === "string"
+    && typeof value.zone_name === "string"
+    && value.hostname.length > 0
+    && value.service.length > 0
+    && value.zone_name.length > 0;
+}
+
+async function fetchDomainList(configuration, query, fetchImplementation) {
+  const url = new URL(
+    `/client/v4/accounts/${encodeURIComponent(configuration.CLOUDFLARE_ACCOUNT_ID)}/workers/domains`,
+    "https://api.cloudflare.com",
+  );
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+
+  let response;
+  try {
+    response = await fetchImplementation(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${configuration.CLOUDFLARE_API_TOKEN}`,
+      },
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    fail("CUSTOM_DOMAIN_PREFLIGHT_UNAVAILABLE");
+  }
+  if (response.status !== 200) fail("CUSTOM_DOMAIN_PREFLIGHT_UNAVAILABLE");
+
+  const payload = await response.json().catch(() => null);
+  if (!payload
+    || payload.success !== true
+    || !Array.isArray(payload.result)
+    || !payload.result.every(domainRecord)
+    || (Number.isSafeInteger(payload.result_info?.total_count)
+      && payload.result_info.total_count !== payload.result.length)) {
+    fail("CUSTOM_DOMAIN_PREFLIGHT_INVALID_RESPONSE");
+  }
+  return payload.result;
+}
+
+export async function preflightCustomDomain(
+  configuration,
+  fetchImplementation = globalThis.fetch,
+) {
+  const hostnameMatches = await fetchDomainList(
+    configuration,
+    { hostname: configuration.CUSTOM_DOMAIN_HOSTNAME },
+    fetchImplementation,
+  );
+  if (hostnameMatches.length === 0) fail("CUSTOM_DOMAIN_NOT_FOUND");
+  if (hostnameMatches.length !== 1
+    || hostnameMatches[0].hostname !== configuration.CUSTOM_DOMAIN_HOSTNAME) {
+    fail("CUSTOM_DOMAIN_PREFLIGHT_INVALID_RESPONSE");
+  }
+  if (hostnameMatches[0].service !== configuration.WORKER_NAME) {
+    fail("CUSTOM_DOMAIN_OWNERSHIP_MISMATCH");
+  }
+
+  const serviceMatches = await fetchDomainList(
+    configuration,
+    { service: configuration.WORKER_NAME },
+    fetchImplementation,
+  );
+  if (serviceMatches.length !== 1
+    || serviceMatches[0].service !== configuration.WORKER_NAME
+    || serviceMatches[0].hostname !== configuration.CUSTOM_DOMAIN_HOSTNAME
+    || serviceMatches[0].zone_name !== hostnameMatches[0].zone_name) {
+    fail("CUSTOM_DOMAIN_SET_MISMATCH");
+  }
+  return {
+    hostname: configuration.CUSTOM_DOMAIN_HOSTNAME,
+    zoneName: hostnameMatches[0].zone_name,
+  };
+}
+
+export function buildProductionWranglerConfig(configuration, customDomain) {
+  const variables = {
+    CRM_APP_URL: configuration.CRM_APP_URL,
+    EMAIL_FROM: configuration.EMAIL_FROM,
+    EMAIL_BRAND_NAME: configuration.EMAIL_BRAND_NAME,
+    DELIVERY_PATH: configuration.DELIVERY_PATH,
+    HEALTH_PATH: configuration.HEALTH_PATH,
+  };
+  if (configuration.EMAIL_REPLY_TO) variables.EMAIL_REPLY_TO = configuration.EMAIL_REPLY_TO;
+
+  return {
+    name: configuration.WORKER_NAME,
+    main: workerEntrypoint,
+    compatibility_date: productionCompatibilityDate,
+    workers_dev: false,
+    preview_urls: false,
+    keep_vars: true,
+    routes: [{
+      pattern: customDomain.hostname,
+      zone_name: customDomain.zoneName,
+      custom_domain: true,
+      enabled: true,
+      previews_enabled: false,
+    }],
+    vars: variables,
+    observability: {
+      enabled: true,
+      head_sampling_rate: 1,
+      logs: {
+        enabled: true,
+        head_sampling_rate: 1,
+        persist: true,
+        invocation_logs: true,
+      },
+      traces: {
+        enabled: false,
+        head_sampling_rate: 1,
+        persist: true,
+      },
+    },
+    secrets: { required: [...requiredSecretNames] },
+  };
+}
+
+function directTemporaryChild(runtimeRoot, directory) {
+  const resolvedRoot = path.resolve(runtimeRoot);
+  const resolvedDirectory = path.resolve(directory);
+  return path.dirname(resolvedDirectory) === resolvedRoot
+    && path.basename(resolvedDirectory).startsWith(temporaryDirectoryPrefix);
+}
+
+export async function removeTemporaryWranglerConfig(temporaryConfig, {
+  rmImplementation = rm,
+} = {}) {
+  if (!temporaryConfig
+    || !directTemporaryChild(temporaryConfig.runtimeRoot, temporaryConfig.directory)) {
+    fail("TEMP_CONFIG_CLEANUP_TARGET_INVALID");
+  }
+  try {
+    await rmImplementation(temporaryConfig.directory, { force: true, recursive: true });
+  } catch {
+    fail("TEMP_CONFIG_CLEANUP_FAILED");
+  }
+}
+
+export async function createTemporaryWranglerConfig(configuration, customDomain, {
+  runtimeRoot = DEFAULT_PRODUCTION_CONFIG_ROOT,
+  expectedUid = process.getuid?.(),
+  chmodImplementation = chmod,
+  lstatImplementation = lstat,
+  mkdtempImplementation = mkdtemp,
+  readFileImplementation = readFile,
+  rmImplementation = rm,
+  writeFileImplementation = writeFile,
+} = {}) {
+  const luminaUid = await validateProductionConfigRoot(runtimeRoot, {
+    expectedUid,
+    lstatImplementation,
+    readFileImplementation,
+  });
+  let directory;
+  try {
+    directory = await mkdtempImplementation(path.join(runtimeRoot, temporaryDirectoryPrefix));
+    if (!directTemporaryChild(runtimeRoot, directory)) fail("TEMP_CONFIG_DIRECTORY_INVALID");
+    await chmodImplementation(directory, 0o700);
+    const directoryStatus = await lstatImplementation(directory);
+    if (directoryStatus.isSymbolicLink()) fail("TEMP_CONFIG_DIRECTORY_SYMLINK_FORBIDDEN");
+    if (!directoryStatus.isDirectory()) fail("TEMP_CONFIG_DIRECTORY_INVALID");
+    if (directoryStatus.uid !== luminaUid) fail("TEMP_CONFIG_DIRECTORY_OWNER_INVALID");
+    if ((directoryStatus.mode & 0o777) !== 0o700) fail("TEMP_CONFIG_DIRECTORY_MODE_INVALID");
+
+    const configPath = path.join(directory, temporaryConfigFilename);
+    const config = buildProductionWranglerConfig(configuration, customDomain);
+    await writeFileImplementation(configPath, `${JSON.stringify(config, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+    await chmodImplementation(configPath, 0o600);
+    const configStatus = await lstatImplementation(configPath);
+    if (configStatus.isSymbolicLink()) fail("TEMP_CONFIG_FILE_SYMLINK_FORBIDDEN");
+    if (!configStatus.isFile()) fail("TEMP_CONFIG_FILE_INVALID");
+    if (configStatus.uid !== luminaUid) fail("TEMP_CONFIG_FILE_OWNER_INVALID");
+    if ((configStatus.mode & 0o777) !== 0o600) fail("TEMP_CONFIG_FILE_MODE_INVALID");
+    return {
+      configPath,
+      directory,
+      dryRunOutputDirectory: path.join(directory, "dry-run-output"),
+      runtimeRoot,
+    };
+  } catch (error) {
+    if (directory && directTemporaryChild(runtimeRoot, directory)) {
+      try {
+        await rmImplementation(directory, { force: true, recursive: true });
+      } catch {
+        fail("TEMP_CONFIG_CLEANUP_FAILED");
+      }
+    }
+    if (error instanceof ProductionConfigurationError) throw error;
+    fail("TEMP_CONFIG_CREATE_FAILED");
+  }
+}
+
 function wranglerExecutable() {
   const packageJsonPath = require.resolve("wrangler/package.json");
   const packageJson = require(packageJsonPath);
@@ -206,27 +493,17 @@ function wranglerExecutable() {
   return path.resolve(path.dirname(packageJsonPath), relativeBin);
 }
 
-export function buildWranglerArguments(configuration, { dryRun = false } = {}) {
-  const variables = [
-    ["CRM_APP_URL", configuration.CRM_APP_URL],
-    ["EMAIL_FROM", configuration.EMAIL_FROM],
-    ["EMAIL_BRAND_NAME", configuration.EMAIL_BRAND_NAME],
-    ["DELIVERY_PATH", configuration.DELIVERY_PATH],
-    ["HEALTH_PATH", configuration.HEALTH_PATH],
-  ];
-  if (configuration.EMAIL_REPLY_TO) variables.push(["EMAIL_REPLY_TO", configuration.EMAIL_REPLY_TO]);
+export function buildWranglerArguments(temporaryConfig, { dryRun = false } = {}) {
   const args = [
     wranglerExecutable(),
     "deploy",
     "--config",
-    path.join(workerDirectory, "wrangler.toml"),
-    "--name",
-    configuration.WORKER_NAME,
-    "--keep-vars",
+    temporaryConfig.configPath,
     "--strict",
   ];
-  for (const [key, value] of variables) args.push("--var", `${key}:${value}`);
-  if (dryRun) args.push("--dry-run", "--outdir", dryRunOutputDirectory);
+  if (dryRun) {
+    args.push("--dry-run", "--outdir", temporaryConfig.dryRunOutputDirectory);
+  }
   return args;
 }
 
@@ -253,6 +530,8 @@ function sanitizedOutput(value, configuration) {
     configuration.CLOUDFLARE_API_TOKEN,
     configuration.CLOUDFLARE_ACCOUNT_ID,
     configuration.WORKER_NAME,
+    configuration.CUSTOM_DOMAIN_HOSTNAME,
+    configuration.CUSTOM_DOMAIN_ZONE_NAME,
     configuration.WORKER_PUBLIC_BASE_URL,
     configuration.CRM_APP_URL,
     configuration.CRM_APP_URL.replace(/\/$/, ""),
@@ -289,8 +568,11 @@ export function formatControllerFailure(error) {
   return `Worker production controller failed: ${code}\n`;
 }
 
-async function runWrangler(configuration, { dryRun, spawnImplementation = spawn }) {
-  const args = buildWranglerArguments(configuration, { dryRun });
+async function runWrangler(configuration, temporaryConfig, {
+  dryRun,
+  spawnImplementation = spawn,
+}) {
+  const args = buildWranglerArguments(temporaryConfig, { dryRun });
   const childEnvironment = { ...process.env };
   delete childEnvironment.LUMINA_WEBHOOK_TOKEN;
   delete childEnvironment.RESEND_API_KEY;
@@ -346,47 +628,58 @@ async function verifyHealth(configuration, fetchImplementation = globalThis.fetc
 
 export async function runDeployment({
   dryRun = false,
-  envFile = dryRun ? undefined : DEFAULT_PRODUCTION_ENV_FILE,
-  allowTestValues = dryRun,
+  envFile = DEFAULT_PRODUCTION_ENV_FILE,
+  runtimeRoot = DEFAULT_PRODUCTION_CONFIG_ROOT,
+  allowTestValues = false,
   platform = process.platform,
   fetchImplementation = globalThis.fetch,
   spawnImplementation = spawn,
   validateEnvFileImplementation = validateProductionEnvFile,
+  preflightCustomDomainImplementation = preflightCustomDomain,
+  createTemporaryConfigImplementation = createTemporaryWranglerConfig,
+  removeTemporaryConfigImplementation = removeTemporaryWranglerConfig,
+  temporaryConfigOptions = {},
 } = {}) {
-  if (!dryRun && platform !== "linux") fail("PRODUCTION_DEPLOY_REQUIRES_LINUX");
-  if (!envFile) fail("DRY_RUN_ENV_FILE_REQUIRED");
+  if (platform !== "linux") fail("PRODUCTION_DEPLOY_REQUIRES_LINUX");
   if (!path.isAbsolute(envFile)) fail("ENV_FILE_PATH_MUST_BE_ABSOLUTE");
-  if (!dryRun) await validateEnvFileImplementation(envFile);
+  await validateEnvFileImplementation(envFile);
 
-  const configuration = await loadProductionValues(envFile, { allowTestValues });
+  let configuration = await loadProductionValues(envFile, { allowTestValues });
+  const customDomain = await preflightCustomDomainImplementation(
+    configuration,
+    fetchImplementation,
+  );
+  configuration = {
+    ...configuration,
+    CUSTOM_DOMAIN_ZONE_NAME: customDomain.zoneName,
+  };
+  let temporaryConfig;
   try {
-    await runWrangler(configuration, { dryRun, spawnImplementation });
+    temporaryConfig = await createTemporaryConfigImplementation(configuration, customDomain, {
+      runtimeRoot,
+      ...temporaryConfigOptions,
+    });
+    await runWrangler(configuration, temporaryConfig, { dryRun, spawnImplementation });
+    if (!dryRun) await verifyHealth(configuration, fetchImplementation);
+    return { dryRun, workerName: configuration.WORKER_NAME };
   } finally {
-    if (dryRun) await rm(dryRunOutputDirectory, { force: true, recursive: true });
+    if (temporaryConfig) {
+      await removeTemporaryConfigImplementation(temporaryConfig, temporaryConfigOptions);
+    }
   }
-  if (!dryRun) await verifyHealth(configuration, fetchImplementation);
-  return { dryRun, workerName: configuration.WORKER_NAME };
 }
 
 export function parseArguments(argumentsList) {
   let dryRun = false;
-  let envFile;
-  for (let index = 0; index < argumentsList.length; index += 1) {
-    const argument = argumentsList[index];
+  for (const argument of argumentsList) {
     if (argument === "--dry-run") {
       if (dryRun) fail("ARGUMENT_UNSUPPORTED");
       dryRun = true;
-    } else if (argument === "--env-file") {
-      if (envFile || !argumentsList[index + 1]) fail("ARGUMENT_UNSUPPORTED");
-      envFile = argumentsList[index + 1];
-      index += 1;
     } else {
       fail("ARGUMENT_UNSUPPORTED");
     }
   }
-  if (dryRun && !envFile) fail("DRY_RUN_ENV_FILE_REQUIRED");
-  if (envFile && !path.isAbsolute(envFile)) fail("ENV_FILE_PATH_MUST_BE_ABSOLUTE");
-  return { dryRun, envFile: envFile ?? DEFAULT_PRODUCTION_ENV_FILE };
+  return { dryRun, envFile: DEFAULT_PRODUCTION_ENV_FILE };
 }
 
 async function main() {

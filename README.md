@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.6**
+Current release candidate: **v3.8.7**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -99,10 +99,13 @@ a production Wrangler deployment. Ubuntu alone stores production deployment conf
 `/etc/lumina-crm/secrets/email-worker-deploy.env`, pulls the audited commit, runs the explicit
 dry-run, deploys the existing Worker in place, and checks only its health endpoint. The tracked
 Wrangler configuration contains no Worker name, domain, route, account ID, sender, or production
-URL; Custom Domain routing and the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` bindings
-remain Dashboard-managed. The tracked Observability policy preserves full-sampling persisted
-invocation logs with traces disabled, so strict deployment does not erase the accepted remote
-behavior. Sanitized Wrangler failures retain a bounded diagnostic tail while all server-supplied
+URL. Both workers.dev and Preview URLs are disabled. Routine strict deployment derives its sole
+Custom Domain from the Ubuntu server-local Env, verifies through the read-only Domains API that it
+already belongs exclusively to the target Worker, and renders the complete name/route/vars/
+Observability contract into a mode-0600 temporary JSON under a mode-0700 runtime directory.
+Dashboard remains available for initial domain creation, inspection, and emergency rollback. The
+existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` values remain remote-only and are never read or
+changed. Sanitized Wrangler failures retain a bounded diagnostic tail while all server-supplied
 deployment values remain redacted. CRM application initialization and email Worker deployment are
 separate stages.
 
