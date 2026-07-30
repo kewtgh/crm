@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.1**
+Current release candidate: **v3.8.2**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -106,7 +106,12 @@ npm run build
 The repository also includes the pinned `ms-playwright/chromium-1228` browser workflow. Run only the
 phase relevant to a scoped change, or the staged matrix when preparing an authorized release.
 
-On an initialized Linux VPS, the persistent deployment runner performs:
+On a new Linux VPS, first run the explicit persistent initialization mode. It adds repeat-safe
+database role/extension and initial-admin bootstrap around the forward-only migration, then records
+the first accepted release with no rollback image. Ordinary deploy refuses to run before this
+accepted state exists and never invokes either bootstrap step.
+
+The persistent deployment runner performs:
 
 ```text
 rootless Docker/state capacity gate
@@ -122,12 +127,14 @@ rootless Docker/state capacity gate
 post-switch failure -> application-image rollback; database stays forward
 ```
 
-Only one retry after a failed direct Git fetch may receive the temporary configured proxy. It is
-never persisted. Containers clear proxy variables. Database migration is forward-only; application
-rollback never claims to reverse an applied schema migration.
+The configured Git proxy, when present, is used for the first and only fetch; otherwise that single
+fetch is direct. It is never persisted as Git, Docker, or systemd configuration. Containers clear
+proxy variables. Database migration is forward-only; application rollback never claims to reverse
+an applied schema migration.
 
 ```bash
 npm run deploy:production:dry-run
+npm run deploy:production:initialize
 npm run deploy:production
 npm run deploy:production:status
 npm run deploy:production:logs

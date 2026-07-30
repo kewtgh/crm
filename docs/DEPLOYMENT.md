@@ -123,6 +123,12 @@ only their fixed Lumina Compose task. The deploy service holds
 rootless Unix socket remains reachable; the application unit retries if the lingering user service
 has not finished starting at boot.
 
+The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, or `rollback`.
+The systemd runner records that mode in its log, per-deployment state, and `latest.json`.
+`last-success.json` remains the accepted release contract used by later deploy and rollback
+requests. An interrupted, non-terminal request remains in place: rerun the same mode to recover its
+existing request ID. Do not delete or edit these files to bypass a deployment gate.
+
 Ensure the pinned PostgreSQL 18.4 image is present, then create the three explicit external volumes:
 
 ```sh
@@ -184,41 +190,54 @@ logs and errors, and never places it in Compose or container environments.
 
 ## First database start
 
-Validate every profile without starting anything:
+After installing all secret files and provisioning the external volumes, initialize a new
+self-hosted PostgreSQL environment with the persistent production controller:
 
 ```sh
-docker compose --project-name lumina-crm --profile ops \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml config
+npm run deploy:production:initialize
 ```
 
-After provisioning the immutable images/state file, start PostgreSQL and run:
+To return after systemd accepts the request, use:
 
 ```sh
-docker compose --project-name lumina-crm \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml up -d postgres
+npm run deploy:production:initialize:detach
+```
 
-docker compose --project-name lumina-crm --profile ops \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml run --rm db-bootstrap
-docker compose --project-name lumina-crm --profile ops \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml run --rm migration-verify
-docker compose --project-name lumina-crm --profile ops \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml run --rm migrate
-docker compose --project-name lumina-crm --profile ops \
-  --env-file /var/lib/lumina-crm/deployments/compose.env \
-  -f /opt/lumina-crm/source/compose.production.yml run --rm bootstrap-admin
+Initialization is explicit and is never inferred by `npm run deploy:production`. It is accepted
+only while `last-success.json` is absent. Conversely, ordinary deploy fails closed until an
+accepted release exists and directs the operator to the initialize command. Once initialization
+succeeds, another initialize request fails before image building or database changes. The first
+accepted release records every rollback field as `null`.
+
+The initialize runner performs capacity/builder/rootless checks, the single proxied-or-direct
+ff-only Git update, all three image builds, and candidate Compose environment creation before it
+starts PostgreSQL. Database work is then strictly:
+
+```text
+PostgreSQL healthy
+-> db-bootstrap
+-> migration-verify
+-> migrate
+-> bootstrap-admin
+-> Compose up Web/Worker
+-> PostgreSQL/Web/Worker health, loopback readiness, and Tunnel public liveness
+-> accepted state and Lumina-only cleanup
 ```
 
 `db-bootstrap` is repeat-safe but rotates role passwords to supplied values. It provisions
 `pgcrypto`, `citext`, and `pg_stat_statements` in the `extensions` schema; it does not migrate.
 `migrate` retains the advisory lock, SHA-256 checksums,
 modified-applied-migration rejection, one transaction per migration, lock/statement timeouts, and
-forward-only policy. Web/Worker never migrate at startup. Remove the one-shot CRM administrator
-password after successful bootstrap.
+forward-only policy. `bootstrap-admin` creates the initial account only when absent and does not
+rotate an existing password unless `ADMIN_ROTATE_PASSWORD` was explicitly enabled. These
+repeat-safe/forward-only properties allow an interrupted initialize request to rerun without reset,
+database drop, migration rollback, or a second request ID. Web/Worker never migrate at startup.
+
+`ADMIN_PASSWORD` is a one-shot input. It and all other secret-file values are excluded from Compose
+YAML, image build arguments, deployment logs, and request/latest/accepted JSON. After
+initialization succeeds, delete or clear `ADMIN_PASSWORD` in the root-owned
+`bootstrap-admin.env`; the non-root runner only prints this instruction and never modifies that
+file.
 
 The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 `lumina-crm-rt-*` projects and remove only their exact resources:
@@ -226,8 +245,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.1 `
-  -OperationsImage lumina-crm-ops-validation:3.8.1
+  -ApplicationImage lumina-crm-validation:3.8.2 `
+  -OperationsImage lumina-crm-ops-validation:3.8.2
 ```
 
 They are local integration tests, not production deployment commands.
@@ -288,6 +307,7 @@ Caddy installation, and application deployment are separate production actions.
 ## Image deployment and rollback
 
 ```sh
+npm run deploy:production:initialize
 npm run deploy:production
 npm run deploy:production:status
 npm run deploy:production:logs
@@ -295,29 +315,37 @@ npm run deploy:production:rollback
 npm run deploy:production:dry-run
 ```
 
-The persistent runner performs:
+For initialization, the persistent runner performs:
 
 ```text
 exclusive Lumina lock
+-> reject if accepted state already exists
 -> capacity gate and isolated builder verification
 -> exact clean main/origin verification and one fetch
 -> containerized type/lint/contracts plus commit-tagged app/ops builds
 -> PostgreSQL health
+-> repeat-safe database role/extension bootstrap
 -> migration manifest verification and locked forward migration
--> save accepted/rollback images
+-> repeat-safe initial administrator bootstrap
 -> Compose up Web/Worker (never down)
 -> independent PostgreSQL/Web/Worker health
 -> loopback detailed readiness
 -> Cloudflare Tunnel public liveness at https://<LUMINA_PUBLIC_HOSTNAME>/api/health
--> persist accepted state
+-> persist accepted state with null rollback images
 -> Lumina-only cleanup
 ```
 
-Pre-switch failure leaves Web/Worker unchanged. Post-switch failure restores previous app/ops
-images and rechecks locally. It never reverses migration and reports: “Application rolled back;
-database remains on the forward schema.” Each migration must remain compatible with the rollback
-application until acceptance. Cleanup starts only after acceptance; cleanup failure is a warning.
-Accepted state is persisted first so interruption can resume finalization safely.
+Ordinary deploy first requires accepted state, then uses the same prepare, fetch, build, PostgreSQL,
+migration, switch, acceptance, persistence, and cleanup path. It never invokes `db-bootstrap` or
+`bootstrap-admin`.
+
+Pre-switch failure leaves Web/Worker unchanged and does not attempt application rollback.
+Post-switch failure uses the existing image rollback logic and rechecks locally; a first
+initialization has no prior image and records rollback as unavailable. Neither path reverses a
+migration, and application rollback reports: “Application rolled back; database remains on the
+forward schema.” Each migration must remain compatible with the rollback application until
+acceptance. Cleanup starts only after acceptance; cleanup failure is a warning. Accepted state is
+persisted first so interruption can resume finalization safely.
 
 ## Daily status, logs, and health
 

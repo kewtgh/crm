@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.8.1",
+  "version": "3.8.2",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -76,6 +76,8 @@
     "release:gate": "node --env-file-if-exists=.env.local scripts/release-gate.mjs",
     "deploy:production": "node scripts/deploy-production.mjs start",
     "deploy:production:detach": "node scripts/deploy-production.mjs start --detach",
+    "deploy:production:initialize": "node scripts/deploy-production.mjs initialize",
+    "deploy:production:initialize:detach": "node scripts/deploy-production.mjs initialize --detach",
     "deploy:production:status": "node scripts/deploy-production.mjs status",
     "deploy:production:logs": "node scripts/deploy-production.mjs logs",
     "deploy:production:rollback": "node scripts/deploy-production.mjs rollback",
