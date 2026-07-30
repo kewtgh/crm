@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.7**
+Current release candidate: **v3.8.8**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -144,6 +144,15 @@ rootless Docker/state capacity gate
 -> Lumina-only image/BuildKit cleanup
 post-switch failure -> application-image rollback; database stays forward
 ```
+
+Storage prepare, storage cleanup, and the deployment runner now share
+`/var/lib/lumina-crm/docker-config` as their only Docker client configuration root and
+`/var/lib/lumina-crm/docker-config/buildx` as their only Buildx configuration root. The separate
+`/var/lib/lumina-crm/storage-maintenance` tree retains only the builder ownership marker, reports,
+and maintenance state. An obsolete configuration directory at that location is never adopted,
+copied, or deleted automatically; its presence requires operator review. After a source
+fast-forward, the audited maintenance program must be installed separately as the fixed root-owned
+`/usr/local/libexec/lumina-crm-storage-maintenance.mjs` before first initialization or deployment.
 
 The configured Git proxy, when present, is used for the first and only fetch; otherwise that single
 fetch is direct. It is never persisted as Git, Docker, or systemd configuration. Containers clear

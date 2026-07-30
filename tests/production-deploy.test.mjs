@@ -36,6 +36,10 @@ import {
 } from "../scripts/lib/backup-policy.mjs";
 import {
   assertAllowedDockerArguments,
+  dockerEnvironment,
+  ensureCanonicalDockerConfigDirectory,
+  LUMINA_BUILDX_CONFIG_ROOT,
+  LUMINA_DOCKER_CONFIG_ROOT,
   selectLuminaImageCandidates,
 } from "../deploy/libexec/lumina-crm-storage-maintenance.mjs";
 
@@ -678,6 +682,174 @@ test("Docker maintenance allowlist rejects host-global destructive commands", ()
       /Forbidden Docker command|outside the Lumina/,
     );
   }
+});
+
+test("storage maintenance and all production units share one canonical Buildx namespace", async () => {
+  assert.equal(LUMINA_DOCKER_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config");
+  assert.equal(LUMINA_BUILDX_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config/buildx");
+
+  const [deployUnit, prepareUnit, cleanupUnit, maintenance, runner] = await Promise.all([
+    source("deploy/systemd/lumina-crm-deploy.service"),
+    source("deploy/systemd/lumina-crm-storage-prepare.service"),
+    source("deploy/systemd/lumina-crm-storage-cleanup.service"),
+    source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
+    source("scripts/deploy-production-runner.mjs"),
+  ]);
+  for (const unit of [deployUnit, prepareUnit, cleanupUnit]) {
+    assert.match(unit, new RegExp(`^Environment=DOCKER_CONFIG=${LUMINA_DOCKER_CONFIG_ROOT}$`, "m"));
+    assert.match(unit, new RegExp(`^Environment=BUILDX_CONFIG=${LUMINA_BUILDX_CONFIG_ROOT}$`, "m"));
+    assert.match(unit, /UnsetEnvironment=.*DOCKER_CONTEXT/);
+  }
+  assert.doesNotMatch(maintenance, /const DOCKER_CONFIG_ROOT\s*=\s*`\$\{STATE_ROOT\}\/docker-config`/);
+  assert.doesNotMatch(maintenance, /\/var\/lib\/lumina-crm\/storage-maintenance\/docker-config/);
+  assert.match(
+    maintenance,
+    /"buildx", "inspect", LUMINA_BUILDER_NAME[\s\S]+?"buildx",[\s\S]+?"create"[\s\S]+?"buildx", "inspect", LUMINA_BUILDER_NAME/,
+  );
+  assert.match(
+    runner,
+    /start", "lumina-crm-storage-prepare\.service"[\s\S]+?"buildx", "inspect", builder/,
+  );
+
+  const environment = dockerEnvironment({
+    DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+    HTTP_PROXY: "http://proxy.example.invalid",
+    HOME: "/tmp/untrusted-home",
+    DOCKER_CONTEXT: "desktop-linux",
+  });
+  assert.deepEqual(environment, {
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    DOCKER_CONFIG: LUMINA_DOCKER_CONFIG_ROOT,
+    BUILDX_CONFIG: LUMINA_BUILDX_CONFIG_ROOT,
+    DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+    LANG: "C.UTF-8",
+  });
+  const simulatedCalls = [
+    { phase: "prepare-create", args: ["buildx", "create", "--name", "lumina-crm-buildkit"] },
+    { phase: "prepare-post-create", args: ["buildx", "inspect", "lumina-crm-buildkit"] },
+    { phase: "deploy-inspect", args: ["buildx", "inspect", "lumina-crm-buildkit"] },
+  ].map((call) => ({ ...call, environment: dockerEnvironment({
+    DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+  }) }));
+  assert.equal(simulatedCalls.every((call) => (
+    call.environment.DOCKER_CONFIG === LUMINA_DOCKER_CONFIG_ROOT
+    && call.environment.BUILDX_CONFIG === LUMINA_BUILDX_CONFIG_ROOT
+  )), true);
+  assert.doesNotMatch(JSON.stringify(environment), /proxy|DOCKER_CONTEXT|\/run\/docker\.sock|\.docker/i);
+  assert.throws(
+    () => dockerEnvironment({
+      DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+      DOCKER_CONFIG: "/tmp/other",
+    }),
+    /LUMINA_DOCKER_CONFIG_ENVIRONMENT_MISMATCH/,
+  );
+  assert.throws(
+    () => dockerEnvironment({
+      DOCKER_HOST: "unix:///run/user/1001/docker.sock",
+      BUILDX_CONFIG: "",
+    }),
+    /LUMINA_DOCKER_CONFIG_ENVIRONMENT_MISMATCH/,
+  );
+  assert.throws(
+    () => dockerEnvironment({ DOCKER_HOST: "unix:///run/docker.sock" }),
+    /LUMINA_ROOTLESS_DOCKER_HOST_REQUIRED/,
+  );
+});
+
+function dockerConfigDirectoryDouble({
+  canonicalExists = true,
+  legacyExists = false,
+  metadata = {},
+  resolved = LUMINA_DOCKER_CONFIG_ROOT,
+} = {}) {
+  let created = false;
+  const calls = [];
+  const directoryMetadata = {
+    uid: 1001,
+    mode: 0o40700,
+    isDirectory: () => true,
+    isSymbolicLink: () => false,
+    ...metadata,
+  };
+  const missing = () => Object.assign(new Error("missing"), { code: "ENOENT" });
+  return {
+    calls,
+    operations: {
+      lstat(target) {
+        calls.push(["lstat", target]);
+        if (target.includes("storage-maintenance")) {
+          if (!legacyExists) throw missing();
+          return { ...directoryMetadata };
+        }
+        if (!canonicalExists && !created) throw missing();
+        return directoryMetadata;
+      },
+      mkdir(target, options) {
+        calls.push(["mkdir", target, options]);
+        created = true;
+      },
+      realpath(target) {
+        calls.push(["realpath", target]);
+        return resolved;
+      },
+    },
+  };
+}
+
+test("canonical Docker configuration directory is created once and then fully revalidated", () => {
+  const mock = dockerConfigDirectoryDouble({ canonicalExists: false });
+  assert.equal(ensureCanonicalDockerConfigDirectory({
+    currentUid: 1001,
+    operations: mock.operations,
+  }), LUMINA_DOCKER_CONFIG_ROOT);
+  assert.deepEqual(mock.calls.filter(([operation]) => operation === "mkdir"), [[
+    "mkdir",
+    LUMINA_DOCKER_CONFIG_ROOT,
+    { recursive: true, mode: 0o700 },
+  ]]);
+  assert.equal(
+    mock.calls.filter(([operation, target]) => (
+      operation === "lstat" && target === LUMINA_DOCKER_CONFIG_ROOT
+    )).length,
+    2,
+  );
+  assert.equal(mock.calls.some(([operation]) => ["rm", "copy", "rename"].includes(operation)), false);
+});
+
+test("an existing valid canonical Docker configuration directory is preserved", () => {
+  const mock = dockerConfigDirectoryDouble();
+  assert.equal(ensureCanonicalDockerConfigDirectory({
+    currentUid: 1001,
+    operations: mock.operations,
+  }), LUMINA_DOCKER_CONFIG_ROOT);
+  assert.equal(mock.calls.some(([operation]) => ["mkdir", "rm", "copy", "rename"].includes(operation)), false);
+});
+
+test("canonical Docker configuration directory rejects unsafe metadata without replacement", () => {
+  for (const [options, expected] of [
+    [{ metadata: { isSymbolicLink: () => true } }, /NOT_REAL_DIRECTORY/],
+    [{ metadata: { isDirectory: () => false } }, /NOT_REAL_DIRECTORY/],
+    [{ metadata: { uid: 1002 } }, /OWNER_INVALID/],
+    [{ metadata: { mode: 0o40750 } }, /PERMISSIONS_INVALID/],
+    [{ metadata: { mode: 0o40701 } }, /PERMISSIONS_INVALID/],
+    [{ resolved: `${LUMINA_DOCKER_CONFIG_ROOT}-redirected` }, /REALPATH_MISMATCH/],
+  ]) {
+    const mock = dockerConfigDirectoryDouble(options);
+    assert.throws(() => ensureCanonicalDockerConfigDirectory({
+      currentUid: 1001,
+      operations: mock.operations,
+    }), expected);
+    assert.equal(mock.calls.some(([operation]) => ["mkdir", "rm", "copy", "rename"].includes(operation)), false);
+  }
+});
+
+test("legacy Buildx configuration path always fails closed without migration or deletion", () => {
+  const mock = dockerConfigDirectoryDouble({ legacyExists: true });
+  assert.throws(() => ensureCanonicalDockerConfigDirectory({
+    currentUid: 1001,
+    operations: mock.operations,
+  }), /LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW/);
+  assert.equal(mock.calls.some(([operation]) => ["mkdir", "rm", "copy", "rename"].includes(operation)), false);
 });
 
 test("production units and provisioning never connect Lumina to rootful Docker", async () => {

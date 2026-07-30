@@ -86,8 +86,8 @@ memory/CPU/PID limits are actually enforced, plus at least 65,536 subordinate UI
 /etc/lumina-crm/secrets/                  root-owned Compose secret sources
 /var/lib/lumina-crm/deployments/          accepted image/deployment state
 /var/lib/lumina-crm/docker/               Lumina rootless Docker data root
-/var/lib/lumina-crm/docker-config/        Lumina-only Buildx configuration
-/var/lib/lumina-crm/storage-maintenance/  builder ownership/cleanup state
+/var/lib/lumina-crm/docker-config/        shared deploy/prepare/cleanup Docker + Buildx client configuration
+/var/lib/lumina-crm/storage-maintenance/  builder marker, reports, and maintenance state only
 /var/log/lumina-crm/                      deployment/maintenance logs
 ```
 
@@ -122,6 +122,26 @@ only their fixed Lumina Compose task. The deploy service holds
 `/var/lib/lumina-crm/deploy.lock`. Docker-using units keep `/run/user` read-only but visible so the
 rootless Unix socket remains reachable; the application unit retries if the lingering user service
 has not finished starting at boot.
+
+A source fast-forward does not update the root-owned maintenance program installed outside the
+checkout. While both storage maintenance units are inactive, install the audited repository file
+at the fixed target, then verify byte identity before running prepare or a deployment:
+
+```sh
+sudo install -o root -g root -m 0755 \
+  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
+  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
+sudo cmp --silent \
+  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
+  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
+sha256sum \
+  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
+  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
+```
+
+The installed file must remain `root:root`, regular rather than a symlink, and not group/world
+writable. Updating this program does not itself require starting storage prepare or CRM
+initialization.
 
 The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, or `rollback`.
 The systemd runner records that mode in its log, per-deployment state, and `latest.json`.
@@ -161,6 +181,14 @@ only the marked `lumina-crm-buildkit` builder:
 sudo systemctl start lumina-crm-storage-prepare.service
 sudo systemctl status lumina-crm-storage-prepare.service
 ```
+
+The deploy runner and both storage units use the same exact `DOCKER_CONFIG` root
+`/var/lib/lumina-crm/docker-config` and `BUILDX_CONFIG` root
+`/var/lib/lumina-crm/docker-config/buildx`. Storage prepare creates or verifies the builder there,
+so the subsequent runner inspection sees the same builder namespace. The maintenance state tree
+keeps `builder-owner.json`, `latest.json`, and reports only; it is not a Docker client configuration
+root. If an obsolete Docker configuration directory exists below that state tree, prepare fails
+with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor removes it.
 
 ## Credential boundaries
 
@@ -246,8 +274,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.7 `
-  -OperationsImage lumina-crm-ops-validation:3.8.7
+  -ApplicationImage lumina-crm-validation:3.8.8 `
+  -OperationsImage lumina-crm-ops-validation:3.8.8
 ```
 
 They are local integration tests, not production deployment commands.
