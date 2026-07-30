@@ -1,5 +1,5 @@
 {
-  "name": "lumina-crm-email-delivery",
+  "name": "email-delivery-worker",
   "version": "3.8.4",
   "private": true,
   "type": "module",
@@ -8,6 +8,12 @@
   },
   "scripts": {
     "test": "node --test --test-isolation=none test/worker.test.js",
-    "lint": "node --check src/index.js && node --check src/templates.js && node --check test/worker.test.js"
+    "test:deployment": "node --test --test-isolation=none test/deploy-production.test.js",
+    "lint": "node --check src/config.js && node --check src/index.js && node --check src/templates.js && node --check scripts/deploy-production.mjs && node --check test/worker.test.js && node --check test/deploy-production.test.js",
+    "deploy:production": "node scripts/deploy-production.mjs",
+    "deploy:production:dry-run": "node scripts/deploy-production.mjs --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "4.102.0"
   }
 }

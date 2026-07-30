@@ -3,9 +3,9 @@
 ## Scope
 
 v3.8.4 retains the production shared-host isolation and persistent first-install flow, and makes
-the repository adapter the canonical Lumina route source for the existing
-`mail-api.ewaya.com` Cloudflare Worker. It does not change database schema semantics, add a CRM Web
-mail route, create a second Worker, or create another Custom Domain.
+the repository email adapter fully local-Env-driven. Public source no longer identifies the
+production Worker, Custom Domain, CRM hostname, sender domain, webhook URL, or route. It does not
+change database schema semantics or add a CRM Web mail route.
 
 The target remains the fixed `lumina-crm` Compose project on a server shared with HunterAI and
 Temporal, but every Lumina Docker client now connects exclusively to a rootless daemon owned by
@@ -30,9 +30,10 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - zero-runtime-dependency email adapter with fixed-time token verification, bounded JSON input,
   nine explicit escaped HTML/text templates, Resend idempotency, stable provider errors, and safe
   logs;
-- reuse of the existing `mail-api.ewaya.com/lumina-crm/delivery` production entrypoint with
-  `workers.dev` disabled, an explicit existing-Worker deployment name, and secrets excluded from
-  Git/Wrangler variables;
+- a generic tracked Wrangler contract with `workers.dev` disabled, no route/name/production vars,
+  Dashboard-managed Custom Domain routing, and two declared required secret binding names;
+- a cross-platform Node production controller with ignored local Env validation, strict
+  route-free deployment, no-upload dry-run, redacted child output, and generic health acceptance;
 - synchronized application, Worker subproject, package, lockfile, and documentation version 3.8.4.
 
 ## Local verification recorded
@@ -40,7 +41,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Check | Result |
 | --- | --- |
 | Email delivery Worker `npm ci` | Pass: 0 installed dependency vulnerabilities |
-| Email delivery Worker `npm test` | Pass: 44/44 |
+| Email delivery Worker `npm test` | Pass: 61/61 |
+| Email delivery Worker `npm run test:deployment` | Pass: 20/20, including no-upload Wrangler dry-run |
 | Email delivery Worker `npm run lint` | Pass |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |

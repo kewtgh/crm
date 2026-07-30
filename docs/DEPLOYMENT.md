@@ -263,35 +263,37 @@ overlap while the advisory lock is held.
 Worker health queries the real schema version, database readiness, required heartbeat freshness,
 and failed/stuck queue counts. A live Node process alone is not healthy.
 
-## Existing mail-api email delivery Worker
+## Env-driven email delivery Worker
 
 The independently deployed source under `infrastructure/email-delivery-worker/` is the canonical
-implementation of Lumina's route on the existing production mail-api Worker. It is not a CRM Web
-route, is not built into the application image, and is not deployed by `deploy:production`. Reuse
-the existing Custom Domain and endpoint:
+generic Resend adapter. It is not a CRM Web route, is not built into the application image, and is
+not deployed by the application `deploy:production` controller.
 
-```text
-https://mail-api.ewaya.com
-https://mail-api.ewaya.com/lumina-crm/delivery
+No production Worker name, Custom Domain, sender, route, application hostname, account ID, or
+public URL belongs in tracked source. Copy the subproject's empty `.env.production.example` to the
+ignored `.env.production.local` and supply `WORKER_NAME`, `WORKER_PUBLIC_BASE_URL`, `CRM_APP_URL`,
+`EMAIL_FROM`, optional `EMAIL_REPLY_TO`, `EMAIL_BRAND_NAME`, `DELIVERY_PATH`, and `HEALTH_PATH`
+locally. Optional Wrangler authentication values may also remain in that ignored file.
+
+The committed Wrangler configuration has no `name`, `routes`, `route`, or production `vars`.
+Custom Domain routing remains managed in Cloudflare Dashboard. The deployment controller passes
+the locally supplied Worker name, preserves remote plaintext bindings, enables strict mode, and
+sends only the six runtime plaintext variables. It never reads, uploads, replaces, or deletes
+Cloudflare secrets.
+
+The Worker requires the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` secret binding names.
+`EMAIL_DELIVERY_WEBHOOK_TOKEN` in the root-owned CRM `worker.env` must exactly match
+`LUMINA_WEBHOOK_TOKEN`; `RESEND_API_KEY` remains only in Cloudflare. Construct
+`EMAIL_DELIVERY_WEBHOOK_URL` locally from `WORKER_PUBLIC_BASE_URL + DELIVERY_PATH`. Both repository
+example values remain empty:
+
+```dotenv
+EMAIL_DELIVERY_WEBHOOK_URL=
+EMAIL_DELIVERY_WEBHOOK_TOKEN=
 ```
 
-Set that endpoint as `EMAIL_DELIVERY_WEBHOOK_URL` in the root-owned production `worker.env`.
-`EMAIL_DELIVERY_WEBHOOK_TOKEN` must exactly match the Worker's
-`LUMINA_WEBHOOK_TOKEN` secret. The Resend API key exists only as the Worker's
-`RESEND_API_KEY` secret and must never be copied to the CRM host. Neither secret belongs in Git,
-Wrangler variables, build output, logs, or status files.
-
-Before any Worker deployment, confirm the existing Worker name in Cloudflare Dashboard and pass
-that exact value through Wrangler's `--name` option. The committed configuration deliberately has
-no Worker `name`; never invent one, create a second Custom Domain, or bind
-`mail-api.ewaya.com` to a new Worker. Preserve the existing `LUMINA_WEBHOOK_TOKEN` when possible,
-and do not regenerate, replace, or upload `RESEND_API_KEY` as part of a code deployment.
-
-The existing plaintext bindings are `CRM_APP_URL=https://crm.ewaya.com` and
-`EMAIL_FROM=Lumina CRM <notifications@notify.ewaya.com>`; `EMAIL_REPLY_TO` is optional. The
-committed configuration sets `keep_vars=true` so unrelated existing plaintext bindings are not
-removed. Wrangler deployments preserve secrets unless an operator explicitly changes or deletes
-them.
+Never copy a real token, sender, Worker name, hostname, or webhook URL into Git, documentation,
+build output, logs, status files, or Compose YAML.
 
 The adapter forwards the CRM `Idempotency-Key`, accepts only the mechanically derived template
 allow-list, escapes all payload values, creates both HTML and text bodies, and never accepts
@@ -310,10 +312,9 @@ calendar-cancel
 ```
 
 The actual database calendar delivery types are `INVITE`, `UPDATE`, and `CANCEL`; the CRM produces
-the corresponding `calendar-*` keys above. See the subproject README for `npm ci`, tests, existing
-Worker-name confirmation, health verification, controlled delivery testing, and the explicit
-`npx wrangler deploy --name <EXISTING_MAIL_API_WORKER_NAME>` operator command. Repository
-validation does not execute that deployment.
+the corresponding `calendar-*` keys above. See the subproject README for local Env validation,
+tests, the no-upload Wrangler dry-run, Dashboard-owned route boundaries, deployment, and generic
+health acceptance. Repository validation does not execute a production deployment or send mail.
 
 ## Cloudflare Tunnel and loopback Caddy gateway
 
@@ -347,14 +348,15 @@ Cloudflare Access and Tunnel transport do not replace Lumina CRM login, MFA, CAP
 limiting, trusted-device logic, or the other application-layer controls.
 
 ```sh
-LUMINA_PUBLIC_HOSTNAME=crm.example.com \
+LUMINA_PUBLIC_HOSTNAME=crm.example.invalid \
 LUMINA_CADDYFILE=/etc/caddy/Caddyfile \
 LUMINA_TUNNEL_CONFIG_FILE=/etc/cloudflared/config.yml \
 npm run tunnel:config:verify
 npm run tunnel:test
 ```
 
-Replace `crm.example.com` with the production hostname. Tunnel creation/credentials, DNS routing,
+Replace the reserved example hostname with the production hostname only in local/server
+configuration. Tunnel creation/credentials, DNS routing,
 Caddy installation, and application deployment are separate production actions.
 
 ## Image deployment and rollback
