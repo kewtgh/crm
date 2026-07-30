@@ -63,6 +63,10 @@ import {
   LUMINA_SECRET_SOURCES_ROOT,
   validateSecretSourceMetadata,
 } from "../scripts/lib/production-secret-sources.mjs";
+import {
+  appVersionFromSource,
+  assertReleaseVersionConsistency,
+} from "../scripts/lib/release-version.mjs";
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
@@ -188,6 +192,35 @@ test("classifies every active systemd oneshot state and fixed deployment lock", 
   for (const state of ["inactive", "failed", "dead", ""]) {
     assert.equal(isSystemdServiceInProgress(state), false);
   }
+});
+
+test("release metadata, runtime APP_VERSION, health responses, and verification stay aligned", async () => {
+  const [packageText, versionSource, healthRoute, runner, dockerfile] = await Promise.all([
+    source("package.json"),
+    source("lib/version.ts"),
+    source("app/api/health/route.ts"),
+    source("scripts/deploy-production-runner.mjs"),
+    source("Dockerfile"),
+  ]);
+  const packageVersion = JSON.parse(packageText).version;
+  assert.equal(
+    assertReleaseVersionConsistency({ packageVersion, appVersionSource: versionSource }),
+    packageVersion,
+  );
+  assert.equal(appVersionFromSource(versionSource), packageVersion);
+  assert.match(healthRoute, /import \{ APP_VERSION \} from "@\/lib\/version"/);
+  assert.equal((healthRoute.match(/version: APP_VERSION/g) ?? []).length, 3);
+  assert.doesNotMatch(healthRoute, /version:\s*["'`]\d+\.\d+\.\d+/);
+  assert.match(runner, /body\?\.version && target\?\.version && body\.version !== target\.version/);
+  assert.match(runner, /returned version \$\{body\.version\}, expected \$\{target\.version\}/);
+  assert.match(dockerfile, /npm run test:deploy:raw/);
+});
+
+test("release version contract rejects a stale runtime APP_VERSION", () => {
+  assert.throws(() => assertReleaseVersionConsistency({
+    packageVersion: "3.8.12",
+    appVersionSource: 'export const APP_VERSION = "3.8.1";\n',
+  }), /LUMINA_RELEASE_VERSION_MISMATCH/);
 });
 
 test("initialize follows the explicit first-install order", async () => {
