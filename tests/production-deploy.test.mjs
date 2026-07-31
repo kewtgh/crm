@@ -67,6 +67,7 @@ import {
   appVersionFromSource,
   assertReleaseVersionConsistency,
 } from "../scripts/lib/release-version.mjs";
+import { EMAIL_DELIVERY_RUNTIME_KEYS } from "../lib/email-delivery-runtime.mjs";
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
@@ -451,6 +452,7 @@ CRM_MIGRATOR_DB_PASSWORD=migrator-role-password
 CRM_BACKUP_DB_PASSWORD=backup-role-password
 TURNSTILE_SECRET_KEY=turnstile-secret-value
 EMAIL_DELIVERY_WEBHOOK_TOKEN=mail-delivery-token
+EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.test/delivery
 BACKUP_ENCRYPTION_KEY=backup-encryption-key
 `;
   const secrets = extractSensitiveEnvironmentValues(environment);
@@ -476,6 +478,57 @@ BACKUP_ENCRYPTION_KEY=backup-encryption-key
     assert.equal(stateJson.includes(secret), false);
   }
   assert.match(safeError, /\[REDACTED\]/);
+});
+
+test("Web and Worker production email runtime ownership cannot drift", async () => {
+  const [
+    productionEnvironment,
+    workerEnvironment,
+    emailWorkerDeployEnvironment,
+    compose,
+    entrypoint,
+    runtimeFixture,
+    healthRoute,
+    communicationRoute,
+    runner,
+  ] = await Promise.all([
+    source("deploy/production.env.example"),
+    source("deploy/worker.env.example"),
+    source("deploy/email-worker-deploy.env.example"),
+    source("compose.production.yml"),
+    source("scripts/container-entrypoint.mjs"),
+    source("scripts/test-compose-runtime-integration.ps1"),
+    source("app/api/health/route.ts"),
+    source("app/api/communications/route.ts"),
+    source("scripts/deploy-production-runner.mjs"),
+  ]);
+  assert.deepEqual(EMAIL_DELIVERY_RUNTIME_KEYS, [
+    "EMAIL_DELIVERY_WEBHOOK_URL",
+    "EMAIL_DELIVERY_WEBHOOK_TOKEN",
+  ]);
+  for (const template of [productionEnvironment, workerEnvironment]) {
+    for (const key of EMAIL_DELIVERY_RUNTIME_KEYS) {
+      assert.match(template, new RegExp(`^${key}=$`, "m"));
+    }
+    assert.doesNotMatch(template, /^(?:RESEND_API_KEY|LUMINA_WEBHOOK_TOKEN)=/m);
+  }
+  assert.doesNotMatch(emailWorkerDeployEnvironment, /^(?:EMAIL_DELIVERY_WEBHOOK_URL|EMAIL_DELIVERY_WEBHOOK_TOKEN|RESEND_API_KEY|LUMINA_WEBHOOK_TOKEN)=/m);
+  assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/web_runtime_env/);
+  assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/worker_runtime_env/);
+  assert.match(compose, /web_runtime_env:[\s\S]+production\.env/);
+  assert.match(compose, /worker_runtime_env:[\s\S]+worker\.env/);
+  assert.match(entrypoint, /EMAIL_DELIVERY_RUNTIME_KEYS/);
+  assert.match(entrypoint, /function webPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
+  assert.match(entrypoint, /function workerPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
+  assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_URL=https:\/\/mailer\.example\.test\/delivery/g) ?? []).length, 2);
+  assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_TOKEN=\$emailDeliveryToken/g) ?? []).length, 2);
+  assert.match(healthRoute, /externallyHealthy:environment\.emailDeliveryExternallyHealthy/);
+  assert.match(healthRoute, /configurationBoundary:"web-and-worker"/);
+  assert.doesNotMatch(healthRoute, /fetch\([^)]*EMAIL_DELIVERY/);
+  assert.match(communicationRoute, /configuredCommunicationDelivery\(\)/);
+  assert.match(communicationRoute, /COMMUNICATION_DELIVERY_NOT_CONFIGURED/);
+  assert.doesNotMatch(communicationRoute, /console\.|logger\.|EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*NextResponse/);
+  assert.doesNotMatch(runner, /EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*\["/);
 });
 
 test("requires the deployment user's exact rootless socket and enforced cgroup limits", () => {

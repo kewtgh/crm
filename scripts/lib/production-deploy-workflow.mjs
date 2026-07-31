@@ -1,7 +1,7 @@
 import { parseEnv } from "node:util";
 
 const releaseModes = new Set(["deploy", "initialize"]);
-const sensitiveEnvironmentKey = /(?:PASSWORD|SECRET|TOKEN|DATABASE.*URL|ACCESS_KEY|ENCRYPTION_KEY|HMAC|CREDENTIAL)/;
+const sensitiveEnvironmentKey = /(?:PASSWORD|SECRET|TOKEN|DATABASE.*URL|EMAIL_DELIVERY_WEBHOOK_URL|ACCESS_KEY|ENCRYPTION_KEY|HMAC|CREDENTIAL)/;
 
 export class ProductionReleaseWorkflowError extends Error {
   constructor(cause, { migrationMayHaveChanged, switched }) {

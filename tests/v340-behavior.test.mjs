@@ -11,7 +11,10 @@ import {
   deliveryWebhookHeaders,
   postDeliveryWebhook,
 } from "../scripts/lib/delivery-webhook.mjs";
-import { inspectWorkerRuntimeEnvironment } from "../lib/runtime-environment.ts";
+import {
+  inspectWebReadinessEnvironment,
+  inspectWorkerRuntimeEnvironment,
+} from "../lib/runtime-environment.ts";
 
 const repositoryFile = (path) => new URL(`../${path}`, import.meta.url);
 
@@ -125,6 +128,28 @@ test("keeps production Worker tuning inside the reviewed service budget", () => 
   };
   assert.equal(inspectWorkerRuntimeEnvironment(integrationEnvironment).valid, true);
   assert.equal(inspectWorkerRuntimeEnvironment({...integrationEnvironment,WORKER_JOB_CONCURRENCY:"2"}).valid, false);
+});
+
+test("reports Web email delivery configuration without probing or exposing it", () => {
+  const configured = inspectWebReadinessEnvironment(validWorkerEnvironment);
+  assert.equal(configured.valid, true);
+  assert.equal(configured.emailDeliveryConfigured, true);
+  assert.equal(configured.emailDeliveryExternallyHealthy, null);
+  assert.equal(configured.emailDeliveryCode, null);
+  const serialized = JSON.stringify(configured);
+  assert.doesNotMatch(serialized, /mailer\.example\.net|e{40}/);
+
+  for (const missingKey of ["EMAIL_DELIVERY_WEBHOOK_URL", "EMAIL_DELIVERY_WEBHOOK_TOKEN"]) {
+    const environment = { ...validWorkerEnvironment };
+    delete environment[missingKey];
+    const missing = inspectWebReadinessEnvironment(environment);
+    assert.equal(missing.valid, false);
+    assert.equal(missing.core, true);
+    assert.equal(missing.emailDeliveryConfigured, false);
+    assert.equal(missing.emailDeliveryExternallyHealthy, null);
+    assert.equal(missing.emailDeliveryCode, "EMAIL_DELIVERY_NOT_CONFIGURED");
+    assert.ok(missing.missing.includes(missingKey));
+  }
 });
 
 test("parallelizes independent Worker categories without weakening per-job leases", async () => {
