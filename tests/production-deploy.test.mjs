@@ -36,6 +36,7 @@ import {
 } from "../scripts/lib/backup-policy.mjs";
 import {
   assertAllowedDockerArguments,
+  buildkitPruneArguments,
   builderCreateArguments,
   dockerEnvironment,
   dockerProxyMarkerContract,
@@ -1161,14 +1162,15 @@ test("storage maintenance and all production units share one canonical Buildx na
   assert.equal(LUMINA_DOCKER_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config");
   assert.equal(LUMINA_BUILDX_CONFIG_ROOT, "/var/lib/lumina-crm/docker-config/buildx");
 
-  const [deployUnit, prepareUnit, cleanupUnit, maintenance, runner] = await Promise.all([
+  const [deployUnit, prepareUnit, cacheCleanupUnit, cleanupUnit, maintenance, runner] = await Promise.all([
     source("deploy/systemd/lumina-crm-deploy.service"),
     source("deploy/systemd/lumina-crm-storage-prepare.service"),
+    source("deploy/systemd/lumina-crm-build-cache-cleanup.service"),
     source("deploy/systemd/lumina-crm-storage-cleanup.service"),
     source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
     source("scripts/deploy-production-runner.mjs"),
   ]);
-  for (const unit of [deployUnit, prepareUnit, cleanupUnit]) {
+  for (const unit of [deployUnit, prepareUnit, cacheCleanupUnit, cleanupUnit]) {
     assert.match(unit, new RegExp(`^Environment=DOCKER_CONFIG=${LUMINA_DOCKER_CONFIG_ROOT}$`, "m"));
     assert.match(unit, new RegExp(`^Environment=BUILDX_CONFIG=${LUMINA_BUILDX_CONFIG_ROOT}$`, "m"));
     assert.match(unit, /UnsetEnvironment=.*DOCKER_CONTEXT/);
@@ -1187,6 +1189,7 @@ test("storage maintenance and all production units share one canonical Buildx na
   assert.match(maintenance, /builderNetworkMode: LUMINA_BUILDKIT_NETWORK_MODE/);
   assert.match(runner, /createHash\("sha256"\)\.update\(configuredDockerProxy\)/);
   assert.doesNotMatch(maintenance, /builderNetworkMode:\s*policy\./);
+  assert.match(cacheCleanupUnit, /storage-maintenance\.mjs cache-cleanup/);
 
   const environment = dockerEnvironment({
     DOCKER_HOST: "unix:///run/user/1001/docker.sock",
@@ -1231,6 +1234,42 @@ test("storage maintenance and all production units share one canonical Buildx na
     () => dockerEnvironment({ DOCKER_HOST: "unix:///run/docker.sock" }),
     /LUMINA_ROOTLESS_DOCKER_HOST_REQUIRED/,
   );
+});
+
+test("every image build attempt ends with bounded fixed-builder cache cleanup", async () => {
+  const [runner, maintenance, sudoers, cacheCleanupUnit] = await Promise.all([
+    source("scripts/deploy-production-runner.mjs"),
+    source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
+    source("deploy/sudoers/lumina-crm-deploy"),
+    source("deploy/systemd/lumina-crm-build-cache-cleanup.service"),
+  ]);
+  const prune = buildkitPruneArguments({
+    cacheRetentionHours: 168,
+    maximumCacheGb: 12,
+    reservedCacheGb: 2,
+    dockerMinimumAvailableBytes: 10 * 1024 ** 3,
+  });
+  assert.deepEqual(prune, [
+    "buildx", "--builder", "lumina-crm-buildkit", "prune",
+    "--filter", "until=168h",
+    "--max-used-space", "12GB",
+    "--reserved-space", "2GB",
+    "--min-free-space", "10GB",
+    "--force",
+    "--verbose",
+  ]);
+  assert.equal(prune.includes("--all"), false);
+  assert.match(
+    runner,
+    /async function buildImages[\s\S]+?try \{[\s\S]+?finally \{[\s\S]+?lumina-crm-build-cache-cleanup\.service/,
+  );
+  assert.match(runner, /allowFailure: true/);
+  assert.match(sudoers, /systemctl start lumina-crm-build-cache-cleanup\.service/);
+  assert.match(cacheCleanupUnit, /User=lumina-crm/);
+  assert.match(cacheCleanupUnit, /ExecStart=.* cache-cleanup/);
+  assert.match(maintenance, /mode === "cache-cleanup"[\s\S]+?cleanupBuildkitCache\(policy\)/);
+  assert.doesNotMatch(cacheCleanupUnit, /storage-cleanup-request|image rm|system prune/);
+  assert.doesNotMatch(JSON.stringify(prune), /system|volume|network/);
 });
 
 function dockerConfigDirectoryDouble({
@@ -1337,6 +1376,7 @@ test("production units and provisioning never connect Lumina to rootful Docker",
     backupUnit,
     restoreUnit,
     storagePrepareUnit,
+    storageCacheCleanupUnit,
     storageCleanupUnit,
     diskUnit,
     storageMaintenance,
@@ -1350,6 +1390,7 @@ test("production units and provisioning never connect Lumina to rootful Docker",
     source("deploy/systemd/lumina-crm-backup.service"),
     source("deploy/systemd/lumina-crm-restore-test.service"),
     source("deploy/systemd/lumina-crm-storage-prepare.service"),
+    source("deploy/systemd/lumina-crm-build-cache-cleanup.service"),
     source("deploy/systemd/lumina-crm-storage-cleanup.service"),
     source("deploy/systemd/lumina-crm-disk-monitor.service"),
     source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
@@ -1365,6 +1406,7 @@ test("production units and provisioning never connect Lumina to rootful Docker",
     backupUnit,
     restoreUnit,
     storagePrepareUnit,
+    storageCacheCleanupUnit,
     storageCleanupUnit,
   ]) {
     assert.doesNotMatch(unit, /Requires=docker\.service|After=docker\.service|\/run\/docker\.sock/);
@@ -1372,7 +1414,7 @@ test("production units and provisioning never connect Lumina to rootful Docker",
     assert.match(unit, /ProtectHome=read-only/);
     assert.match(unit, /EnvironmentFile=\/etc\/lumina-crm\/deploy\.env/);
   }
-  for (const unit of [storagePrepareUnit, storageCleanupUnit]) {
+  for (const unit of [storagePrepareUnit, storageCacheCleanupUnit, storageCleanupUnit]) {
     assert.match(unit, /User=lumina-crm/);
     assert.doesNotMatch(unit, /User=root/);
   }

@@ -1,6 +1,7 @@
 Cmnd_Alias LUMINA_CRM_DEPLOY_SYSTEMD = \
   /usr/bin/systemctl start --no-block lumina-crm-deploy.service, \
   /usr/bin/systemctl start lumina-crm-storage-prepare.service, \
+  /usr/bin/systemctl start lumina-crm-build-cache-cleanup.service, \
   /usr/bin/systemctl start lumina-crm-storage-cleanup.service, \
   /usr/bin/systemctl reload lumina-crm.service, \
   /usr/bin/systemctl start lumina-crm-backup.service, \
