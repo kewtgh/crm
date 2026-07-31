@@ -61,11 +61,11 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
     .sort();
   assert.ok(migrationNames.length >= 73);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607300069_container_runtime_boundary.sql");
+  assert.equal(migrationNames.at(-1), "202607310070_async_communication_delivery_expand.sql");
   const [migrator, verifier, containerMigration, turnstileMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
-    readFile(repositoryFile(`db/migrations/${migrationNames.at(-1)}`), "utf8"),
+    readFile(repositoryFile("db/migrations/202607300069_container_runtime_boundary.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300068_workspace_turnstile_policy.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300065_workspace_business_timezone.sql"), "utf8"),
     readFile(repositoryFile("db/migrations/202607300066_worker_business_timezone_permissions.sql"), "utf8"),
