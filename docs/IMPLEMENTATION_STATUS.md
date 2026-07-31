@@ -1,11 +1,13 @@
-# Implementation status — v3.8.13 release candidate
+# Implementation status — v3.8.14 release candidate
 
 ## Scope
 
-v3.8.13 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.14 retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
-adds an optional, server-local, build-only Docker proxy contract without weakening Git, Compose,
-runtime-container, or HunterAI isolation. Windows is
+adds the expand-only database foundation for a future dedicated, leased
+`COMMUNICATION_DELIVERY` processor over `communication_messages`. The current synchronous Web
+delivery path, Worker categories, runtime environment files, and UI remain unchanged in this
+phase. Windows is
 development-only and holds no production Worker
 configuration or Cloudflare credentials; Ubuntu alone stores the server Env, performs the in-place
 deployment, and verifies health. Public source does not identify the production Worker, Custom
@@ -56,8 +58,11 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   health responses, and strict deployment acceptance aligned;
 - one explicit CRM email runtime contract shared by Web communication delivery and background
   Worker delivery, with configuration-only readiness diagnostics and no provider probe;
-- synchronized application, Worker subproject metadata, package, lockfile, and documentation
-  version 3.8.13; the Cloudflare Worker runtime logic is unchanged in this release.
+- an expand-only communication delivery schema with distinct provider attempts, fenced leases,
+  bounded retry policy, conservative uncertainty handling, worker-only delivery RPC grants, and an
+  audited future retry RPC while retaining every synchronous Web compatibility function;
+- synchronized application package, lockfile, runtime, Compose test fixture, and documentation
+  version 3.8.14; the independently deployed Cloudflare Worker code and metadata are unchanged.
 
 ## Local verification recorded
 
@@ -66,6 +71,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Root `npm ci` | Pass: 566 packages installed, 572 audited, 0 vulnerabilities |
 | Production deploy / email-runtime / version / secret-source / Buildx targeted contracts | Pass: 44/44 targeted, including Web/Worker email ownership, release/runtime/health version consistency, build-before secret rejection, fixed rootless host networking, proxy isolation, and existing cleanup/rootless boundaries |
 | Email communication and runtime-environment targeted contracts | Pass: 11/11, including configured delivery forwarding, missing Web configuration, non-probing diagnostics, Worker delivery, and safe output |
+| Communication delivery Phase 1 migration | Pass: clean standard migration 75/75; checksum replay 0 applied / 75 current; parent-069 representative QUEUED, FAILED, SENT, RECEIVED, and DELIVERED rows unchanged |
+| Communication delivery Phase 1 SQL behavior | Pass: concurrent claim isolation, `SKIP LOCKED`, fencing, safe/uncertain lease recovery, provider receipts, bounded backoff/attempts, consent, recipient, grants, audited retry, and synchronous Web compatibility |
 | Verification image `docker build --target verification --output type=cacheonly .` | Pass: containerized build, contracts, and deploy tests completed with `docs/DEPLOYMENT.md` present |
 | Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
