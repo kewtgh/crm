@@ -169,6 +169,7 @@ export async function createAccount({
   emailVerified,
   team,
   managerMemberId,
+  afterCreate,
 }: {
   email: string;
   username: string;
@@ -181,6 +182,7 @@ export async function createAccount({
   emailVerified: boolean;
   team?: string;
   managerMemberId?: string | null;
+  afterCreate?: (client: PoolClient, userId: string) => Promise<void>;
 }) {
   const id = crypto.randomUUID();
   const passwordHash = await hashPassword(password);
@@ -217,6 +219,7 @@ export async function createAccount({
           [workspaceId, id, displayNameZh.trim(), displayNameEn.trim(), role, team ?? "", managerMemberId ?? null],
         );
       }
+      await afterCreate?.(client, id);
       await client.query("commit");
       return { id };
     } catch (error) {
