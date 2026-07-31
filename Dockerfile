@@ -53,6 +53,7 @@ WORKDIR /app
 COPY --from=production-dependencies --chown=lumina:lumina /app/node_modules ./node_modules
 COPY --from=build --chown=lumina:lumina /app/dist ./dist
 COPY --chown=lumina:lumina package.json package-lock.json ./
+COPY --chown=lumina:lumina lib/email-delivery-runtime.mjs ./lib/
 COPY --chown=lumina:lumina \
     scripts/bootstrap-admin.mjs \
     scripts/container-entrypoint.mjs \
@@ -62,6 +63,7 @@ COPY --chown=lumina:lumina \
     scripts/db-restore-test.mjs \
     scripts/db-verify-migrations.mjs \
     scripts/process-calendar-deliveries.mjs \
+    scripts/process-communication-deliveries.mjs \
     scripts/process-generated-jobs.mjs \
     scripts/process-integration-sync.mjs \
     scripts/process-notification-outbox.mjs \

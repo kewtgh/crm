@@ -1,10 +1,7 @@
 import { z } from "zod";
 import path from "node:path";
 import { secureEndpointOrigin } from "./application-origin.mjs";
-import {
-  EMAIL_DELIVERY_NOT_CONFIGURED,
-  EMAIL_DELIVERY_RUNTIME_KEYS,
-} from "./email-delivery-runtime.mjs";
+import { EMAIL_DELIVERY_RUNTIME_KEYS } from "./email-delivery-runtime.mjs";
 
 const placeholderPattern = /replace-with|change-me|example-secret|your-project|your-anon|server-only-service|production-site-key|production-server-secret|public-anon-key|workspace-uuid|independent-random/i;
 const configured = z.string().trim().min(1).refine(
@@ -97,6 +94,7 @@ export const WORKER_KEYS = [
   "REMINDERS",
   "NOTIFICATION_OUTBOX",
   "CALENDAR_DELIVERIES",
+  "COMMUNICATION_DELIVERY",
   "GENERATED_JOBS",
   "WEBHOOK_INBOX",
   "INTEGRATION_SYNC",
@@ -123,6 +121,7 @@ const deliveryKeys = [
   ...EMAIL_DELIVERY_RUNTIME_KEYS,
   "OUTBOX_BATCH_SIZE",
   "CALENDAR_DELIVERY_BATCH_SIZE",
+  "COMMUNICATION_DELIVERY_BATCH_SIZE",
   "EXPORT_BATCH_SIZE",
   "REMINDER_BATCH_SIZE",
 ] as const;
@@ -175,13 +174,10 @@ const deliveryEnvironmentSchema = z.object({
   EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
   OUTBOX_BATCH_SIZE: boundedPositiveInteger(40),
   CALENDAR_DELIVERY_BATCH_SIZE: boundedPositiveInteger(40),
+  COMMUNICATION_DELIVERY_BATCH_SIZE: boundedPositiveInteger(40),
   EXPORT_BATCH_SIZE: boundedPositiveInteger(10),
   REMINDER_BATCH_SIZE: boundedPositiveInteger(200),
   WORKER_JOB_CONCURRENCY: boundedPositiveInteger(8).optional(),
-});
-const webEmailDeliveryEnvironmentSchema = z.object({
-  EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
-  EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
 });
 const webhookEnvironmentSchema = z.object({
   WEBHOOK_MICROSOFT_365_SECRET: productionSecret,
@@ -225,6 +221,7 @@ function workerBudgetIssues(environment: NodeJS.ProcessEnv) {
   return [
     ...(exceeds("OUTBOX_BATCH_SIZE", 20, 20) ? ["OUTBOX_BATCH_SIZE"] : []),
     ...(exceeds("CALENDAR_DELIVERY_BATCH_SIZE", 20, 20) ? ["CALENDAR_DELIVERY_BATCH_SIZE"] : []),
+    ...(exceeds("COMMUNICATION_DELIVERY_BATCH_SIZE", 20, 20) ? ["COMMUNICATION_DELIVERY_BATCH_SIZE"] : []),
     ...(featureEnabled(environment.WEBHOOKS_ENABLED) && exceeds("WEBHOOK_BATCH_SIZE", 20, 20) ? ["WEBHOOK_BATCH_SIZE"] : []),
     ...(featureEnabled(environment.INTEGRATION_SYNC_ENABLED) && exceeds("INTEGRATION_SYNC_BATCH_SIZE", 10, 60) ? ["INTEGRATION_SYNC_BATCH_SIZE"] : []),
   ];
@@ -263,6 +260,7 @@ export function inspectWorkerRuntimeEnvironment(
     "REMINDERS",
     "NOTIFICATION_OUTBOX",
     "CALENDAR_DELIVERIES",
+    "COMMUNICATION_DELIVERY",
     "GENERATED_JOBS",
     ...(webhooksEnabled ? ["WEBHOOK_INBOX" as const] : []),
     ...(integrationsEnabled ? ["INTEGRATION_SYNC" as const] : []),
@@ -280,7 +278,7 @@ export function inspectWorkerRuntimeEnvironment(
     ? result.error.issues.map((issue) => String(issue.path[0] ?? "environment")) : [];
   const budgetIssues = workerBudgetIssues(environment);
   const missing = [...invalidKeys(base), ...invalidKeys(deliveryResult), ...invalidKeys(webhookResult), ...invalidKeys(integrationResult), ...invalidKeys(observabilityResult), ...invalidKeys(ssoResult), ...invalidKeys(scimResult), ...budgetIssues];
-  const delivery = deliveryResult.success && !budgetIssues.some((key) => ["OUTBOX_BATCH_SIZE","CALENDAR_DELIVERY_BATCH_SIZE"].includes(key));
+  const delivery = deliveryResult.success && !budgetIssues.some((key) => ["OUTBOX_BATCH_SIZE","CALENDAR_DELIVERY_BATCH_SIZE","COMMUNICATION_DELIVERY_BATCH_SIZE"].includes(key));
   const webhooks = !webhooksEnabled || (webhookResult?.success === true && !budgetIssues.includes("WEBHOOK_BATCH_SIZE"));
   const integrations = !integrationsEnabled || (integrationResult?.success === true && !budgetIssues.includes("INTEGRATION_SYNC_BATCH_SIZE"));
   const observability = !observabilityEnabled || observabilityResult?.success === true;
@@ -313,27 +311,19 @@ export function inspectWebReadinessEnvironment(
   const core = inspectCoreRuntimeEnvironment(environment);
   const webhooksEnabled = featureEnabled(environment.WEBHOOKS_ENABLED);
   const integrationsEnabled = featureEnabled(environment.INTEGRATION_SYNC_ENABLED);
-  const emailDeliveryResult = webEmailDeliveryEnvironmentSchema.safeParse(environment);
-  const emailDeliveryMissing = emailDeliveryResult.success
-    ? []
-    : emailDeliveryResult.error.issues.map((issue) => String(issue.path[0] ?? "environment"));
   return {
     ...core,
-    valid: core.valid && emailDeliveryResult.success,
-    configured: core.configured
-      + EMAIL_DELIVERY_RUNTIME_KEYS.filter((key) => Boolean(environment[key]?.trim())).length,
-    expected: core.expected + EMAIL_DELIVERY_RUNTIME_KEYS.length,
-    missing: [...new Set([...core.missing, ...emailDeliveryMissing])],
     core: core.valid,
-    emailDeliveryConfigured: emailDeliveryResult.success,
+    emailDeliveryConfigured: null,
     emailDeliveryExternallyHealthy: null,
-    emailDeliveryCode: emailDeliveryResult.success ? null : EMAIL_DELIVERY_NOT_CONFIGURED,
+    emailDeliveryCode: null,
     webhooksEnabled,
     integrationsEnabled,
     enabledWorkers: [
       "REMINDERS",
       "NOTIFICATION_OUTBOX",
       "CALENDAR_DELIVERIES",
+      "COMMUNICATION_DELIVERY",
       "GENERATED_JOBS",
       ...(webhooksEnabled ? ["WEBHOOK_INBOX"] : []),
       ...(integrationsEnabled ? ["INTEGRATION_SYNC"] : []),

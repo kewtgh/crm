@@ -1,11 +1,12 @@
 param(
   [string]$Suffix = ([guid]::NewGuid().ToString("N").Substring(0, 10)),
-  [string]$ApplicationImage = "lumina-crm-validation:3.8.14",
-  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.14"
+  [string]$ApplicationImage = "lumina-crm-validation:3.8.15",
+  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.15"
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+Add-Type -AssemblyName System.Net.Http
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $composeFile = Join-Path $repositoryRoot "compose.production.yml"
@@ -16,8 +17,8 @@ $postgresVolume = "$project-postgres-data"
 $objectsVolume = "$project-objects"
 $backupsVolume = "$project-backups"
 $secretRoot = Join-Path $repositoryRoot "work\$project-secrets"
-$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.14"
-$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.14"
+$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.15"
+$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.15"
 $workspaceId = "00000000-0000-4000-8000-000000000001"
 
 foreach ($value in @($project, $backendNetwork, $edgeNetwork, $postgresVolume, $objectsVolume, $backupsVolume)) {
@@ -89,11 +90,27 @@ function Wait-ContainerHealth([string]$Service, [int]$Seconds = 120) {
 }
 
 function Get-HealthResponse([string]$Path) {
-  return Invoke-WebRequest `
-    -Uri "http://127.0.0.1:$webPort$Path" `
-    -Method Get `
-    -SkipHttpErrorCheck `
-    -TimeoutSec 20
+  $client = [System.Net.Http.HttpClient]::new()
+  $client.Timeout = [TimeSpan]::FromSeconds(20)
+  try {
+    $response = $client.GetAsync(
+      "http://127.0.0.1:$webPort$Path"
+    ).GetAwaiter().GetResult()
+    return [pscustomobject]@{
+      StatusCode = [int]$response.StatusCode
+      Content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    }
+  } finally {
+    $client.Dispose()
+  }
+}
+
+function Get-ContainerInspection([string]$Name) {
+  $inspection = docker inspect $Name | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0 -or !$inspection) {
+    throw "Container inspection failed: $Name"
+  }
+  return $inspection[0]
 }
 
 function Write-SecretFile([string]$Name, [string]$Content) {
@@ -181,6 +198,7 @@ EMAIL_DELIVERY_WEBHOOK_TOKEN=$emailDeliveryToken
 WORKER_JOB_CONCURRENCY=4
 OUTBOX_BATCH_SIZE=20
 CALENDAR_DELIVERY_BATCH_SIZE=20
+COMMUNICATION_DELIVERY_BATCH_SIZE=20
 EXPORT_BATCH_SIZE=10
 EXPORT_MAX_ROWS=250000
 REMINDER_BATCH_SIZE=100
@@ -219,8 +237,11 @@ SCIM_ENABLED=false
   Invoke-Compose @("--profile", "ops", "run", "--rm", "--no-deps", "migrate")
   Invoke-Compose @("--profile", "ops", "run", "--rm", "--no-deps", "bootstrap-admin")
 
+  $ErrorActionPreference = "Continue"
   $missingOutput = (& docker compose --file $composeFile run --rm --no-deps worker worker-health 2>&1) -join "`n"
-  if ($LASTEXITCODE -eq 0 -or $missingOutput -notmatch "WORKER_HEALTH_(MISSING|STALE)WORKERS") {
+  $missingExitCode = $LASTEXITCODE
+  $ErrorActionPreference = "Stop"
+  if ($missingExitCode -eq 0 -or $missingOutput -notmatch "WORKER_HEALTH_(MISSING|STALE)WORKERS") {
     throw "Worker health did not reject missing heartbeat state"
   }
 
@@ -243,16 +264,24 @@ SCIM_ENABLED=false
   $postgresContainer = "$project-postgres-1"
   $workerContainer = "$project-worker-1"
   $webContainer = "$project-web-1"
-  $postgresId = (docker inspect --format "{{.Id}}" $postgresContainer).Trim()
-  $postgresMount = (docker inspect --format "{{range .Mounts}}{{if eq .Destination `"/var/lib/postgresql`"}}{{.Name}}{{end}}{{end}}" $postgresContainer).Trim()
+  $postgresInspection = Get-ContainerInspection $postgresContainer
+  $postgresId = [string]$postgresInspection.Id
+  $postgresMount = [string]((
+    $postgresInspection.Mounts |
+      Where-Object { $_.Destination -eq "/var/lib/postgresql" } |
+      Select-Object -First 1
+  ).Name)
 
   docker stop $workerContainer | Out-Null
   docker exec --env PGPASSWORD=$superuserPassword $postgresContainer `
     psql --host 127.0.0.1 --username postgres --dbname lumina_crm `
     --command "update public.worker_heartbeats set last_seen_at=now()-interval '20 minutes'" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "Failed to create stale heartbeat fixture" }
+  $ErrorActionPreference = "Continue"
   $staleOutput = (& docker compose --file $composeFile run --rm --no-deps worker worker-health 2>&1) -join "`n"
-  if ($LASTEXITCODE -eq 0 -or $staleOutput -notmatch "WORKER_HEALTH_STALEWORKERS") {
+  $staleExitCode = $LASTEXITCODE
+  $ErrorActionPreference = "Stop"
+  if ($staleExitCode -eq 0 -or $staleOutput -notmatch "WORKER_HEALTH_STALEWORKERS") {
     throw "Worker health did not reject stale heartbeat state"
   }
   docker start $workerContainer | Out-Null
@@ -290,9 +319,15 @@ SCIM_ENABLED=false
   Wait-ContainerHealth "web"
   Wait-ContainerHealth "worker"
 
-  $postgresIdAfter = (docker inspect --format "{{.Id}}" $postgresContainer).Trim()
-  $postgresMountAfter = (docker inspect --format "{{range .Mounts}}{{if eq .Destination `"/var/lib/postgresql`"}}{{.Name}}{{end}}{{end}}" $postgresContainer).Trim()
-  $restoredImage = (docker inspect --format "{{.Config.Image}}" "$project-web-1").Trim()
+  $postgresInspectionAfter = Get-ContainerInspection $postgresContainer
+  $webInspectionAfter = Get-ContainerInspection "$project-web-1"
+  $postgresIdAfter = [string]$postgresInspectionAfter.Id
+  $postgresMountAfter = [string]((
+    $postgresInspectionAfter.Mounts |
+      Where-Object { $_.Destination -eq "/var/lib/postgresql" } |
+      Select-Object -First 1
+  ).Name)
+  $restoredImage = [string]$webInspectionAfter.Config.Image
   if ($postgresIdAfter -ne $postgresId -or $postgresMountAfter -ne $postgresMount -or
     $postgresMountAfter -ne $postgresVolume -or $restoredImage -ne $rollbackTag) {
     throw "Image rollback changed the PostgreSQL container/volume or failed to restore the rollback tag"

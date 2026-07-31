@@ -9,8 +9,9 @@ test("adds the next canonical expand-only communication delivery migration", asy
   const files = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.equal(files.at(-2), "202607300069_container_runtime_boundary.sql");
-  assert.equal(files.at(-1), migrationName);
+  const migrationIndex = files.indexOf(migrationName);
+  assert.equal(files[migrationIndex - 1], "202607300069_container_runtime_boundary.sql");
+  assert.ok(migrationIndex >= 0);
 
   const migration = await readFile(repositoryFile(`db/migrations/${migrationName}`), "utf8");
   for (const column of [
@@ -57,12 +58,8 @@ test("defines due, expired-lease and terminal operational indexes without requeu
   assert.doesNotMatch(preFunctionSql, /set\s+next_attempt_at/i);
 });
 
-test("uses fenced worker-only RPCs and preserves the synchronous Web compatibility functions", async () => {
-  const [migration, route, repository] = await Promise.all([
-    readFile(repositoryFile(`db/migrations/${migrationName}`), "utf8"),
-    readFile(repositoryFile("app/api/communications/route.ts"), "utf8"),
-    readFile(repositoryFile("lib/v220-repository.ts"), "utf8"),
-  ]);
+test("uses fenced worker-only RPCs and preserves database rollback compatibility functions", async () => {
+  const migration = await readFile(repositoryFile(`db/migrations/${migrationName}`), "utf8");
   for (const signature of [
     "claim_communication_deliveries_leased",
     "mark_communication_delivery_attempt_started_leased",
@@ -86,10 +83,6 @@ test("uses fenced worker-only RPCs and preserves the synchronous Web compatibili
     /grant\s+(?:insert|update|delete|all)[\s\S]{0,100}communication_messages[\s\S]{0,100}crm_worker/i,
   );
 
-  assert.match(route, /if\(queued\.shouldDeliver\)await deliver/);
-  assert.match(route, /await deliver\(\{id:message\.id/);
-  assert.match(repository, /service_complete_communication/);
-  assert.match(repository, /service_fail_communication/);
   assert.match(migration, /Existing synchronous Web functions[\s\S]+remain unchanged/);
 });
 

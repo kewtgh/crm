@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.14**
+Current release candidate: **v3.8.15**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -14,10 +14,11 @@ replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Cad
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
 
-Version 3.8.14 adds only the forward-compatible database foundation for a future dedicated
-`COMMUNICATION_DELIVERY` Worker: provider attempts are distinct from legacy Web attempts, leases
-are fenced, retry and uncertainty states are bounded, and new delivery RPCs are restricted to
-`crm_worker`. The synchronous Web delivery path remains active and compatible in this expand phase.
+Version 3.8.15 makes the dedicated `COMMUNICATION_DELIVERY` Worker the sole owner of external
+communication email delivery. Web requests now return durable queued state without recipient lookup
+or provider I/O; fenced Worker attempts use bounded concurrency, stable provider idempotency,
+conservative uncertainty recovery, independent heartbeat/readiness, and asynchronous UI status.
+The v3.8.14 database expansion and legacy Web credentials/RPCs remain for one rollback release.
 
 Version 3.7 moved production to the fixed `lumina-crm` Docker Compose project. PostgreSQL, Web,
 Worker, migrations, encrypted backup/restore, commit-tagged image release, application-only

@@ -518,15 +518,19 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
   assert.match(compose, /web_runtime_env:[\s\S]+production\.env/);
   assert.match(compose, /worker_runtime_env:[\s\S]+worker\.env/);
   assert.match(entrypoint, /EMAIL_DELIVERY_RUNTIME_KEYS/);
-  assert.match(entrypoint, /function webPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
+  const webPreflight = entrypoint.slice(
+    entrypoint.indexOf("function webPreflight"),
+    entrypoint.indexOf("function workerPreflight"),
+  );
+  assert.doesNotMatch(webPreflight, /EMAIL_DELIVERY_RUNTIME_KEYS/);
   assert.match(entrypoint, /function workerPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_URL=https:\/\/mailer\.example\.test\/delivery/g) ?? []).length, 2);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_TOKEN=\$emailDeliveryToken/g) ?? []).length, 2);
   assert.match(healthRoute, /externallyHealthy:environment\.emailDeliveryExternallyHealthy/);
-  assert.match(healthRoute, /configurationBoundary:"web-and-worker"/);
+  assert.match(healthRoute, /configurationBoundary:"worker"/);
   assert.doesNotMatch(healthRoute, /fetch\([^)]*EMAIL_DELIVERY/);
-  assert.match(communicationRoute, /configuredCommunicationDelivery\(\)/);
-  assert.match(communicationRoute, /COMMUNICATION_DELIVERY_NOT_CONFIGURED/);
+  assert.doesNotMatch(communicationRoute, /configuredCommunicationDelivery|postCommunicationDelivery|EMAIL_DELIVERY_WEBHOOK/);
+  assert.match(communicationRoute, /requeueCommunicationMessage/);
   assert.doesNotMatch(communicationRoute, /console\.|logger\.|EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*NextResponse/);
   assert.doesNotMatch(runner, /EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*\["/);
 });
@@ -1432,6 +1436,14 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
   assert.match(
     workflow,
     /await operations\.buildImages\(target\);[\s\S]+await operations\.migrate\(candidateEnvironment\);[\s\S]+await operations\.switchApplication\(candidateEnvironment\)/,
+  );
+  assert.match(
+    runner,
+    /switch Web image before enabling the new Worker image[\s\S]+waitForContainerHealth\(composeEnvPath, "web"[\s\S]+switch Worker image after Web ownership transfer/,
+  );
+  assert.match(
+    runner,
+    /stop asynchronous Worker before restoring the previous Web image[\s\S]+restore previous Web image[\s\S]+restore previous Worker image after Web rollback/,
   );
   assert.match(runner, /database remains on the forward schema/);
   assert.match(caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m);

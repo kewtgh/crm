@@ -6,6 +6,7 @@ const allWorkers = [
   "REMINDERS",
   "NOTIFICATION_OUTBOX",
   "CALENDAR_DELIVERIES",
+  "COMMUNICATION_DELIVERY",
   "GENERATED_JOBS",
   ...(/^(1|true|yes|on)$/i.test(process.env.WEBHOOKS_ENABLED ?? "") ? ["WEBHOOK_INBOX"] : []),
   ...(/^(1|true|yes|on)$/i.test(process.env.INTEGRATION_SYNC_ENABLED ?? "") ? ["INTEGRATION_SYNC"] : []),

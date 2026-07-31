@@ -7,6 +7,7 @@ const allWorkers=[
   ["REMINDERS","process-reminders.mjs"],
   ["NOTIFICATION_OUTBOX","process-notification-outbox.mjs"],
   ["CALENDAR_DELIVERIES","process-calendar-deliveries.mjs"],
+  ["COMMUNICATION_DELIVERY","process-communication-deliveries.mjs"],
   ["GENERATED_JOBS","process-generated-jobs.mjs"],
   ["WEBHOOK_INBOX","process-webhook-inbox.mjs"],
   ["INTEGRATION_SYNC","process-integration-sync.mjs"],
