@@ -13,8 +13,9 @@ const migration = "202607310070_async_communication_delivery_expand.sql";
 const files = (await readdir(directory))
   .filter((name) => /^\d{12,}_[a-z0-9_]+\.sql$/.test(name))
   .sort();
-assert.equal(files.at(-2), parent);
-assert.equal(files.at(-1), migration);
+const migrationIndex = files.indexOf(migration);
+assert.equal(files[migrationIndex - 1], parent);
+assert.ok(migrationIndex >= 0);
 
 const client = new Client({ connectionString });
 await client.connect();

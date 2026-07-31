@@ -39,6 +39,7 @@ const validWorkerEnvironment = {
   EMAIL_DELIVERY_WEBHOOK_TOKEN:"e".repeat(40),
   OUTBOX_BATCH_SIZE:"20",
   CALENDAR_DELIVERY_BATCH_SIZE:"20",
+  COMMUNICATION_DELIVERY_BATCH_SIZE:"20",
   EXPORT_BATCH_SIZE:"10",
   REMINDER_BATCH_SIZE:"100",
   WORKER_JOB_CONCURRENCY:"4",
@@ -98,6 +99,7 @@ test("keeps production Worker tuning inside the reviewed service budget", () => 
   for (const patch of [
     {OUTBOX_BATCH_SIZE:"41"},
     {CALENDAR_DELIVERY_BATCH_SIZE:"41"},
+    {COMMUNICATION_DELIVERY_BATCH_SIZE:"41"},
     {EXPORT_BATCH_SIZE:"11"},
     {REMINDER_BATCH_SIZE:"201"},
     {WORKER_JOB_CONCURRENCY:"9"},
@@ -130,10 +132,10 @@ test("keeps production Worker tuning inside the reviewed service budget", () => 
   assert.equal(inspectWorkerRuntimeEnvironment({...integrationEnvironment,WORKER_JOB_CONCURRENCY:"2"}).valid, false);
 });
 
-test("reports Web email delivery configuration without probing or exposing it", () => {
+test("keeps Web readiness independent from Worker-only email delivery configuration", () => {
   const configured = inspectWebReadinessEnvironment(validWorkerEnvironment);
   assert.equal(configured.valid, true);
-  assert.equal(configured.emailDeliveryConfigured, true);
+  assert.equal(configured.emailDeliveryConfigured, null);
   assert.equal(configured.emailDeliveryExternallyHealthy, null);
   assert.equal(configured.emailDeliveryCode, null);
   const serialized = JSON.stringify(configured);
@@ -143,12 +145,12 @@ test("reports Web email delivery configuration without probing or exposing it", 
     const environment = { ...validWorkerEnvironment };
     delete environment[missingKey];
     const missing = inspectWebReadinessEnvironment(environment);
-    assert.equal(missing.valid, false);
+    assert.equal(missing.valid, true);
     assert.equal(missing.core, true);
-    assert.equal(missing.emailDeliveryConfigured, false);
+    assert.equal(missing.emailDeliveryConfigured, null);
     assert.equal(missing.emailDeliveryExternallyHealthy, null);
-    assert.equal(missing.emailDeliveryCode, "EMAIL_DELIVERY_NOT_CONFIGURED");
-    assert.ok(missing.missing.includes(missingKey));
+    assert.equal(missing.emailDeliveryCode, null);
+    assert.ok(!missing.missing.includes(missingKey));
   }
 });
 

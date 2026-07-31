@@ -20,7 +20,20 @@ import type {
 import { useUserPreferences } from "./user-preferences-context";
 
 const communicationPurposes=["SERVICE","TRANSACTIONAL","EVENT","MARKETING"] as const;
-type OperationResult={operation:"thread"|"send"|"inbound"|"retry";threadId:string;messageId?:string};
+type OperationResult={operation:"thread"|"send"|"inbound"|"retry";threadId:string;messageId?:string;deliveryStatus?:string;accepted?:boolean};
+const communicationFailureKeys=new Set([
+  "PROVIDER_REJECTED",
+  "PROVIDER_UNAVAILABLE",
+  "PROVIDER_INVALID_RESPONSE",
+  "RECIPIENT_EMAIL_UNAVAILABLE",
+  "CONSENT_REVOKED",
+  "DELIVERY_CONFIGURATION_UNAVAILABLE",
+  "MAX_PROVIDER_ATTEMPTS",
+  "THREAD_CLOSED",
+  "LEASE_EXPIRED_BEFORE_PROVIDER_ATTEMPT",
+  "LEASE_EXPIRED_AFTER_PROVIDER_ATTEMPT",
+  "IDEMPOTENCY_WINDOW_EXPIRED",
+]);
 
 export function CommunicationsInboxPage({
   initial,
@@ -122,6 +135,14 @@ export function CommunicationsInboxPage({
     },query?250:0);
     return()=>{window.clearTimeout(timer);controller.abort();};
   },[loadInbox,page,pageSize,query,refreshToken]);
+
+  useEffect(()=>{
+    if(!thread||threadLoading||!thread.messages.some(message=>["QUEUED","PROCESSING"].includes(message.deliveryStatus)))return;
+    const timer=window.setTimeout(()=>{
+      void loadThread(thread.id,thread.messagePage,thread.messagePageSize);
+    },5000);
+    return()=>window.clearTimeout(timer);
+  },[loadThread,thread,threadLoading]);
 
   const chooseThread=(id:string)=>{
     if(id===selectedId)return;
@@ -256,8 +277,8 @@ export function CommunicationsInboxPage({
           <header><div><h2>{thread.subject}</h2><p>{locale==="zh-CN"?thread.contactZh:thread.contactEn} · {thread.email} · {t(`communications.purpose.${thread.purpose.toLowerCase()}`)}</p></div></header>
           <div className="communication-messages">{thread.messages.map(message=><div className={message.direction.toLowerCase()} key={message.id}>
             <p>{message.body}</p>
-            <small>{formatDate(message.createdAt,{includeTime:true})} · {t(`communications.delivery.${message.deliveryStatus.toLowerCase()}`)} · {t("communications.attempts")} {message.attemptCount}{message.lastError?` · ${message.lastError}`:""}</small>
-            {message.direction==="OUTBOUND"&&message.deliveryStatus==="FAILED"&&<button className="text-button" type="button" disabled={pending||threadLoading} onClick={()=>void retry(message.id)}><RotateCcw size={14}/>{t("communications.retry")}</button>}
+            <small>{formatDate(message.createdAt,{includeTime:true})} · {t(`communications.delivery.${message.deliveryStatus.toLowerCase()}`)} · {t("communications.attempts")} {message.direction==="OUTBOUND"?message.providerAttemptCount:message.attemptCount}{communicationFailureKeys.has(message.failureCode)?` · ${t(`communications.failure.${message.failureCode}`)}`:""}</small>
+            {message.direction==="OUTBOUND"&&message.retryAllowed&&<button className="text-button" type="button" disabled={pending||threadLoading} onClick={()=>void retry(message.id)}><RotateCcw size={14}/>{t("communications.retry")}</button>}
           </div>)}</div>
           {thread.messageTotal>0&&<div className="communication-message-pagination"><Pagination page={Math.min(thread.messagePage,messagePages)} totalPages={messagePages} total={thread.messageTotal} pageSize={thread.messagePageSize} onPage={value=>void loadThread(thread.id,value,thread.messagePageSize)} onPageSize={value=>void loadThread(thread.id,undefined,value)}/></div>}
           <form className="communication-composer" onSubmit={send} onChange={()=>{if(!pending)messageRequest.current=null;}}>

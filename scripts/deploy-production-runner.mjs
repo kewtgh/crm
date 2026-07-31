@@ -493,10 +493,14 @@ async function bootstrapAdmin(candidateEnv) {
 
 async function switchApplication(candidateEnv) {
   atomicWrite(composeEnvPath, readFileSync(candidateEnv, "utf8"));
-  await compose("switch Web and Worker images", composeEnvPath, [
-    "up", "-d", "--no-deps", "web", "worker",
+  await compose("switch Web image before enabling the new Worker image", composeEnvPath, [
+    "up", "-d", "--no-deps", "web",
   ], { timeoutMs: 300_000 });
   switched = true;
+  await waitForContainerHealth(composeEnvPath, "web", 120_000);
+  await compose("switch Worker image after Web ownership transfer", composeEnvPath, [
+    "up", "-d", "--no-deps", "worker",
+  ], { timeoutMs: 300_000 });
 }
 
 async function rollbackApplication(reason) {
@@ -508,8 +512,15 @@ async function rollbackApplication(reason) {
     operationsImage: previousAccepted.operationsImage,
   };
   atomicWrite(composeEnvPath, composeEnvironment(previous));
-  await compose("restore previous application images", composeEnvPath, [
-    "up", "-d", "--no-deps", "web", "worker",
+  await compose("stop asynchronous Worker before restoring the previous Web image", composeEnvPath, [
+    "stop", "worker",
+  ], { timeoutMs: 120_000 });
+  await compose("restore previous Web image", composeEnvPath, [
+    "up", "-d", "--no-deps", "web",
+  ], { timeoutMs: 300_000 });
+  await waitForContainerHealth(composeEnvPath, "web", 120_000);
+  await compose("restore previous Worker image after Web rollback", composeEnvPath, [
+    "up", "-d", "--no-deps", "worker",
   ], { timeoutMs: 300_000 });
   target = { ...previous, version: previousAccepted.version };
   await acceptRuntime(composeEnvPath, { publicChecks: false });

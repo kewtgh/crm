@@ -24,8 +24,9 @@ test("makes communication thread creation replay-safe at the database boundary",
 });
 
 test("grants one bounded owner for provider delivery and skips successful replays", async () => {
-  const [migration, route] = await Promise.all([
+  const [migration, switchMigration, route] = await Promise.all([
     readFile(repositoryFile("db/migrations/202607290064_v330_communication_scalability.sql"), "utf8"),
+    readFile(repositoryFile("db/migrations/202607310071_async_communication_delivery_switch.sql"), "utf8"),
     readFile(repositoryFile("app/api/communications/route.ts"), "utf8"),
   ]);
   assert.match(migration, /returns jsonb/);
@@ -34,8 +35,11 @@ test("grants one bounded owner for provider delivery and skips successful replay
   assert.match(migration, /last_attempt_at<=now\(\)-interval '20 seconds'/);
   assert.match(migration, /'shouldDeliver',false/);
   assert.match(migration, /'shouldDeliver',true/);
-  assert.match(route, /if\(queued\.shouldDeliver\)await deliver/);
-  assert.match(route, /deliveryStarted:queued\.shouldDeliver/);
+  assert.match(switchMigration, /'shouldDeliver',false/);
+  assert.match(switchMigration, /next_attempt_at=now\(\)/);
+  assert.match(route, /accepted:deliveryStatus==="QUEUED"/);
+  assert.match(route, /status:deliveryStatus==="QUEUED"\?202:200/);
+  assert.doesNotMatch(route, /if\(queued\.shouldDeliver\)|deliveryStarted|fetch\(/);
   assert.doesNotMatch(route, /return NextResponse\.json\(await loadCommunications\(\)\)/);
 });
 

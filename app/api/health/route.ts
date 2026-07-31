@@ -21,7 +21,7 @@ const integrationStatus=(environment:ReturnType<typeof inspectWebReadinessEnviro
     configured:environment.emailDeliveryConfigured,
     externallyHealthy:environment.emailDeliveryExternallyHealthy,
     code:environment.emailDeliveryCode,
-    configurationBoundary:"web-and-worker",
+    configurationBoundary:"worker",
   },
   webhook:{enabled:environment.webhooksEnabled,configured:null,configurationBoundary:"worker"},
   integrationSync:{enabled:environment.integrationsEnabled,configured:null,configurationBoundary:"worker"},

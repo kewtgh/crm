@@ -201,8 +201,8 @@ with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor remo
 
 | File / consumer | Database identity and other secrets |
 | --- | --- |
-| `production.env` / Web | `crm_app`, `crm_system`, auth/object-signing secrets, and the CRM email webhook URL/token currently used for direct `communication-message` delivery |
-| `worker.env` / Worker | `crm_worker`, object-store/integration credentials, and the same CRM email webhook URL/token for notification, reminder, and calendar delivery |
+| `production.env` / Web | `crm_app`, `crm_system`, auth/object-signing secrets, plus transitional CRM email webhook URL/token retained only for rollback to v3.8.14 |
+| `worker.env` / Worker | `crm_worker`, object-store/integration credentials, and the CRM email webhook URL/token for notification, reminder, calendar, and communication delivery |
 | `email-worker-deploy.env` / Cloudflare deployment controller | Worker deployment metadata plus Cloudflare account/API deployment credential; no CRM runtime email URL/token and no provider runtime secrets |
 | Email delivery Cloudflare Worker | CRM webhook token plus Worker-only Resend API key |
 | `database-bootstrap.env` | PostgreSQL administrator plus five role passwords |
@@ -217,9 +217,11 @@ Web/Worker reject migration, backup, restore, and database-administrator variabl
 every write-capable database URL. No normal runtime service receives migration, backup, or
 PostgreSQL administrator credentials.
 
-Until direct communication email is migrated to the background Worker, both `production.env` and
-`worker.env` must contain identical `EMAIL_DELIVERY_WEBHOOK_URL` and
-`EMAIL_DELIVERY_WEBHOOK_TOKEN` values. The secret relationship is:
+Starting with v3.8.15, the active Web process neither reads these values nor performs external
+communication delivery. `COMMUNICATION_DELIVERY` is the sole provider-I/O owner. For one
+application rollback release, `production.env` and `worker.env` still contain identical
+`EMAIL_DELIVERY_WEBHOOK_URL` and `EMAIL_DELIVERY_WEBHOOK_TOKEN` values. The active and rollback
+secret relationship is:
 
 ```text
 production.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
@@ -228,11 +230,15 @@ worker.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
 Cloudflare Worker secret LUMINA_WEBHOOK_TOKEN
 ```
 
+`worker.env` is the only active CRM consumer. `production.env` retains the values only so an
+operator can disable `COMMUNICATION_DELIVERY` and roll back to the v3.8.14 synchronous image.
+Phase 3 removes the Web template values and legacy database grants after production acceptance.
+
 `RESEND_API_KEY` exists only as a Cloudflare Email Worker secret. It must never enter
 `production.env`, `worker.env`, `email-worker-deploy.env`, Compose YAML, or application deployment
-state. Loopback readiness validates only that the Web email configuration is structurally present;
-it reports external health as not checked and neither probes the endpoint nor sends a test email.
-Basic `/api/health` liveness remains independent of email configuration and provider availability.
+state. Loopback readiness validates the independent `COMMUNICATION_DELIVERY` heartbeat and governed
+queue metrics; it neither probes the endpoint nor sends a test email. Basic `/api/health` liveness
+remains independent of email configuration and provider availability.
 
 All containers clear uppercase/lowercase proxy variables and set `NO_PROXY` for `postgres` and
 local services. Set `LUMINA_GIT_PROXY=http://127.0.0.1:20271` in
@@ -527,6 +533,14 @@ migration, and application rollback reports: “Application rolled back; databas
 forward schema.” Each migration must remain compatible with the rollback application until
 acceptance. Cleanup starts only after acceptance; cleanup failure is a warning. Accepted state is
 persisted first so interruption can resume finalization safely.
+
+v3.8.15 is the first asynchronous communication-delivery release. Forward application switching
+replaces and health-checks Web before replacing Worker, so the old synchronous Web is gone before a
+`COMMUNICATION_DELIVERY` process can start. Before rolling back to v3.8.14, stop the Worker first,
+restore and health-check the prior Web image, and only then restore the prior Worker image. Never run
+the old synchronous Web sender and the new communication Worker concurrently. Do not
+down-migrate: the 070/071 schema remains forward-compatible, legacy `crm_system` completion/failure
+grants and the transitional Web email values remain until Phase 3.
 
 ## Daily status, logs, and health
 
