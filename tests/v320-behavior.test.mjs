@@ -9,6 +9,8 @@ import {
 import {
   COMMUNICATION_DELIVERY_TIMEOUT_MS,
   communicationDeliveryHeaders,
+  configuredCommunicationDelivery,
+  postCommunicationDelivery,
 } from "../lib/communication-delivery.ts";
 
 const repositoryFile = (path) => new URL(`../${path}`, import.meta.url);
@@ -37,6 +39,33 @@ test("keeps provider delivery inside the client budget with a stable idempotency
     communicationDeliveryHeaders("message-123", "token").authorization,
     "Bearer token",
   );
+});
+
+test("passes configured Web delivery credentials without returning or logging them", async () => {
+  const endpoint = "https://mailer.example.test/delivery";
+  const bearerToken = "w".repeat(40);
+  assert.equal(configuredCommunicationDelivery({ EMAIL_DELIVERY_WEBHOOK_URL: endpoint }), null);
+  assert.equal(configuredCommunicationDelivery({ EMAIL_DELIVERY_WEBHOOK_TOKEN: bearerToken }), null);
+  assert.deepEqual(configuredCommunicationDelivery({
+    EMAIL_DELIVERY_WEBHOOK_URL: endpoint,
+    EMAIL_DELIVERY_WEBHOOK_TOKEN: bearerToken,
+  }), { endpoint, bearerToken });
+  let captured;
+  const response = await postCommunicationDelivery({
+    endpoint,
+    bearerToken,
+    messageId: "communication-message-id",
+    payload: { id: "communication-message-id", template: "communication-message" },
+    fetchImplementation: async (url, init) => {
+      captured = { url, init };
+      return new Response(JSON.stringify({ id: "provider-id" }), { status: 200 });
+    },
+  });
+  assert.equal(captured.url, endpoint);
+  assert.equal(captured.init.headers.authorization, `Bearer ${bearerToken}`);
+  assert.equal(captured.init.headers["idempotency-key"], "communication-message-id");
+  assert.equal(await response.json().then((body) => body.id), "provider-id");
+  assert.doesNotMatch(JSON.stringify({ status: response.status }), /mailer|w{40}/);
 });
 
 test("persists appointment request fingerprints and closes the malformed JSON fallback", async () => {
@@ -68,8 +97,7 @@ test("reports communication result capacity and blocks duplicate client operatio
   ]);
   assert.match(migration, /'total',\(select count\(\*\) from filtered\)/);
   assert.match(migration, /'truncated',\(select count\(\*\) from filtered\)>jsonb_array_length/);
-  assert.match(route, /communicationDeliveryHeaders\(message\.id/);
-  assert.match(route, /AbortSignal\.timeout\(COMMUNICATION_DELIVERY_TIMEOUT_MS\)/);
+  assert.match(route, /postCommunicationDelivery\(\{\.\.\.delivery,messageId:message\.id/);
   assert.match(component, /if\(operationLock\.current\)return null/);
   assert.match(component, /messageRequest\.current=request/);
   assert.doesNotMatch(component, /<Search size=/);

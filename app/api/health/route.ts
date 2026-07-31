@@ -16,7 +16,13 @@ export const dynamic = "force-dynamic";
 const READINESS_DATABASE_TIMEOUT_MS = 10_000;
 
 const integrationStatus=(environment:ReturnType<typeof inspectWebReadinessEnvironment>)=>({
-  email:{enabled:true,configured:null,configurationBoundary:"worker"},
+  email:{
+    enabled:true,
+    configured:environment.emailDeliveryConfigured,
+    externallyHealthy:environment.emailDeliveryExternallyHealthy,
+    code:environment.emailDeliveryCode,
+    configurationBoundary:"web-and-worker",
+  },
   webhook:{enabled:environment.webhooksEnabled,configured:null,configurationBoundary:"worker"},
   integrationSync:{enabled:environment.integrationsEnabled,configured:null,configurationBoundary:"worker"},
   externalAi:{enabled:false,configured:false},

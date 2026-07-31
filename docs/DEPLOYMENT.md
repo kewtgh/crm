@@ -201,8 +201,9 @@ with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor remo
 
 | File / consumer | Database identity and other secrets |
 | --- | --- |
-| `production.env` / Web | `crm_app`, `crm_system`, auth and object-signing secrets |
-| `worker.env` / Worker | `crm_worker`, delivery/integration and object-store credentials |
+| `production.env` / Web | `crm_app`, `crm_system`, auth/object-signing secrets, and the CRM email webhook URL/token currently used for direct `communication-message` delivery |
+| `worker.env` / Worker | `crm_worker`, object-store/integration credentials, and the same CRM email webhook URL/token for notification, reminder, and calendar delivery |
+| `email-worker-deploy.env` / Cloudflare deployment controller | Worker deployment metadata plus Cloudflare account/API deployment credential; no CRM runtime email URL/token and no provider runtime secrets |
 | Email delivery Cloudflare Worker | CRM webhook token plus Worker-only Resend API key |
 | `database-bootstrap.env` | PostgreSQL administrator plus five role passwords |
 | `migration.env` | `crm_migrator` only |
@@ -215,6 +216,23 @@ with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor remo
 Web/Worker reject migration, backup, restore, and database-administrator variables. Backup rejects
 every write-capable database URL. No normal runtime service receives migration, backup, or
 PostgreSQL administrator credentials.
+
+Until direct communication email is migrated to the background Worker, both `production.env` and
+`worker.env` must contain identical `EMAIL_DELIVERY_WEBHOOK_URL` and
+`EMAIL_DELIVERY_WEBHOOK_TOKEN` values. The secret relationship is:
+
+```text
+production.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
+worker.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
+=
+Cloudflare Worker secret LUMINA_WEBHOOK_TOKEN
+```
+
+`RESEND_API_KEY` exists only as a Cloudflare Email Worker secret. It must never enter
+`production.env`, `worker.env`, `email-worker-deploy.env`, Compose YAML, or application deployment
+state. Loopback readiness validates only that the Web email configuration is structurally present;
+it reports external health as not checked and neither probes the endpoint nor sends a test email.
+Basic `/api/health` liveness remains independent of email configuration and provider availability.
 
 All containers clear uppercase/lowercase proxy variables and set `NO_PROXY` for `postgres` and
 local services. Set `LUMINA_GIT_PROXY=http://127.0.0.1:20271` in
@@ -310,8 +328,8 @@ The repository's Windows validation harnesses create unique `lumina-crm-it-*` /
 ```powershell
 .\scripts\test-compose-database-integration.ps1
 .\scripts\test-compose-runtime-integration.ps1 `
-  -ApplicationImage lumina-crm-validation:3.8.12 `
-  -OperationsImage lumina-crm-ops-validation:3.8.12
+  -ApplicationImage lumina-crm-validation:3.8.13 `
+  -OperationsImage lumina-crm-ops-validation:3.8.13
 ```
 
 They are local integration tests, not production deployment commands.
@@ -378,12 +396,10 @@ the Worker name, Custom Domain, URLs, mailboxes, paths, brand, account ID, and A
 redacted in literal and URL-encoded forms.
 
 The Worker requires the existing `LUMINA_WEBHOOK_TOKEN` and `RESEND_API_KEY` secret binding names.
-Neither belongs in the deployment Env: both remain only in Cloudflare Worker secret bindings, and
-the controller does not read, upload, replace, or delete them. The controller also never reads the
-CRM server's `worker.env`. CRM initialization separately ensures that its root-owned
-`EMAIL_DELIVERY_WEBHOOK_TOKEN` matches `LUMINA_WEBHOOK_TOKEN` and constructs
-`EMAIL_DELIVERY_WEBHOOK_URL` from the production Worker base URL and delivery path. Both repository
-example values remain empty:
+Neither belongs in `email-worker-deploy.env`: both remain only in Cloudflare Worker secret bindings,
+and the controller does not read, upload, replace, or delete them. The controller also never reads
+the CRM server's `production.env` or `worker.env`. Operators place the same CRM-side URL/token in
+both root-owned runtime files; both tracked templates keep their values empty:
 
 ```dotenv
 EMAIL_DELIVERY_WEBHOOK_URL=

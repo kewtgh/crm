@@ -1,6 +1,10 @@
 import { z } from "zod";
 import path from "node:path";
 import { secureEndpointOrigin } from "./application-origin.mjs";
+import {
+  EMAIL_DELIVERY_NOT_CONFIGURED,
+  EMAIL_DELIVERY_RUNTIME_KEYS,
+} from "./email-delivery-runtime.mjs";
 
 const placeholderPattern = /replace-with|change-me|example-secret|your-project|your-anon|server-only-service|production-site-key|production-server-secret|public-anon-key|workspace-uuid|independent-random/i;
 const configured = z.string().trim().min(1).refine(
@@ -116,8 +120,7 @@ const s3StorageKeys = [
   "S3_SECRET_ACCESS_KEY",
 ] as const;
 const deliveryKeys = [
-  "EMAIL_DELIVERY_WEBHOOK_URL",
-  "EMAIL_DELIVERY_WEBHOOK_TOKEN",
+  ...EMAIL_DELIVERY_RUNTIME_KEYS,
   "OUTBOX_BATCH_SIZE",
   "CALENDAR_DELIVERY_BATCH_SIZE",
   "EXPORT_BATCH_SIZE",
@@ -175,6 +178,10 @@ const deliveryEnvironmentSchema = z.object({
   EXPORT_BATCH_SIZE: boundedPositiveInteger(10),
   REMINDER_BATCH_SIZE: boundedPositiveInteger(200),
   WORKER_JOB_CONCURRENCY: boundedPositiveInteger(8).optional(),
+});
+const webEmailDeliveryEnvironmentSchema = z.object({
+  EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
+  EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
 });
 const webhookEnvironmentSchema = z.object({
   WEBHOOK_MICROSOFT_365_SECRET: productionSecret,
@@ -306,9 +313,21 @@ export function inspectWebReadinessEnvironment(
   const core = inspectCoreRuntimeEnvironment(environment);
   const webhooksEnabled = featureEnabled(environment.WEBHOOKS_ENABLED);
   const integrationsEnabled = featureEnabled(environment.INTEGRATION_SYNC_ENABLED);
+  const emailDeliveryResult = webEmailDeliveryEnvironmentSchema.safeParse(environment);
+  const emailDeliveryMissing = emailDeliveryResult.success
+    ? []
+    : emailDeliveryResult.error.issues.map((issue) => String(issue.path[0] ?? "environment"));
   return {
     ...core,
+    valid: core.valid && emailDeliveryResult.success,
+    configured: core.configured
+      + EMAIL_DELIVERY_RUNTIME_KEYS.filter((key) => Boolean(environment[key]?.trim())).length,
+    expected: core.expected + EMAIL_DELIVERY_RUNTIME_KEYS.length,
+    missing: [...new Set([...core.missing, ...emailDeliveryMissing])],
     core: core.valid,
+    emailDeliveryConfigured: emailDeliveryResult.success,
+    emailDeliveryExternallyHealthy: null,
+    emailDeliveryCode: emailDeliveryResult.success ? null : EMAIL_DELIVERY_NOT_CONFIGURED,
     webhooksEnabled,
     integrationsEnabled,
     enabledWorkers: [

@@ -1,7 +1,7 @@
 param(
   [string]$Suffix = ([guid]::NewGuid().ToString("N").Substring(0, 10)),
-  [string]$ApplicationImage = "lumina-crm-validation:3.8.12",
-  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.12"
+  [string]$ApplicationImage = "lumina-crm-validation:3.8.13",
+  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.13"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,8 +16,8 @@ $postgresVolume = "$project-postgres-data"
 $objectsVolume = "$project-objects"
 $backupsVolume = "$project-backups"
 $secretRoot = Join-Path $repositoryRoot "work\$project-secrets"
-$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.12"
-$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.12"
+$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.13"
+$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.13"
 $workspaceId = "00000000-0000-4000-8000-000000000001"
 
 foreach ($value in @($project, $backendNetwork, $edgeNetwork, $postgresVolume, $objectsVolume, $backupsVolume)) {
@@ -111,6 +111,7 @@ $systemPassword = New-TestSecret
 $workerPassword = New-TestSecret
 $migratorPassword = New-TestSecret
 $backupPassword = New-TestSecret
+$emailDeliveryToken = New-TestSecret
 $candidateTagCreated = $false
 $rollbackTagCreated = $false
 
@@ -159,6 +160,8 @@ TOTP_ENCRYPTION_KEY=$(New-TestSecret)
 OBJECT_STORAGE_SIGNING_SECRET=$(New-TestSecret)
 OBJECT_STORAGE_PROVIDER=local
 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/lumina-crm/objects
+EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.test/delivery
+EMAIL_DELIVERY_WEBHOOK_TOKEN=$emailDeliveryToken
 WEBHOOKS_ENABLED=false
 INTEGRATION_SYNC_ENABLED=false
 SSO_ENABLED=false
@@ -173,8 +176,8 @@ CRM_WORKSPACE_ID=$workspaceId
 WORKER_ID=runtime-$Suffix
 OBJECT_STORAGE_PROVIDER=local
 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/lumina-crm/objects
-EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.com/crm-delivery
-EMAIL_DELIVERY_WEBHOOK_TOKEN=$(New-TestSecret)
+EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.test/delivery
+EMAIL_DELIVERY_WEBHOOK_TOKEN=$emailDeliveryToken
 WORKER_JOB_CONCURRENCY=4
 OUTBOX_BATCH_SIZE=20
 CALENDAR_DELIVERY_BATCH_SIZE=20

@@ -1,8 +1,8 @@
-# Implementation status — v3.8.12 release candidate
+# Implementation status — v3.8.13 release candidate
 
 ## Scope
 
-v3.8.12 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.13 retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 adds an optional, server-local, build-only Docker proxy contract without weakening Git, Compose,
 runtime-container, or HunterAI isolation. Windows is
@@ -54,15 +54,18 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - explicit separation between CRM application initialization and email Worker deployment;
 - a containerized release-version contract that keeps package metadata, runtime `APP_VERSION`,
   health responses, and strict deployment acceptance aligned;
+- one explicit CRM email runtime contract shared by Web communication delivery and background
+  Worker delivery, with configuration-only readiness diagnostics and no provider probe;
 - synchronized application, Worker subproject metadata, package, lockfile, and documentation
-  version 3.8.12; the Worker runtime logic is unchanged in this release.
+  version 3.8.13; the Cloudflare Worker runtime logic is unchanged in this release.
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
 | Root `npm ci` | Pass: 566 packages installed, 572 audited, 0 vulnerabilities |
-| Production deploy / version / secret-source / Buildx targeted contracts | Pass: 43/43, including release/runtime/health version consistency and mismatch rejection, build-before secret rejection, fixed rootless host networking, proxy isolation, and existing cleanup/rootless boundaries |
+| Production deploy / email-runtime / version / secret-source / Buildx targeted contracts | Pass: 44/44 targeted, including Web/Worker email ownership, release/runtime/health version consistency, build-before secret rejection, fixed rootless host networking, proxy isolation, and existing cleanup/rootless boundaries |
+| Email communication and runtime-environment targeted contracts | Pass: 11/11, including configured delivery forwarding, missing Web configuration, non-probing diagnostics, Worker delivery, and safe output |
 | Verification image `docker build --target verification --output type=cacheonly .` | Pass: containerized build, contracts, and deploy tests completed with `docs/DEPLOYMENT.md` present |
 | Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
@@ -71,10 +74,10 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 52/52 version/rootless Compose/deploy/secret-source/verification-context/BuildKit host-network/proxy/Tunnel contracts |
+| `npm run test:deploy:raw` | Pass: 53/53 email-runtime/version/rootless Compose/deploy/secret-source/verification-context/BuildKit host-network/proxy/Tunnel contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
-| `npm run test:contracts:raw` | Pass: 44 application contracts + 6 CAPTCHA contracts |
+| `npm run test:contracts:raw` | Pass: 46 application contracts + 6 CAPTCHA contracts |
 | Tracked-tree production identifier / retired Env / deployment-command scans | Pass |
 | `git diff --check` | Pass before release commit |
 

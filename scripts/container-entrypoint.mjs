@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import { EMAIL_DELIVERY_RUNTIME_KEYS } from "../lib/email-delivery-runtime.mjs";
 
 const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
@@ -80,6 +81,7 @@ function webPreflight() {
     "TRUSTED_DEVICE_HASH_SECRET",
     "TOTP_ENCRYPTION_KEY",
     "OBJECT_STORAGE_SIGNING_SECRET",
+    ...EMAIL_DELIVERY_RUNTIME_KEYS,
   ]);
   requireDatabaseRole("DATABASE_URL", "crm_app");
   requireDatabaseRole("SYSTEM_DATABASE_URL", "crm_system");
@@ -98,8 +100,7 @@ function workerPreflight() {
   requireKeys([
     "CRM_WORKSPACE_ID",
     "OBJECT_STORAGE_PROVIDER",
-    "EMAIL_DELIVERY_WEBHOOK_URL",
-    "EMAIL_DELIVERY_WEBHOOK_TOKEN",
+    ...EMAIL_DELIVERY_RUNTIME_KEYS,
   ]);
   rejectPresent([
     "DATABASE_URL",
