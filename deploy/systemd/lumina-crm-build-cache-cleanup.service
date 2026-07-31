@@ -1,0 +1,37 @@
+[Unit]
+Description=Lumina CRM bounded BuildKit cache cleanup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=lumina-crm
+Group=lumina-crm
+EnvironmentFile=/etc/lumina-crm/deploy.env
+Environment=DOCKER_CONFIG=/var/lib/lumina-crm/docker-config
+Environment=BUILDX_CONFIG=/var/lib/lumina-crm/docker-config/buildx
+UnsetEnvironment=DOCKER_CONTEXT
+ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs cache-cleanup
+TimeoutStartSec=360s
+UMask=0027
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=read-only
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+NoNewPrivileges=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+StateDirectory=lumina-crm/storage-maintenance
+StateDirectoryMode=0750
+LogsDirectory=lumina-crm/storage-maintenance
+LogsDirectoryMode=0750
+ReadWritePaths=/var/lib/lumina-crm /var/log/lumina-crm

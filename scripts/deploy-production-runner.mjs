@@ -434,26 +434,42 @@ async function buildImages(release) {
     ...dockerBuildProxyArguments(configuredDockerProxy),
     "--provenance=true",
   ];
-  await run("containerized type, lint and contract verification", "docker", [
-    "buildx", "build", ...common,
-    "--target", "verification",
-    "--output", "type=cacheonly",
-    ".",
-  ], { timeoutMs: 900_000, environment: buildEnvironment });
-  await run("build immutable application image", "docker", [
-    "buildx", "build", ...common,
-    "--target", "application",
-    "--tag", release.currentImage,
-    "--load",
-    ".",
-  ], { timeoutMs: 900_000, environment: buildEnvironment });
-  await run("build immutable operations image", "docker", [
-    "buildx", "build", ...common,
-    "--target", "operations",
-    "--tag", release.operationsImage,
-    "--load",
-    ".",
-  ], { timeoutMs: 900_000, environment: buildEnvironment });
+  try {
+    await run("containerized type, lint and contract verification", "docker", [
+      "buildx", "build", ...common,
+      "--target", "verification",
+      "--output", "type=cacheonly",
+      ".",
+    ], { timeoutMs: 900_000, environment: buildEnvironment });
+    await run("build immutable application image", "docker", [
+      "buildx", "build", ...common,
+      "--target", "application",
+      "--tag", release.currentImage,
+      "--load",
+      ".",
+    ], { timeoutMs: 900_000, environment: buildEnvironment });
+    await run("build immutable operations image", "docker", [
+      "buildx", "build", ...common,
+      "--target", "operations",
+      "--tag", release.operationsImage,
+      "--load",
+      ".",
+    ], { timeoutMs: 900_000, environment: buildEnvironment });
+  } finally {
+    try {
+      const cleanup = await run(
+        "bounded post-build BuildKit cache cleanup",
+        "sudo",
+        ["-n", "/usr/bin/systemctl", "start", "lumina-crm-build-cache-cleanup.service"],
+        { timeoutMs: 360_000, allowFailure: true },
+      );
+      if (cleanup.code !== 0) {
+        log("WARN", "BuildKit cache cleanup requires operator review");
+      }
+    } catch {
+      log("WARN", "BuildKit cache cleanup could not be started; operator review is required");
+    }
+  }
 }
 
 async function startPostgres(candidateEnv) {

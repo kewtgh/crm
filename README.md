@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.16**
+Current release candidate: **v3.8.17**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -13,6 +13,10 @@ It also verifies each encrypted database backup with its matching encrypted loca
 replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
+
+Version 3.8.17 adds bounded automatic cleanup of the fixed Lumina BuildKit cache after every image
+build sequence, including failed builds. It preserves the configured retention, maximum, reserved,
+and minimum-free-space limits without invoking global Docker prune or deleting accepted images.
 
 Version 3.8.16 preserves the Phase 2 communication-delivery ownership switch and fixes staff-account
 creation so a committed account is never deleted or reported as a form failure merely because the
@@ -158,7 +162,7 @@ rootless Docker/state capacity gate
 post-switch failure -> application-image rollback; database stays forward
 ```
 
-Storage prepare, storage cleanup, and the deployment runner now share
+Storage prepare, post-build cache cleanup, post-acceptance storage cleanup, and the deployment runner share
 `/var/lib/lumina-crm/docker-config` as their only Docker client configuration root and
 `/var/lib/lumina-crm/docker-config/buildx` as their only Buildx configuration root. The separate
 `/var/lib/lumina-crm/storage-maintenance` tree retains only the builder ownership marker, reports,
@@ -166,6 +170,12 @@ and maintenance state. An obsolete configuration directory at that location is n
 copied, or deleted automatically; its presence requires operator review. After a source
 fast-forward, the audited maintenance program must be installed separately as the fixed root-owned
 `/usr/local/libexec/lumina-crm-storage-maintenance.mjs` before first initialization or deployment.
+
+Every automatic image-build sequence triggers bounded cleanup of only the fixed
+`lumina-crm-buildkit` cache, including when verification or a later image build fails. The
+server-local retention, maximum-cache, reserved-cache, and minimum-free-space policy remains
+authoritative; no `docker system prune`, volume/network prune, or accepted-image deletion is used
+by this post-build mode.
 
 The configured Git proxy, when present, is used for the first and only fetch; otherwise that single
 fetch is direct. It is never persisted as Git, Docker, or systemd configuration. Containers clear

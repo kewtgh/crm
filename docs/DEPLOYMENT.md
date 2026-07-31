@@ -189,13 +189,23 @@ sudo systemctl start lumina-crm-storage-prepare.service
 sudo systemctl status lumina-crm-storage-prepare.service
 ```
 
-The deploy runner and both storage units use the same exact `DOCKER_CONFIG` root
+The deploy runner and all storage units use the same exact `DOCKER_CONFIG` root
 `/var/lib/lumina-crm/docker-config` and `BUILDX_CONFIG` root
 `/var/lib/lumina-crm/docker-config/buildx`. Storage prepare creates or verifies the builder there,
 so the subsequent runner inspection sees the same builder namespace. The maintenance state tree
 keeps `builder-owner.json`, `latest.json`, and reports only; it is not a Docker client configuration
 root. If an obsolete Docker configuration directory exists below that state tree, prepare fails
 with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor removes it.
+
+Install `lumina-crm-build-cache-cleanup.service` with the prepare and post-acceptance cleanup units,
+and install the matching sudoers update before deploying. After every three-image build sequence,
+the runner starts this one-shot service from a `finally` path, so a failed verification or image
+build cannot silently skip cache maintenance. This mode validates the owned
+`lumina-crm-buildkit` builder, then applies `LUMINA_BUILDKIT_CACHE_RETENTION_HOURS`,
+`LUMINA_BUILDKIT_MAX_CACHE_GB`, `LUMINA_BUILDKIT_RESERVED_CACHE_GB`, and the Docker
+minimum-free-space threshold. It does not require an accepted-release cleanup request, enumerate
+or delete images, or run any global Docker prune. A cache-cleanup failure is reported for operator
+review without replacing the authoritative build failure.
 
 ## Credential boundaries
 

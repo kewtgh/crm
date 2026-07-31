@@ -662,13 +662,55 @@ function buildkitUsage() {
   };
 }
 
-function cleanupDocker(policy, request) {
+export function buildkitPruneArguments(policy) {
+  return [
+    "buildx", "--builder", LUMINA_BUILDER_NAME, "prune",
+    "--filter", `until=${policy.cacheRetentionHours}h`,
+    "--max-used-space", `${policy.maximumCacheGb}GB`,
+    "--reserved-space", `${policy.reservedCacheGb}GB`,
+    "--min-free-space", `${Math.ceil(policy.dockerMinimumAvailableBytes / GIBIBYTE)}GB`,
+    "--force",
+    "--verbose",
+  ];
+}
+
+function validateOwnedBuilder(policy) {
   const marker = existsSync(BUILDER_MARKER_PATH) ? readJson(BUILDER_MARKER_PATH) : null;
   const fingerprint = configFingerprint(policy);
   validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], {
     validateStdout: (output) => validateBuilderInspect(output, policy.dockerProxy),
   });
+}
+
+function cleanupBuildkitCache(policy, { validate = true } = {}) {
+  if (validate) validateOwnedBuilder(policy);
+  const cacheBefore = buildkitUsage();
+  const prune = runDocker(buildkitPruneArguments(policy), {
+    allowFailure: true,
+    timeoutMs: 300_000,
+  });
+  const failures = [];
+  if (!prune.ok) {
+    failures.push({
+      object: LUMINA_BUILDER_NAME,
+      operation: "buildx-prune",
+      error: (prune.stderr || prune.stdout).slice(-1_000),
+    });
+  }
+  return {
+    cacheBefore,
+    cachePrune: {
+      ok: prune.ok,
+      output: (prune.stdout || prune.stderr).slice(0, MAX_OUTPUT_BYTES),
+    },
+    cacheAfter: buildkitUsage(),
+    failures,
+  };
+}
+
+function cleanupDocker(policy, request) {
+  validateOwnedBuilder(policy);
 
   const images = listLuminaImages();
   const inUseIds = inUseImageIds();
@@ -715,23 +757,8 @@ function cleanupDocker(policy, request) {
     }
   }
 
-  const cacheBefore = buildkitUsage();
-  const prune = runDocker([
-    "buildx", "--builder", LUMINA_BUILDER_NAME, "prune",
-    "--filter", `until=${policy.cacheRetentionHours}h`,
-    "--max-used-space", `${policy.maximumCacheGb}GB`,
-    "--reserved-space", `${policy.reservedCacheGb}GB`,
-    "--min-free-space", `${Math.ceil(policy.dockerMinimumAvailableBytes / GIBIBYTE)}GB`,
-    "--force",
-    "--verbose",
-  ], { allowFailure: true, timeoutMs: 300_000 });
-  if (!prune.ok) {
-    failures.push({
-      object: LUMINA_BUILDER_NAME,
-      operation: "buildx-prune",
-      error: (prune.stderr || prune.stdout).slice(-1_000),
-    });
-  }
+  const cache = cleanupBuildkitCache(policy, { validate: false });
+  failures.push(...cache.failures);
   return {
     imageCandidates: candidates.map((image) => ({
       id: image.Id,
@@ -741,12 +768,9 @@ function cleanupDocker(policy, request) {
     imageDecisions,
     deletedImages,
     estimatedImageBytes: deletedImages.reduce((total, image) => total + image.sizeBytes, 0),
-    cacheBefore,
-    cachePrune: {
-      ok: prune.ok,
-      output: (prune.stdout || prune.stderr).slice(0, MAX_OUTPUT_BYTES),
-    },
-    cacheAfter: buildkitUsage(),
+    cacheBefore: cache.cacheBefore,
+    cachePrune: cache.cachePrune,
+    cacheAfter: cache.cacheAfter,
     failures,
   };
 }
@@ -814,6 +838,17 @@ async function perform(mode) {
           maximumCacheGb: policy.maximumCacheGb,
           reservedCacheGb: policy.reservedCacheGb,
         },
+      };
+    }
+    if (mode === "cache-cleanup") {
+      const cleanup = cleanupBuildkitCache(policy);
+      const diskAfter = captureDisk(policy);
+      return {
+        status: cleanup.failures.length ? "PARTIAL" : "SUCCEEDED",
+        mode,
+        diskBefore,
+        diskAfter: diskDelta(diskBefore, diskAfter),
+        cleanup,
       };
     }
     if (mode !== "cleanup") throw new Error(`Unsupported storage maintenance mode: ${mode}`);

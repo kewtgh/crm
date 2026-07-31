@@ -1,8 +1,8 @@
-# Implementation status — v3.8.16 release candidate
+# Implementation status — v3.8.17 release candidate
 
 ## Scope
 
-v3.8.16 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.17 retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 switches communication email from synchronous Web-owned provider I/O to the dedicated leased
 `COMMUNICATION_DELIVERY` processor over `communication_messages`. Web now only accepts durable
@@ -24,6 +24,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - exact rootless socket, security option, systemd cgroup, and data-root deployment gates;
 - Docker-using systemd units that neither require the rootful daemon nor hide `/run/user`;
 - non-root storage preparation/cleanup through the fixed root-owned maintenance program;
+- bounded fixed-builder cache cleanup after every image-build sequence, including build failure,
+  without global prune or accepted-image deletion;
 - one owner-checked, non-symlink Docker configuration root shared by deploy, prepare, and cleanup,
   with fail-closed handling for the obsolete maintenance-local configuration path;
 - a credential-free HTTP(S) Docker build proxy allowlist, fixed rootless BuildKit `network=host`,
@@ -62,7 +64,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.16; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.17; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
