@@ -102,12 +102,14 @@ test("keeps compensated SCIM versions monotonic", () => {
 });
 
 test("self-managed identity boundaries retain compensation, CSRF, and session revocation", async () => {
-  const [scim, password, proxy, apiClient, adminUsers, refresh, sessions] = await Promise.all([
+  const [scim, password, proxy, apiClient, adminUsers, staffUi, staffApi, refresh, sessions] = await Promise.all([
     readFile(new URL("../lib/scim.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/settings/password/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../proxy.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/api-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/admin-users-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/users/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/refresh/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/auth/session-store.ts", import.meta.url), "utf8"),
   ]);
@@ -119,8 +121,15 @@ test("self-managed identity boundaries retain compensation, CSRF, and session re
   assert.match(apiClient, /createSingleFlight/);
   assert.match(apiClient, /INVALID_API_RESPONSE/);
   assert.match(adminUsers, /app_auth\.accounts/);
-  assert.match(adminUsers, /CREATE_ROLLED_BACK/);
-  assert.match(adminUsers, /delete from app_auth\.accounts/);
+  assert.match(adminUsers, /AWAITING_EMAIL_CONFIRMATION/);
+  assert.match(adminUsers, /INVITATION_EMAIL_DELIVERY_UNCONFIRMED/);
+  assert.doesNotMatch(adminUsers, /CREATE_ROLLED_BACK/);
+  assert.doesNotMatch(adminUsers, /delete from app_auth\.accounts/);
+  assert.match(staffApi, /emailDeliveryStatus === "SENT" \? 201 : 202/);
+  assert.match(staffUi, /onCreated\(result\.item, result\.emailDeliveryStatus\)/);
+  assert.match(staffUi, /setInviteOpen\(false\)/);
+  assert.match(staffUi, /admin\.users\.awaitingEmailConfirmation/);
+  assert.match(staffUi, /admin\.users\.createdDeliveryUnconfirmed/);
   assert.match(refresh, /rotateSessionToken/);
   assert.match(sessions, /createHash\("sha256"\)/);
 });

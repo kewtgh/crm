@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.15**
+Current release candidate: **v3.8.16**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -14,7 +14,13 @@ replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Cad
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
 
-Version 3.8.15 makes the dedicated `COMMUNICATION_DELIVERY` Worker the sole owner of external
+Version 3.8.16 preserves the Phase 2 communication-delivery ownership switch and fixes staff-account
+creation so a committed account is never deleted or reported as a form failure merely because the
+invitation email response is ambiguous. The create dialog closes after acceptance, the account appears
+immediately as awaiting email confirmation/first sign-in, and an unconfirmed delivery receives a
+specific non-destructive notice.
+
+Version 3.8.15 made the dedicated `COMMUNICATION_DELIVERY` Worker the sole owner of external
 communication email delivery. Web requests now return durable queued state without recipient lookup
 or provider I/O; fenced Worker attempts use bounded concurrency, stable provider idempotency,
 conservative uncertainty recovery, independent heartbeat/readiness, and asynchronous UI status.

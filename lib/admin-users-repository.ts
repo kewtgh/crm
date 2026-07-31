@@ -15,7 +15,10 @@ export type StaffUserRecord = {
   status: "ACTIVE" | "SUSPENDED";
   lastSignInAt: string | null;
   mfaEnabled: boolean;
+  onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" | "ACTIVE";
 };
+
+export type StaffInvitationDeliveryStatus = "SENT" | "UNCONFIRMED";
 
 type StaffRow = {
   id: string;
@@ -27,6 +30,7 @@ type StaffRow = {
   status: "ACTIVE" | "SUSPENDED";
   last_sign_in_at: string | null;
   mfa_enabled: boolean;
+  membership_must_change_password: boolean;
   total_count: number | string;
 };
 
@@ -41,6 +45,9 @@ function mapStaff(row: StaffRow): StaffUserRecord {
     status: row.status,
     lastSignInAt: row.last_sign_in_at,
     mfaEnabled: row.mfa_enabled,
+    onboardingStatus: row.membership_must_change_password
+      ? "AWAITING_EMAIL_CONFIRMATION"
+      : "ACTIVE",
   };
 }
 
@@ -74,6 +81,7 @@ export async function listStaffUsers(input: { query?: string; page?: number; pag
         account.email::text,
         membership.role,
         membership.status,
+        membership.must_change_password as membership_must_change_password,
         account.last_sign_in_at,
         exists(
           select 1 from app_auth.totp_factors factor
@@ -111,6 +119,7 @@ export async function getStaffUser(userId: string): Promise<StaffUserRecord> {
         account.email::text,
         membership.role,
         membership.status,
+        membership.must_change_password as membership_must_change_password,
         account.last_sign_in_at,
         exists(
           select 1 from app_auth.totp_factors factor
@@ -157,7 +166,7 @@ async function deliverTemporaryCredentials(
   input: CreateStaffInput,
   username: string,
   temporaryPassword: string,
-) {
+): Promise<StaffInvitationDeliveryStatus> {
   const endpoint = process.env.EMAIL_DELIVERY_WEBHOOK_URL;
   if (!endpoint) {
     throw new DatabaseRequestError(
@@ -194,12 +203,9 @@ async function deliverTemporaryCredentials(
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
   if (!response?.ok) {
-    throw new DatabaseRequestError(
-      502,
-      "ACCOUNT_EMAIL_DELIVERY_FAILED",
-      "The account email could not be delivered",
-    );
+    return "UNCONFIRMED";
   }
+  return "SENT";
 }
 
 export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
@@ -234,40 +240,63 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       emailVerified: true,
       team: input.team,
       managerMemberId: input.managerMemberId,
+      afterCreate: async (client, userId) => {
+        await client.query(
+          `insert into public.audit_events(
+            workspace_id, actor_id, entity_type, entity_id, action, after_data
+          ) values($1, $2, 'staff_user', $3, 'CREATE', $4)`,
+          [
+            workspaceId,
+            actor.id,
+            userId,
+            {
+              username,
+              role: input.role,
+              accountStatus: "ACTIVE",
+              onboardingStatus: "AWAITING_EMAIL_CONFIRMATION",
+            },
+          ],
+        );
+      },
     });
   } catch (error) {
     normalizeWriteError(error);
   }
 
-  try {
-    await deliverTemporaryCredentials(input, username, temporaryPassword);
-  } catch (error) {
-    await withPoolClient("system", async (client) => {
-      await client.query("begin");
-      try {
-        await client.query("delete from app_auth.accounts where id = $1", [created.id]);
-        await client.query(
-          `insert into public.audit_events(
-            workspace_id, actor_id, entity_type, entity_id, action, after_data
-          ) values($1, $2, 'staff_user', $3, 'CREATE_ROLLED_BACK', $4)`,
-          [workspaceId, actor.id, created.id, { username, role: input.role }],
-        );
-        await client.query("commit");
-      } catch (rollbackError) {
-        await client.query("rollback").catch(() => undefined);
-        throw rollbackError;
-      }
-    });
-    throw error;
-  }
-
+  const emailDeliveryStatus = await deliverTemporaryCredentials(
+    input,
+    username,
+    temporaryPassword,
+  );
   await withPoolClient("system", (client) => client.query(
     `insert into public.audit_events(
       workspace_id, actor_id, entity_type, entity_id, action, after_data
-    ) values($1, $2, 'staff_user', $3, 'CREATE', $4)`,
-    [workspaceId, actor.id, created.id, { username, role: input.role, accountStatus: "ACTIVE" }],
-  ));
-  return created;
+    ) values($1, $2, 'staff_user', $3, $4, $5)`,
+    [
+      workspaceId,
+      actor.id,
+      created.id,
+      emailDeliveryStatus === "SENT"
+        ? "INVITATION_EMAIL_SENT"
+        : "INVITATION_EMAIL_DELIVERY_UNCONFIRMED",
+      { deliveryStatus: emailDeliveryStatus },
+    ],
+  )).catch(() => undefined);
+  return {
+    item: {
+      id: created.id,
+      username,
+      displayNameZh: input.displayNameZh.trim(),
+      displayNameEn: input.displayNameEn.trim(),
+      email: input.email.trim().toLowerCase(),
+      role: input.role,
+      status: "ACTIVE" as const,
+      lastSignInAt: null,
+      mfaEnabled: false,
+      onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" as const,
+    },
+    emailDeliveryStatus,
+  };
 }
 
 export async function repairStaffIdentity(repairId: string) {

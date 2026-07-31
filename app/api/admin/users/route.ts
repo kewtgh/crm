@@ -38,7 +38,10 @@ async function post(request: Request) {
   const actor = await requireApiRole("SUPER_ADMIN", "ADMIN");
   await requireApiAal2();
   try {
-    return NextResponse.json({ item: await createStaffUser(parsed.data, actor) }, { status: 201 });
+    const result = await createStaffUser(parsed.data, actor);
+    return NextResponse.json(result, {
+      status: result.emailDeliveryStatus === "SENT" ? 201 : 202,
+    });
   } catch (error) { return failure(error); }
 }
 export const GET=apiRoute(get,"STAFF_USERS_FAILED");

@@ -1,8 +1,8 @@
-# Implementation status — v3.8.15 release candidate
+# Implementation status — v3.8.16 release candidate
 
 ## Scope
 
-v3.8.15 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.16 retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 switches communication email from synchronous Web-owned provider I/O to the dedicated leased
 `COMMUNICATION_DELIVERY` processor over `communication_messages`. Web now only accepts durable
@@ -62,7 +62,9 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.15; the independently deployed Cloudflare Worker code and metadata are unchanged.
+  version 3.8.16; the independently deployed Cloudflare Worker code and metadata are unchanged;
+- durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
+  handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
 ## Local verification recorded
 
