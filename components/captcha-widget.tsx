@@ -130,12 +130,12 @@ export function CaptchaWidget({
   error?: string;
   fallbackSignal?: number;
   fallbackReason?: CaptchaFallbackReason;
-  turnstileEnabled?: boolean;
+  turnstileEnabled?: boolean | null;
 }) {
   const { locale, t } = useI18n();
   const errorId = `${useId().replace(/:/g, "")}-error`;
   const [providerState, setProviderState] = useState<CaptchaProviderState>(
-    turnstileEnabled
+    turnstileEnabled !== false
       ? { provider: "turnstile" }
       : { provider: "altcha", fallbackReason: "administrator_disabled" },
   );
@@ -153,6 +153,20 @@ export function CaptchaWidget({
     ? { provider: "altcha", fallbackReason }
     : providerState;
   const activeFallbackReason = activeProviderState.fallbackReason ?? fallbackReason;
+  if (turnstileEnabled === null) {
+    return (
+      <div
+        className="captcha-field"
+        data-captcha-error="CAPTCHA_CONFIGURATION_UNAVAILABLE"
+        data-captcha-provider="unavailable"
+      >
+        <span className="field-label">{t("auth.captcha.label")}</span>
+        <div className="captcha-status error" role="alert">
+          <span>{t("auth.error.captchaUnavailable")}</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="captcha-field" aria-describedby={error ? errorId : undefined}>
       <span className="field-label">{t("auth.captcha.label")}</span>

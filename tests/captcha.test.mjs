@@ -11,10 +11,12 @@ import {
 import { verifyCaptchaProof } from "../lib/captcha.ts";
 import { fallbackFromTurnstile } from "../lib/captcha-types.ts";
 import { verifyTurnstileToken } from "../lib/turnstile.ts";
+import { POST as verifyCaptchaRoute } from "../app/api/captcha/verify/route.ts";
 
 process.env.ALTCHA_HMAC_SECRET = "altcha-test-secret-is-independent-and-at-least-32-bytes";
 process.env.LOGIN_THROTTLE_HASH_SECRET = "captcha-source-hash-secret-is-also-independent";
 process.env.OBSERVABILITY_SAMPLE_RATE = "0";
+process.env.APP_URL = "https://crm.example.net";
 
 function request(ip = "203.0.113.20") {
   return new Request("https://crm.example.net/api/captcha/verify", {
@@ -174,4 +176,71 @@ test("rejects tampered, expired, and repeated ALTCHA challenges", async () => {
   });
   const expired = await verifyAltchaPayload(await solvedPayload(expiredChallenge), request(), expiredStore);
   assert.deepEqual(expired, { ok: false, code: "CAPTCHA_EXPIRED" });
+});
+
+test("ALTCHA HTTP verification ignores stale sessions but still rejects cross-site requests", async () => {
+  const sameOrigin = await verifyCaptchaRoute(new Request(
+    "https://crm.example.net/api/captcha/verify?action=staff_login&reason=administrator_disabled",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: "crm_session=fake-or-expired",
+        origin: "https://crm.example.net",
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({ payload: "invalid-altcha-payload" }),
+    },
+  ));
+  assert.equal(sameOrigin.status, 200);
+  assert.deepEqual(await sameOrigin.json(), { verified: false, reason: "CAPTCHA_INVALID" });
+
+  const crossSite = await verifyCaptchaRoute(new Request(
+    "https://crm.example.net/api/captcha/verify?action=staff_login&reason=administrator_disabled",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: "crm_session=fake-or-expired",
+        origin: "https://attacker.example",
+        "sec-fetch-site": "cross-site",
+      },
+      body: JSON.stringify({ payload: "invalid-altcha-payload" }),
+    },
+  ));
+  assert.equal(crossSite.status, 403);
+  assert.equal((await crossSite.json()).code, "UNTRUSTED_ORIGIN");
+});
+
+test("ALTCHA challenge lifecycle succeeds with a stale session cookie and remains single-use", async () => {
+  const store = lifecycle();
+  const staleSessionRequest = new Request("https://crm.example.net/api/captcha/verify", {
+    headers: {
+      cookie: "crm_session=fake-or-expired",
+      "cf-connecting-ip": "203.0.113.20",
+      origin: "https://crm.example.net",
+    },
+  });
+  const challenge = await issueAltchaChallenge(
+    staleSessionRequest,
+    "staff_login",
+    "administrator_disabled",
+    store,
+    { counter: 1 },
+  );
+  assert.ok(challenge);
+  const verification = await verifyAltchaPayload(
+    await solvedPayload(challenge),
+    staleSessionRequest,
+    store,
+  );
+  assert.equal(verification.ok, true);
+  assert.deepEqual(
+    await consumeAltchaAttestation(verification.token, staleSessionRequest, "staff_login", store),
+    { ok: true },
+  );
+  assert.deepEqual(
+    await consumeAltchaAttestation(verification.token, staleSessionRequest, "staff_login", store),
+    { ok: false, code: "CAPTCHA_REPLAYED" },
+  );
 });

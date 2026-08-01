@@ -9,7 +9,7 @@ import type { CaptchaFallbackReason, CaptchaProof } from "@/lib/captcha-types";
 import { passwordValueSchema } from "@/lib/validation";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetch-timeout";
 
-export function PasswordResetRequestForm({turnstileEnabled=true}:{turnstileEnabled?:boolean}) {
+export function PasswordResetRequestForm({turnstileEnabled=true}:{turnstileEnabled?:boolean|null}) {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");

@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.17**
+Current release candidate: **v3.8.18**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -13,6 +13,11 @@ It also verifies each encrypted database backup with its matching encrypted loca
 replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
+
+Version 3.8.18 separates strict pre-authentication origin checks from authenticated Session CSRF,
+so stale browser Session Cookies cannot block CAPTCHA verification, sign-in, SSO, device verification,
+or password recovery. It also distinguishes unavailable CAPTCHA configuration from an administrator
+disabling Turnstile and aligns authentication Cookie deletion attributes with issuance.
 
 Version 3.8.17 adds bounded automatic cleanup of the fixed Lumina BuildKit cache after every image
 build sequence, including failed builds. It preserves the configured retention, maximum, reserved,
