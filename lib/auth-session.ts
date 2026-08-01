@@ -39,8 +39,20 @@ export function setAuthSessionCookies(
 }
 
 export function clearAuthSessionCookies(response: NextResponse) {
-  for (const name of new Set(Object.values(authCookieNames))) {
-    response.cookies.set(name, "", { path: "/", maxAge: 0 });
-  }
-  response.cookies.set(csrfCookieName, "", { path: "/", maxAge: 0 });
+  const base = cookieBase();
+  response.cookies.set(authCookieNames.session, "", {
+    ...base,
+    httpOnly: true,
+    maxAge: 0,
+  });
+  response.cookies.set(csrfCookieName, "", {
+    ...base,
+    httpOnly: false,
+    maxAge: 0,
+  });
+  response.cookies.set(authCookieNames.persistence, "", {
+    ...base,
+    httpOnly: true,
+    maxAge: 0,
+  });
 }

@@ -19,3 +19,17 @@ export async function loadTurnstileEnabled() {
   if (typeof value !== "boolean") throw new Error("CAPTCHA_WORKSPACE_NOT_FOUND");
   return value;
 }
+
+export type CaptchaProviderConfiguration =
+  | { status: "ready"; turnstileEnabled: boolean }
+  | { status: "unavailable"; code: "CAPTCHA_CONFIGURATION_UNAVAILABLE" };
+
+export async function loadCaptchaProviderConfiguration(
+  loader: () => Promise<boolean> = loadTurnstileEnabled,
+): Promise<CaptchaProviderConfiguration> {
+  try {
+    return { status: "ready", turnstileEnabled: await loader() };
+  } catch {
+    return { status: "unavailable", code: "CAPTCHA_CONFIGURATION_UNAVAILABLE" };
+  }
+}

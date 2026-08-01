@@ -51,7 +51,7 @@ function PasswordField({ error }: { error?: string }) {
   );
 }
 
-export function AuthForm({ ssoEnabled = false, turnstileEnabled = true, initialErrorCode, initialNoticeCode }: { ssoEnabled?: boolean; turnstileEnabled?: boolean; initialErrorCode?: string; initialNoticeCode?: string }) {
+export function AuthForm({ ssoEnabled = false, turnstileEnabled = true, initialErrorCode, initialNoticeCode }: { ssoEnabled?: boolean; turnstileEnabled?: boolean | null; initialErrorCode?: string; initialNoticeCode?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);

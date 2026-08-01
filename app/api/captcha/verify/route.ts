@@ -7,10 +7,10 @@ import {
   type CaptchaAction,
   type CaptchaFallbackReason,
 } from "@/lib/captcha-types";
-import { mutationIsTrusted } from "@/lib/request-security";
+import { preAuthMutationIsTrusted } from "@/lib/request-security";
 
 async function post(request: Request) {
-  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
+  if (!preAuthMutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
   const search = new URL(request.url).searchParams;
   const action = search.get("action");
   const fallbackReason = search.get("reason");

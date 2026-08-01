@@ -74,8 +74,8 @@ test("exposes organization settings behind admin AAL2 and trusted-origin checks"
   assert.match(captcha, /TURNSTILE_DISABLED/);
   assert.match(captcha, /administrator_disabled/);
   assert.match(widget, /turnstileEnabled[\s\S]*administrator_disabled/);
-  assert.match(loginPage, /loadTurnstileEnabled/);
-  assert.match(recoveryPage, /loadTurnstileEnabled/);
+  assert.match(loginPage, /loadCaptchaProviderConfiguration/);
+  assert.match(recoveryPage, /loadCaptchaProviderConfiguration/);
   assert.match(browserQa, /QA_VALIDATE_TURNSTILE_POLICY/);
   assert.match(browserQa, /data-captcha-provider="altcha"/);
   assert.match(browserQa, /update public\.audit_events set actor_id=null/);

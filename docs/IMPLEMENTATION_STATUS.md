@@ -1,8 +1,8 @@
-# Implementation status — v3.8.17 release candidate
+# Implementation status — v3.8.18 release candidate
 
 ## Scope
 
-v3.8.17 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.18 retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 switches communication email from synchronous Web-owned provider I/O to the dedicated leased
 `COMMUNICATION_DELIVERY` processor over `communication_messages`. Web now only accepts durable
@@ -39,6 +39,10 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - corrected Compose/rootless disk monitoring with strict threshold configuration;
 - strict remote/local backup retention and paired encrypted database/object verification;
 - CSRF-aware secure sign-out with pending, error, fallback redirect, and Chromium coverage;
+- separate strict pre-authentication Origin and authenticated Session CSRF boundaries, resilient to
+  stale Session Cookies without weakening cross-site rejection or authenticated mutations;
+- explicit unavailable CAPTCHA configuration state instead of treating configuration failures as an
+  administrator-disabled Turnstile policy;
 - immediate stale-search clearing and finite, consistently clamped progress semantics;
 - current Compose-only deployment core and contracts, without obsolete v3.6 release logic;
 - minimal application image script set, excluding deploy, QA, and smoke controllers;
@@ -64,7 +68,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.17; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.18; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 

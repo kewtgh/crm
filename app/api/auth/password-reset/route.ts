@@ -6,7 +6,7 @@ import { consumeEmailToken, issueEmailToken } from "@/lib/auth/email-tokens";
 import { applyAccountRecoveryRateLimit } from "@/lib/account-recovery-rate-limit";
 import { verifyCaptchaProof } from "@/lib/captcha";
 import { loginThrottleIdentity } from "@/lib/login-rate-limit";
-import { mutationIsTrusted } from "@/lib/request-security";
+import { preAuthMutationIsTrusted } from "@/lib/request-security";
 import { passwordResetRequestSchema, passwordValueSchema } from "@/lib/validation";
 
 const completionSchema = z.object({
@@ -15,7 +15,7 @@ const completionSchema = z.object({
 });
 
 async function post(request: Request) {
-  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
+  if (!preAuthMutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
   const body = await request.json().catch(() => ({}));
   if (body && typeof body === "object" && "token" in body) {
     const parsed = completionSchema.safeParse(body);

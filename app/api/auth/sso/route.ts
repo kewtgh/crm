@@ -11,13 +11,13 @@ import {
   loginThrottleIdentity,
   recordLoginFailure,
 } from "@/lib/login-rate-limit";
-import { mutationIsTrusted } from "@/lib/request-security";
+import { preAuthMutationIsTrusted } from "@/lib/request-security";
 import { verifyCaptchaProof } from "@/lib/captcha";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
 import { ssoStartSchema } from "@/lib/validation";
 
 async function post(request: Request) {
-  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
+  if (!preAuthMutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
   const parsed = ssoStartSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) throw new ApiError("INVALID_SSO_EMAIL", 400, "INVALID_SSO_EMAIL", { field: "email" });
   const email = parsed.data.email.trim().toLowerCase();
