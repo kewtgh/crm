@@ -1,8 +1,10 @@
-# Implementation status — v3.8.24 release candidate
+# Implementation status — v3.8.25 release candidate
 
 ## Scope
 
-v3.8.24 makes the target runtime environment preflight self-contained in a dependency-free
+v3.8.25 atomically archives terminal deployment requests before publishing the final controller
+state, and reports archival faults as control-plane finalization failures without relabeling an
+accepted application release. v3.8.24 makes the target runtime environment preflight self-contained in a dependency-free
 authoritative core, with no host `tsx` or `node_modules` requirement and stable validator failure
 classification. v3.8.23 restores the Notification Outbox runtime dependency in the minimal application image,
 adds an in-image runtime-closure gate, and preserves safe Worker module-load diagnostics. v3.8.22
@@ -82,7 +84,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.24; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.25; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
