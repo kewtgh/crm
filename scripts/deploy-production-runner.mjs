@@ -46,7 +46,6 @@ const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const composeEnvPath = path.join(stateRoot, "compose.env");
-const cleanupRequestPath = path.join(stateRoot, "storage-cleanup-request.json");
 const builderMarkerPath = "/var/lib/lumina-crm/storage-maintenance/builder-owner.json";
 const composeFile = path.join(sourceRoot, "compose.production.yml");
 const project = "lumina-crm";
@@ -75,7 +74,7 @@ mkdirSync(logRoot, { recursive: true, mode: 0o750 });
 
 const request = JSON.parse(readFileSync(requestPath, "utf8"));
 if (!/^[0-9a-f-]{36}$/i.test(request.requestId ?? "")
-  || !["deploy", "initialize", "rollback"].includes(request.mode)
+  || !["deploy", "initialize", "rollback", "recover"].includes(request.mode)
   || path.resolve(request.sourceRoot ?? "") !== sourceRoot) {
   throw new Error("Deployment request is invalid");
 }
@@ -98,6 +97,9 @@ let migrationMayHaveChanged = false;
 const priorLatest = readJson(latestPath);
 const acceptedStateExists = existsSync(acceptedPath);
 let previousAccepted = readJson(acceptedPath);
+const previousComposeEnvironment = existsSync(composeEnvPath)
+  ? readFileSync(composeEnvPath, "utf8")
+  : null;
 let target = null;
 let persisted = {
   deploymentId,
@@ -111,12 +113,18 @@ let persisted = {
   targetCommit: null,
   applicationVersion: null,
   previousImage: previousAccepted?.currentImage ?? null,
+  previousWorkerImage: previousAccepted?.currentImage ?? null,
   targetImage: null,
   migrationMayHaveChanged: false,
   rollback: null,
   applicationAccepted: false,
   acceptedAt: null,
   cleanup: null,
+  preflight: "PENDING",
+  webSwitch: "PENDING",
+  workerSwitch: "PENDING",
+  webHealth: "PENDING",
+  workerHealth: "PENDING",
   logPath,
   error: null,
 };
@@ -265,6 +273,30 @@ function compose(label, envFile, args, options) {
   return run(label, "docker", composeArguments(envFile, args), options);
 }
 
+async function serviceRuntime(envFile, service) {
+  if (!envFile || !existsSync(envFile)) return { image:null, state:"missing", health:"missing" };
+  const located = await compose(`locate ${service} runtime`, envFile, ["ps", "--quiet", service], {
+    timeoutMs: 15_000,
+    quiet: true,
+    allowFailure: true,
+  });
+  const id = located.stdout.trim();
+  if (!id) return { image:null, state:"missing", health:"missing" };
+  const inspected = await run(`inspect ${service} runtime`, "docker", [
+    "inspect", "--format", "{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", id,
+  ], { timeoutMs:15_000,quiet:true,allowFailure:true });
+  const [image, state, health] = inspected.stdout.trim().split("|");
+  return { image:image || null,state:state || "unknown",health:health || "unknown" };
+}
+
+async function runtimeSnapshot(envFile = composeEnvPath) {
+  const [web, worker] = await Promise.all([
+    serviceRuntime(envFile, "web"),
+    serviceRuntime(envFile, "worker"),
+  ]);
+  return { web, worker };
+}
+
 function imageReferences(commit) {
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("Commit must be a full SHA");
   const applicationRepository = process.env.LUMINA_IMAGE_REPOSITORY || "lumina-crm";
@@ -353,7 +385,9 @@ async function fetchHealth(label, url, { readiness = false, headers } = {}) {
 async function acceptRuntime(envFile, { publicChecks = true } = {}) {
   await waitForContainerHealth(envFile, "postgres", 120_000);
   await waitForContainerHealth(envFile, "web", 120_000);
+  persist({ webHealth:"HEALTHY" });
   await waitForContainerHealth(envFile, "worker", 240_000);
+  persist({ workerHealth:"HEALTHY" });
   await fetchHealth(
     "loopback readiness",
     "http://127.0.0.1:3200/api/health?mode=ready",
@@ -367,12 +401,6 @@ async function acceptRuntime(envFile, { publicChecks = true } = {}) {
 }
 
 async function prepareBuilderAndCapacity() {
-  await run(
-    "host and Docker capacity plus isolated builder verification",
-    "sudo",
-    ["-n", "/usr/bin/systemctl", "start", "lumina-crm-storage-prepare.service"],
-    { timeoutMs: 300_000 },
-  );
   await run(
     "verify isolated Lumina builder",
     "docker",
@@ -434,42 +462,26 @@ async function buildImages(release) {
     ...dockerBuildProxyArguments(configuredDockerProxy),
     "--provenance=true",
   ];
-  try {
-    await run("containerized type, lint and contract verification", "docker", [
+  await run("containerized type, lint and contract verification", "docker", [
       "buildx", "build", ...common,
       "--target", "verification",
       "--output", "type=cacheonly",
       ".",
     ], { timeoutMs: 900_000, environment: buildEnvironment });
-    await run("build immutable application image", "docker", [
+  await run("build immutable application image", "docker", [
       "buildx", "build", ...common,
       "--target", "application",
       "--tag", release.currentImage,
       "--load",
       ".",
     ], { timeoutMs: 900_000, environment: buildEnvironment });
-    await run("build immutable operations image", "docker", [
+  await run("build immutable operations image", "docker", [
       "buildx", "build", ...common,
       "--target", "operations",
       "--tag", release.operationsImage,
       "--load",
       ".",
-    ], { timeoutMs: 900_000, environment: buildEnvironment });
-  } finally {
-    try {
-      const cleanup = await run(
-        "bounded post-build BuildKit cache cleanup",
-        "sudo",
-        ["-n", "/usr/bin/systemctl", "start", "lumina-crm-build-cache-cleanup.service"],
-        { timeoutMs: 360_000, allowFailure: true },
-      );
-      if (cleanup.code !== 0) {
-        log("WARN", "BuildKit cache cleanup requires operator review");
-      }
-    } catch {
-      log("WARN", "BuildKit cache cleanup could not be started; operator review is required");
-    }
-  }
+  ], { timeoutMs: 900_000, environment: buildEnvironment });
 }
 
 async function startPostgres(candidateEnv) {
@@ -481,6 +493,15 @@ async function preflightSecretSources() {
   stage("verify production secret source metadata");
   const result = assertProductionSecretSources();
   log("INFO", `Verified metadata for ${result.checkedFiles.length} production secret source files`);
+}
+
+async function preflightTargetRuntimeContract() {
+  await run("validate target runtime environment contract", "node", [
+    "--import", "tsx",
+    "scripts/validate-production-runtime-contract.mjs",
+    "/etc/lumina-crm/secrets",
+  ], { timeoutMs:30_000,quiet:true });
+  persist({ preflight:"VALID" });
 }
 
 async function bootstrapDatabase(candidateEnv) {
@@ -508,15 +529,11 @@ async function bootstrapAdmin(candidateEnv) {
 }
 
 async function switchApplication(candidateEnv) {
-  atomicWrite(composeEnvPath, readFileSync(candidateEnv, "utf8"));
-  await compose("switch Web image before enabling the new Worker image", composeEnvPath, [
-    "up", "-d", "--no-deps", "web",
-  ], { timeoutMs: 300_000 });
   switched = true;
-  await waitForContainerHealth(composeEnvPath, "web", 120_000);
-  await compose("switch Worker image after Web ownership transfer", composeEnvPath, [
-    "up", "-d", "--no-deps", "worker",
+  await compose("recreate Web and Worker for the target release", candidateEnv, [
+    "up", "-d", "--no-deps", "--force-recreate", "web", "worker",
   ], { timeoutMs: 300_000 });
+  persist({ webSwitch:"TARGET_RECREATED",workerSwitch:"TARGET_RECREATED" });
 }
 
 async function rollbackApplication(reason) {
@@ -527,19 +544,15 @@ async function rollbackApplication(reason) {
     currentImage: previousAccepted.currentImage,
     operationsImage: previousAccepted.operationsImage,
   };
-  atomicWrite(composeEnvPath, composeEnvironment(previous));
-  await compose("stop asynchronous Worker before restoring the previous Web image", composeEnvPath, [
-    "stop", "worker",
-  ], { timeoutMs: 120_000 });
-  await compose("restore previous Web image", composeEnvPath, [
-    "up", "-d", "--no-deps", "web",
-  ], { timeoutMs: 300_000 });
-  await waitForContainerHealth(composeEnvPath, "web", 120_000);
-  await compose("restore previous Worker image after Web rollback", composeEnvPath, [
-    "up", "-d", "--no-deps", "worker",
+  const rollbackEnv = path.join(stateRoot, `${deploymentId}.rollback.env`);
+  atomicWrite(rollbackEnv, composeEnvironment(previous));
+  await compose("force recreate Web and Worker at the previous release", rollbackEnv, [
+    "up", "-d", "--no-deps", "--force-recreate", "web", "worker",
   ], { timeoutMs: 300_000 });
   target = { ...previous, version: previousAccepted.version };
-  await acceptRuntime(composeEnvPath, { publicChecks: false });
+  await acceptRuntime(rollbackEnv, { publicChecks: false });
+  atomicWrite(composeEnvPath, previousComposeEnvironment ?? composeEnvironment(previous));
+  rmSync(rollbackEnv, { force:true });
   log("WARN", "Application rolled back; database remains on the forward schema.");
   return {
     status: "SUCCEEDED",
@@ -549,30 +562,21 @@ async function rollbackApplication(reason) {
   };
 }
 
-async function requestCleanup(accepted) {
-  atomicWrite(cleanupRequestPath, `${JSON.stringify({
-    deploymentId,
-    applicationAccepted: true,
-    acceptedAt: accepted.acceptedAt,
-    currentImage: accepted.currentImage,
-    rollbackImage: accepted.rollbackImage,
-    protectedImageTags: [
-      accepted.currentImage,
-      accepted.operationsImage,
-      accepted.rollbackImage,
-      accepted.rollbackOperationsImage,
-      ...(accepted.recentImages ?? []),
-    ].filter(Boolean),
-  }, null, 2)}\n`);
-  const result = await run(
-    "post-acceptance Lumina-only cleanup",
-    "sudo",
-    ["-n", "/usr/bin/systemctl", "start", "lumina-crm-storage-cleanup.service"],
-    { timeoutMs: 360_000, allowFailure: true },
-  );
-  return result.code === 0
-    ? { status: "SUCCEEDED" }
-    : { status: "WARNING", message: "Healthy release retained; cleanup requires operator review" };
+async function requestCleanup() {
+  try {
+    const result = await run(
+      "bounded Lumina BuildKit cache cleanup",
+      "docker",
+      ["buildx", "--builder", builder, "prune", "--filter", "until=168h", "--max-used-space", "12GB", "--reserved-space", "2GB", "--force"],
+      { timeoutMs: 360_000, allowFailure: true },
+    );
+    return result.code === 0
+      ? { status: "BUILDKIT_CACHE_CLEANUP_COMPLETED" }
+      : { status: "BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL" };
+  } catch {
+    log("WARN", "BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL");
+    return { status:"BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL" };
+  }
 }
 
 async function finish(result, update = {}) {
@@ -584,14 +588,57 @@ async function finish(result, update = {}) {
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
   });
+  if (request.mode === "deploy" && (
+    initialRuntime.web.image !== previousAccepted?.currentImage
+    || initialRuntime.worker.image !== previousAccepted?.currentImage
+  )) {
+    throw new Error("CURRENT_RELEASE_RECOVERY_REQUIRED");
+  }
   rmSync(requestPath, { force: true });
 }
 
 try {
   publicHostname();
   persist();
+  const initialRuntime = await runtimeSnapshot();
+  persist({
+    previousImage:initialRuntime.web.image ?? previousAccepted?.currentImage ?? null,
+    previousWorkerImage:initialRuntime.worker.image ?? previousAccepted?.currentImage ?? null,
+    initialWebHealth:initialRuntime.web.health,
+    initialWorkerHealth:initialRuntime.worker.health,
+  });
   log("INFO", `Accepted persistent request mode=${request.mode}`);
-  if (request.mode === "rollback") {
+  if (request.mode === "recover") {
+    if (!previousAccepted?.currentImage || !previousAccepted?.operationsImage || !previousAccepted?.commit) {
+      throw new Error("LAST_SUCCESS_INCOMPLETE");
+    }
+    target = {
+      commit:previousAccepted.commit,
+      currentImage:previousAccepted.currentImage,
+      operationsImage:previousAccepted.operationsImage,
+      version:previousAccepted.version,
+    };
+    const alreadyHealthy = initialRuntime.web.image === target.currentImage
+      && initialRuntime.worker.image === target.currentImage
+      && initialRuntime.web.health === "healthy"
+      && initialRuntime.worker.health === "healthy";
+    if (!alreadyHealthy) {
+      const recoveryEnv = path.join(stateRoot, `${deploymentId}.recovery.env`);
+      atomicWrite(recoveryEnv, composeEnvironment(target));
+      switched = true;
+      await switchApplication(recoveryEnv);
+      await acceptRuntime(recoveryEnv, { publicChecks:false });
+      atomicWrite(composeEnvPath, readFileSync(recoveryEnv, "utf8"));
+      rmSync(recoveryEnv, { force:true });
+    }
+    await finish("RECOVERED", {
+      applicationAccepted:true,
+      acceptedAt:previousAccepted.acceptedAt,
+      targetCommit:previousAccepted.commit,
+      targetImage:previousAccepted.currentImage,
+      recovery:alreadyHealthy ? "ALREADY_HEALTHY" : "RECREATED",
+    });
+  } else if (request.mode === "rollback") {
     if (!previousAccepted?.rollbackImage || !previousAccepted?.rollbackOperationsImage) {
       throw new Error("No explicit rollback image is recorded");
     }
@@ -604,7 +651,8 @@ try {
     atomicWrite(rollbackEnv, composeEnvironment(target));
     const old = previousAccepted;
     await switchApplication(rollbackEnv);
-    await acceptRuntime(composeEnvPath);
+    await acceptRuntime(rollbackEnv);
+    atomicWrite(composeEnvPath, readFileSync(rollbackEnv, "utf8"));
     const acceptedAt = new Date().toISOString();
     const accepted = {
       deploymentId,
@@ -686,6 +734,7 @@ try {
             return candidateEnv;
           },
           preflightSecretSources,
+          preflightTargetRuntimeContract,
           startPostgres,
           bootstrapDatabase,
           verifyMigrations,
@@ -696,7 +745,7 @@ try {
           migrate: applyMigrations,
           bootstrapAdmin,
           switchApplication,
-          acceptRuntime: async () => acceptRuntime(composeEnvPath),
+          acceptRuntime,
         },
       });
       migrationMayHaveChanged = workflow.migrationMayHaveChanged;
@@ -711,6 +760,7 @@ try {
         previousAccepted,
         acceptedAt,
       });
+      atomicWrite(composeEnvPath, readFileSync(candidateEnv, "utf8"));
       atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
       persist({ applicationAccepted: true, acceptedAt });
       const cleanup = await requestCleanup(accepted);
@@ -743,11 +793,25 @@ try {
       };
     }
   }
+  const currentRuntime = await runtimeSnapshot().catch(() => ({
+    web:{ image:null,state:"unknown",health:"unknown" },
+    worker:{ image:null,state:"unknown",health:"unknown" },
+  }));
+  const failedResult = rollback?.status === "SUCCEEDED"
+    ? "FAILED_ROLLED_BACK"
+    : switched
+      ? "FAILED_ROLLBACK_REQUIRED"
+      : "FAILED";
   await finish(
-    request.mode === "rollback" ? "ROLLBACK_FAILED" : "FAILED",
+    request.mode === "rollback" ? "ROLLBACK_FAILED" : failedResult,
     {
       migrationMayHaveChanged,
       rollback,
+      activeWebImage:currentRuntime.web.image,
+      activeWorkerImage:currentRuntime.worker.image,
+      activeWebHealth:currentRuntime.web.health,
+      activeWorkerHealth:currentRuntime.worker.health,
+      manualRecoveryRequired:failedResult === "FAILED_ROLLBACK_REQUIRED",
       error: redact(error instanceof Error ? error.message : String(error)),
     },
   );

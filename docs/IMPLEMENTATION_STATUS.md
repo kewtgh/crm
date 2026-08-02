@@ -1,8 +1,11 @@
-# Implementation status — v3.8.19 release candidate
+# Implementation status — v3.8.20 release candidate
 
 ## Scope
 
-v3.8.19 adds durable staff invitations, safe invitation resend, role-specific session retention, and a non-destructive staff action menu while retaining the production shared-host isolation, persistent first-install flow, complete email
+v3.8.20 adds target-checkout runtime preflight, atomic Web/Worker release switching, automatic
+two-service rollback and idempotent last-success recovery while retaining durable staff invitations,
+safe invitation resend, role-specific session retention, and a non-destructive staff action menu.
+It retains the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 switches communication email from synchronous Web-owned provider I/O to the dedicated leased
 `COMMUNICATION_DELIVERY` processor over `communication_messages`. Web now only accepts durable
@@ -24,8 +27,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - exact rootless socket, security option, systemd cgroup, and data-root deployment gates;
 - Docker-using systemd units that neither require the rootful daemon nor hide `/run/user`;
 - non-root storage preparation/cleanup through the fixed root-owned maintenance program;
-- bounded fixed-builder cache cleanup after every image-build sequence, including build failure,
-  without global prune or accepted-image deletion;
+- bounded fixed-builder cache cleanup after acceptance, rootless and non-fatal, without global
+  prune or accepted-image deletion;
 - one owner-checked, non-symlink Docker configuration root shared by deploy, prepare, and cleanup,
   with fail-closed handling for the obsolete maintenance-local configuration path;
 - a credential-free HTTP(S) Docker build proxy allowlist, fixed rootless BuildKit `network=host`,
@@ -33,7 +36,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   subprocess environment, redaction, and marker network/proxy fingerprint drift detection;
 - a minimal verification build context that keeps the documentation tree excluded while restoring
   the deployment contract consumed by containerized production-deploy tests;
-- a metadata-only preflight for the fixed file-backed Compose secret sources, with host directory
+- a target-checkout runtime-schema preflight plus metadata validation for fixed Compose secret sources, with host directory
   traversal restricted by `root:lumina-crm`/`0750` and container-readable regular files fixed at
   `root:lumina-crm`/`0644` for runtime UID/GID `10001:10001`;
 - corrected Compose/rootless disk monitoring with strict threshold configuration;
@@ -68,7 +71,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.18; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.20; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
@@ -90,7 +93,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 53/53 email-runtime/version/rootless Compose/deploy/secret-source/verification-context/BuildKit host-network/proxy/Tunnel contracts |
+| `npm run test:deploy:raw` | Pass: 56/56 target-runtime/version/rootless Compose/deploy/secret-source/atomic-switch/BuildKit/Tunnel contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
 | `npm run test:contracts:raw` | Pass: 58 application contracts + 6 CAPTCHA contracts |

@@ -69,6 +69,10 @@ import {
   assertReleaseVersionConsistency,
 } from "../scripts/lib/release-version.mjs";
 import { EMAIL_DELIVERY_RUNTIME_KEYS } from "../lib/email-delivery-runtime.mjs";
+import {
+  TargetRuntimeContractError,
+  validateTargetRuntimeContract,
+} from "../scripts/lib/target-runtime-contract.mjs";
 
 const repositoryFile = (value) => new URL(`../${value}`, import.meta.url);
 const source = (value) => readFile(repositoryFile(value), "utf8");
@@ -122,6 +126,7 @@ function releaseWorkflowDouble({ failAt } = {}) {
       buildImages: operation("build"),
       writeCandidateEnvironment: operation("candidate-env", "candidate.env"),
       preflightSecretSources: operation("secret-preflight"),
+      preflightTargetRuntimeContract: operation("target-runtime-preflight"),
       startPostgres: operation("postgres"),
       bootstrapDatabase: operation("db-bootstrap"),
       verifyMigrations: operation("migration-verify"),
@@ -229,10 +234,11 @@ test("initialize follows the explicit first-install order", async () => {
   const { calls, operations } = releaseWorkflowDouble();
   const result = await runProductionReleaseWorkflow({ mode: "initialize", operations });
   assert.deepEqual(calls, [
-    "prepare",
     "fetch",
     "resolve-target",
     "secret-preflight",
+    "target-runtime-preflight",
+    "prepare",
     "build",
     "candidate-env",
     "postgres",
@@ -254,7 +260,55 @@ test("unsafe secret metadata stops initialize before image build and PostgreSQL"
     runProductionReleaseWorkflow({ mode: "initialize", operations }),
     /failed at secret-preflight/,
   );
-  assert.deepEqual(calls, ["prepare", "fetch", "resolve-target", "secret-preflight"]);
+  assert.deepEqual(calls, ["fetch", "resolve-target", "secret-preflight"]);
+});
+
+function runtimeContractFixture() {
+  const invitationKey = "ab".repeat(32);
+  return {
+    web:{
+      INVITATION_CREDENTIAL_ENCRYPTION_KEY:invitationKey,
+      TURNSTILE_SECRET_KEY:"turnstile-".padEnd(40, "a"),
+      ALTCHA_HMAC_SECRET:"altcha-".padEnd(40, "b"),
+      LOGIN_THROTTLE_HASH_SECRET:"login-".padEnd(40, "c"),
+      TRUSTED_DEVICE_HASH_SECRET:"trusted-".padEnd(40, "d"),
+      TOTP_ENCRYPTION_KEY:"totp-".padEnd(40, "e"),
+      OBJECT_STORAGE_SIGNING_SECRET:"objects-".padEnd(40, "f"),
+    },
+    worker:{ INVITATION_CREDENTIAL_ENCRYPTION_KEY:invitationKey },
+    webStatus:{ valid:true,missing:[] },
+    workerStatus:{ valid:true,missing:[] },
+  };
+}
+
+test("target runtime contract fails closed before build for missing Web or Worker settings", () => {
+  for (const boundary of ["web", "worker"]) {
+    const fixture = runtimeContractFixture();
+    fixture[boundary].INVITATION_CREDENTIAL_ENCRYPTION_KEY = "";
+    fixture[`${boundary}Status`] = { valid:false,missing:["INVITATION_CREDENTIAL_ENCRYPTION_KEY"] };
+    assert.throws(
+      () => validateTargetRuntimeContract(fixture),
+      (error) => error instanceof TargetRuntimeContractError
+        && error.code === "TARGET_RUNTIME_SECRET_MISSING",
+    );
+  }
+});
+
+test("target invitation credential must be valid, matching, and independent", () => {
+  const invalid = runtimeContractFixture();
+  invalid.web.INVITATION_CREDENTIAL_ENCRYPTION_KEY = "not-a-key";
+  assert.throws(() => validateTargetRuntimeContract(invalid), /TARGET_RUNTIME_ENVIRONMENT_INVALID/);
+
+  const mismatch = runtimeContractFixture();
+  mismatch.worker.INVITATION_CREDENTIAL_ENCRYPTION_KEY = "cd".repeat(32);
+  assert.throws(() => validateTargetRuntimeContract(mismatch), /TARGET_RUNTIME_SECRET_MISMATCH/);
+
+  const reused = runtimeContractFixture();
+  reused.web.TOTP_ENCRYPTION_KEY = reused.web.INVITATION_CREDENTIAL_ENCRYPTION_KEY;
+  assert.throws(() => validateTargetRuntimeContract(reused), /TARGET_RUNTIME_SECRET_NOT_INDEPENDENT/);
+  assert.deepEqual(validateTargetRuntimeContract(runtimeContractFixture()), {
+    status:"VALID",boundaries:["web", "worker"],
+  });
 });
 
 test("exposes initialize through package scripts, controller help, and the runbook", async () => {
@@ -970,9 +1024,9 @@ test("secret preflight, documentation, Compose sources, and runtime UID remain c
   ]);
   assert.match(
     workflow,
-    /resolveTarget\(commit\)[\s\S]+preflightSecretSources\(\)[\s\S]+buildImages\(target\)[\s\S]+startPostgres\(candidateEnvironment\)/,
+    /resolveTarget\(commit\)[\s\S]+preflightSecretSources\(\)[\s\S]+preflightTargetRuntimeContract\(\)[\s\S]+buildImages\(target\)[\s\S]+startPostgres\(candidateEnvironment\)/,
   );
-  assert.match(runner, /preflightSecretSources,\s+startPostgres,/);
+  assert.match(runner, /preflightSecretSources,\s+preflightTargetRuntimeContract,\s+startPostgres,/);
   assert.equal((dockerfile.match(/USER 10001:10001/g) ?? []).length, 2);
   for (const name of LUMINA_REQUIRED_SECRET_SOURCE_FILES) {
     assert.equal(
@@ -1188,7 +1242,7 @@ test("storage maintenance and all production units share one canonical Buildx na
   );
   assert.match(
     runner,
-    /start", "lumina-crm-storage-prepare\.service"[\s\S]+?"buildx", "inspect", builder/,
+    /"verify isolated Lumina builder"[\s\S]+?"buildx", "inspect", builder/,
   );
   assert.match(runner, /validateBuildxInspectContract[\s\S]+builderNetworkMode !== "host"/);
   assert.match(maintenance, /builderNetworkMode: LUMINA_BUILDKIT_NETWORK_MODE/);
@@ -1241,12 +1295,10 @@ test("storage maintenance and all production units share one canonical Buildx na
   );
 });
 
-test("every image build attempt ends with bounded fixed-builder cache cleanup", async () => {
-  const [runner, maintenance, sudoers, cacheCleanupUnit] = await Promise.all([
+test("post-acceptance BuildKit cleanup is rootless, bounded, and non-fatal", async () => {
+  const [runner, maintenance] = await Promise.all([
     source("scripts/deploy-production-runner.mjs"),
     source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
-    source("deploy/sudoers/lumina-crm-deploy"),
-    source("deploy/systemd/lumina-crm-build-cache-cleanup.service"),
   ]);
   const prune = buildkitPruneArguments({
     cacheRetentionHours: 168,
@@ -1264,16 +1316,10 @@ test("every image build attempt ends with bounded fixed-builder cache cleanup", 
     "--verbose",
   ]);
   assert.equal(prune.includes("--all"), false);
-  assert.match(
-    runner,
-    /async function buildImages[\s\S]+?try \{[\s\S]+?finally \{[\s\S]+?lumina-crm-build-cache-cleanup\.service/,
-  );
+  assert.match(runner, /async function requestCleanup[\s\S]+"docker"[\s\S]+"buildx", "--builder", builder[\s\S]+"until=168h"/);
   assert.match(runner, /allowFailure: true/);
-  assert.match(sudoers, /systemctl start lumina-crm-build-cache-cleanup\.service/);
-  assert.match(cacheCleanupUnit, /User=lumina-crm/);
-  assert.match(cacheCleanupUnit, /ExecStart=.* cache-cleanup/);
   assert.match(maintenance, /mode === "cache-cleanup"[\s\S]+?cleanupBuildkitCache\(policy\)/);
-  assert.doesNotMatch(cacheCleanupUnit, /storage-cleanup-request|image rm|system prune/);
+  assert.doesNotMatch(runner, /\bsudo\b|docker system prune|volume prune|down -v/);
   assert.doesNotMatch(JSON.stringify(prune), /system|volume|network/);
 });
 
@@ -1486,11 +1532,11 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
   );
   assert.match(
     runner,
-    /switch Web image before enabling the new Worker image[\s\S]+waitForContainerHealth\(composeEnvPath, "web"[\s\S]+switch Worker image after Web ownership transfer/,
+    /recreate Web and Worker for the target release[\s\S]+--force-recreate[\s\S]+"web", "worker"/,
   );
   assert.match(
     runner,
-    /stop asynchronous Worker before restoring the previous Web image[\s\S]+restore previous Web image[\s\S]+restore previous Worker image after Web rollback/,
+    /force recreate Web and Worker at the previous release[\s\S]+--force-recreate[\s\S]+"web", "worker"/,
   );
   assert.match(runner, /database remains on the forward schema/);
   assert.match(caddy, /^http:\/\/127\.0\.0\.1:3211 \{/m);
