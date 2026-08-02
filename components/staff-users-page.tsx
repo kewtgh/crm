@@ -7,7 +7,7 @@ import type { AppRole } from "@/lib/roles";
 import { roleMessageKey } from "@/lib/roles";
 import { useAppUser } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
-import { InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
+import { ConfirmDialog, InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
 
@@ -20,11 +20,6 @@ export function staffCreationMessageKey(status: StaffInvitationDeliveryStatus) {
 
 export function staffAccountErrorMessageKey(code: string) {
   return createErrorKeys[code] ?? "admin.users.error.UNKNOWN";
-}
-
-export function closeStaffActionMenu(target: Pick<HTMLElement, "closest">) {
-  const menu = target.closest("details") as HTMLDetailsElement | null;
-  if (menu) menu.open = false;
 }
 
 type CreateStaffResult = { item: StaffUserRecord; emailDeliveryStatus: StaffInvitationDeliveryStatus };
@@ -64,8 +59,24 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
   const [loadError, setLoadError] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
+  const [statusTarget, setStatusTarget] = useState<StaffUserRecord | null>(null);
+  const [statusPending, setStatusPending] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const resendKeys = useRef(new Map<string,string>());
+
+  useEffect(() => {
+    if (!actionMenuUserId) return;
+    const closeMenu = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && document.querySelector(`[data-staff-action-menu="${actionMenuUserId}"]`)?.contains(target)) return;
+      setActionMenuUserId(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setActionMenuUserId(null); };
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("mousedown", closeMenu); document.removeEventListener("keydown", closeOnEscape); };
+  }, [actionMenuUserId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -84,11 +95,14 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
 
   const updateStatus = async (item: StaffUserRecord) => {
     const status = item.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    setStatusPending(true);
     try {
       await apiFetch(`/api/admin/users/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
-    } catch { setLoadError(t("admin.users.updateFailed")); return; }
+    } catch { setLoadError(t("admin.users.updateFailed")); setStatusPending(false); return; }
     setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status } : entry));
     setToast(t(status === "ACTIVE" ? "admin.users.activated" : "admin.users.suspended", { name: `${item.displayNameZh} / ${item.displayNameEn}` }));
+    setStatusPending(false);
+    setStatusTarget(null);
   };
 
   const resendInvitation = async (item: StaffUserRecord) => {
@@ -118,11 +132,12 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     <section className="surface staff-directory"><div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("admin.users.search")} />{loading && <span role="status">{t("admin.users.loading")}</span>}</div>
       {loadError && <InlineMessage type="error">{loadError}</InlineMessage>}
       <div className="staff-user-head"><span>{t("admin.users.identity")}</span><span>{t("admin.users.account")}</span><span>{t("settings.role")}</span><span>{t("common.mfa")}</span><span>{t("admin.lastLogin")}</span><span>{t("common.actions")}</span></div>
-      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? `admin.users.invitationStatus.${(item.invitationDeliveryStatus ?? "UNCERTAIN").toLowerCase()}` : "common.active")}</small></span><details className="staff-action-menu"><summary className="icon-button" aria-label={t("common.actions")}><MoreHorizontal size={18}/></summary><div role="menu"><button type="button" role="menuitem" disabled={protectedAccount || item.id === currentUser.id} onClick={(event) => { closeStaffActionMenu(event.currentTarget); void updateStatus(item); }}>{t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })}</button>{awaitingConfirmation && <button type="button" role="menuitem" onClick={(event) => { closeStaffActionMenu(event.currentTarget); void resendInvitation(item); }}><RotateCcw size={15}/>{t("admin.users.resendInvitation")}</button>}</div></details></article>; })}</div>
+      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; const menuOpen = actionMenuUserId === item.id; return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? `admin.users.invitationStatus.${(item.invitationDeliveryStatus ?? "UNCERTAIN").toLowerCase()}` : "common.active")}</small></span><div className="staff-action-menu" data-staff-action-menu={item.id}><button className="icon-button staff-action-trigger" type="button" aria-label={t("common.actions")} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setActionMenuUserId((current) => current === item.id ? null : item.id)}><MoreHorizontal size={18}/></button>{menuOpen && <div role="menu"><button type="button" role="menuitem" disabled={protectedAccount || item.id === currentUser.id} onClick={() => { setActionMenuUserId(null); setStatusTarget(item); }}>{t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })}</button>{awaitingConfirmation && <button type="button" role="menuitem" onClick={() => { setActionMenuUserId(null); void resendInvitation(item); }}><RotateCcw size={15}/>{t("admin.users.resendInvitation")}</button>}</div>}</div></article>; })}</div>
       {!items.length && !loading && <div className="empty-state"><span>{t("admin.users.empty")}</span></div>}
       <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);}}/>
     </section>
     <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={(item, deliveryStatus) => { setInviteOpen(false); setPage(1); setQuery(""); setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)]); setTotal((current) => current + (items.some((entry) => entry.id === item.id) ? 0 : 1)); setReloadKey((value) => value + 1); setToast(t(staffCreationMessageKey(deliveryStatus))); }} />
+    {statusTarget && <ConfirmDialog title={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendConfirmTitle" : "admin.users.activateConfirmTitle", { name: statusTarget.displayNameEn })} description={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendConfirmDescription" : "admin.users.activateConfirmDescription", { name: `${statusTarget.displayNameZh} / ${statusTarget.displayNameEn}` })} confirmLabel={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: statusTarget.displayNameEn })} pending={statusPending} tone={statusTarget.status === "ACTIVE" ? "danger" : "primary"} onClose={() => { if (!statusPending) setStatusTarget(null); }} onConfirm={() => void updateStatus(statusTarget)} />}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
 }

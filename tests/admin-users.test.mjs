@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  closeStaffActionMenu,
   staffAccountErrorMessageKey,
   staffCreationMessageKey,
   submitStaffAccount,
@@ -27,10 +26,14 @@ const item = {
   invitationDeliveryStatus:"QUEUED",
 };
 
-test("staff action selections close their popup menu immediately", () => {
-  const details = { open:true };
-  closeStaffActionMenu({ closest:() => details });
-  assert.equal(details.open, false);
+test("staff action trigger only opens a controlled menu and status changes require confirmation", async () => {
+  const source = await readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8");
+  const trigger = source.match(/<button className="icon-button staff-action-trigger"[\s\S]+?<MoreHorizontal size=\{18\}\/\><\/button>/)?.[0] ?? "";
+  assert.match(trigger, /setActionMenuUserId/);
+  assert.doesNotMatch(trigger, /updateStatus|apiFetch|PATCH|setStatusTarget/);
+  assert.match(source, /onClick=\{\(\) => \{ setActionMenuUserId\(null\); setStatusTarget\(item\); \}\}/);
+  assert.match(source, /<ConfirmDialog[\s\S]+onConfirm=\{\(\) => void updateStatus\(statusTarget\)\}/);
+  assert.doesNotMatch(source, /<details className="staff-action-menu"|<summary/);
 });
 
 test("persistent sessions last 15 days for administrators and 30 days for staff", () => {
