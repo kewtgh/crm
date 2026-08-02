@@ -72,7 +72,7 @@ test("deploy runner requires public Tunnel liveness without any origin secret", 
   assert.match(runner, /try \{\s*publicHostname\(\);\s*persist\(\);/);
   assert.match(
     runner,
-    /await acceptRuntime\(composeEnvPath\);[\s\S]*atomicWrite\(acceptedPath,/,
+    /acceptRuntime,[\s\S]*atomicWrite\(composeEnvPath,[\s\S]*atomicWrite\(acceptedPath,/,
   );
   assert.doesNotMatch(
     runner,

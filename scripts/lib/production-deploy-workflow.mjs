@@ -119,10 +119,11 @@ export async function runProductionReleaseWorkflow({ mode, operations }) {
   let migrationMayHaveChanged = false;
   let switched = false;
   try {
-    await operations.prepare();
     const commit = await operations.updateSource();
     const target = await operations.resolveTarget(commit);
     await operations.preflightSecretSources();
+    await operations.preflightTargetRuntimeContract();
+    await operations.prepare();
     await operations.buildImages(target);
     const candidateEnvironment = await operations.writeCandidateEnvironment(target);
     await operations.startPostgres(candidateEnvironment);
@@ -136,8 +137,8 @@ export async function runProductionReleaseWorkflow({ mode, operations }) {
     if (mode === "initialize") {
       await operations.bootstrapAdmin(candidateEnvironment);
     }
-    await operations.switchApplication(candidateEnvironment);
     switched = true;
+    await operations.switchApplication(candidateEnvironment);
     await operations.acceptRuntime(candidateEnvironment);
     return {
       candidateEnvironment,

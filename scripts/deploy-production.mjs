@@ -33,10 +33,13 @@ const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const deployService = "lumina-crm-deploy.service";
-const terminalResults = new Set(["SUCCESS", "FAILED", "ROLLBACK_OK", "ROLLBACK_FAILED"]);
+const terminalResults = new Set(["SUCCESS", "RECOVERED", "FAILED", "FAILED_ROLLED_BACK", "FAILED_ROLLBACK_REQUIRED", "ROLLBACK_OK", "ROLLBACK_FAILED"]);
 const terminalMarkers = {
   SUCCESS: "LUMINA_PRODUCTION_DEPLOY_OK",
   FAILED: "LUMINA_PRODUCTION_DEPLOY_FAILED",
+  FAILED_ROLLED_BACK: "LUMINA_PRODUCTION_DEPLOY_FAILED_ROLLED_BACK",
+  FAILED_ROLLBACK_REQUIRED: "LUMINA_PRODUCTION_DEPLOY_FAILED_ROLLBACK_REQUIRED",
+  RECOVERED: "LUMINA_PRODUCTION_RECOVERY_OK",
   ROLLBACK_OK: "LUMINA_PRODUCTION_ROLLBACK_OK",
   ROLLBACK_FAILED: "LUMINA_PRODUCTION_ROLLBACK_FAILED",
 };
@@ -53,6 +56,7 @@ Usage:
   npm run deploy:production:status       Show the persisted deployment state
   npm run deploy:production:logs         Print the latest deployment log
   npm run deploy:production:rollback     Restore the recorded immutable application images
+  npm run deploy:production:recover      Reconcile Web and Worker to last-success without migration
   npm run deploy:production:dry-run      Validate repository deployment assets without side effects
 
 The systemd runner continues if SSH disconnects. Re-run the status or logs command
@@ -159,6 +163,15 @@ function printSummary(status) {
     `application version: ${status.applicationVersion ?? "unknown"}`,
   `previous image: ${status.previousImage ?? "none"}`,
   `target image: ${status.targetImage ?? "not built"}`,
+    `active Web image: ${status.activeWebImage ?? status.targetImage ?? "unknown"}`,
+    `active Worker image: ${status.activeWorkerImage ?? status.targetImage ?? "unknown"}`,
+    `preflight: ${status.preflight ?? "unknown"}`,
+    `Web switch: ${status.webSwitch ?? "unknown"}`,
+    `Worker switch: ${status.workerSwitch ?? "unknown"}`,
+    `Web health: ${status.activeWebHealth ?? status.webHealth ?? "unknown"}`,
+    `Worker health: ${status.activeWorkerHealth ?? status.workerHealth ?? "unknown"}`,
+    `rollback attempted: ${status.rollback ? "yes" : "no"}`,
+    `rollback completed: ${status.rollback?.status === "SUCCEEDED" ? "yes" : "no"}`,
     `started: ${status.startedAt ?? "unknown"}`,
     `finished: ${status.finishedAt ?? "not finished"}`,
     `duration ms: ${status.durationMs ?? "not finished"}`,
@@ -185,7 +198,7 @@ async function followRequest(requestId, initial) {
     if (terminalResults.has(latest?.result)) {
       printSummary(latest);
       process.stdout.write(`${terminalMarkers[latest.result]}\n`);
-      if (latest.result !== "SUCCESS" && latest.result !== "ROLLBACK_OK") process.exitCode = 1;
+      if (!["SUCCESS", "RECOVERED", "ROLLBACK_OK"].includes(latest.result)) process.exitCode = 1;
       return;
     }
     if (!isServiceActive()) throw new Error("Production runner became inactive without a terminal persisted result");
@@ -229,7 +242,7 @@ async function start(mode, { detached = false } = {}) {
     created = true;
   }
 
-  const started = command("sudo", ["-n", "/usr/bin/systemctl", "start", "--no-block", deployService], { allowFailure: true });
+  const started = command("systemctl", ["start", "--no-block", deployService], { allowFailure: true });
   if (started.status !== 0) {
     if (created) rmSync(requestPath, { force: true });
     const detail = String(started.stderr || started.stdout || `exit ${started.status}`).trim().slice(0, 500);
@@ -372,6 +385,9 @@ if (action === "--help" || action === "-h" || action === "help" || options.inclu
     } else if (action === "rollback") {
       assertOptions(["--detach"]);
       await start("rollback", { detached: options.includes("--detach") });
+    } else if (action === "recover") {
+      assertOptions(["--detach"]);
+      await start("recover", { detached: options.includes("--detach") });
     } else if (action === "dry-run") {
       assertOptions([]);
       dryRun();

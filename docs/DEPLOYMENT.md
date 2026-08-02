@@ -509,6 +509,7 @@ npm run deploy:production
 npm run deploy:production:status
 npm run deploy:production:logs
 npm run deploy:production:rollback
+npm run deploy:production:recover
 npm run deploy:production:dry-run
 ```
 
@@ -517,32 +518,37 @@ For initialization, the persistent runner performs:
 ```text
 exclusive Lumina lock
 -> reject if accepted state already exists
--> capacity gate and isolated builder verification
 -> exact clean main/origin verification and one fetch
+-> target-checkout Web/Worker runtime contract and Secret metadata preflight
+-> isolated rootless builder verification
 -> containerized type/lint/contracts plus commit-tagged app/ops builds
 -> PostgreSQL health
 -> repeat-safe database role/extension bootstrap
 -> migration manifest verification and locked forward migration
 -> repeat-safe initial administrator bootstrap
--> Compose up Web/Worker (never down)
+-> force-recreate Web/Worker together (never down) so replaced Secret files are remounted
 -> independent PostgreSQL/Web/Worker health
 -> loopback detailed readiness
 -> Cloudflare Tunnel public liveness at https://<LUMINA_PUBLIC_HOSTNAME>/api/health
--> persist accepted state with null rollback images
--> Lumina-only cleanup
+-> atomically persist compose.env and accepted state with null rollback images
+-> bounded rootless Lumina BuildKit cleanup (non-fatal)
 ```
 
 Ordinary deploy first requires accepted state, then uses the same prepare, fetch, build, PostgreSQL,
 migration, switch, acceptance, persistence, and cleanup path. It never invokes `db-bootstrap` or
 `bootstrap-admin`.
 
-Pre-switch failure leaves Web/Worker unchanged and does not attempt application rollback.
-Post-switch failure uses the existing image rollback logic and rechecks locally; a first
+Target runtime validation is executed from the target checkout before image build, migration,
+Compose persistence, or container replacement. It validates both runtime schemas, the exact
+32-byte invitation encryption key encoding, Web/Worker equality, and secret independence without
+logging values. Pre-switch failure leaves Web/Worker, compose.env and last-success unchanged.
+Post-switch failure force-recreates both Web and Worker at last-success and rechecks locally; a first
 initialization has no prior image and records rollback as unavailable. Neither path reverses a
 migration, and application rollback reports: “Application rolled back; database remains on the
 forward schema.” Each migration must remain compatible with the rollback application until
-acceptance. Cleanup starts only after acceptance; cleanup failure is a warning. Accepted state is
-persisted first so interruption can resume finalization safely.
+acceptance. `deploy:production:recover` performs no build or migration: it idempotently reconciles
+both services and compose.env to a complete last-success release, failing closed if that state is
+missing. Cleanup starts only after acceptance and its failure is a non-fatal warning.
 
 v3.8.15 is the first asynchronous communication-delivery release. Forward application switching
 replaces and health-checks Web before replacing Worker, so the old synchronous Web is gone before a
