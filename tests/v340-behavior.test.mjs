@@ -12,9 +12,14 @@ import {
   postDeliveryWebhook,
 } from "../scripts/lib/delivery-webhook.mjs";
 import {
+  inspectCoreRuntimeEnvironment,
   inspectWebReadinessEnvironment,
   inspectWorkerRuntimeEnvironment,
 } from "../lib/runtime-environment.ts";
+import {
+  inspectCoreRuntimeEnvironment as inspectCoreRuntimeEnvironmentCore,
+  inspectWorkerRuntimeEnvironment as inspectWorkerRuntimeEnvironmentCore,
+} from "../lib/runtime-environment-core.mjs";
 
 const repositoryFile = (path) => new URL(`../${path}`, import.meta.url);
 
@@ -131,6 +136,20 @@ test("keeps production Worker tuning inside the reviewed service budget", () => 
   };
   assert.equal(inspectWorkerRuntimeEnvironment(integrationEnvironment).valid, true);
   assert.equal(inspectWorkerRuntimeEnvironment({...integrationEnvironment,WORKER_JOB_CONCURRENCY:"2"}).valid, false);
+});
+
+test("TypeScript runtime facade has complete fixture parity with the dependency-free core", () => {
+  const fixtures = [
+    validWorkerEnvironment,
+    { ...validWorkerEnvironment, APP_URL: "http://crm.example.net" },
+    { ...validWorkerEnvironment, WORKER_JOB_CONCURRENCY: "1", OUTBOX_BATCH_SIZE: "20" },
+    { ...validWorkerEnvironment, WEBHOOKS_ENABLED: "true" },
+    { ...validWorkerEnvironment, S3_ENDPOINT: "" },
+  ];
+  for (const fixture of fixtures) {
+    assert.deepEqual(inspectCoreRuntimeEnvironment(fixture), inspectCoreRuntimeEnvironmentCore(fixture));
+    assert.deepEqual(inspectWorkerRuntimeEnvironment(fixture), inspectWorkerRuntimeEnvironmentCore(fixture));
+  }
 });
 
 test("keeps Web readiness independent from Worker-only email delivery configuration", () => {

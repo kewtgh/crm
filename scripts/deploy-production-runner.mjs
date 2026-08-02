@@ -37,6 +37,7 @@ import {
   releaseFailureRollbackPlan,
   runProductionReleaseWorkflow,
 } from "./lib/production-deploy-workflow.mjs";
+import { runTargetRuntimePreflight } from "./lib/target-runtime-validator-process.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -496,12 +497,11 @@ async function preflightSecretSources() {
 }
 
 async function preflightTargetRuntimeContract() {
-  await run("validate target runtime environment contract", "node", [
-    "--import", "tsx",
-    "scripts/validate-production-runtime-contract.mjs",
-    "/etc/lumina-crm/secrets",
-  ], { timeoutMs:30_000,quiet:true });
-  persist({ preflight:"VALID" });
+  await runTargetRuntimePreflight({
+    run,
+    persist,
+    secretsRoot: "/etc/lumina-crm/secrets",
+  });
 }
 
 async function bootstrapDatabase(candidateEnv) {
@@ -793,10 +793,15 @@ try {
       };
     }
   }
-  const currentRuntime = await runtimeSnapshot().catch(() => ({
-    web:{ image:null,state:"unknown",health:"unknown" },
-    worker:{ image:null,state:"unknown",health:"unknown" },
-  }));
+  const currentRuntime = switched
+    ? await runtimeSnapshot().catch(() => ({
+      web:{ image:null,state:"unknown",health:"unknown" },
+      worker:{ image:null,state:"unknown",health:"unknown" },
+    }))
+    : {
+      web:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
+      worker:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
+    };
   const failedResult = rollback?.status === "SUCCEEDED"
     ? "FAILED_ROLLED_BACK"
     : switched

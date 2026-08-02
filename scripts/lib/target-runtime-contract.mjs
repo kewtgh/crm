@@ -34,6 +34,7 @@ export function invitationCredentialKey(value) {
 
 export function validateTargetRuntimeContract({ web, worker, webStatus, workerStatus }) {
   const missing = [];
+  const invalidByBoundary = [];
   for (const [boundary, environment, status] of [
     ["web", web, webStatus],
     ["worker", worker, workerStatus],
@@ -42,13 +43,7 @@ export function validateTargetRuntimeContract({ web, worker, webStatus, workerSt
     const absent = status.missing.filter((key) => !environment[key]?.trim());
     if (absent.length) missing.push(...absent.map((key) => `${boundary}:${key}`));
     const invalid = status.missing.filter((key) => environment[key]?.trim());
-    if (invalid.length) {
-      throw new TargetRuntimeContractError(
-        "TARGET_RUNTIME_ENVIRONMENT_INVALID",
-        boundary,
-        invalid,
-      );
-    }
+    if (invalid.length) invalidByBoundary.push([boundary, invalid]);
   }
   if (missing.length) {
     throw new TargetRuntimeContractError(
@@ -74,6 +69,14 @@ export function validateTargetRuntimeContract({ web, worker, webStatus, workerSt
       "TARGET_RUNTIME_SECRET_NOT_INDEPENDENT",
       "web",
       ["INVITATION_CREDENTIAL_ENCRYPTION_KEY", ...reused],
+    );
+  }
+  if (invalidByBoundary.length) {
+    const [boundary, invalid] = invalidByBoundary[0];
+    throw new TargetRuntimeContractError(
+      "TARGET_RUNTIME_ENVIRONMENT_INVALID",
+      boundary,
+      invalid,
     );
   }
   return {

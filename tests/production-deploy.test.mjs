@@ -263,6 +263,21 @@ test("unsafe secret metadata stops initialize before image build and PostgreSQL"
   assert.deepEqual(calls, ["fetch", "resolve-target", "secret-preflight"]);
 });
 
+test("target runtime preflight failure stops before every side effect", async () => {
+  const { calls, operations } = releaseWorkflowDouble({ failAt: "target-runtime-preflight" });
+  await assert.rejects(
+    () => runProductionReleaseWorkflow({ mode: "deploy", operations }),
+    (error) => error instanceof ProductionReleaseWorkflowError
+      && error.switched === false
+      && error.migrationMayHaveChanged === false,
+  );
+  assert.deepEqual(calls, ["fetch", "resolve-target", "secret-preflight", "target-runtime-preflight"]);
+  for (const forbidden of ["prepare", "build", "candidate-env", "postgres", "migrate", "switch", "acceptance"]) {
+    assert.equal(calls.includes(forbidden), false);
+  }
+  assert.equal(releaseFailureRollbackPlan({ switched: false, previousAccepted: {} }), null);
+});
+
 function runtimeContractFixture() {
   const invitationKey = "ab".repeat(32);
   return {
