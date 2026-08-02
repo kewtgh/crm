@@ -38,6 +38,10 @@ import {
   runProductionReleaseWorkflow,
 } from "./lib/production-deploy-workflow.mjs";
 import { runTargetRuntimePreflight } from "./lib/target-runtime-validator-process.mjs";
+import {
+  ControlPlaneFinalizationError,
+  finalizeTerminalDeployment,
+} from "./lib/deployment-finalization.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -84,6 +88,7 @@ const startedAt = new Date();
 const deploymentId = `${startedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${request.requestId.slice(0, 8)}`;
 const logPath = path.join(logRoot, `${deploymentId}.log`);
 const statusPath = path.join(stateRoot, `${deploymentId}.json`);
+const requestArchivePath = path.join(stateRoot, `request-${deploymentId}.json`);
 writeFileSync(logPath, "", { flag: "wx", mode: 0o640 });
 
 const configuredGitProxy = process.env.LUMINA_GIT_PROXY?.trim() ?? "";
@@ -579,28 +584,37 @@ async function requestCleanup() {
   }
 }
 
-async function finish(result, update = {}) {
-  const finishedAt = new Date();
-  persist({
-    ...update,
+function finish(context, currentState, result, update = {}) {
+  return finalizeTerminalDeployment({
+    ...context,
+    currentState,
     result,
-    stage: "finished",
-    finishedAt: finishedAt.toISOString(),
-    durationMs: finishedAt.getTime() - startedAt.getTime(),
+    update,
+    finishedAt: new Date(),
   });
+}
+
+const finalizationContext = {
+  startedAt,
+  requestPath,
+  requestArchivePath,
+  statusPath,
+  latestPath,
+  exists: existsSync,
+  rename: renameSync,
+  atomicWrite,
+};
+
+try {
+  publicHostname();
+  persist();
+  const initialRuntime = await runtimeSnapshot();
   if (request.mode === "deploy" && (
     initialRuntime.web.image !== previousAccepted?.currentImage
     || initialRuntime.worker.image !== previousAccepted?.currentImage
   )) {
     throw new Error("CURRENT_RELEASE_RECOVERY_REQUIRED");
   }
-  rmSync(requestPath, { force: true });
-}
-
-try {
-  publicHostname();
-  persist();
-  const initialRuntime = await runtimeSnapshot();
   persist({
     previousImage:initialRuntime.web.image ?? previousAccepted?.currentImage ?? null,
     previousWorkerImage:initialRuntime.worker.image ?? previousAccepted?.currentImage ?? null,
@@ -631,7 +645,7 @@ try {
       atomicWrite(composeEnvPath, readFileSync(recoveryEnv, "utf8"));
       rmSync(recoveryEnv, { force:true });
     }
-    await finish("RECOVERED", {
+    finish(finalizationContext, persisted, "RECOVERED", {
       applicationAccepted:true,
       acceptedAt:previousAccepted.acceptedAt,
       targetCommit:previousAccepted.commit,
@@ -675,13 +689,13 @@ try {
       database: "FORWARD_SCHEMA_RETAINED",
     };
     atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
-    await finish("ROLLBACK_OK", {
+    log("WARN", "Application rolled back; database remains on the forward schema.");
+    finish(finalizationContext, persisted, "ROLLBACK_OK", {
       applicationAccepted: true,
       acceptedAt,
       rollback: { status: "SUCCEEDED", database: "FORWARD_SCHEMA_RETAINED" },
       targetImage: target.currentImage,
     });
-    log("WARN", "Application rolled back; database remains on the forward schema.");
   } else {
     const interrupted = priorLatest;
     if (acceptedReleaseMatchesRequest({
@@ -697,7 +711,7 @@ try {
           + "bootstrap-admin.env. The runner did not modify the root-owned secret file.",
         );
       }
-      await finish("SUCCESS", {
+      finish(finalizationContext, persisted, "SUCCESS", {
         targetCommit: interrupted?.targetCommit ?? previousAccepted.commit,
         applicationVersion: interrupted?.applicationVersion ?? previousAccepted.version,
         targetImage: interrupted?.targetImage ?? previousAccepted.currentImage,
@@ -772,53 +786,65 @@ try {
           + "bootstrap-admin.env. The runner did not modify the root-owned secret file.",
         );
       }
-      await finish("SUCCESS", { applicationAccepted: true, acceptedAt, cleanup });
       rmSync(candidateEnv, { force: true });
+      finish(finalizationContext, persisted, "SUCCESS", { applicationAccepted: true, acceptedAt, cleanup });
     }
   }
 } catch (error) {
-  if (error instanceof ProductionReleaseWorkflowError) {
-    migrationMayHaveChanged = error.migrationMayHaveChanged;
-    switched = error.switched;
-  }
-  log("ERROR", error instanceof Error ? error.message : String(error));
-  let rollback = releaseFailureRollbackPlan({ switched, previousAccepted });
-  if (rollback?.status === "REQUIRED") {
-    try {
-      rollback = await rollbackApplication("POST_SWITCH_ACCEPTANCE_FAILED");
-    } catch (rollbackError) {
-      rollback = {
-        status: "FAILED",
-        error: redact(rollbackError instanceof Error ? rollbackError.message : String(rollbackError)),
-      };
+  if (error instanceof ControlPlaneFinalizationError) {
+    log("ERROR", "CONTROL_PLANE_FINALIZATION_FAILED");
+    process.exitCode = 1;
+  } else {
+    if (error instanceof ProductionReleaseWorkflowError) {
+      migrationMayHaveChanged = error.migrationMayHaveChanged;
+      switched = error.switched;
     }
+    log("ERROR", error instanceof Error ? error.message : String(error));
+    let rollback = releaseFailureRollbackPlan({ switched, previousAccepted });
+    if (rollback?.status === "REQUIRED") {
+      try {
+        rollback = await rollbackApplication("POST_SWITCH_ACCEPTANCE_FAILED");
+      } catch (rollbackError) {
+        rollback = {
+          status: "FAILED",
+          error: redact(rollbackError instanceof Error ? rollbackError.message : String(rollbackError)),
+        };
+      }
+    }
+    const currentRuntime = switched
+      ? await runtimeSnapshot().catch(() => ({
+        web:{ image:null,state:"unknown",health:"unknown" },
+        worker:{ image:null,state:"unknown",health:"unknown" },
+      }))
+      : {
+        web:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
+        worker:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
+      };
+    const failedResult = rollback?.status === "SUCCEEDED"
+      ? "FAILED_ROLLED_BACK"
+      : switched
+        ? "FAILED_ROLLBACK_REQUIRED"
+        : "FAILED";
+    try {
+      finish(
+        finalizationContext,
+        persisted,
+        request.mode === "rollback" ? "ROLLBACK_FAILED" : failedResult,
+        {
+          migrationMayHaveChanged,
+          rollback,
+          activeWebImage:currentRuntime.web.image,
+          activeWorkerImage:currentRuntime.worker.image,
+          activeWebHealth:currentRuntime.web.health,
+          activeWorkerHealth:currentRuntime.worker.health,
+          manualRecoveryRequired:failedResult === "FAILED_ROLLBACK_REQUIRED",
+          error: redact(error instanceof Error ? error.message : String(error)),
+        },
+      );
+    } catch (finalizationError) {
+      if (!(finalizationError instanceof ControlPlaneFinalizationError)) throw finalizationError;
+      log("ERROR", "CONTROL_PLANE_FINALIZATION_FAILED");
+    }
+    process.exitCode = 1;
   }
-  const currentRuntime = switched
-    ? await runtimeSnapshot().catch(() => ({
-      web:{ image:null,state:"unknown",health:"unknown" },
-      worker:{ image:null,state:"unknown",health:"unknown" },
-    }))
-    : {
-      web:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
-      worker:{ image:previousAccepted?.currentImage ?? null,state:"unchanged",health:"unchanged" },
-    };
-  const failedResult = rollback?.status === "SUCCEEDED"
-    ? "FAILED_ROLLED_BACK"
-    : switched
-      ? "FAILED_ROLLBACK_REQUIRED"
-      : "FAILED";
-  await finish(
-    request.mode === "rollback" ? "ROLLBACK_FAILED" : failedResult,
-    {
-      migrationMayHaveChanged,
-      rollback,
-      activeWebImage:currentRuntime.web.image,
-      activeWorkerImage:currentRuntime.worker.image,
-      activeWebHealth:currentRuntime.web.health,
-      activeWorkerHealth:currentRuntime.worker.health,
-      manualRecoveryRequired:failedResult === "FAILED_ROLLBACK_REQUIRED",
-      error: redact(error instanceof Error ? error.message : String(error)),
-    },
-  );
-  process.exitCode = 1;
 }

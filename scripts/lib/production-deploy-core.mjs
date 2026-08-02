@@ -1,6 +1,10 @@
 import path from "node:path";
 
 export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
+export const FINALIZED_DEPLOYMENT_RESULTS = Object.freeze([
+  "SUCCESS", "RECOVERED", "FAILED", "FAILED_ROLLED_BACK",
+  "FAILED_ROLLBACK_REQUIRED", "ROLLBACK_OK", "ROLLBACK_FAILED",
+]);
 
 export function assertSpecificAbsolutePath(value, label) {
   const resolved = path.resolve(String(value));
@@ -54,8 +58,12 @@ export function classifyPersistedDeployment({ serviceActive, request, latest }) 
     return { state: "RUNNING", deploymentId: latest?.deploymentId ?? null };
   }
   if (latest?.result
-    && ["SUCCESS", "FAILED", "ROLLBACK_OK", "ROLLBACK_FAILED"].includes(latest.result)
-    && (!request || request.requestId === latest.requestId)) {
+    && FINALIZED_DEPLOYMENT_RESULTS.includes(latest.result)
+    && latest.finalizationComplete === true
+    && !request) {
+    return { state: latest.result, deploymentId: latest.deploymentId ?? null };
+  }
+  if (latest?.result === "CONTROL_PLANE_FINALIZATION_FAILED") {
     return { state: latest.result, deploymentId: latest.deploymentId ?? null };
   }
   if (request) return { state: "PENDING_RECOVERABLE", requestId: request.requestId };

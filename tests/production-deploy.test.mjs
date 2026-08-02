@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,12 +8,19 @@ import test from "node:test";
 import {
   assertPathWithin,
   classifyPersistedDeployment,
+  FINALIZED_DEPLOYMENT_RESULTS,
   isSystemdServiceInProgress,
   PRODUCTION_DEPLOY_LOCK_PATH,
   validatePendingRequestForRecovery,
   validateDirectoryMetadata,
   writeExclusiveRequest,
 } from "../scripts/lib/production-deploy-core.mjs";
+import {
+  CONTROL_PLANE_FINALIZATION_FAILED,
+  ControlPlaneFinalizationError,
+  finalizeTerminalDeployment,
+  terminalRequestIsArchived,
+} from "../scripts/lib/deployment-finalization.mjs";
 import {
   assertRootlessDockerHost,
   assertRootlessDockerInfo,
@@ -180,6 +188,19 @@ test("keeps controller paths and request state inside exact deployment roots", a
         request,
         latest: { requestId: request.requestId, deploymentId: "finished", result: "FAILED" },
       }),
+      { state: "PENDING_RECOVERABLE", requestId: request.requestId },
+    );
+    assert.deepEqual(
+      classifyPersistedDeployment({
+        serviceActive: false,
+        request: null,
+        latest: {
+          requestId: request.requestId,
+          deploymentId: "finished",
+          result: "FAILED",
+          finalizationComplete: true,
+        },
+      }),
       { state: "FAILED", deploymentId: "finished" },
     );
     assert.deepEqual(
@@ -189,6 +210,183 @@ test("keeps controller paths and request state inside exact deployment roots", a
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("every terminal mode atomically archives its request before publishing latest", async (t) => {
+  const cases = [
+    ["deploy", "SUCCESS"],
+    ["initialize", "SUCCESS"],
+    ["recover", "RECOVERED"],
+    ["rollback", "ROLLBACK_OK"],
+    ["deploy", "FAILED"],
+    ["deploy", "FAILED_ROLLED_BACK"],
+    ["deploy", "FAILED_ROLLBACK_REQUIRED"],
+    ["rollback", "ROLLBACK_FAILED"],
+  ];
+  for (const [mode, result] of cases) {
+    await t.test(`${mode} ${result}`, async () => {
+      const directory = await mkdtemp(path.join(os.tmpdir(), "lumina-finalization-"));
+      try {
+        const requestPath = path.join(directory, "request.json");
+        const requestArchivePath = path.join(directory, `request-deployment-${mode}-${result}.json`);
+        const statusPath = path.join(directory, "deployment.json");
+        const latestPath = path.join(directory, "latest.json");
+        const acceptedPath = path.join(directory, "last-success.json");
+        const composePath = path.join(directory, "compose.env");
+        const request = { requestId: `request-${mode}-${result}`, mode };
+        writeFileSync(requestPath, `${JSON.stringify(request)}\n`);
+        writeFileSync(acceptedPath, "accepted-release\n");
+        writeFileSync(composePath, "LUMINA_IMAGE=accepted\n");
+        const events = [];
+        const atomicWrite = (file, content) => {
+          events.push(`write:${path.basename(file)}`);
+          writeFileSync(file, content);
+        };
+        const finalized = finalizeTerminalDeployment({
+          currentState: { deploymentId: `deployment-${mode}-${result}`, requestId: request.requestId, mode },
+          result,
+          update: { applicationAccepted: result === "SUCCESS" || result === "RECOVERED" || result === "ROLLBACK_OK" },
+          startedAt: new Date("2026-08-03T00:00:00.000Z"),
+          finishedAt: new Date("2026-08-03T00:00:01.000Z"),
+          requestPath,
+          requestArchivePath,
+          statusPath,
+          latestPath,
+          exists: existsSync,
+          rename: (source, destination) => {
+            events.push("archive-request");
+            renameSync(source, destination);
+          },
+          atomicWrite,
+        });
+        assert.equal(existsSync(requestPath), false);
+        assert.equal(existsSync(requestArchivePath), true);
+        assert.equal(JSON.parse(readFileSync(requestArchivePath, "utf8")).requestId, request.requestId);
+        assert.equal(
+          events.indexOf("archive-request") < events.indexOf(`write:${path.basename(latestPath)}`),
+          true,
+        );
+        assert.equal(JSON.parse(readFileSync(latestPath, "utf8")).finalizationComplete, true);
+        assert.equal(JSON.parse(readFileSync(statusPath, "utf8")).result, result);
+        assert.equal(readFileSync(acceptedPath, "utf8"), "accepted-release\n");
+        assert.equal(readFileSync(composePath, "utf8"), "LUMINA_IMAGE=accepted\n");
+        assert.equal(terminalRequestIsArchived({
+          latest: finalized,
+          requestExists: existsSync(requestPath),
+          archivedRequest: JSON.parse(readFileSync(requestArchivePath, "utf8")),
+        }), true);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+  assert.deepEqual([...FINALIZED_DEPLOYMENT_RESULTS].sort(), [
+    "FAILED", "FAILED_ROLLBACK_REQUIRED", "FAILED_ROLLED_BACK", "RECOVERED",
+    "ROLLBACK_FAILED", "ROLLBACK_OK", "SUCCESS",
+  ]);
+});
+
+test("accepted application archive failure remains a control-plane failure", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lumina-finalization-failure-"));
+  try {
+    const requestPath = path.join(directory, "request.json");
+    const requestArchivePath = path.join(directory, "request-deployment.json");
+    const statusPath = path.join(directory, "deployment.json");
+    const latestPath = path.join(directory, "latest.json");
+    writeFileSync(requestPath, '{"requestId":"accepted-request","mode":"deploy"}\n');
+    writeFileSync(requestArchivePath, "archive collision\n");
+    assert.throws(
+      () => finalizeTerminalDeployment({
+        currentState: { deploymentId: "deployment", requestId: "accepted-request", mode: "deploy" },
+        result: "SUCCESS",
+        update: { applicationAccepted: true },
+        startedAt: new Date("2026-08-03T00:00:00.000Z"),
+        requestPath,
+        requestArchivePath,
+        statusPath,
+        latestPath,
+        exists: existsSync,
+        rename: renameSync,
+        atomicWrite: (file, content) => writeFileSync(file, content),
+      }),
+      (error) => error instanceof ControlPlaneFinalizationError
+        && error.message === CONTROL_PLANE_FINALIZATION_FAILED,
+    );
+    const latest = JSON.parse(readFileSync(latestPath, "utf8"));
+    assert.equal(latest.result, CONTROL_PLANE_FINALIZATION_FAILED);
+    assert.equal(latest.applicationResult, "SUCCESS");
+    assert.equal(latest.applicationAccepted, true);
+    assert.equal(latest.finalizationComplete, false);
+    assert.equal(existsSync(requestPath), true);
+    assert.doesNotMatch(JSON.stringify(latest), /DEPLOY(?:MENT)?_FAILED/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("accepted application status-write failure remains a control-plane failure", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lumina-finalization-write-failure-"));
+  try {
+    const requestPath = path.join(directory, "request.json");
+    const requestArchivePath = path.join(directory, "request-deployment.json");
+    const statusPath = path.join(directory, "deployment.json");
+    const latestPath = path.join(directory, "latest.json");
+    writeFileSync(requestPath, '{"requestId":"accepted-request","mode":"deploy"}\n');
+    let firstStatusWrite = true;
+    assert.throws(
+      () => finalizeTerminalDeployment({
+        currentState: { deploymentId: "deployment", requestId: "accepted-request", mode: "deploy" },
+        result: "SUCCESS",
+        update: { applicationAccepted: true },
+        startedAt: new Date("2026-08-03T00:00:00.000Z"),
+        requestPath,
+        requestArchivePath,
+        statusPath,
+        latestPath,
+        exists: existsSync,
+        rename: renameSync,
+        atomicWrite: (file, content) => {
+          if (file === statusPath && firstStatusWrite) {
+            firstStatusWrite = false;
+            throw new Error("injected status write failure");
+          }
+          writeFileSync(file, content);
+        },
+      }),
+      (error) => error instanceof ControlPlaneFinalizationError
+        && error.message === CONTROL_PLANE_FINALIZATION_FAILED,
+    );
+    const latest = JSON.parse(readFileSync(latestPath, "utf8"));
+    assert.equal(latest.result, CONTROL_PLANE_FINALIZATION_FAILED);
+    assert.equal(latest.applicationResult, "SUCCESS");
+    assert.equal(latest.applicationAccepted, true);
+    assert.equal(existsSync(requestPath), true);
+    assert.equal(existsSync(requestArchivePath), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("controller waits for the matching archived request before accepting a terminal result", async () => {
+  const controller = await source("scripts/deploy-production.mjs");
+  const latest = {
+    requestId: "request-1",
+    mode: "deploy",
+    result: "SUCCESS",
+    finalizationComplete: true,
+    requestArchived: true,
+  };
+  const archivedRequest = { requestId: "request-1", mode: "deploy" };
+  assert.equal(terminalRequestIsArchived({ latest, requestExists: true, archivedRequest }), false);
+  assert.equal(terminalRequestIsArchived({
+    latest: { ...latest, finalizationComplete: false },
+    requestExists: false,
+    archivedRequest,
+  }), false);
+  assert.equal(terminalRequestIsArchived({ latest, requestExists: false, archivedRequest }), true);
+  assert.match(controller, /if \(!requestFinalizationComplete\(latest\)\)/);
+  assert.match(controller, /controlPlaneFailureRecord\(latest\) \?\? latest/);
+  assert.doesNotMatch(controller, /rmSync\(requestPath/);
 });
 
 test("classifies every active systemd oneshot state and fixed deployment lock", () => {

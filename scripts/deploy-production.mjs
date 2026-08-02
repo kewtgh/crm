@@ -8,7 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
-  rmSync,
+  renameSync,
 } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertPathWithin,
   classifyPersistedDeployment,
+  FINALIZED_DEPLOYMENT_RESULTS,
   isSystemdServiceInProgress,
   PRODUCTION_DEPLOY_LOCK_PATH,
   validatePendingRequestForRecovery,
@@ -24,6 +25,10 @@ import {
   writeExclusiveRequest,
 } from "./lib/production-deploy-core.mjs";
 import { assertReleaseModeAllowed } from "./lib/production-deploy-workflow.mjs";
+import {
+  CONTROL_PLANE_FINALIZATION_FAILED,
+  terminalRequestIsArchived,
+} from "./lib/deployment-finalization.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const deployRoot = path.resolve("/opt/lumina-crm");
@@ -33,7 +38,7 @@ const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const deployService = "lumina-crm-deploy.service";
-const terminalResults = new Set(["SUCCESS", "RECOVERED", "FAILED", "FAILED_ROLLED_BACK", "FAILED_ROLLBACK_REQUIRED", "ROLLBACK_OK", "ROLLBACK_FAILED"]);
+const terminalResults = new Set([...FINALIZED_DEPLOYMENT_RESULTS, CONTROL_PLANE_FINALIZATION_FAILED]);
 const terminalMarkers = {
   SUCCESS: "LUMINA_PRODUCTION_DEPLOY_OK",
   FAILED: "LUMINA_PRODUCTION_DEPLOY_FAILED",
@@ -42,6 +47,7 @@ const terminalMarkers = {
   RECOVERED: "LUMINA_PRODUCTION_RECOVERY_OK",
   ROLLBACK_OK: "LUMINA_PRODUCTION_ROLLBACK_OK",
   ROLLBACK_FAILED: "LUMINA_PRODUCTION_ROLLBACK_FAILED",
+  CONTROL_PLANE_FINALIZATION_FAILED,
 };
 
 function help() {
@@ -175,9 +181,38 @@ function printSummary(status) {
     `started: ${status.startedAt ?? "unknown"}`,
     `finished: ${status.finishedAt ?? "not finished"}`,
     `duration ms: ${status.durationMs ?? "not finished"}`,
+    `finalization complete: ${status.finalizationComplete === true ? "yes" : "no"}`,
+    `request archive: ${status.requestArchivePath ?? "not archived"}`,
     `log: ${status.logPath ?? "not created"}`,
   ];
   process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+function requestFinalizationComplete(latest) {
+  if (!latest?.requestArchivePath) return false;
+  let archivePath;
+  try {
+    archivePath = assertPathWithin(stateRoot, latest.requestArchivePath, {
+      directChild: true,
+      label: "Deployment request archive",
+    });
+  } catch {
+    return false;
+  }
+  return terminalRequestIsArchived({
+    latest,
+    requestExists: existsSync(requestPath),
+    archivedRequest: readJson(archivePath),
+  });
+}
+
+function controlPlaneFailureRecord(latest) {
+  if (!/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/i.test(latest?.deploymentId ?? "")) return null;
+  const recordPath = path.join(stateRoot, `${latest.deploymentId}.json`);
+  const record = readJson(recordPath);
+  return record?.requestId === latest.requestId
+    && record.result === CONTROL_PLANE_FINALIZATION_FAILED
+    ? record : null;
 }
 
 async function followRequest(requestId, initial) {
@@ -186,6 +221,7 @@ async function followRequest(requestId, initial) {
   const deadline = Date.now() + 3_900_000;
   while (Date.now() < deadline) {
     latest = readJson(latestPath) ?? latest;
+    latest = controlPlaneFailureRecord(latest) ?? latest;
     if (latest?.requestId !== requestId) throw new Error("Latest deployment state no longer matches this request");
     if (latest.logPath) {
       const safeLog = assertPathWithin(logRoot, latest.logPath, { directChild: true, label: "Deployment log" });
@@ -196,6 +232,17 @@ async function followRequest(requestId, initial) {
       }
     }
     if (terminalResults.has(latest?.result)) {
+      if (latest.result === CONTROL_PLANE_FINALIZATION_FAILED) {
+        printSummary(latest);
+        process.stdout.write(`${CONTROL_PLANE_FINALIZATION_FAILED}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      if (!requestFinalizationComplete(latest)) {
+        if (!isServiceActive()) throw new Error(CONTROL_PLANE_FINALIZATION_FAILED);
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        continue;
+      }
       printSummary(latest);
       process.stdout.write(`${terminalMarkers[latest.result]}\n`);
       if (!["SUCCESS", "RECOVERED", "ROLLBACK_OK"].includes(latest.result)) process.exitCode = 1;
@@ -244,7 +291,13 @@ async function start(mode, { detached = false } = {}) {
 
   const started = command("systemctl", ["start", "--no-block", deployService], { allowFailure: true });
   if (started.status !== 0) {
-    if (created) rmSync(requestPath, { force: true });
+    if (created) {
+      const startFailureArchive = path.join(stateRoot, `request-controller-start-failed-${request.requestId}.json`);
+      if (existsSync(startFailureArchive)) {
+        throw new Error(`Controller start-failure archive already exists: ${startFailureArchive}`);
+      }
+      renameSync(requestPath, startFailureArchive);
+    }
     const detail = String(started.stderr || started.stdout || `exit ${started.status}`).trim().slice(0, 500);
     throw new Error(`Could not start ${deployService}: ${detail}`);
   }
