@@ -53,7 +53,10 @@ WORKDIR /app
 COPY --from=production-dependencies --chown=lumina:lumina /app/node_modules ./node_modules
 COPY --from=build --chown=lumina:lumina /app/dist ./dist
 COPY --chown=lumina:lumina package.json package-lock.json ./
-COPY --chown=lumina:lumina lib/email-delivery-runtime.mjs ./lib/
+COPY --chown=lumina:lumina \
+    lib/email-delivery-runtime.mjs \
+    lib/invitation-credential-crypto.mjs \
+    ./lib/
 COPY --chown=lumina:lumina \
     scripts/bootstrap-admin.mjs \
     scripts/container-entrypoint.mjs \
@@ -71,6 +74,7 @@ COPY --chown=lumina:lumina \
     scripts/process-webhook-inbox.mjs \
     scripts/process-worker-cycle.mjs \
     scripts/run-worker-loop.mjs \
+    scripts/verify-application-runtime-closure.mjs \
     scripts/worker-healthcheck.mjs \
     scripts/worker-heartbeat.mjs \
     scripts/worker-schema-check.mjs \
@@ -80,11 +84,13 @@ COPY --chown=lumina:lumina \
     scripts/lib/backup-policy.mjs \
     scripts/lib/bounded-concurrency.mjs \
     scripts/lib/delivery-webhook.mjs \
+    scripts/lib/worker-process-diagnostics.mjs \
     scripts/lib/worker-database.mjs \
     scripts/lib/worker-object-store.mjs \
     ./scripts/lib/
 COPY --chown=lumina:lumina db ./db
 USER 10001:10001
+RUN node scripts/verify-application-runtime-closure.mjs
 EXPOSE 3200
 ENTRYPOINT ["node", "scripts/container-entrypoint.mjs"]
 CMD ["web"]

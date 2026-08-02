@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
 import { closeWorkerDatabase, withWorkerAdvisoryLock } from "./lib/worker-database.mjs";
+import { runWorkerScript } from "./lib/worker-process-diagnostics.mjs";
 
 const allWorkers=[
   ["REMINDERS","process-reminders.mjs"],
@@ -21,25 +20,14 @@ const workers=allWorkers.filter(([worker])=>{
 const skipped=allWorkers.filter(([worker])=>!workers.some(([enabled])=>enabled===worker)).map(([worker])=>worker);
 const failures=[];
 
-function run(script){
-  return new Promise((resolve)=>{
-    const child=spawn(process.execPath,[fileURLToPath(new URL(script,import.meta.url))],{
-      env:process.env,
-      stdio:"inherit",
-    });
-    child.once("error",(error)=>resolve({code:1,error}));
-    child.once("exit",(code,signal)=>resolve({
-      code:code??1,
-      error:code===0?null:new Error(`${script} exited with ${code??signal??"UNKNOWN"}`),
-    }));
-  });
-}
-
 try {
   const locked=await withWorkerAdvisoryLock("lumina-crm-worker-cycle",async()=>{
     const results=await Promise.all(workers.map(async([worker,script])=>{
       process.stdout.write(`\n[worker-cycle] ${worker}\n`);
-      const result=await run(script);
+      const result=await runWorkerScript(new URL(script,import.meta.url),script,process.env);
+      if(result.code!==0){
+        process.stderr.write(`[worker-cycle] ${worker} failed code=${result.errorCode}\n`);
+      }
       if(result.code!==0&&process.env.WORKER_DATABASE_URL){
         await createWorkerHeartbeat(worker)
           .failure(result.error,{orchestrated:true})
