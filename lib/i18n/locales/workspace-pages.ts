@@ -1,6 +1,7 @@
 import type { Messages } from "../types";
 
 export const zhWorkspacePages: Messages = {
+  "admin.users.suspendConfirmTitle":"确认停用 {name}？","admin.users.suspendConfirmDescription":"停用 {name} 将立即撤销该员工的访问权限。此操作不会删除账号。","admin.users.activateConfirmTitle":"确认启用 {name}？","admin.users.activateConfirmDescription":"启用 {name} 将恢复该员工的账号访问权限。",
   "admin.users.error.IDENTITY_TAKEN":"该账户名或邮箱已存在。",
   "reports.description":"只展示已连接真实数据库和权限规则的运营分析。","reports.consumption":"消费分析","reports.consumptionHelp":"年度、季度与月度的已确认付款分析。","reports.performance":"业绩与关系目标","reports.performanceHelp":"目标、贡献归属、预测和四级客户关系覆盖。","reports.contracts":"合同与续约","reports.contractsHelp":"合同周期、风险、续约窗口与审批入口。","reports.exportApprovalHelp":"需要导出的合同和业绩汇总必须从对应页面提交管理员审批；审批通过后生成后台任务。",
   "admin.portal.title": "管理运营门户", "admin.portal.description": "这里汇总真实待办、账号安全、系统消息和上线进度。", "admin.refresh": "刷新状态", "admin.inviteUser": "创建员工账号",
@@ -28,6 +29,7 @@ export const zhWorkspacePages: Messages = {
 };
 
 export const enWorkspacePages: Messages = {
+  "admin.users.suspendConfirmTitle":"Confirm suspension of {name}?","admin.users.suspendConfirmDescription":"Suspending {name} immediately revokes this employee's access. The account is not deleted.","admin.users.activateConfirmTitle":"Confirm activation of {name}?","admin.users.activateConfirmDescription":"Activating {name} restores this employee's account access.",
   "admin.users.error.IDENTITY_TAKEN":"That username or email already exists.",
   "reports.description":"Only operational analytics connected to real database and permission rules are shown.","reports.consumption":"Consumption analytics","reports.consumptionHelp":"Annual, quarterly, and monthly confirmed-payment analysis.","reports.performance":"Performance and relationship targets","reports.performanceHelp":"Targets, contribution attribution, forecast, and four-level customer relationship coverage.","reports.contracts":"Contracts and renewals","reports.contractsHelp":"Contract periods, risk, renewal windows, and approval entry points.","reports.exportApprovalHelp":"Contract and performance exports must be requested from their source page for administrator approval. An approved request creates a background job.",
   "admin.portal.title":"Admin operations portal","admin.portal.description":"Review live work, account security, system messages, and launch readiness here.","admin.refresh":"Refresh status","admin.inviteUser":"Create staff account",

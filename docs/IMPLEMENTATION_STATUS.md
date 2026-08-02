@@ -1,8 +1,10 @@
-# Implementation status — v3.8.21 release candidate
+# Implementation status — v3.8.22 release candidate
 
 ## Scope
 
-v3.8.21 adds the missing crm_system SELECT/INSERT/UPDATE RLS policies for durable staff invitation
+v3.8.22 replaces the staff action `details/summary` control with a controlled menu and requires an
+explicit confirmation dialog before any account status mutation. v3.8.21 added the missing
+crm_system SELECT/INSERT/UPDATE RLS policies for durable staff invitation
 deliveries without granting DELETE or direct crm_worker writes. v3.8.20 added target-checkout
 runtime preflight, atomic Web/Worker release switching, automatic
 two-service rollback and idempotent last-success recovery while retaining durable staff invitations,
@@ -73,7 +75,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.21; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.22; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
