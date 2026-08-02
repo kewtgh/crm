@@ -88,11 +88,13 @@ test("invitation credentials are encrypted at rest and only decrypted by the del
 });
 
 test("resend invitation remains AAL2-only, rotates credentials, revokes sessions, and queues delivery", async () => {
-  const [route, repository, worker, migration] = await Promise.all([
+  const [route, repository, worker, migration, rlsMigration, observability] = await Promise.all([
     readFile(new URL("../app/api/admin/users/[id]/resend-invitation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/admin-users-repository.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/process-notification-outbox.mjs", import.meta.url), "utf8"),
     readFile(new URL("../db/migrations/202608020072_staff_invitation_delivery.sql", import.meta.url), "utf8"),
+    readFile(new URL("../db/migrations/202608020073_staff_invitation_system_rls.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/observability.ts", import.meta.url), "utf8"),
   ]);
   assert.match(route, /requireApiRole\("SUPER_ADMIN", "ADMIN"\)/);
   assert.match(route, /requireApiAal2\(\)/);
@@ -103,4 +105,11 @@ test("resend invitation remains AAL2-only, rotates credentials, revokes sessions
   assert.match(worker, /decryptInvitationCredential/);
   assert.match(worker, /DELIVERY_NETWORK_ERROR/);
   assert.match(migration, /'QUEUED','SENT','FAILED','UNCERTAIN'/);
+  assert.match(rlsMigration, /for select to crm_system[\s\S]+using \(true\)/);
+  assert.match(rlsMigration, /for insert to crm_system[\s\S]+with check \(true\)/);
+  assert.match(rlsMigration, /for update to crm_system[\s\S]+using \(true\)[\s\S]+with check \(true\)/);
+  assert.doesNotMatch(rlsMigration, /for delete|to crm_worker|audit_events|notification_outbox/i);
+  assert.match(route, /DATABASE_POLICY_DENIED/);
+  assert.match(observability, /admin\.staff_invitation\.resend/);
+  assert.doesNotMatch(route, /error\.message|JSON\.stringify\(error\)/);
 });

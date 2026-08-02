@@ -38,11 +38,22 @@ export type StaffAccountCreationEvent = {
   errorCode?: string;
 };
 
+export type StaffInvitationResendEvent = {
+  name: "admin.staff_invitation.resend";
+  requestId: string;
+  route: "/api/admin/users/:id/resend-invitation";
+  operation: "resendStaffInvitation";
+  status: number;
+  result: "queued" | "rejected" | "failed";
+  errorCode?: "DATABASE_POLICY_DENIED" | "STAFF_INVITATION_RESEND_FAILED";
+};
+
 export type ObservabilityEvent =
   | ApiRequestObservabilityEvent
   | ApiRequestFailureEvent
   | CaptchaObservabilityEvent
-  | StaffAccountCreationEvent;
+  | StaffAccountCreationEvent
+  | StaffInvitationResendEvent;
 
 function enabled(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
@@ -65,6 +76,7 @@ export async function emitObservabilityEvent(event: ObservabilityEvent) {
   // cookies, account identifiers, or business-record content.
   const alwaysLog = event.name === "api.request.failed"
     || event.name === "admin.staff_account.create"
+    || event.name === "admin.staff_invitation.resend"
     || (event.name === "api.request.completed"
       ? event.status >= 500
       : event.result !== "success");

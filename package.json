@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.8.20",
+  "version": "3.8.21",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -37,6 +37,9 @@
     "test:db:communication-delivery:raw": "node --env-file-if-exists=.env.local scripts/test-communication-delivery-expand.mjs",
     "test:db:communication-migration:raw": "node --env-file-if-exists=.env.local scripts/test-communication-delivery-migration-compatibility.mjs",
     "test:db:communication-switch:raw": "node --env-file-if-exists=.env.local scripts/test-communication-delivery-switch.mjs",
+    "test:db:staff-invitation-rls:raw": "node --env-file-if-exists=.env.local scripts/test-staff-invitation-rls.mjs",
+    "test:db:staff-invitation-transaction:raw": "node --env-file-if-exists=.env.local --import tsx scripts/test-staff-invitation-transaction.mjs",
+    "test:db:staff-invitation-rls:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-staff-invitation-rls-postgres.ps1",
     "smoke:v350:timezone": "node --env-file-if-exists=.env.local --import tsx scripts/v350-business-timezone-smoke.ts",
     "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs",
     "db:backup:crypto:smoke": "node --env-file-if-exists=.env.local scripts/backup-crypto-smoke.mjs",

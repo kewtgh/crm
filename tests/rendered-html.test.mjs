@@ -61,7 +61,7 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
     .sort();
   assert.ok(migrationNames.length >= 73);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202608020072_staff_invitation_delivery.sql");
+  assert.equal(migrationNames.at(-1), "202608020073_staff_invitation_system_rls.sql");
   const [migrator, verifier, containerMigration, turnstileMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),
