@@ -1,7 +1,7 @@
 param(
   [string]$Suffix = ([guid]::NewGuid().ToString("N").Substring(0, 10)),
-  [string]$ApplicationImage = "lumina-crm-validation:3.8.18",
-  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.18"
+  [string]$ApplicationImage = "lumina-crm-validation:3.8.19",
+  [string]$OperationsImage = "lumina-crm-ops-validation:3.8.19"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,8 +17,8 @@ $postgresVolume = "$project-postgres-data"
 $objectsVolume = "$project-objects"
 $backupsVolume = "$project-backups"
 $secretRoot = Join-Path $repositoryRoot "work\$project-secrets"
-$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.18"
-$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.18"
+$candidateTag = "lumina-crm-runtime-candidate-$Suffix`:3.8.19"
+$rollbackTag = "lumina-crm-runtime-rollback-$Suffix`:3.8.19"
 $workspaceId = "00000000-0000-4000-8000-000000000001"
 
 foreach ($value in @($project, $backendNetwork, $edgeNetwork, $postgresVolume, $objectsVolume, $backupsVolume)) {
@@ -137,6 +137,7 @@ try {
   Assert-LuminaImage $OperationsImage
   New-Item -ItemType Directory -Path $secretRoot -Force | Out-Null
 
+  $invitationEncryptionKey = New-TestSecret
   Write-SecretFile "postgres-superuser-password.txt" $superuserPassword
   Write-SecretFile "database-bootstrap.env" @"
 DATABASE_ADMIN_URL=postgresql://postgres:$superuserPassword@postgres:5432/lumina_crm
@@ -174,6 +175,7 @@ CRM_WORKSPACE_ID=$workspaceId
 LOGIN_THROTTLE_HASH_SECRET=$(New-TestSecret)
 TRUSTED_DEVICE_HASH_SECRET=$(New-TestSecret)
 TOTP_ENCRYPTION_KEY=$(New-TestSecret)
+INVITATION_CREDENTIAL_ENCRYPTION_KEY=$invitationEncryptionKey
 OBJECT_STORAGE_SIGNING_SECRET=$(New-TestSecret)
 OBJECT_STORAGE_PROVIDER=local
 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/lumina-crm/objects
@@ -191,6 +193,7 @@ WORKER_DATABASE_URL=postgresql://crm_worker:$workerPassword@postgres:5432/lumina
 WORKER_DATABASE_POOL_MAX=2
 CRM_WORKSPACE_ID=$workspaceId
 WORKER_ID=runtime-$Suffix
+INVITATION_CREDENTIAL_ENCRYPTION_KEY=$invitationEncryptionKey
 OBJECT_STORAGE_PROVIDER=local
 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/lumina-crm/objects
 EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.test/delivery

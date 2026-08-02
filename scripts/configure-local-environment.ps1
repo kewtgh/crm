@@ -68,6 +68,7 @@ Set-Default 'CRM_WORKSPACE_ID' '00000000-0000-4000-8000-000000000001'
 Set-Default 'LOGIN_THROTTLE_HASH_SECRET' (New-RandomSecret)
 Set-Default 'TRUSTED_DEVICE_HASH_SECRET' (New-RandomSecret)
 Set-Default 'TOTP_ENCRYPTION_KEY' (New-HexSecret)
+Set-Default 'INVITATION_CREDENTIAL_ENCRYPTION_KEY' (New-HexSecret)
 Set-Default 'OBJECT_STORAGE_SIGNING_SECRET' (New-RandomSecret)
 Set-Value 'OBJECT_STORAGE_PROVIDER' 'local'
 Set-Value 'OBJECT_STORAGE_LOCAL_ROOT' (Join-Path $PWD 'work\object-storage')

@@ -80,6 +80,7 @@ function webPreflight() {
     "LOGIN_THROTTLE_HASH_SECRET",
     "TRUSTED_DEVICE_HASH_SECRET",
     "TOTP_ENCRYPTION_KEY",
+    "INVITATION_CREDENTIAL_ENCRYPTION_KEY",
     "OBJECT_STORAGE_SIGNING_SECRET",
   ]);
   requireDatabaseRole("DATABASE_URL", "crm_app");
@@ -99,6 +100,7 @@ function workerPreflight() {
   requireKeys([
     "CRM_WORKSPACE_ID",
     "OBJECT_STORAGE_PROVIDER",
+    "INVITATION_CREDENTIAL_ENCRYPTION_KEY",
     ...EMAIL_DELIVERY_RUNTIME_KEYS,
   ]);
   rejectPresent([

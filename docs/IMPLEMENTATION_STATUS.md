@@ -1,8 +1,8 @@
-# Implementation status — v3.8.18 release candidate
+# Implementation status — v3.8.19 release candidate
 
 ## Scope
 
-v3.8.18 retains the production shared-host isolation, persistent first-install flow, complete email
+v3.8.19 adds durable staff invitations, safe invitation resend, role-specific session retention, and a non-destructive staff action menu while retaining the production shared-host isolation, persistent first-install flow, complete email
 Worker strict deployment configuration, and canonical rootless Docker/Buildx client namespace. It
 switches communication email from synchronous Web-owned provider I/O to the dedicated leased
 `COMMUNICATION_DELIVERY` processor over `communication_messages`. Web now only accepts durable

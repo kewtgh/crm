@@ -36,6 +36,11 @@ function requestIdFor(request: Request) {
   return supplied && /^[A-Za-z0-9._-]{1,80}$/.test(supplied) ? supplied : crypto.randomUUID();
 }
 
+const apiRequestIds = new WeakMap<Request, string>();
+export function apiRequestId(request: Request) {
+  return apiRequestIds.get(request) ?? request.headers.get("x-request-id") ?? "unknown";
+}
+
 export function apiErrorResponse(
   code: string,
   status: number,
@@ -124,6 +129,7 @@ export function apiRoute<Context = unknown>(
 ) {
   return async (request: Request, context: Context) => {
     const requestId = requestIdFor(request);
+    apiRequestIds.set(request, requestId);
     const startedAt = performance.now();
     const route = routeTemplate(new URL(request.url).pathname);
     const complete = async (response: Response, knownErrorCode?:string) => {

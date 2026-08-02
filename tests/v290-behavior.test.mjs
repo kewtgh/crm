@@ -25,6 +25,7 @@ const validEnvironment = {
   LOGIN_THROTTLE_HASH_SECRET: "l".repeat(40),
   TRUSTED_DEVICE_HASH_SECRET: "d".repeat(40),
   TOTP_ENCRYPTION_KEY: "m".repeat(40),
+  INVITATION_CREDENTIAL_ENCRYPTION_KEY: "i".repeat(40),
   OBJECT_STORAGE_SIGNING_SECRET: "o".repeat(40),
 };
 
@@ -122,7 +123,9 @@ test("self-managed identity boundaries retain compensation, CSRF, and session re
   assert.match(apiClient, /INVALID_API_RESPONSE/);
   assert.match(adminUsers, /app_auth\.accounts/);
   assert.match(adminUsers, /AWAITING_EMAIL_CONFIRMATION/);
-  assert.match(adminUsers, /INVITATION_EMAIL_DELIVERY_UNCONFIRMED/);
+  assert.match(adminUsers, /INVITATION_QUEUED/);
+  assert.match(adminUsers, /notification_outbox/);
+  assert.doesNotMatch(adminUsers, /fetch\(endpoint/);
   assert.doesNotMatch(adminUsers, /CREATE_ROLLED_BACK/);
   assert.doesNotMatch(adminUsers, /delete from app_auth\.accounts/);
   assert.match(staffApi, /emailDeliveryStatus === "SENT" \? 201 : 202/);
