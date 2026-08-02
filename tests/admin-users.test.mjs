@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  closeStaffActionMenu,
   staffAccountErrorMessageKey,
   staffCreationMessageKey,
   submitStaffAccount,
@@ -25,6 +26,12 @@ const item = {
   onboardingStatus:"AWAITING_EMAIL_CONFIRMATION",
   invitationDeliveryStatus:"QUEUED",
 };
+
+test("staff action selections close their popup menu immediately", () => {
+  const details = { open:true };
+  closeStaffActionMenu({ closest:() => details });
+  assert.equal(details.open, false);
+});
 
 test("persistent sessions last 15 days for administrators and 30 days for staff", () => {
   assert.equal(persistentSessionMaxAgeForRole("SUPER_ADMIN"), 15 * 24 * 60 * 60);
