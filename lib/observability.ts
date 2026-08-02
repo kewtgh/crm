@@ -29,10 +29,20 @@ export type CaptchaObservabilityEvent = {
   durationMs: number;
 };
 
+export type StaffAccountCreationEvent = {
+  name: "admin.staff_account.create";
+  requestId: string;
+  status: number;
+  result: "created" | "rejected" | "failed";
+  deliveryStatus?: "SENT" | "UNCONFIRMED";
+  errorCode?: string;
+};
+
 export type ObservabilityEvent =
   | ApiRequestObservabilityEvent
   | ApiRequestFailureEvent
-  | CaptchaObservabilityEvent;
+  | CaptchaObservabilityEvent
+  | StaffAccountCreationEvent;
 
 function enabled(value: string | undefined) {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
@@ -54,6 +64,7 @@ export async function emitObservabilityEvent(event: ObservabilityEvent) {
   // This allow-listed envelope never includes request bodies, query strings,
   // cookies, account identifiers, or business-record content.
   const alwaysLog = event.name === "api.request.failed"
+    || event.name === "admin.staff_account.create"
     || (event.name === "api.request.completed"
       ? event.status >= 500
       : event.result !== "success");

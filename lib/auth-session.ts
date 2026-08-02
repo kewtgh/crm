@@ -18,7 +18,7 @@ function cookieBase() {
 
 export function setAuthSessionCookies(
   response: NextResponse,
-  session: Pick<AuthenticatedSession, "token" | "csrfToken" | "maxAge">,
+  session: Pick<AuthenticatedSession, "token" | "csrfToken" | "maxAge" | "persistent">,
 ) {
   const base = cookieBase();
   response.cookies.set(authCookieNames.session, session.token, {
@@ -31,7 +31,7 @@ export function setAuthSessionCookies(
     httpOnly: false,
     maxAge: session.maxAge,
   });
-  response.cookies.set(authCookieNames.persistence, "1", {
+  response.cookies.set(authCookieNames.persistence, session.persistent ? "1" : "0", {
     ...base,
     httpOnly: true,
     maxAge: session.maxAge,

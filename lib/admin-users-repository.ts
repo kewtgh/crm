@@ -1,9 +1,12 @@
+import type { PoolClient } from "pg";
 import type { AppRole } from "./roles";
 import type { AppUser } from "./user";
 import { createAccount } from "./auth/accounts";
+import { hashPassword } from "./auth/password";
 import { withPoolClient } from "./db/pools";
 import { DatabaseRequestError } from "./db/gateway";
 import { applicationOrigin } from "./application-origin.mjs";
+import { encryptInvitationCredential } from "./invitation-credential-crypto.mjs";
 
 export type StaffUserRecord = {
   id: string;
@@ -16,9 +19,11 @@ export type StaffUserRecord = {
   lastSignInAt: string | null;
   mfaEnabled: boolean;
   onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" | "ACTIVE";
+  invitationDeliveryStatus: StaffInvitationStatus | null;
 };
 
 export type StaffInvitationDeliveryStatus = "SENT" | "UNCONFIRMED";
+export type StaffInvitationStatus = "QUEUED" | "SENT" | "FAILED" | "UNCERTAIN";
 
 type StaffRow = {
   id: string;
@@ -32,6 +37,7 @@ type StaffRow = {
   mfa_enabled: boolean;
   membership_must_change_password: boolean;
   total_count: number | string;
+  invitation_delivery_status: StaffInvitationStatus | null;
 };
 
 function mapStaff(row: StaffRow): StaffUserRecord {
@@ -48,6 +54,7 @@ function mapStaff(row: StaffRow): StaffUserRecord {
     onboardingStatus: row.membership_must_change_password
       ? "AWAITING_EMAIL_CONFIRMATION"
       : "ACTIVE",
+    invitationDeliveryStatus: row.invitation_delivery_status,
   };
 }
 
@@ -87,11 +94,18 @@ export async function listStaffUsers(input: { query?: string; page?: number; pag
           select 1 from app_auth.totp_factors factor
           where factor.user_id = account.id and factor.status = 'VERIFIED'
         ) as mfa_enabled,
-        count(*) over() as total_count
+        count(*) over() as total_count,
+        invitation.invitation_delivery_status
       from app_auth.accounts account
       join public.user_profiles profile on profile.user_id = account.id
       join public.workspace_memberships membership
         on membership.user_id = account.id and membership.workspace_id = $1
+      left join lateral (
+        select delivery.status as invitation_delivery_status
+        from public.staff_invitation_deliveries delivery
+        where delivery.workspace_id=membership.workspace_id and delivery.user_id=account.id
+        order by delivery.created_at desc limit 1
+      ) invitation on true
       where $2 = ''
         or profile.username::text ilike '%' || $2 || '%'
         or profile.display_name_zh ilike '%' || $2 || '%'
@@ -125,11 +139,18 @@ export async function getStaffUser(userId: string): Promise<StaffUserRecord> {
           select 1 from app_auth.totp_factors factor
           where factor.user_id = account.id and factor.status = 'VERIFIED'
         ) as mfa_enabled,
-        1 as total_count
+        1 as total_count,
+        invitation.invitation_delivery_status
       from app_auth.accounts account
       join public.user_profiles profile on profile.user_id = account.id
       join public.workspace_memberships membership
         on membership.user_id = account.id and membership.workspace_id = $2
+      left join lateral (
+        select delivery.status as invitation_delivery_status
+        from public.staff_invitation_deliveries delivery
+        where delivery.workspace_id=membership.workspace_id and delivery.user_id=account.id
+        order by delivery.created_at desc limit 1
+      ) invitation on true
       where account.id = $1
       limit 1
     `,
@@ -162,50 +183,50 @@ function generateTemporaryPassword() {
   return generated.join("");
 }
 
-async function deliverTemporaryCredentials(
+async function queueInvitation(
+  client: PoolClient,
   input: CreateStaffInput,
-  username: string,
+  userId: string,
+  actorId: string,
   temporaryPassword: string,
-): Promise<StaffInvitationDeliveryStatus> {
-  const endpoint = process.env.EMAIL_DELIVERY_WEBHOOK_URL;
-  if (!endpoint) {
-    throw new DatabaseRequestError(
-      503,
-      "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED",
-      "Account email delivery is not configured",
-    );
-  }
+  requestKey: string,
+) {
+  const existing = await client.query<{ id: string; status: StaffInvitationStatus }>(
+    `select id,status from public.staff_invitation_deliveries
+     where requested_by=$1 and user_id=$2 and request_key=$3`,
+    [actorId, userId, requestKey],
+  );
+  if (existing.rows[0]) return existing.rows[0];
   const deliveryId = crypto.randomUUID();
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "idempotency-key": deliveryId,
-      ...(process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
-        ? { authorization: `Bearer ${process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN}` }
-        : {}),
-    },
-    body: JSON.stringify({
-      id: deliveryId,
-      to: input.email.trim().toLowerCase(),
-      template: "staff-account-created",
-      payload: {
-        username,
-        temporaryPassword,
-        loginUrl: new URL("/login", applicationOrigin()).toString(),
-        displayNameZh: input.displayNameZh,
-        displayNameEn: input.displayNameEn,
-        mustChangePassword: true,
-        mfaRequired: input.role === "ADMIN",
-      },
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(10_000),
-  }).catch(() => null);
-  if (!response?.ok) {
-    return "UNCONFIRMED";
-  }
-  return "SENT";
+  const encryptedCredential = encryptInvitationCredential(temporaryPassword);
+  await client.query(
+    `insert into public.staff_invitation_deliveries(
+       id,workspace_id,user_id,requested_by,request_key,outbox_id,status
+     ) values($1,$2,$3,$4,$5,$1,'QUEUED')`,
+    [deliveryId, configuredWorkspaceId(), userId, actorId, requestKey],
+  );
+  await client.query(
+    `insert into public.notification_outbox(
+       id,workspace_id,recipient_id,channel,template_key,payload
+     ) values($1,$2,$3,'EMAIL','staff-account-created',$4)`,
+    [deliveryId, configuredWorkspaceId(), userId, {
+      invitationDeliveryId: deliveryId,
+      username: input.username.trim().toLowerCase(),
+      encryptedTemporaryPassword: encryptedCredential,
+      loginUrl: new URL("/login", applicationOrigin()).toString(),
+      displayNameZh: input.displayNameZh.trim(),
+      displayNameEn: input.displayNameEn.trim(),
+      mustChangePassword: true,
+      mfaRequired: input.role === "ADMIN",
+    }],
+  );
+  await client.query(
+    `insert into public.audit_events(
+       workspace_id,actor_id,entity_type,entity_id,action,after_data
+     ) values($1,$2,'staff_user',$3,'INVITATION_QUEUED',$4)`,
+    [configuredWorkspaceId(), actorId, userId, { deliveryId, deliveryStatus: "QUEUED" }],
+  );
+  return { id: deliveryId, status: "QUEUED" as const };
 }
 
 export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
@@ -214,13 +235,6 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       403,
       "ROLE_ASSIGNMENT_FORBIDDEN",
       "Only a super administrator can create an administrator",
-    );
-  }
-  if (!process.env.EMAIL_DELIVERY_WEBHOOK_URL) {
-    throw new DatabaseRequestError(
-      503,
-      "ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED",
-      "Account email delivery is not configured",
     );
   }
   const username = input.username.trim().toLowerCase();
@@ -257,31 +271,20 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
             },
           ],
         );
+        await queueInvitation(
+          client,
+          input,
+          userId,
+          actor.id,
+          temporaryPassword,
+          `create:${userId}`,
+        );
       },
     });
   } catch (error) {
     normalizeWriteError(error);
   }
 
-  const emailDeliveryStatus = await deliverTemporaryCredentials(
-    input,
-    username,
-    temporaryPassword,
-  );
-  await withPoolClient("system", (client) => client.query(
-    `insert into public.audit_events(
-      workspace_id, actor_id, entity_type, entity_id, action, after_data
-    ) values($1, $2, 'staff_user', $3, $4, $5)`,
-    [
-      workspaceId,
-      actor.id,
-      created.id,
-      emailDeliveryStatus === "SENT"
-        ? "INVITATION_EMAIL_SENT"
-        : "INVITATION_EMAIL_DELIVERY_UNCONFIRMED",
-      { deliveryStatus: emailDeliveryStatus },
-    ],
-  )).catch(() => undefined);
   return {
     item: {
       id: created.id,
@@ -294,9 +297,86 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       lastSignInAt: null,
       mfaEnabled: false,
       onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" as const,
+      invitationDeliveryStatus: "QUEUED" as const,
     },
-    emailDeliveryStatus,
+    emailDeliveryStatus: "UNCONFIRMED" as StaffInvitationDeliveryStatus,
   };
+}
+
+export async function resendStaffInvitation(
+  userId: string,
+  requestKey: string,
+  actor: AppUser,
+) {
+  const workspaceId = configuredWorkspaceId();
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const result = await withPoolClient("system", async (client) => {
+    await client.query("begin");
+    try {
+      const targetResult = await client.query<{
+        username: string; email: string; display_name_zh: string; display_name_en: string;
+        role: Exclude<AppRole, "SUPER_ADMIN">; account_pending: boolean; membership_pending: boolean;
+      }>(
+        `select profile.username::text,account.email::text,profile.display_name_zh,profile.display_name_en,
+                membership.role,account.must_change_password as account_pending,
+                membership.must_change_password as membership_pending
+         from app_auth.accounts account
+         join public.user_profiles profile on profile.user_id=account.id
+         join public.workspace_memberships membership on membership.user_id=account.id and membership.workspace_id=$2
+         where account.id=$1 and account.status='ACTIVE' and membership.status='ACTIVE' for update`,
+        [userId, workspaceId],
+      );
+      const target = targetResult.rows[0];
+      if (!target) throw new DatabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
+      const existing = await client.query<{ id: string; status: StaffInvitationStatus }>(
+        `select id,status from public.staff_invitation_deliveries
+         where requested_by=$1 and user_id=$2 and request_key=$3`,
+        [actor.id, userId, requestKey],
+      );
+      if (existing.rows[0]) {
+        await client.query("commit");
+        return existing.rows[0];
+      }
+      if (!target.account_pending && !target.membership_pending) {
+        throw new DatabaseRequestError(409, "STAFF_INVITATION_NOT_PENDING", "Invitation is not pending");
+      }
+      await client.query(
+        `update app_auth.accounts set password_version=password_version+1,
+           must_change_password=true,updated_at=now() where id=$1`,
+        [userId],
+      );
+      await client.query(
+        `insert into app_auth.password_credentials(user_id,password_hash,parameters)
+         values($1,$2,$3) on conflict(user_id) do update set
+           password_hash=excluded.password_hash,parameters=excluded.parameters,updated_at=now()`,
+        [userId, passwordHash, { algorithm: "argon2id", memoryCost: 65_536, timeCost: 3, parallelism: 1 }],
+      );
+      await client.query(
+        "update public.workspace_memberships set must_change_password=true where workspace_id=$1 and user_id=$2",
+        [workspaceId, userId],
+      );
+      await client.query(
+        `update app_auth.sessions set revoked_at=now(),revoked_reason='INVITATION_REISSUED'
+         where user_id=$1 and revoked_at is null`,
+        [userId],
+      );
+      const queued = await queueInvitation(client, {
+        username: target.username,
+        email: target.email,
+        displayNameZh: target.display_name_zh,
+        displayNameEn: target.display_name_en,
+        role: target.role,
+        team: "",
+      }, userId, actor.id, temporaryPassword, requestKey);
+      await client.query("commit");
+      return queued;
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
+  });
+  return { item: await getStaffUser(userId), invitationDeliveryStatus: result.status };
 }
 
 export async function repairStaffIdentity(repairId: string) {

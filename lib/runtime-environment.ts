@@ -59,6 +59,7 @@ export const coreRuntimeEnvironmentSchema = z.object({
   LOGIN_THROTTLE_HASH_SECRET: productionSecret,
   TRUSTED_DEVICE_HASH_SECRET: productionSecret,
   TOTP_ENCRYPTION_KEY: productionSecret,
+  INVITATION_CREDENTIAL_ENCRYPTION_KEY: productionSecret,
   OBJECT_STORAGE_SIGNING_SECRET: productionSecret,
 }).superRefine((value, context) => {
   const appHostname = new URL(value.APP_URL).hostname;
@@ -74,6 +75,7 @@ export const coreRuntimeEnvironmentSchema = z.object({
     ["LOGIN_THROTTLE_HASH_SECRET", value.LOGIN_THROTTLE_HASH_SECRET],
     ["TRUSTED_DEVICE_HASH_SECRET", value.TRUSTED_DEVICE_HASH_SECRET],
     ["TOTP_ENCRYPTION_KEY", value.TOTP_ENCRYPTION_KEY],
+    ["INVITATION_CREDENTIAL_ENCRYPTION_KEY", value.INVITATION_CREDENTIAL_ENCRYPTION_KEY],
     ["OBJECT_STORAGE_SIGNING_SECRET", value.OBJECT_STORAGE_SIGNING_SECRET],
   ] as const;
   secrets.forEach(([key, secret], index) => {
@@ -119,6 +121,7 @@ const s3StorageKeys = [
 ] as const;
 const deliveryKeys = [
   ...EMAIL_DELIVERY_RUNTIME_KEYS,
+  "INVITATION_CREDENTIAL_ENCRYPTION_KEY",
   "OUTBOX_BATCH_SIZE",
   "CALENDAR_DELIVERY_BATCH_SIZE",
   "COMMUNICATION_DELIVERY_BATCH_SIZE",
@@ -172,6 +175,7 @@ const workerBaseEnvironmentSchema = z.object({
 const deliveryEnvironmentSchema = z.object({
   EMAIL_DELIVERY_WEBHOOK_URL: configuredUrl,
   EMAIL_DELIVERY_WEBHOOK_TOKEN: productionSecret,
+  INVITATION_CREDENTIAL_ENCRYPTION_KEY: productionSecret,
   OUTBOX_BATCH_SIZE: boundedPositiveInteger(40),
   CALENDAR_DELIVERY_BATCH_SIZE: boundedPositiveInteger(40),
   COMMUNICATION_DELIVERY_BATCH_SIZE: boundedPositiveInteger(40),

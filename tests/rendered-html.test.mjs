@@ -18,7 +18,7 @@ test("reports incomplete PostgreSQL runtime configuration without throwing", asy
     await import("../lib/runtime-environment.ts");
   const core = inspectCoreRuntimeEnvironment({});
   assert.equal(core.valid, false);
-  for (const key of ["APP_URL", "DATABASE_URL", "SYSTEM_DATABASE_URL", "TOTP_ENCRYPTION_KEY"]) {
+  for (const key of ["APP_URL", "DATABASE_URL", "SYSTEM_DATABASE_URL", "TOTP_ENCRYPTION_KEY", "INVITATION_CREDENTIAL_ENCRYPTION_KEY"]) {
     assert.ok(core.missing.includes(key), `${key} must be required`);
   }
   const worker = inspectWorkerRuntimeEnvironment({});
@@ -61,7 +61,7 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
     .sort();
   assert.ok(migrationNames.length >= 73);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
-  assert.equal(migrationNames.at(-1), "202607310071_async_communication_delivery_switch.sql");
+  assert.equal(migrationNames.at(-1), "202608020072_staff_invitation_delivery.sql");
   const [migrator, verifier, containerMigration, turnstileMigration, businessTimezoneMigration, workerPermissionMigration, businessDateMigration, communicationMigration, backupMigration, profileRlsMigration] = await Promise.all([
     readFile(repositoryFile("scripts/db-migrate.mjs"), "utf8"),
     readFile(repositoryFile("scripts/db-verify-migrations.mjs"), "utf8"),

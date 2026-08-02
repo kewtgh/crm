@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyRound, MailPlus, MoreHorizontal, ShieldCheck, UserRoundPlus, X } from "lucide-react";
+import { KeyRound, MailPlus, MoreHorizontal, RotateCcw, ShieldCheck, UserRoundPlus, X } from "lucide-react";
 import type { StaffInvitationDeliveryStatus, StaffUserRecord } from "@/lib/admin-users-repository";
 import type { AppRole } from "@/lib/roles";
 import { roleMessageKey } from "@/lib/roles";
@@ -12,6 +12,39 @@ import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
 
 const assignableRoles: Exclude<AppRole, "SUPER_ADMIN">[] = ["ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"];
+const createErrorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", STAFF_IDENTITY_TAKEN:"admin.users.error.IDENTITY_TAKEN", RECORD_CONFLICT:"admin.users.error.IDENTITY_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", DATABASE_UNAVAILABLE:"admin.users.error.SERVICE_UNAVAILABLE", UPSTREAM_TIMEOUT:"admin.users.error.SERVICE_UNAVAILABLE", WORKSPACE_NOT_CONFIGURED:"admin.users.error.WORKSPACE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", STAFF_USERS_FAILED:"admin.users.error.SERVICE_UNAVAILABLE", STAFF_USER_CREATE_FAILED:"admin.users.error.SERVICE_UNAVAILABLE" };
+
+export function staffCreationMessageKey(status: StaffInvitationDeliveryStatus) {
+  return status === "SENT" ? "admin.users.created" : "admin.users.createdDeliveryUnconfirmed";
+}
+
+export function staffAccountErrorMessageKey(code: string) {
+  return createErrorKeys[code] ?? "admin.users.error.UNKNOWN";
+}
+
+type CreateStaffResult = { item: StaffUserRecord; emailDeliveryStatus: StaffInvitationDeliveryStatus };
+
+export async function submitStaffAccount({
+  form,
+  payload,
+  request,
+  onCreated,
+}: {
+  form: Pick<HTMLFormElement, "reset">;
+  payload: Record<string, FormDataEntryValue>;
+  request: (payload: Record<string, FormDataEntryValue>) => Promise<CreateStaffResult>;
+  onCreated: (item: StaffUserRecord, deliveryStatus: StaffInvitationDeliveryStatus) => void;
+}) {
+  let result: CreateStaffResult;
+  try {
+    result = await request(payload);
+  } catch (cause) {
+    return { ok: false as const, cause };
+  }
+  form.reset();
+  onCreated(result.item, result.emailDeliveryStatus);
+  return { ok: true as const, result };
+}
 
 export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: StaffUserRecord[]; initialTotal: number }) {
   const { t } = useI18n();
@@ -27,6 +60,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
   const [inviteOpen, setInviteOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const resendKeys = useRef(new Map<string,string>());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,6 +86,26 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     setToast(t(status === "ACTIVE" ? "admin.users.activated" : "admin.users.suspended", { name: `${item.displayNameZh} / ${item.displayNameEn}` }));
   };
 
+  const resendInvitation = async (item: StaffUserRecord) => {
+    const idempotencyKey = resendKeys.current.get(item.id) ?? crypto.randomUUID();
+    resendKeys.current.set(item.id, idempotencyKey);
+    try {
+      const result = await apiFetch<{ item: StaffUserRecord; invitationDeliveryStatus: StaffUserRecord["invitationDeliveryStatus"] }>(
+        `/api/admin/users/${item.id}/resend-invitation`,
+        { method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({ idempotencyKey }) },
+      );
+      resendKeys.current.delete(item.id);
+      setItems((current) => current.map((entry) => entry.id === item.id ? result.item : entry));
+      setReloadKey((value) => value + 1);
+      setToast(t("admin.users.invitationQueued"));
+    } catch (cause) {
+      const code = cause instanceof ApiClientError ? cause.code : "";
+      setLoadError(t(code === "STAFF_INVITATION_NOT_PENDING"
+        ? "admin.users.error.INVITATION_NOT_PENDING"
+        : "admin.users.error.INVITATION_RESEND_FAILED"));
+    }
+  };
+
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return <div className="page-stack">
     <section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.crmUsers")}</p><h1>{t("admin.users.title")}</h1><p>{t("admin.users.description")}</p></div><button className="primary-button" type="button" onClick={() => setInviteOpen(true)}><UserRoundPlus size={17}/>{t("admin.inviteUser")}</button></section>
@@ -59,11 +113,11 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     <section className="surface staff-directory"><div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("admin.users.search")} />{loading && <span role="status">{t("admin.users.loading")}</span>}</div>
       {loadError && <InlineMessage type="error">{loadError}</InlineMessage>}
       <div className="staff-user-head"><span>{t("admin.users.identity")}</span><span>{t("admin.users.account")}</span><span>{t("settings.role")}</span><span>{t("common.mfa")}</span><span>{t("admin.lastLogin")}</span><span>{t("common.actions")}</span></div>
-      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? "admin.users.creationPending" : "common.active")}</small></span><button className="icon-button" type="button" disabled={protectedAccount || item.id === currentUser.id} aria-label={t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })} title={protectedAccount ? t("admin.superAdminProtected") : undefined} onClick={() => updateStatus(item)}><MoreHorizontal size={18}/></button></article>; })}</div>
+      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? `admin.users.invitationStatus.${(item.invitationDeliveryStatus ?? "UNCERTAIN").toLowerCase()}` : "common.active")}</small></span><details className="staff-action-menu"><summary className="icon-button" aria-label={t("common.actions")}><MoreHorizontal size={18}/></summary><div role="menu"><button type="button" role="menuitem" disabled={protectedAccount || item.id === currentUser.id} onClick={() => void updateStatus(item)}>{t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })}</button>{awaitingConfirmation && <button type="button" role="menuitem" onClick={() => void resendInvitation(item)}><RotateCcw size={15}/>{t("admin.users.resendInvitation")}</button>}</div></details></article>; })}</div>
       {!items.length && !loading && <div className="empty-state"><span>{t("admin.users.empty")}</span></div>}
       <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);}}/>
     </section>
-    <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={(item, deliveryStatus) => { setInviteOpen(false); setPage(1); setQuery(""); setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)]); setTotal((current) => current + (items.some((entry) => entry.id === item.id) ? 0 : 1)); setReloadKey((value) => value + 1); setToast(t(deliveryStatus === "SENT" ? "admin.users.created" : "admin.users.createdDeliveryUnconfirmed")); }} />
+    <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={(item, deliveryStatus) => { setInviteOpen(false); setPage(1); setQuery(""); setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)]); setTotal((current) => current + (items.some((entry) => entry.id === item.id) ? 0 : 1)); setReloadKey((value) => value + 1); setToast(t(staffCreationMessageKey(deliveryStatus))); }} />
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
 }
@@ -103,19 +157,25 @@ function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: b
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setPending(true); setError(""); setFieldError({});
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
-    try {
-      const result = await apiFetch<{ item: StaffUserRecord; emailDeliveryStatus: StaffInvitationDeliveryStatus }>("/api/admin/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      event.currentTarget.reset(); onCreated(result.item, result.emailDeliveryStatus);
-    } catch (cause) {
-      const errorKeys: Record<string,string> = { INVALID_INPUT:"admin.users.error.INVALID_INPUT", USERNAME_TAKEN:"admin.users.error.USERNAME_TAKEN", STAFF_IDENTITY_TAKEN:"admin.users.error.EMAIL_TAKEN", RECORD_CONFLICT:"admin.users.error.EMAIL_TAKEN", ROLE_ASSIGNMENT_FORBIDDEN:"admin.users.error.ROLE_ASSIGNMENT_FORBIDDEN", ADMIN_SERVICE_NOT_CONFIGURED:"admin.users.error.ADMIN_SERVICE_NOT_CONFIGURED", DATABASE_UNAVAILABLE:"admin.users.error.SERVICE_UNAVAILABLE", UPSTREAM_TIMEOUT:"admin.users.error.SERVICE_UNAVAILABLE", WORKSPACE_NOT_CONFIGURED:"admin.users.error.WORKSPACE_NOT_CONFIGURED", ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED:"admin.users.error.ACCOUNT_EMAIL_DELIVERY_NOT_CONFIGURED", STAFF_USER_CREATE_FAILED:"admin.users.error.SERVICE_UNAVAILABLE" };
+    const outcome = await submitStaffAccount({
+      form:formElement,
+      payload,
+      request:(body) => apiFetch<CreateStaffResult>("/api/admin/users", {
+        method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),
+      }),
+      onCreated,
+    });
+    if (!outcome.ok) {
+      const cause = outcome.cause;
       const code = cause instanceof ApiClientError ? cause.code : "";
       const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
-      const message = t(errorKeys[code] ?? "admin.users.error.UNKNOWN");
+      const message = t(staffAccountErrorMessageKey(code));
       if (field) setFieldError({ [field]: message }); else setError(message);
     }
-    finally { setPending(false); }
+    setPending(false);
   };
 
   return <dialog className="staff-dialog" ref={dialogRef} onClose={closeDialog} onCancel={(event)=>{if(pending)event.preventDefault();}} aria-labelledby="create-staff-title" aria-busy={pending||undefined}>

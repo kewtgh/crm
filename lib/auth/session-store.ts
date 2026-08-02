@@ -7,8 +7,15 @@ import type { AuthorizationContext } from "../db/context";
 export const sessionCookieName = "crm_session";
 export const csrfCookieName = "crm_csrf";
 export const persistentSessionMaxAge = 60 * 60 * 24 * 30;
+export const privilegedPersistentSessionMaxAge = 60 * 60 * 24 * 15;
 const transientSessionMaxAge = 60 * 60 * 12;
 const sessionTouchIntervalMs = 5 * 60 * 1000;
+
+export function persistentSessionMaxAgeForRole(role: AppRole) {
+  return role === "SUPER_ADMIN" || role === "ADMIN"
+    ? privilegedPersistentSessionMaxAge
+    : persistentSessionMaxAge;
+}
 
 type SessionRow = {
   session_id: string;
@@ -34,6 +41,7 @@ export type AuthenticatedSession = {
   token: string;
   csrfToken: string;
   maxAge: number;
+  persistent: boolean;
   user: AppUser;
   authorization: AuthorizationContext;
 };
@@ -133,19 +141,23 @@ export async function loadSession(token: string | null | undefined) {
 export async function createSession({
   userId,
   passwordVersion,
+  role,
   aal = "aal1",
   persistent,
   request,
 }: {
   userId: string;
   passwordVersion: number;
+  role: AppRole;
   aal?: "aal1" | "aal2";
   persistent: boolean;
   request?: Request;
 }) {
   const token = randomOpaqueToken();
   const csrfToken = randomOpaqueToken(24);
-  const maxAge = persistent ? persistentSessionMaxAge : transientSessionMaxAge;
+  const maxAge = persistent
+    ? persistentSessionMaxAgeForRole(role)
+    : transientSessionMaxAge;
   const source = request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
     ?? request?.headers.get("x-real-ip")
     ?? "";
@@ -176,7 +188,7 @@ export async function createSession({
     "update app_auth.accounts set last_sign_in_at = now(), updated_at = now() where id = $1",
     [userId],
   );
-  return { id: result.rows[0].id, token, csrfToken, maxAge };
+  return { id: result.rows[0].id, token, csrfToken, maxAge, persistent };
 }
 
 export async function elevateSession(token: string, aal: "aal2") {

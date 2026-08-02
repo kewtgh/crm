@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { authCookieNames } from "@/lib/auth";
 import {
   clearAuthSessionCookies,
-  persistentSessionMaxAge,
   setAuthSessionCookies,
 } from "@/lib/auth-session";
 import {
   csrfCookieName,
   loadSession,
+  persistentSessionMaxAgeForRole,
   rotateSessionToken,
 } from "@/lib/auth/session-store";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
@@ -52,8 +52,9 @@ export async function GET(request: Request) {
   setAuthSessionCookies(response, {
     token: nextToken,
     csrfToken,
-    maxAge: cookieStore.get(authCookieNames.persistence)
-      ? persistentSessionMaxAge
+    persistent: cookieStore.get(authCookieNames.persistence)?.value === "1",
+    maxAge: cookieStore.get(authCookieNames.persistence)?.value === "1"
+      ? persistentSessionMaxAgeForRole(session.user.role)
       : 60 * 60 * 12,
   });
   response.headers.set("cache-control", "no-store");

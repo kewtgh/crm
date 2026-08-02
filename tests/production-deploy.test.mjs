@@ -454,6 +454,7 @@ CRM_BACKUP_DB_PASSWORD=backup-role-password
 TURNSTILE_SECRET_KEY=turnstile-secret-value
 EMAIL_DELIVERY_WEBHOOK_TOKEN=mail-delivery-token
 EMAIL_DELIVERY_WEBHOOK_URL=https://mailer.example.test/delivery
+INVITATION_CREDENTIAL_ENCRYPTION_KEY=invitation-credential-encryption-secret
 BACKUP_ENCRYPTION_KEY=backup-encryption-key
 `;
   const secrets = extractSensitiveEnvironmentValues(environment);
@@ -513,6 +514,9 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
     }
     assert.doesNotMatch(template, /^(?:RESEND_API_KEY|LUMINA_WEBHOOK_TOKEN)=/m);
   }
+  for (const template of [productionEnvironment, workerEnvironment]) {
+    assert.match(template, /^INVITATION_CREDENTIAL_ENCRYPTION_KEY=/m);
+  }
   assert.doesNotMatch(emailWorkerDeployEnvironment, /^(?:EMAIL_DELIVERY_WEBHOOK_URL|EMAIL_DELIVERY_WEBHOOK_TOKEN|RESEND_API_KEY|LUMINA_WEBHOOK_TOKEN)=/m);
   assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/web_runtime_env/);
   assert.match(compose, /LUMINA_ENV_FILES: \/run\/secrets\/worker_runtime_env/);
@@ -527,6 +531,7 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
   assert.match(entrypoint, /function workerPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_URL=https:\/\/mailer\.example\.test\/delivery/g) ?? []).length, 2);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_TOKEN=\$emailDeliveryToken/g) ?? []).length, 2);
+  assert.equal((runtimeFixture.match(/INVITATION_CREDENTIAL_ENCRYPTION_KEY=\$invitationEncryptionKey/g) ?? []).length, 2);
   assert.match(healthRoute, /externallyHealthy:environment\.emailDeliveryExternallyHealthy/);
   assert.match(healthRoute, /configurationBoundary:"worker"/);
   assert.doesNotMatch(healthRoute, /fetch\([^)]*EMAIL_DELIVERY/);

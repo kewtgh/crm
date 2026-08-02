@@ -56,6 +56,7 @@ async function post(request: Request) {
   const session = await createSession({
     userId: identity.id,
     passwordVersion: identity.passwordVersion,
+    role: identity.role,
     persistent: pending.remember,
     request,
   });

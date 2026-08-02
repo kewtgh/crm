@@ -592,6 +592,7 @@ test("every repository email template key has an explicit tested mapping", async
   const directFiles = [
     "lib/admin-users-repository.ts",
     "app/api/communications/route.ts",
+    "scripts/process-communication-deliveries.mjs",
   ];
   for (const file of directFiles) {
     const contents = await readFile(path.join(repositoryRoot, file), "utf8");
@@ -611,7 +612,15 @@ test("every repository email template key has an explicit tested mapping", async
     path.join(repositoryRoot, "lib", "admin-users-repository.ts"),
     "utf8",
   );
-  assert.match(staffSource, /"idempotency-key": deliveryId/);
+  const outboxWorkerSource = await readFile(
+    path.join(repositoryRoot, "scripts", "process-notification-outbox.mjs"),
+    "utf8",
+  );
+  assert.match(staffSource, /staff-account-created/);
+  discovered.add("staff-account-created");
+  assert.match(staffSource, /encryptedTemporaryPassword/);
+  assert.match(outboxWorkerSource, /idempotencyKey:job\.id/);
+  assert.match(outboxWorkerSource, /decryptInvitationCredential/);
 
   assert.deepEqual([...discovered].sort(), [...TEMPLATE_KEYS].sort());
 

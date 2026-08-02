@@ -100,6 +100,7 @@ try {
   const session = await createSession({
     userId: identity.id,
     passwordVersion: identity.passwordVersion,
+    role: identity.role,
     persistent: false,
   });
   const loaded = await loadSession(session.token);

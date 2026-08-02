@@ -193,7 +193,7 @@ export const zhCN: Messages = {
   "auth.goLogin": "返回登录",
   "auth.remember": "在此设备保持登录",
   "auth.rememberDevice": "记住此设备 30 天",
-  "auth.sessionDuration": "登录会话至少保留 30 天；是否信任此设备单独控制。",
+  "auth.sessionDuration": "选择保持登录后，管理员会话最长 15 天，其他员工最长 30 天；设备信任单独控制。",
   "auth.security.passwordChanged": "密码已更新，其他会话和可信设备已撤销。请使用新密码重新登录。",
   "auth.security.passwordChangedReview": "密码已更新并已退出当前设备，但部分远程会话或可信设备未能确认撤销。重新登录后请在“隐私与设备”中复核。",
   "auth.brandEyebrow": "清晰看见每段关系",

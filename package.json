@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.8.18",
+  "version": "3.8.19",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -23,6 +23,7 @@
     "test:contracts:raw": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs tests/v381-behavior.test.mjs tests/v382-behavior.test.mjs tests/request-security.test.mjs tests/preauth-routes.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
     "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs tests/cloudflare-tunnel-caddy.test.mjs",
+    "test:admin-users": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/admin-users.test.mjs",
     "typecheck": "node scripts/run-bounded.mjs --label typecheck --timeout-seconds 120 --idle-seconds 60 -- npm run typecheck:raw",
     "typecheck:raw": "tsc --noEmit",
     "lint": "node scripts/run-bounded.mjs --label lint --timeout-seconds 180 --idle-seconds 90 -- npm run lint:raw",

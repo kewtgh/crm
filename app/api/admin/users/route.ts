@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createStaffUser, listStaffUsers } from "@/lib/admin-users-repository";
-import { apiRoute, parsePagination, requireApiAal2, requireApiRole } from "@/lib/api";
+import { apiRequestId, apiRoute, parsePagination, requireApiAal2, requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { APP_ROLES } from "@/lib/roles";
 import { DatabaseRequestError } from "@/lib/db/gateway";
+import { emitObservabilityEvent } from "@/lib/observability";
 
 const createSchema = z.object({
   username: z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z][a-z0-9._-]+$/),
@@ -39,10 +40,21 @@ async function post(request: Request) {
   await requireApiAal2();
   try {
     const result = await createStaffUser(parsed.data, actor);
-    return NextResponse.json(result, {
-      status: result.emailDeliveryStatus === "SENT" ? 201 : 202,
+    const status = result.emailDeliveryStatus === "SENT" ? 201 : 202;
+    await emitObservabilityEvent({
+      name:"admin.staff_account.create",requestId:apiRequestId(request),status,
+      result:"created",deliveryStatus:result.emailDeliveryStatus,
     });
-  } catch (error) { return failure(error); }
+    return NextResponse.json(result, { status });
+  } catch (error) {
+    const response = failure(error);
+    const code = error instanceof DatabaseRequestError ? error.code : "STAFF_USERS_FAILED";
+    await emitObservabilityEvent({
+      name:"admin.staff_account.create",requestId:apiRequestId(request),status:response.status,
+      result:response.status<500?"rejected":"failed",errorCode:code,
+    });
+    return response;
+  }
 }
 export const GET=apiRoute(get,"STAFF_USERS_FAILED");
 export const POST=apiRoute(post,"STAFF_USER_CREATE_FAILED");
