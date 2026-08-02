@@ -1,8 +1,10 @@
-# Implementation status — v3.8.23 release candidate
+# Implementation status — v3.8.24 release candidate
 
 ## Scope
 
-v3.8.23 restores the Notification Outbox runtime dependency in the minimal application image,
+v3.8.24 makes the target runtime environment preflight self-contained in a dependency-free
+authoritative core, with no host `tsx` or `node_modules` requirement and stable validator failure
+classification. v3.8.23 restores the Notification Outbox runtime dependency in the minimal application image,
 adds an in-image runtime-closure gate, and preserves safe Worker module-load diagnostics. v3.8.22
 replaces the staff action `details/summary` control with a controlled menu and requires an
 explicit confirmation dialog before any account status mutation. v3.8.21 added the missing
@@ -45,6 +47,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - a target-checkout runtime-schema preflight plus metadata validation for fixed Compose secret sources, with host directory
   traversal restricted by `root:lumina-crm`/`0750` and container-readable regular files fixed at
   `root:lumina-crm`/`0644` for runtime UID/GID `10001:10001`;
+- a Node-built-in-only target runtime contract shared by Web, Worker, and the pre-build deploy
+  preflight, including feature groups, external-work budgets, and invitation-key independence;
 - corrected Compose/rootless disk monitoring with strict threshold configuration;
 - strict remote/local backup retention and paired encrypted database/object verification;
 - CSRF-aware secure sign-out with pending, error, fallback redirect, and Chromium coverage;
@@ -78,7 +82,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
 - synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.23; the independently deployed Cloudflare Worker code and metadata are unchanged;
+  version 3.8.24; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 
@@ -93,6 +97,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Communication delivery Phase 2 SQL behavior | Pass: durable queue identity, duplicate idempotency, Worker claim/start/completion, independent heartbeat/readiness metrics, Operations queue exposure, and retained rollback grants |
 | Verification image `docker build --target verification --output type=cacheonly .` | Pass: containerized build, contracts, and deploy tests completed with `docs/DEPLOYMENT.md` present |
 | Final application image runtime smoke | Pass: final image runs as `10001:10001`; 29 local runtime modules resolved; invitation credential crypto module owner/read/import verified after the minimal application copy |
+| Target runtime preflight without host dependencies | Pass: temporary target checkout contains no `node_modules` or `tsx`; complete Web/Worker contract validates from tracked Node-built-in-only modules |
 | Isolated production Compose runtime | Pass: 76 migrations, Web/Worker health, communication heartbeat-aware readiness, stale-worker failure, PostgreSQL recovery, forward-schema rollback, volume preservation and cleanup |
 | Email delivery Worker `npm ci` | Pass: install completed and 35 packages audited; npm reported 0 vulnerabilities |
 | Email delivery Worker `npm test` | Pass: 61/61 |
@@ -101,10 +106,10 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 61/61 application-runtime/target-runtime/version/rootless Compose/deploy/secret-source/atomic-switch/BuildKit/Tunnel contracts |
+| `npm run test:deploy:raw` | Pass: 69/69 application-runtime/target-runtime/version/rootless Compose/deploy/secret-source/atomic-switch/BuildKit/Tunnel contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
-| `npm run test:contracts:raw` | Pass: 66 application contracts + 8 CAPTCHA contracts |
+| `npm run test:contracts:raw` | Pass: 67 application contracts + 8 CAPTCHA contracts |
 | Tracked-tree production identifier / retired Env / deployment-command scans | Pass |
 | `git diff --check` | Pass before release commit |
 
