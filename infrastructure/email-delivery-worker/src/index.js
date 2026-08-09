@@ -152,11 +152,44 @@ function providerFetchFailureType(error) {
   return "FETCH_OTHER";
 }
 
+function providerHeaders(configuration, idempotencyKey, HeadersImplementation) {
+  let headers;
+  try {
+    headers = new HeadersImplementation();
+  } catch (error) {
+    return {
+      failure: {
+        providerHeader: "AUTHORIZATION",
+        providerErrorName: safeProviderErrorName(error),
+      },
+    };
+  }
+  const definitions = [
+    ["AUTHORIZATION", "authorization", `Bearer ${configuration.apiKey}`],
+    ["CONTENT_TYPE", "content-type", "application/json"],
+    ["IDEMPOTENCY_KEY", "idempotency-key", idempotencyKey],
+    ["USER_AGENT", "user-agent", PROVIDER_USER_AGENT],
+  ];
+  for (const [providerHeader, name, value] of definitions) {
+    try {
+      headers.set(name, value);
+    } catch (error) {
+      return {
+        failure: {
+          providerHeader,
+          providerErrorName: safeProviderErrorName(error),
+        },
+      };
+    }
+  }
+  return { headers };
+}
+
 function providerRequest(
   body,
   rendered,
   configuration,
-  idempotencyKey,
+  headers,
   providerTimeoutMs,
   RequestImplementation,
 ) {
@@ -170,14 +203,8 @@ function providerRequest(
   if (configuration.replyTo) providerBody.reply_to = configuration.replyTo;
   return new RequestImplementation(RESEND_ENDPOINT, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${configuration.apiKey}`,
-      "content-type": "application/json",
-      "idempotency-key": idempotencyKey,
-      "user-agent": PROVIDER_USER_AGENT,
-    },
+    headers,
     body: JSON.stringify(providerBody),
-    cache: "no-store",
     redirect: "error",
     signal: AbortSignal.timeout(providerTimeoutMs),
   });
@@ -188,6 +215,7 @@ async function deliver(request, {
   fetchImplementation,
   logger,
   providerTimeoutMs,
+  HeadersImplementation,
   RequestImplementation,
 }) {
   if (!await authorized(request, configuration.webhookToken)) {
@@ -225,13 +253,32 @@ async function deliver(request, {
     return errorResponse(422, "TEMPLATE_RENDER_FAILED");
   }
 
+  const providerHeaderResult = providerHeaders(
+    configuration,
+    idempotencyKey,
+    HeadersImplementation,
+  );
+  if (providerHeaderResult.failure) {
+    safeLog(logger, {
+      event: "email_delivery",
+      requestId: parsed.body.id,
+      template: parsed.body.template,
+      httpStatus: 503,
+      providerResult: "unavailable",
+      providerFailureType: "PROVIDER_HEADER_CONSTRUCTION_FAILED",
+      providerHeader: providerHeaderResult.failure.providerHeader,
+      providerErrorName: providerHeaderResult.failure.providerErrorName,
+    });
+    return errorResponse(503, "PROVIDER_UNAVAILABLE");
+  }
+
   let outboundProviderRequest;
   try {
     outboundProviderRequest = providerRequest(
       parsed.body,
       rendered,
       configuration,
-      idempotencyKey,
+      providerHeaderResult.headers,
       providerTimeoutMs,
       RequestImplementation,
     );
@@ -314,12 +361,16 @@ async function deliver(request, {
 
 export function createEmailDeliveryWorker({
   fetchImplementation = globalThis.fetch,
+  HeadersImplementation = globalThis.Headers,
   logger = console,
   providerTimeoutMs = 15_000,
   RequestImplementation = globalThis.Request,
 } = {}) {
   if (typeof fetchImplementation !== "function") {
     throw new Error("FETCH_IMPLEMENTATION_REQUIRED");
+  }
+  if (typeof HeadersImplementation !== "function") {
+    throw new Error("HEADERS_IMPLEMENTATION_REQUIRED");
   }
   if (typeof RequestImplementation !== "function") {
     throw new Error("REQUEST_IMPLEMENTATION_REQUIRED");
@@ -348,6 +399,7 @@ export function createEmailDeliveryWorker({
       return deliver(request, {
         configuration,
         fetchImplementation,
+        HeadersImplementation,
         logger,
         providerTimeoutMs,
         RequestImplementation,

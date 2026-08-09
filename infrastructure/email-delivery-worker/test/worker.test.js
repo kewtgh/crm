@@ -265,6 +265,8 @@ test("malformed Resend API key configuration fails closed", async (t) => {
     ` ${RESEND_KEY}`,
     `${RESEND_KEY}\t`,
     `${RESEND_KEY}\u0000suffix`,
+    `${RESEND_KEY}é`,
+    `${RESEND_KEY}密钥`,
   ];
   for (const apiKey of invalidApiKeys) {
     await t.test(typeof apiKey === "string" ? JSON.stringify(apiKey) : String(apiKey), async () => {
@@ -467,16 +469,29 @@ test("payload cannot inject HTML or provider envelope fields", async () => {
 
 test("a valid request invokes Resend exactly once", async () => {
   const provider = providerDouble();
-  const worker = createEmailDeliveryWorker({ fetchImplementation: provider.fetchImplementation });
+  let requestInit;
+  class CapturingRequest extends Request {
+    constructor(input, init) {
+      requestInit = init;
+      super(input, init);
+    }
+  }
+  const worker = createEmailDeliveryWorker({
+    fetchImplementation: provider.fetchImplementation,
+    RequestImplementation: CapturingRequest,
+  });
   const response = await worker.fetch(deliveryRequest(), environment());
   assert.equal(response.status, 200);
   assert.equal(provider.calls.length, 1);
   assert.equal(provider.calls[0].url, "https://api.resend.com/emails");
   assert.equal(provider.calls[0].request instanceof Request, true);
   assert.equal(provider.calls[0].request.method, "POST");
-  assert.equal(provider.calls[0].request.cache, "no-store");
+  assert.equal(Object.hasOwn(requestInit, "cache"), false);
+  assert.equal(requestInit.headers instanceof Headers, true);
+  assert.equal(provider.calls[0].request.cache, "default");
   assert.equal(provider.calls[0].request.redirect, "error");
   assert.equal(provider.calls[0].request.signal instanceof AbortSignal, true);
+  assert.equal(provider.calls[0].request.headers.get("authorization"), `Bearer ${RESEND_KEY}`);
   assert.equal(provider.calls[0].request.headers.get("user-agent"), "lumina-mail-delivery/1.0");
 });
 
@@ -614,6 +629,92 @@ test("provider request construction failure is classified without leaking except
     httpStatus: 503,
     providerResult: "unavailable",
     providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
+    providerErrorName: "TypeError",
+  });
+  assert.equal(lines.join("\n").includes(marker), false);
+});
+
+test("provider header construction failures expose only bounded safe evidence", async (t) => {
+  const cases = [
+    ["AUTHORIZATION", "authorization"],
+    ["CONTENT_TYPE", "content-type"],
+    ["IDEMPOTENCY_KEY", "idempotency-key"],
+    ["USER_AGENT", "user-agent"],
+  ];
+  for (const [providerHeader, failingName] of cases) {
+    await t.test(providerHeader, async () => {
+      const lines = [];
+      const marker = `header-error-secret-${failingName}`;
+      class ThrowingHeaders extends Headers {
+        set(name, value) {
+          if (name === failingName) throw new TypeError(marker);
+          return super.set(name, value);
+        }
+      }
+      const worker = createEmailDeliveryWorker({
+        fetchImplementation: async () => {
+          assert.fail("fetch must not run when provider header construction fails");
+        },
+        HeadersImplementation: ThrowingHeaders,
+        logger: { info: (line) => lines.push(line) },
+      });
+      const response = await worker.fetch(deliveryRequest({
+        body: deliveryBody({
+          template: "staff-account-created",
+          payload: samplePayloads()["staff-account-created"],
+        }),
+      }), environment());
+      assert.equal(response.status, 503);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "PROVIDER_UNAVAILABLE" },
+      });
+      assert.deepEqual(JSON.parse(lines.at(-1)), {
+        event: "email_delivery",
+        requestId: "job-123",
+        template: "staff-account-created",
+        httpStatus: 503,
+        providerResult: "unavailable",
+        providerFailureType: "PROVIDER_HEADER_CONSTRUCTION_FAILED",
+        providerHeader,
+        providerErrorName: "TypeError",
+      });
+      const log = lines.join("\n");
+      assert.equal(log.includes(marker), false);
+      assert.equal(log.includes(RESEND_KEY), false);
+      assert.equal(log.includes(RECIPIENT), false);
+      assert.equal(log.includes("unit-test-temporary-password"), false);
+      assert.equal(log.includes(`Bearer ${RESEND_KEY}`), false);
+      assert.equal(log.includes("calendar:job:version:INVITE"), false);
+      assert.equal(log.includes("lumina-mail-delivery/1.0"), false);
+    });
+  }
+});
+
+test("provider Headers constructor failure uses the bounded initial header category", async () => {
+  const lines = [];
+  const marker = "headers-constructor-secret-message";
+  class ThrowingHeaders {
+    constructor() {
+      throw new TypeError(marker);
+    }
+  }
+  const worker = createEmailDeliveryWorker({
+    fetchImplementation: async () => {
+      assert.fail("fetch must not run when Headers construction fails");
+    },
+    HeadersImplementation: ThrowingHeaders,
+    logger: { info: (line) => lines.push(line) },
+  });
+  const response = await worker.fetch(deliveryRequest(), environment());
+  assert.equal(response.status, 503);
+  assert.deepEqual(JSON.parse(lines.at(-1)), {
+    event: "email_delivery",
+    requestId: "job-123",
+    template: "device-verification",
+    httpStatus: 503,
+    providerResult: "unavailable",
+    providerFailureType: "PROVIDER_HEADER_CONSTRUCTION_FAILED",
+    providerHeader: "AUTHORIZATION",
     providerErrorName: "TypeError",
   });
   assert.equal(lines.join("\n").includes(marker), false);
