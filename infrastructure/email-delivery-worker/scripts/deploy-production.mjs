@@ -1,9 +1,11 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   chmod,
   lstat,
   mkdtemp,
   readFile,
+  rename,
   rm,
   stat,
   writeFile,
@@ -12,6 +14,7 @@ import { createRequire } from "node:module";
 import { isIP } from "node:net";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -45,6 +48,10 @@ const requiredKeys = [...supportedKeys].filter((key) => key !== "EMAIL_REPLY_TO"
 const placeholderWords = /(?:^|[._\s/-])(example|placeholder|replace|change-me)(?:$|[._\s/-])/i;
 const maxWranglerErrorDetailBytes = 8_000;
 const require = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
+const sourceCommitPattern = /^[a-f0-9]{40}$/;
+const cloudflareIdentifierPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+const deploymentEvidenceFilename = "last-success.json";
 
 export class ProductionConfigurationError extends Error {
   constructor(code) {
@@ -493,13 +500,21 @@ function wranglerExecutable() {
   return path.resolve(path.dirname(packageJsonPath), relativeBin);
 }
 
-export function buildWranglerArguments(temporaryConfig, { dryRun = false } = {}) {
+export function buildWranglerArguments(
+  temporaryConfig,
+  { dryRun = false, sourceCommit } = {},
+) {
+  if (!sourceCommitPattern.test(sourceCommit ?? "")) fail("SOURCE_COMMIT_INVALID");
   const args = [
     wranglerExecutable(),
     "deploy",
     "--config",
     temporaryConfig.configPath,
     "--strict",
+    "--tag",
+    sourceCommit,
+    "--message",
+    sourceCommit,
   ];
   if (dryRun) {
     args.push("--dry-run", "--outdir", temporaryConfig.dryRunOutputDirectory);
@@ -570,16 +585,17 @@ export function formatControllerFailure(error) {
 
 async function runWrangler(configuration, temporaryConfig, {
   dryRun,
+  sourceCommit,
   spawnImplementation = spawn,
 }) {
-  const args = buildWranglerArguments(temporaryConfig, { dryRun });
+  const args = buildWranglerArguments(temporaryConfig, { dryRun, sourceCommit });
   const childEnvironment = { ...process.env };
   delete childEnvironment.LUMINA_WEBHOOK_TOKEN;
   delete childEnvironment.RESEND_API_KEY;
   childEnvironment.CLOUDFLARE_ACCOUNT_ID = configuration.CLOUDFLARE_ACCOUNT_ID;
   childEnvironment.CLOUDFLARE_API_TOKEN = configuration.CLOUDFLARE_API_TOKEN;
 
-  await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const child = spawnImplementation(process.execPath, args, {
       cwd: workerDirectory,
       env: childEnvironment,
@@ -587,24 +603,220 @@ async function runWrangler(configuration, temporaryConfig, {
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    let output = "";
-    const collect = (chunk) => {
-      output += chunk.toString();
-      if (output.length > 1_000_000) {
+    let stdout = "";
+    let stderr = "";
+    const collect = (target) => (chunk) => {
+      if (target === "stdout") stdout += chunk.toString();
+      else stderr += chunk.toString();
+      if (stdout.length + stderr.length > 1_000_000) {
         child.kill();
         reject(new Error("WRANGLER_OUTPUT_LIMIT_EXCEEDED"));
       }
     };
-    child.stdout?.on("data", collect);
-    child.stderr?.on("data", collect);
+    child.stdout?.on("data", collect("stdout"));
+    child.stderr?.on("data", collect("stderr"));
     child.on("error", () => reject(new Error("WRANGLER_START_FAILED")));
     child.on("close", (code) => {
-      if (code === 0) resolve();
+      if (code === 0) {
+        resolve({
+          stdout: limitedUtf8Tail(sanitizedOutput(stdout, configuration)),
+          stderr: limitedUtf8Tail(sanitizedOutput(stderr, configuration)),
+        });
+      }
       else reject(new WranglerExecutionError(
-        limitedUtf8Tail(sanitizedOutput(output, configuration)),
+        limitedUtf8Tail(sanitizedOutput(`${stdout}\n${stderr}`, configuration)),
       ));
     });
   });
+}
+
+export async function resolveSourceProvenance({
+  execFileImplementation = execFileAsync,
+} = {}) {
+  let head;
+  let statusOutput;
+  try {
+    ({ stdout: head } = await execFileImplementation(
+      "git",
+      ["rev-parse", "--verify", "HEAD"],
+      { cwd: workerDirectory, encoding: "utf8", maxBuffer: 64 * 1024 },
+    ));
+    ({ stdout: statusOutput } = await execFileImplementation(
+      "git",
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      { cwd: workerDirectory, encoding: "utf8", maxBuffer: 64 * 1024 },
+    ));
+  } catch {
+    fail("SOURCE_PROVENANCE_UNAVAILABLE");
+  }
+  const sourceCommit = String(head).trim().toLowerCase();
+  if (!sourceCommitPattern.test(sourceCommit)) fail("SOURCE_COMMIT_INVALID");
+  if (String(statusOutput).length !== 0) fail("SOURCE_WORKTREE_DIRTY");
+  return { sourceCommit };
+}
+
+async function fetchCloudflareResult(configuration, pathname, fetchImplementation) {
+  const url = new URL(
+    `/client/v4/accounts/${encodeURIComponent(configuration.CLOUDFLARE_ACCOUNT_ID)}${pathname}`,
+    "https://api.cloudflare.com",
+  );
+  let response;
+  try {
+    response = await fetchImplementation(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${configuration.CLOUDFLARE_API_TOKEN}`,
+      },
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  if (response.status !== 200) fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  const payload = await response.json().catch(() => null);
+  if (!payload || payload.success !== true || !payload.result) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  return payload.result;
+}
+
+export async function queryWorkerVersions(
+  configuration,
+  fetchImplementation = globalThis.fetch,
+) {
+  const result = await fetchCloudflareResult(
+    configuration,
+    `/workers/scripts/${encodeURIComponent(configuration.WORKER_NAME)}/versions?deployable=true`,
+    fetchImplementation,
+  );
+  if (!Array.isArray(result.items) || result.items.length > 1_000) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  for (const version of result.items) {
+    if (!version
+      || typeof version !== "object"
+      || !cloudflareIdentifierPattern.test(version.id ?? "")
+      || typeof version.metadata?.created_on !== "string") {
+      fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+    }
+  }
+  return result.items;
+}
+
+export function identifyUploadedVersion(beforeVersions, afterVersions, sourceCommit) {
+  if (!sourceCommitPattern.test(sourceCommit ?? "")) fail("SOURCE_COMMIT_INVALID");
+  const beforeIds = new Set(beforeVersions.map((version) => version.id));
+  const candidates = afterVersions.filter((version) => (
+    !beforeIds.has(version.id)
+    && version.annotations?.["workers/tag"] === sourceCommit
+    && version.annotations?.["workers/message"] === sourceCommit
+  ));
+  if (candidates.length !== 1) fail("WORKER_ACTIVE_VERSION_MISMATCH");
+  return candidates[0];
+}
+
+export async function queryActiveDeployment(
+  configuration,
+  fetchImplementation = globalThis.fetch,
+) {
+  const result = await fetchCloudflareResult(
+    configuration,
+    `/workers/scripts/${encodeURIComponent(configuration.WORKER_NAME)}/deployments`,
+    fetchImplementation,
+  );
+  if (!Array.isArray(result.deployments) || result.deployments.length === 0) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  return result.deployments[0];
+}
+
+export function acceptActiveDeployment(deployment, intendedVersionId) {
+  if (!deployment
+    || typeof deployment !== "object"
+    || !Array.isArray(deployment.versions)
+    || !cloudflareIdentifierPattern.test(intendedVersionId ?? "")) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  if (deployment.versions.length > 1) fail("WORKER_TRAFFIC_SPLIT_UNEXPECTED");
+  if (deployment.versions.length !== 1) fail("WORKER_ACTIVE_VERSION_MISMATCH");
+  const [traffic] = deployment.versions;
+  if (!traffic
+    || !cloudflareIdentifierPattern.test(traffic.version_id ?? "")
+    || typeof traffic.percentage !== "number"
+    || !Number.isFinite(traffic.percentage)) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  if (traffic.version_id !== intendedVersionId || traffic.percentage !== 100) {
+    fail("WORKER_ACTIVE_VERSION_MISMATCH");
+  }
+  if (!deployment.created_on || Number.isNaN(Date.parse(deployment.created_on))) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  const deploymentTimestamp = new Date(deployment.created_on).toISOString();
+  if (deployment.id !== undefined
+    && !cloudflareIdentifierPattern.test(deployment.id)) {
+    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  }
+  return {
+    workerVersionId: intendedVersionId,
+    ...(deployment.id === undefined ? {} : { deploymentId: deployment.id }),
+    trafficPercentage: 100,
+    deploymentTimestamp,
+  };
+}
+
+export async function persistDeploymentEvidence(evidence, {
+  runtimeRoot = DEFAULT_PRODUCTION_CONFIG_ROOT,
+  chmodImplementation = chmod,
+  randomUUIDImplementation = randomUUID,
+  renameImplementation = rename,
+  rmImplementation = rm,
+  writeFileImplementation = writeFile,
+} = {}) {
+  const expectedKeys = [
+    "workerVersionId",
+    ...(evidence.deploymentId === undefined ? [] : ["deploymentId"]),
+    "trafficPercentage",
+    "sourceCommit",
+    "deploymentTimestamp",
+  ];
+  if (Object.keys(evidence).join("\n") !== expectedKeys.join("\n")
+    || !cloudflareIdentifierPattern.test(evidence.workerVersionId ?? "")
+    || (evidence.deploymentId !== undefined
+      && !cloudflareIdentifierPattern.test(evidence.deploymentId))
+    || evidence.trafficPercentage !== 100
+    || !sourceCommitPattern.test(evidence.sourceCommit ?? "")
+    || typeof evidence.deploymentTimestamp !== "string"
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(evidence.deploymentTimestamp)
+    || Number.isNaN(Date.parse(evidence.deploymentTimestamp))
+    || new Date(evidence.deploymentTimestamp).toISOString() !== evidence.deploymentTimestamp) {
+    fail("DEPLOYMENT_EVIDENCE_INVALID");
+  }
+  const finalPath = path.join(runtimeRoot, deploymentEvidenceFilename);
+  const temporaryPath = path.join(
+    runtimeRoot,
+    `.last-success-${randomUUIDImplementation()}.tmp`,
+  );
+  try {
+    await writeFileImplementation(temporaryPath, `${JSON.stringify(evidence, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+    await chmodImplementation(temporaryPath, 0o600);
+    await renameImplementation(temporaryPath, finalPath);
+  } catch {
+    try {
+      await rmImplementation(temporaryPath, { force: true });
+    } catch {
+      // Preserve the stable evidence failure below.
+    }
+    fail("DEPLOYMENT_EVIDENCE_PERSIST_FAILED");
+  }
+  return finalPath;
 }
 
 async function verifyHealth(configuration, fetchImplementation = globalThis.fetch) {
@@ -638,11 +850,19 @@ export async function runDeployment({
   preflightCustomDomainImplementation = preflightCustomDomain,
   createTemporaryConfigImplementation = createTemporaryWranglerConfig,
   removeTemporaryConfigImplementation = removeTemporaryWranglerConfig,
+  resolveSourceProvenanceImplementation = resolveSourceProvenance,
+  queryWorkerVersionsImplementation = queryWorkerVersions,
+  queryActiveDeploymentImplementation = queryActiveDeployment,
+  persistDeploymentEvidenceImplementation = persistDeploymentEvidence,
   temporaryConfigOptions = {},
 } = {}) {
   if (platform !== "linux") fail("PRODUCTION_DEPLOY_REQUIRES_LINUX");
   if (!path.isAbsolute(envFile)) fail("ENV_FILE_PATH_MUST_BE_ABSOLUTE");
   await validateEnvFileImplementation(envFile);
+  const sourceProvenance = await resolveSourceProvenanceImplementation();
+  if (!sourceCommitPattern.test(sourceProvenance?.sourceCommit ?? "")) {
+    fail("SOURCE_COMMIT_INVALID");
+  }
 
   let configuration = await loadProductionValues(envFile, { allowTestValues });
   const customDomain = await preflightCustomDomainImplementation(
@@ -659,9 +879,89 @@ export async function runDeployment({
       runtimeRoot,
       ...temporaryConfigOptions,
     });
-    await runWrangler(configuration, temporaryConfig, { dryRun, spawnImplementation });
-    if (!dryRun) await verifyHealth(configuration, fetchImplementation);
-    return { dryRun, workerName: configuration.WORKER_NAME };
+    if (dryRun) {
+      await runWrangler(configuration, temporaryConfig, {
+        dryRun,
+        sourceCommit: sourceProvenance.sourceCommit,
+        spawnImplementation,
+      });
+      return { dryRun, workerName: configuration.WORKER_NAME };
+    }
+
+    const versionsBefore = await queryWorkerVersionsImplementation(
+      configuration,
+      fetchImplementation,
+    );
+    const sourceAtUpload = await resolveSourceProvenanceImplementation();
+    if (sourceAtUpload?.sourceCommit !== sourceProvenance.sourceCommit) {
+      fail("SOURCE_CHANGED_DURING_DEPLOYMENT");
+    }
+    const wranglerResult = await runWrangler(configuration, temporaryConfig, {
+      dryRun,
+      sourceCommit: sourceProvenance.sourceCommit,
+      spawnImplementation,
+    });
+    if (!wranglerResult
+      || typeof wranglerResult.stdout !== "string"
+      || typeof wranglerResult.stderr !== "string") {
+      fail("WRANGLER_RESULT_INVALID");
+    }
+    const sourceAfterUpload = await resolveSourceProvenanceImplementation();
+    if (sourceAfterUpload?.sourceCommit !== sourceProvenance.sourceCommit) {
+      fail("SOURCE_CHANGED_DURING_DEPLOYMENT");
+    }
+
+    const versionsAfter = await queryWorkerVersionsImplementation(
+      configuration,
+      fetchImplementation,
+    );
+    const uploadedVersion = identifyUploadedVersion(
+      versionsBefore,
+      versionsAfter,
+      sourceProvenance.sourceCommit,
+    );
+    const activeDeployment = await queryActiveDeploymentImplementation(
+      configuration,
+      fetchImplementation,
+    );
+    acceptActiveDeployment(activeDeployment, uploadedVersion.id);
+
+    const postDeploymentDomain = await preflightCustomDomainImplementation(
+      configuration,
+      fetchImplementation,
+    );
+    if (postDeploymentDomain.hostname !== customDomain.hostname
+      || postDeploymentDomain.zoneName !== customDomain.zoneName) {
+      fail("CUSTOM_DOMAIN_SET_MISMATCH");
+    }
+    await verifyHealth(configuration, fetchImplementation);
+
+    const finalActiveDeployment = await queryActiveDeploymentImplementation(
+      configuration,
+      fetchImplementation,
+    );
+    const deploymentEvidence = {
+      ...acceptActiveDeployment(finalActiveDeployment, uploadedVersion.id),
+      sourceCommit: sourceProvenance.sourceCommit,
+    };
+    const orderedDeploymentEvidence = {
+      workerVersionId: deploymentEvidence.workerVersionId,
+      ...(deploymentEvidence.deploymentId === undefined
+        ? {}
+        : { deploymentId: deploymentEvidence.deploymentId }),
+      trafficPercentage: deploymentEvidence.trafficPercentage,
+      sourceCommit: deploymentEvidence.sourceCommit,
+      deploymentTimestamp: deploymentEvidence.deploymentTimestamp,
+    };
+    await persistDeploymentEvidenceImplementation(orderedDeploymentEvidence, {
+      runtimeRoot,
+      ...temporaryConfigOptions,
+    });
+    return {
+      dryRun,
+      workerName: configuration.WORKER_NAME,
+      deploymentEvidence: orderedDeploymentEvidence,
+    };
   } finally {
     if (temporaryConfig) {
       await removeTemporaryConfigImplementation(temporaryConfig, temporaryConfigOptions);
@@ -687,7 +987,7 @@ async function main() {
   await runDeployment(options);
   process.stdout.write(options.dryRun
     ? "Worker production dry-run completed without upload.\n"
-    : "Worker deployment and health check completed.\n");
+    : "Worker active-version proof and health check completed.\n");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
