@@ -13,6 +13,7 @@ import {
   acceptActiveDeployment,
   buildProductionWranglerConfig,
   buildWranglerArguments,
+  buildWranglerVersionListArguments,
   createTemporaryWranglerConfig,
   DEFAULT_PRODUCTION_CONFIG_ROOT,
   DEFAULT_PRODUCTION_ENV_FILE,
@@ -120,11 +121,11 @@ function domainAndHealthFetch({
   payload,
   invalidJson = false,
   healthStatus = 200,
-  versionsBefore = [fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) })],
-  versionsAfter = [
-    fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) }),
-    fakeVersion(),
-  ],
+  scriptVersions = [{
+    id: UPLOADED_VERSION_ID,
+    metadata: { created_on: DEPLOYMENT_TIMESTAMP },
+    number: 2,
+  }],
   deployments = [fakeDeployment(), fakeDeployment()],
   deploymentStatus = 200,
   deploymentInvalidJson = false,
@@ -136,12 +137,11 @@ function domainAndHealthFetch({
     capture.requests.push({ options, url: url.toString() });
     if (url.hostname === "api.cloudflare.com") {
       if (url.pathname.endsWith("/versions")) {
-        capture.events ??= [];
-        capture.events.push("versions");
-        const index = capture.versionQueries ?? 0;
-        capture.versionQueries = index + 1;
-        const items = index === 0 ? versionsBefore : versionsAfter;
-        return jsonResponse(deploymentStatus, { success: true, result: { items } });
+        capture.scriptVersionApiRequests = (capture.scriptVersionApiRequests ?? 0) + 1;
+        return jsonResponse(deploymentStatus, {
+          success: true,
+          result: { items: scriptVersions },
+        });
       }
       if (url.pathname.endsWith("/deployments")) {
         capture.events ??= [];
@@ -184,22 +184,45 @@ function domainAndHealthFetch({
   };
 }
 
-function successfulSpawn(capture = {}) {
+function successfulSpawn(capture = {}, {
+  versionsBefore = [fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) })],
+  versionsAfter = [
+    fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) }),
+    fakeVersion(),
+  ],
+} = {}) {
   return (command, args, options) => {
-    capture.command = command;
-    capture.args = args;
-    capture.options = options;
+    capture.wranglerCalls ??= [];
+    capture.wranglerCalls.push({ args, command, options });
+    const versionList = args[1] === "versions" && args[2] === "list";
+    let stdout = "";
+    if (versionList) {
+      const queryIndex = capture.versionQueries ?? 0;
+      capture.versionQueries = queryIndex + 1;
+      stdout = JSON.stringify(queryIndex === 0 ? versionsBefore : versionsAfter);
+    } else {
+      capture.command = command;
+      capture.args = args;
+      capture.options = options;
+    }
     const child = new EventEmitter();
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
     child.kill = () => {};
-    queueMicrotask(() => child.emit("close", 0));
+    queueMicrotask(() => {
+      if (stdout) child.stdout.write(stdout);
+      child.emit("close", 0);
+    });
     return child;
   };
 }
 
 function failingSpawn(output = "safe Wrangler failure detail") {
-  return () => {
+  const versionListSpawn = successfulSpawn({});
+  return (command, args, options) => {
+    if (args[1] === "versions" && args[2] === "list") {
+      return versionListSpawn(command, args, options);
+    }
     const child = new EventEmitter();
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
@@ -213,7 +236,11 @@ function failingSpawn(output = "safe Wrangler failure detail") {
 }
 
 function erroringSpawn() {
-  return () => {
+  const versionListSpawn = successfulSpawn({});
+  return (command, args, options) => {
+    if (args[1] === "versions" && args[2] === "list") {
+      return versionListSpawn(command, args, options);
+    }
     const child = new EventEmitter();
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
@@ -445,6 +472,7 @@ test("Wrangler arguments use only the temporary config and strict deployment sur
     dryRun: true,
     sourceCommit: SOURCE_COMMIT,
   });
+  const versionListArgs = buildWranglerVersionListArguments(temporaryConfig);
   for (const args of [productionArgs, dryRunArgs]) {
     assert.ok(args.includes("--strict"));
     assert.equal(args[args.indexOf("--config") + 1], temporaryConfig.configPath);
@@ -458,6 +486,13 @@ test("Wrangler arguments use only the temporary config and strict deployment sur
   assert.ok(dryRunArgs.includes("--dry-run"));
   assert.equal(dryRunArgs[dryRunArgs.indexOf("--outdir") + 1], temporaryConfig.dryRunOutputDirectory);
   assert.equal(productionArgs.includes("--dry-run"), false);
+  assert.deepEqual(versionListArgs.slice(1), [
+    "versions",
+    "list",
+    "--config",
+    temporaryConfig.configPath,
+    "--json",
+  ]);
 });
 
 test("runtime root is a real 0700 directory owned by the lumina-crm execution user", async (t) => {
@@ -616,7 +651,7 @@ test("Custom Domain preflight rejects API failure, invalid JSON, and invalid con
   }
 });
 
-test("production and dry-run use the same generated config and always clean it", async () => {
+test("annotation-free Scripts Versions API cannot break Wrangler JSON provenance or dry-run", async () => {
   await withTemporaryEnv(async (envFile) => {
     const generated = [];
     for (const dryRun of [false, true]) {
@@ -641,6 +676,7 @@ test("production and dry-run use the same generated config and always clean it",
         });
         assert.deepEqual(capture.persistedEvidence, result.deploymentEvidence);
         assert.equal(capture.versionQueries, 2);
+        assert.equal(capture.scriptVersionApiRequests ?? 0, 0);
         assert.equal(capture.deploymentQueries, 2);
         assert.equal(
           capture.requests.filter((request) => new URL(request.url).pathname.endsWith("/workers/domains")).length,
@@ -690,17 +726,132 @@ test("source provenance requires an exact clean 40-character commit", async (t) 
   });
 });
 
-test("uploaded Worker Version is identified only by API diff and exact source annotations", () => {
+test("dirty or changing source never produces false deployment evidence", async (t) => {
+  await withTemporaryEnv(async (envFile) => {
+    await t.test("dirty before upload", async () => {
+      const capture = {};
+      await assert.rejects(runFixture(envFile, {
+        capture,
+        resolveSourceProvenanceImplementation: async () => {
+          throw new ProductionConfigurationError("SOURCE_WORKTREE_DIRTY");
+        },
+      }), { code: "SOURCE_WORKTREE_DIRTY" });
+      assert.equal(capture.wranglerCalls, undefined);
+      assert.equal(capture.persistedEvidence, undefined);
+    });
+
+    await t.test("source changes while Wrangler deploy runs", async () => {
+      const capture = {};
+      let sourceChecks = 0;
+      let rejected;
+      try {
+        await runFixture(envFile, {
+          capture,
+          resolveSourceProvenanceImplementation: async () => {
+            sourceChecks += 1;
+            return {
+              sourceCommit: sourceChecks < 3 ? SOURCE_COMMIT : "a".repeat(40),
+            };
+          },
+        });
+      } catch (error) {
+        rejected = error;
+      }
+      assert.equal(rejected?.code, "SOURCE_CHANGED_DURING_DEPLOYMENT");
+      assert.equal(sourceChecks, 3);
+      assert.equal(capture.args[1], "deploy");
+      assert.equal(capture.persistedEvidence, undefined);
+      assert.match(
+        formatControllerFailure(rejected),
+        /CONTROL_PLANE_STATE=UPLOAD_SUCCEEDED_BUT_PROVENANCE_UNVERIFIED/,
+      );
+    });
+  });
+});
+
+test("uploaded Worker Version provenance requires one new Wrangler JSON version", async (t) => {
   const before = [fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) })];
   const uploaded = fakeVersion();
   assert.equal(identifyUploadedVersion(before, [...before, uploaded], SOURCE_COMMIT), uploaded);
-  assert.throws(
-    () => identifyUploadedVersion(before, [
+  const unavailableCases = [
+    ["tag mismatch", fakeVersion({ sourceCommit: "b".repeat(40) })],
+    ["message mismatch", {
+      ...uploaded,
+      annotations: { ...uploaded.annotations, "workers/message": "b".repeat(40) },
+    }],
+    ["missing tag", {
+      ...uploaded,
+      annotations: { "workers/message": SOURCE_COMMIT },
+    }],
+    ["missing message", {
+      ...uploaded,
+      annotations: { "workers/tag": SOURCE_COMMIT },
+    }],
+  ];
+  for (const [name, candidate] of unavailableCases) {
+    await t.test(name, () => {
+      assert.throws(
+        () => identifyUploadedVersion(before, [...before, candidate], SOURCE_COMMIT),
+        { code: "WORKER_VERSION_PROVENANCE_UNAVAILABLE" },
+      );
+    });
+  }
+  await t.test("multiple new versions", () => {
+    assert.throws(() => identifyUploadedVersion(before, [
       ...before,
-      fakeVersion({ sourceCommit: "b".repeat(40) }),
-    ], SOURCE_COMMIT),
-    { code: "WORKER_ACTIVE_VERSION_MISMATCH" },
-  );
+      uploaded,
+      fakeVersion({ id: "44444444-4444-4444-8444-444444444444" }),
+    ], SOURCE_COMMIT), { code: "WORKER_VERSION_PROVENANCE_AMBIGUOUS" });
+  });
+});
+
+test("post-upload provenance failures report control-plane split without implying runtime rollback", async (t) => {
+  await withTemporaryEnv(async (envFile) => {
+    const cases = [
+      [
+        "unavailable",
+        [
+          fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) }),
+          fakeVersion({ sourceCommit: "b".repeat(40) }),
+        ],
+        "WORKER_VERSION_PROVENANCE_UNAVAILABLE",
+      ],
+      [
+        "ambiguous",
+        [
+          fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) }),
+          fakeVersion(),
+          fakeVersion({ id: "44444444-4444-4444-8444-444444444444" }),
+        ],
+        "WORKER_VERSION_PROVENANCE_AMBIGUOUS",
+      ],
+    ];
+    for (const [name, versionsAfter, code] of cases) {
+      await t.test(name, async () => {
+        const capture = {};
+        let rejected;
+        try {
+          await runFixture(envFile, {
+            capture,
+            spawnImplementation: successfulSpawn(capture, { versionsAfter }),
+          });
+        } catch (error) {
+          rejected = error;
+        }
+        assert.equal(rejected?.code, code);
+        assert.equal(capture.deploymentQueries ?? 0, 0);
+        assert.equal(capture.healthRequests ?? 0, 0);
+        assert.equal(capture.persistedEvidence, undefined);
+        assert.equal(formatControllerFailure(rejected),
+          `Worker production controller failed: ${code}\n`
+          + "CONTROL_PLANE_STATE=UPLOAD_SUCCEEDED_BUT_PROVENANCE_UNVERIFIED\n"
+          + "WORKER_UPLOAD_COMPLETED=yes\n"
+          + "WORKER_VERSION_ID=unknown\n"
+          + "ACTIVE_DEPLOYMENT_VERIFIED=no\n"
+          + "EVIDENCE_PERSISTED=no\n");
+      });
+    }
+  });
 });
 
 test("active deployment requires exactly the uploaded version at 100 percent", async (t) => {
@@ -735,20 +886,32 @@ test("active deployment requires exactly the uploaded version at 100 percent", a
   });
 });
 
-test("deployment status queries use official JSON APIs and fail closed", async () => {
+test("Wrangler version JSON and Deployment API are independent machine-readable proofs", async () => {
   const capture = {};
   const configuration = validatedValues();
   const fetchImplementation = domainAndHealthFetch({ capture });
-  const versions = await queryWorkerVersions(configuration, fetchImplementation);
+  const temporaryConfig = {
+    configPath: path.join(tmpdir(), "runtime", "wrangler.production.json"),
+  };
+  const versions = await queryWorkerVersions(configuration, temporaryConfig, {
+    spawnImplementation: successfulSpawn(capture),
+  });
   const deployment = await queryActiveDeployment(configuration, fetchImplementation);
   assert.equal(versions.length, 1);
   assert.deepEqual(deployment, fakeDeployment());
-  assert.match(capture.requests[0].url, /\/versions\?deployable=true$/);
-  assert.match(capture.requests[1].url, /\/deployments$/);
-  for (const request of capture.requests) {
-    assert.equal(request.options.method, "GET");
-    assert.equal(request.options.headers.Accept, "application/json");
-  }
+  assert.deepEqual(capture.wranglerCalls[0].args.slice(1), [
+    "versions",
+    "list",
+    "--config",
+    temporaryConfig.configPath,
+    "--json",
+  ]);
+  assert.equal(capture.wranglerCalls[0].options.env.CLOUDFLARE_ACCOUNT_ID, configuration.CLOUDFLARE_ACCOUNT_ID);
+  assert.equal(capture.wranglerCalls[0].options.env.CLOUDFLARE_API_TOKEN, configuration.CLOUDFLARE_API_TOKEN);
+  assert.equal(capture.scriptVersionApiRequests ?? 0, 0);
+  assert.match(capture.requests[0].url, /\/deployments$/);
+  assert.equal(capture.requests[0].options.method, "GET");
+  assert.equal(capture.requests[0].options.headers.Accept, "application/json");
 
   await assert.rejects(queryActiveDeployment(
     configuration,
@@ -763,17 +926,25 @@ test("deployment status queries use official JSON APIs and fail closed", async (
 test("stale healthy Worker cannot satisfy active-version acceptance", async () => {
   await withTemporaryEnv(async (envFile) => {
     const capture = {};
-    await assert.rejects(runFixture(envFile, {
-      capture,
-      fetchImplementation: domainAndHealthFetch({
+    let rejected;
+    try {
+      await runFixture(envFile, {
         capture,
-        deployments: [fakeDeployment({
-          versions: [{ version_id: OLD_VERSION_ID, percentage: 100 }],
-        })],
-      }),
-    }), { code: "WORKER_ACTIVE_VERSION_MISMATCH" });
+        fetchImplementation: domainAndHealthFetch({
+          capture,
+          deployments: [fakeDeployment({
+            versions: [{ version_id: OLD_VERSION_ID, percentage: 100 }],
+          })],
+        }),
+      });
+    } catch (error) {
+      rejected = error;
+    }
+    assert.equal(rejected?.code, "WORKER_ACTIVE_VERSION_MISMATCH");
     assert.equal(capture.healthRequests ?? 0, 0);
     assert.equal(capture.persistedEvidence, undefined);
+    assert.match(formatControllerFailure(rejected), /CONTROL_PLANE_STATE=DEPLOYMENT_NOT_ACTIVE/);
+    assert.match(formatControllerFailure(rejected), new RegExp(`WORKER_VERSION_ID=${UPLOADED_VERSION_ID}`));
   });
 });
 
@@ -846,6 +1017,26 @@ test("deployment evidence persists only the bounded source-to-traffic proof", as
       "sourceCommit",
       "deploymentTimestamp",
     ]);
+
+    const calls = {};
+    await persistDeploymentEvidence(evidence, {
+      runtimeRoot,
+      randomUUIDImplementation: () => "55555555-5555-4555-8555-555555555555",
+      writeFileImplementation: async (target, contents, options) => {
+        calls.write = { contents, options, target };
+      },
+      chmodImplementation: async (target, mode) => {
+        calls.chmod = { mode, target };
+      },
+      renameImplementation: async (source, target) => {
+        calls.rename = { source, target };
+      },
+    });
+    assert.equal(calls.write.options.mode, 0o600);
+    assert.equal(calls.write.options.flag, "wx");
+    assert.equal(calls.chmod.mode, 0o600);
+    assert.equal(calls.rename.source, calls.write.target);
+    assert.equal(path.basename(calls.rename.target), "last-success.json");
   } finally {
     await rm(runtimeRoot, { force: true, recursive: true });
   }
@@ -871,7 +1062,12 @@ test("deployment state failures expose no secret or provider values", async () =
     const rendered = formatControllerFailure(rejected);
     assert.equal(
       rendered,
-      "Worker production controller failed: WORKER_DEPLOYMENT_STATUS_UNAVAILABLE\n",
+      "Worker production controller failed: WORKER_DEPLOYMENT_STATUS_UNAVAILABLE\n"
+        + "CONTROL_PLANE_STATE=ACTIVE_DEPLOYMENT_UNVERIFIED\n"
+        + "WORKER_UPLOAD_COMPLETED=yes\n"
+        + `WORKER_VERSION_ID=${UPLOADED_VERSION_ID}\n`
+        + "ACTIVE_DEPLOYMENT_VERIFIED=no\n"
+        + "EVIDENCE_PERSISTED=no\n",
     );
     assert.equal(rendered.includes(secretMarker), false);
     for (const secret of [
