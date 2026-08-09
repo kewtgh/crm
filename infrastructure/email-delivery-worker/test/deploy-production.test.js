@@ -10,17 +10,23 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
+  acceptActiveDeployment,
   buildProductionWranglerConfig,
   buildWranglerArguments,
   createTemporaryWranglerConfig,
   DEFAULT_PRODUCTION_CONFIG_ROOT,
   DEFAULT_PRODUCTION_ENV_FILE,
   formatControllerFailure,
+  identifyUploadedVersion,
   loadProductionValues,
   parseArguments,
+  persistDeploymentEvidence,
   preflightCustomDomain,
   ProductionConfigurationError,
+  queryActiveDeployment,
+  queryWorkerVersions,
   removeTemporaryWranglerConfig,
+  resolveSourceProvenance,
   runDeployment,
   validateProductionConfigRoot,
   validateProductionEnvFile,
@@ -30,6 +36,11 @@ import {
 const execFileAsync = promisify(execFile);
 const workerRoot = fileURLToPath(new URL("..", import.meta.url));
 const repositoryRoot = path.resolve(workerRoot, "..", "..");
+const SOURCE_COMMIT = "0123456789abcdef0123456789abcdef01234567";
+const OLD_VERSION_ID = "11111111-1111-4111-8111-111111111111";
+const UPLOADED_VERSION_ID = "22222222-2222-4222-8222-222222222222";
+const DEPLOYMENT_ID = "33333333-3333-4333-8333-333333333333";
+const DEPLOYMENT_TIMESTAMP = "2026-08-10T08:00:00.000Z";
 
 function fakeProductionValues(overrides = {}) {
   return {
@@ -61,6 +72,29 @@ function fakeDomain(overrides = {}) {
   };
 }
 
+function fakeVersion({
+  id = UPLOADED_VERSION_ID,
+  sourceCommit = SOURCE_COMMIT,
+  createdOn = DEPLOYMENT_TIMESTAMP,
+} = {}) {
+  return {
+    id,
+    metadata: { created_on: createdOn },
+    annotations: {
+      "workers/tag": sourceCommit,
+      "workers/message": sourceCommit,
+    },
+  };
+}
+
+function fakeDeployment({
+  id = DEPLOYMENT_ID,
+  versions = [{ version_id: UPLOADED_VERSION_ID, percentage: 100 }],
+  createdOn = DEPLOYMENT_TIMESTAMP,
+} = {}) {
+  return { id, versions, created_on: createdOn };
+}
+
 function asEnvFile(values) {
   return Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n");
 }
@@ -86,6 +120,14 @@ function domainAndHealthFetch({
   payload,
   invalidJson = false,
   healthStatus = 200,
+  versionsBefore = [fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) })],
+  versionsAfter = [
+    fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) }),
+    fakeVersion(),
+  ],
+  deployments = [fakeDeployment(), fakeDeployment()],
+  deploymentStatus = 200,
+  deploymentInvalidJson = false,
   capture = {},
 } = {}) {
   return async (input, options = {}) => {
@@ -93,6 +135,28 @@ function domainAndHealthFetch({
     capture.requests ??= [];
     capture.requests.push({ options, url: url.toString() });
     if (url.hostname === "api.cloudflare.com") {
+      if (url.pathname.endsWith("/versions")) {
+        capture.events ??= [];
+        capture.events.push("versions");
+        const index = capture.versionQueries ?? 0;
+        capture.versionQueries = index + 1;
+        const items = index === 0 ? versionsBefore : versionsAfter;
+        return jsonResponse(deploymentStatus, { success: true, result: { items } });
+      }
+      if (url.pathname.endsWith("/deployments")) {
+        capture.events ??= [];
+        capture.events.push("deployment");
+        const index = capture.deploymentQueries ?? 0;
+        capture.deploymentQueries = index + 1;
+        if (deploymentInvalidJson) {
+          return { status: deploymentStatus, json: async () => { throw new Error("invalid"); } };
+        }
+        const deployment = deployments[Math.min(index, deployments.length - 1)];
+        return jsonResponse(deploymentStatus, {
+          success: true,
+          result: { deployments: deployment ? [deployment] : [] },
+        });
+      }
       if (invalidJson) return { status, json: async () => { throw new Error("invalid"); } };
       if (payload !== undefined) return jsonResponse(status, payload);
       let result = domains;
@@ -110,6 +174,8 @@ function domainAndHealthFetch({
         result_info: { total_count: result.length },
       });
     }
+    capture.events ??= [];
+    capture.events.push("health");
     capture.healthRequests = (capture.healthRequests ?? 0) + 1;
     return {
       status: healthStatus,
@@ -215,6 +281,13 @@ async function runFixture(envFile, {
     fetchImplementation,
     spawnImplementation,
     validateEnvFileImplementation: async () => {},
+    resolveSourceProvenanceImplementation: async () => {
+      capture.sourceChecks = (capture.sourceChecks ?? 0) + 1;
+      return { sourceCommit: SOURCE_COMMIT };
+    },
+    persistDeploymentEvidenceImplementation: async (evidence) => {
+      capture.persistedEvidence = evidence;
+    },
     ...temporaryHarness(capture),
     ...overrides,
   });
@@ -367,11 +440,16 @@ test("Wrangler arguments use only the temporary config and strict deployment sur
     configPath: path.join(tmpdir(), "runtime", "wrangler.production.json"),
     dryRunOutputDirectory: path.join(tmpdir(), "runtime", "dry-run-output"),
   };
-  const productionArgs = buildWranglerArguments(temporaryConfig);
-  const dryRunArgs = buildWranglerArguments(temporaryConfig, { dryRun: true });
+  const productionArgs = buildWranglerArguments(temporaryConfig, { sourceCommit: SOURCE_COMMIT });
+  const dryRunArgs = buildWranglerArguments(temporaryConfig, {
+    dryRun: true,
+    sourceCommit: SOURCE_COMMIT,
+  });
   for (const args of [productionArgs, dryRunArgs]) {
     assert.ok(args.includes("--strict"));
     assert.equal(args[args.indexOf("--config") + 1], temporaryConfig.configPath);
+    assert.equal(args[args.indexOf("--tag") + 1], SOURCE_COMMIT);
+    assert.equal(args[args.indexOf("--message") + 1], SOURCE_COMMIT);
     assert.doesNotMatch(
       args.join("\n"),
       /--name|--var|--route|--domain|--keep-vars|\bsecret\b|\bdelete\b|\bbulk\b/i,
@@ -544,15 +622,266 @@ test("production and dry-run use the same generated config and always clean it",
     for (const dryRun of [false, true]) {
       const capture = {};
       const result = await runFixture(envFile, { capture, dryRun });
-      assert.deepEqual(result, { dryRun, workerName: "unit-test-worker" });
+      if (dryRun) {
+        assert.deepEqual(result, { dryRun, workerName: "unit-test-worker" });
+        assert.equal(capture.persistedEvidence, undefined);
+        assert.equal(capture.versionQueries ?? 0, 0);
+        assert.equal(capture.deploymentQueries ?? 0, 0);
+      } else {
+        assert.deepEqual(result, {
+          dryRun,
+          workerName: "unit-test-worker",
+          deploymentEvidence: {
+            workerVersionId: UPLOADED_VERSION_ID,
+            deploymentId: DEPLOYMENT_ID,
+            trafficPercentage: 100,
+            sourceCommit: SOURCE_COMMIT,
+            deploymentTimestamp: DEPLOYMENT_TIMESTAMP,
+          },
+        });
+        assert.deepEqual(capture.persistedEvidence, result.deploymentEvidence);
+        assert.equal(capture.versionQueries, 2);
+        assert.equal(capture.deploymentQueries, 2);
+        assert.equal(
+          capture.requests.filter((request) => new URL(request.url).pathname.endsWith("/workers/domains")).length,
+          4,
+        );
+      }
       assert.equal(capture.created, 1);
       assert.equal(capture.cleaned, 1);
       assert.equal(capture.generated.preview_urls, false);
       generated.push(capture.generated);
       if (dryRun) assert.equal(capture.healthRequests ?? 0, 0);
-      else assert.equal(capture.healthRequests, 1);
+      else {
+        assert.equal(capture.healthRequests, 1);
+        assert.ok(capture.events.indexOf("deployment") < capture.events.indexOf("health"));
+        assert.ok(capture.events.lastIndexOf("deployment") > capture.events.indexOf("health"));
+      }
     }
     assert.deepEqual(generated[0], generated[1]);
+  });
+});
+
+test("source provenance requires an exact clean 40-character commit", async (t) => {
+  await t.test("clean source", async () => {
+    const calls = [];
+    const result = await resolveSourceProvenance({
+      execFileImplementation: async (command, args, options) => {
+        calls.push({ args, command, options });
+        return { stdout: args[0] === "rev-parse" ? `${SOURCE_COMMIT}\n` : "" };
+      },
+    });
+    assert.deepEqual(result, { sourceCommit: SOURCE_COMMIT });
+    assert.equal(calls.length, 2);
+  });
+  await t.test("dirty source", async () => {
+    await assert.rejects(resolveSourceProvenance({
+      execFileImplementation: async (command, args) => ({
+        stdout: args[0] === "rev-parse" ? SOURCE_COMMIT : " M src/index.js\n",
+      }),
+    }), { code: "SOURCE_WORKTREE_DIRTY" });
+  });
+  await t.test("invalid commit", async () => {
+    await assert.rejects(resolveSourceProvenance({
+      execFileImplementation: async (command, args) => ({
+        stdout: args[0] === "rev-parse" ? "short" : "",
+      }),
+    }), { code: "SOURCE_COMMIT_INVALID" });
+  });
+});
+
+test("uploaded Worker Version is identified only by API diff and exact source annotations", () => {
+  const before = [fakeVersion({ id: OLD_VERSION_ID, sourceCommit: "a".repeat(40) })];
+  const uploaded = fakeVersion();
+  assert.equal(identifyUploadedVersion(before, [...before, uploaded], SOURCE_COMMIT), uploaded);
+  assert.throws(
+    () => identifyUploadedVersion(before, [
+      ...before,
+      fakeVersion({ sourceCommit: "b".repeat(40) }),
+    ], SOURCE_COMMIT),
+    { code: "WORKER_ACTIVE_VERSION_MISMATCH" },
+  );
+});
+
+test("active deployment requires exactly the uploaded version at 100 percent", async (t) => {
+  const accepted = acceptActiveDeployment(fakeDeployment(), UPLOADED_VERSION_ID);
+  assert.deepEqual(accepted, {
+    workerVersionId: UPLOADED_VERSION_ID,
+    deploymentId: DEPLOYMENT_ID,
+    trafficPercentage: 100,
+    deploymentTimestamp: DEPLOYMENT_TIMESTAMP,
+  });
+
+  const mismatches = [
+    ["old version active", [{ version_id: OLD_VERSION_ID, percentage: 100 }]],
+    ["uploaded version at zero", [{ version_id: UPLOADED_VERSION_ID, percentage: 0 }]],
+    ["uploaded version at fifty", [{ version_id: UPLOADED_VERSION_ID, percentage: 50 }]],
+  ];
+  for (const [name, versions] of mismatches) {
+    await t.test(name, () => {
+      assert.throws(
+        () => acceptActiveDeployment(fakeDeployment({ versions }), UPLOADED_VERSION_ID),
+        { code: "WORKER_ACTIVE_VERSION_MISMATCH" },
+      );
+    });
+  }
+  await t.test("two-version traffic split", () => {
+    assert.throws(() => acceptActiveDeployment(fakeDeployment({
+      versions: [
+        { version_id: UPLOADED_VERSION_ID, percentage: 50 },
+        { version_id: OLD_VERSION_ID, percentage: 50 },
+      ],
+    }), UPLOADED_VERSION_ID), { code: "WORKER_TRAFFIC_SPLIT_UNEXPECTED" });
+  });
+});
+
+test("deployment status queries use official JSON APIs and fail closed", async () => {
+  const capture = {};
+  const configuration = validatedValues();
+  const fetchImplementation = domainAndHealthFetch({ capture });
+  const versions = await queryWorkerVersions(configuration, fetchImplementation);
+  const deployment = await queryActiveDeployment(configuration, fetchImplementation);
+  assert.equal(versions.length, 1);
+  assert.deepEqual(deployment, fakeDeployment());
+  assert.match(capture.requests[0].url, /\/versions\?deployable=true$/);
+  assert.match(capture.requests[1].url, /\/deployments$/);
+  for (const request of capture.requests) {
+    assert.equal(request.options.method, "GET");
+    assert.equal(request.options.headers.Accept, "application/json");
+  }
+
+  await assert.rejects(queryActiveDeployment(
+    configuration,
+    domainAndHealthFetch({ deploymentStatus: 503 }),
+  ), { code: "WORKER_DEPLOYMENT_STATUS_UNAVAILABLE" });
+  await assert.rejects(queryActiveDeployment(
+    configuration,
+    domainAndHealthFetch({ deploymentInvalidJson: true }),
+  ), { code: "WORKER_DEPLOYMENT_STATUS_UNAVAILABLE" });
+});
+
+test("stale healthy Worker cannot satisfy active-version acceptance", async () => {
+  await withTemporaryEnv(async (envFile) => {
+    const capture = {};
+    await assert.rejects(runFixture(envFile, {
+      capture,
+      fetchImplementation: domainAndHealthFetch({
+        capture,
+        deployments: [fakeDeployment({
+          versions: [{ version_id: OLD_VERSION_ID, percentage: 100 }],
+        })],
+      }),
+    }), { code: "WORKER_ACTIVE_VERSION_MISMATCH" });
+    assert.equal(capture.healthRequests ?? 0, 0);
+    assert.equal(capture.persistedEvidence, undefined);
+  });
+});
+
+test("post-deployment Custom Domain proof must still match the intended Worker", async () => {
+  await withTemporaryEnv(async (envFile) => {
+    const capture = {};
+    let domainChecks = 0;
+    await assert.rejects(runFixture(envFile, {
+      capture,
+      preflightCustomDomainImplementation: async () => {
+        domainChecks += 1;
+        return domainChecks === 1
+          ? { hostname: "worker.example.invalid", zoneName: "example.invalid" }
+          : { hostname: "other.example.invalid", zoneName: "example.invalid" };
+      },
+    }), { code: "CUSTOM_DOMAIN_SET_MISMATCH" });
+    assert.equal(domainChecks, 2);
+    assert.equal(capture.healthRequests ?? 0, 0);
+    assert.equal(capture.persistedEvidence, undefined);
+  });
+});
+
+test("correct active version still requires strict health and final active proof", async (t) => {
+  await withTemporaryEnv(async (envFile) => {
+    await t.test("health failure", async () => {
+      const capture = {};
+      await assert.rejects(runFixture(envFile, {
+        capture,
+        fetchImplementation: domainAndHealthFetch({ capture, healthStatus: 503 }),
+      }), { message: "HEALTH_CHECK_FAILED" });
+      assert.equal(capture.deploymentQueries, 1);
+      assert.equal(capture.healthRequests, 1);
+      assert.equal(capture.persistedEvidence, undefined);
+    });
+    await t.test("version changes after health", async () => {
+      const capture = {};
+      await assert.rejects(runFixture(envFile, {
+        capture,
+        fetchImplementation: domainAndHealthFetch({
+          capture,
+          deployments: [
+            fakeDeployment(),
+            fakeDeployment({ versions: [{ version_id: OLD_VERSION_ID, percentage: 100 }] }),
+          ],
+        }),
+      }), { code: "WORKER_ACTIVE_VERSION_MISMATCH" });
+      assert.equal(capture.healthRequests, 1);
+      assert.equal(capture.persistedEvidence, undefined);
+    });
+  });
+});
+
+test("deployment evidence persists only the bounded source-to-traffic proof", async () => {
+  const runtimeRoot = await mkdtemp(path.join(tmpdir(), "email-worker-evidence-"));
+  const evidence = {
+    workerVersionId: UPLOADED_VERSION_ID,
+    deploymentId: DEPLOYMENT_ID,
+    trafficPercentage: 100,
+    sourceCommit: SOURCE_COMMIT,
+    deploymentTimestamp: DEPLOYMENT_TIMESTAMP,
+  };
+  try {
+    const evidencePath = await persistDeploymentEvidence(evidence, { runtimeRoot });
+    assert.equal(path.dirname(evidencePath), runtimeRoot);
+    assert.deepEqual(JSON.parse(await readFile(evidencePath, "utf8")), evidence);
+    assert.deepEqual(Object.keys(evidence), [
+      "workerVersionId",
+      "deploymentId",
+      "trafficPercentage",
+      "sourceCommit",
+      "deploymentTimestamp",
+    ]);
+  } finally {
+    await rm(runtimeRoot, { force: true, recursive: true });
+  }
+});
+
+test("deployment state failures expose no secret or provider values", async () => {
+  await withTemporaryEnv(async (envFile) => {
+    const secretMarker = "must-not-appear-cloudflare-token-or-provider-value";
+    let rejected;
+    try {
+      await runFixture(envFile, {
+        fetchImplementation: async (input) => {
+          const url = new URL(input);
+          if (url.pathname.includes("/workers/domains")) {
+            return domainAndHealthFetch()(input);
+          }
+          throw new Error(secretMarker);
+        },
+      });
+    } catch (error) {
+      rejected = error;
+    }
+    const rendered = formatControllerFailure(rejected);
+    assert.equal(
+      rendered,
+      "Worker production controller failed: WORKER_DEPLOYMENT_STATUS_UNAVAILABLE\n",
+    );
+    assert.equal(rendered.includes(secretMarker), false);
+    for (const secret of [
+      fakeProductionValues().CLOUDFLARE_API_TOKEN,
+      "LUMINA_WEBHOOK_TOKEN",
+      "RESEND_API_KEY",
+      "recipient@example.test",
+    ]) {
+      assert.equal(rendered.includes(secret), false);
+    }
   });
 });
 
