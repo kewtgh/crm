@@ -57,6 +57,7 @@ export function validResendApiKey(value) {
     && value.length > 3
     && value === value.trim()
     && value.startsWith("re_")
+    && /^[\x20-\x7e]+$/u.test(value)
     && !/[\u0000-\u001f\u007f]/u.test(value)
     && !/\s/u.test(value);
 }
