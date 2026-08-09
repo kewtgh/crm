@@ -51,6 +51,7 @@ const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
 const sourceCommitPattern = /^[a-f0-9]{40}$/;
 const cloudflareIdentifierPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+const cloudflareVersionIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const deploymentEvidenceFilename = "last-success.json";
 
 export class ProductionConfigurationError extends Error {
@@ -67,6 +68,15 @@ class WranglerExecutionError extends Error {
     this.name = "WranglerExecutionError";
     this.code = "WRANGLER_FAILED";
     this.detail = detail;
+  }
+}
+
+class PostUploadVerificationError extends Error {
+  constructor(code, deploymentState) {
+    super(code);
+    this.name = "PostUploadVerificationError";
+    this.code = code;
+    this.deploymentState = deploymentState;
   }
 }
 
@@ -522,6 +532,17 @@ export function buildWranglerArguments(
   return args;
 }
 
+export function buildWranglerVersionListArguments(temporaryConfig) {
+  return [
+    wranglerExecutable(),
+    "versions",
+    "list",
+    "--config",
+    temporaryConfig.configPath,
+    "--json",
+  ];
+}
+
 function encodedVariants(value) {
   const componentEncoded = encodeURIComponent(value);
   const uriEncoded = encodeURI(value);
@@ -570,35 +591,72 @@ function limitedUtf8Tail(value, maximumBytes = maxWranglerErrorDetailBytes) {
   return bytes.subarray(bytes.length - maximumBytes).toString("utf8").replace(/^\uFFFD+/, "");
 }
 
+function stableControllerErrorCode(error) {
+  if (error instanceof ProductionConfigurationError
+    || error instanceof WranglerExecutionError
+    || error instanceof PostUploadVerificationError) {
+    return error.code;
+  }
+  return typeof error?.message === "string"
+    && /^[A-Z][A-Z0-9_]{1,100}$/.test(error.message)
+    ? error.message
+    : "UNEXPECTED_FAILURE";
+}
+
 export function formatControllerFailure(error) {
   if (error instanceof WranglerExecutionError) {
     const detail = limitedUtf8Tail(error.detail).trim();
     return `Worker production controller failed: ${error.code}${detail ? `\n${detail}` : ""}\n`;
   }
-  const stableErrorCode = typeof error?.message === "string"
-    && /^[A-Z][A-Z0-9_]{1,100}$/.test(error.message)
-    ? error.message
-    : "UNEXPECTED_FAILURE";
-  const code = error instanceof ProductionConfigurationError ? error.code : stableErrorCode;
-  return `Worker production controller failed: ${code}\n`;
+  const code = stableControllerErrorCode(error);
+  let output = `Worker production controller failed: ${code}\n`;
+  if (error instanceof PostUploadVerificationError) {
+    const state = error.deploymentState;
+    output += `CONTROL_PLANE_STATE=${state.controlPlaneState}\n`;
+    output += "WORKER_UPLOAD_COMPLETED=yes\n";
+    output += `WORKER_VERSION_ID=${state.workerVersionId ?? "unknown"}\n`;
+    output += `ACTIVE_DEPLOYMENT_VERIFIED=${state.activeDeploymentVerified ? "yes" : "no"}\n`;
+    output += "EVIDENCE_PERSISTED=no\n";
+  }
+  return output;
 }
 
-async function runWrangler(configuration, temporaryConfig, {
-  dryRun,
-  sourceCommit,
-  spawnImplementation = spawn,
-}) {
-  const args = buildWranglerArguments(temporaryConfig, { dryRun, sourceCommit });
+function postUploadVerificationError(error, state) {
+  const code = stableControllerErrorCode(error);
+  let controlPlaneState;
+  if (!state.workerVersionId) {
+    controlPlaneState = "UPLOAD_SUCCEEDED_BUT_PROVENANCE_UNVERIFIED";
+  } else if (code === "WORKER_ACTIVE_VERSION_MISMATCH"
+    || code === "WORKER_TRAFFIC_SPLIT_UNEXPECTED") {
+    controlPlaneState = "DEPLOYMENT_NOT_ACTIVE";
+  } else if (!state.activeDeploymentVerified) {
+    controlPlaneState = "ACTIVE_DEPLOYMENT_UNVERIFIED";
+  } else {
+    controlPlaneState = "POST_ACTIVATION_VERIFICATION_FAILED";
+  }
+  return new PostUploadVerificationError(code, {
+    controlPlaneState,
+    workerVersionId: state.workerVersionId,
+    activeDeploymentVerified: state.activeDeploymentVerified,
+  });
+}
+
+function wranglerEnvironment(configuration) {
   const childEnvironment = { ...process.env };
   delete childEnvironment.LUMINA_WEBHOOK_TOKEN;
   delete childEnvironment.RESEND_API_KEY;
   childEnvironment.CLOUDFLARE_ACCOUNT_ID = configuration.CLOUDFLARE_ACCOUNT_ID;
   childEnvironment.CLOUDFLARE_API_TOKEN = configuration.CLOUDFLARE_API_TOKEN;
+  return childEnvironment;
+}
 
+async function runWranglerCommand(configuration, args, {
+  spawnImplementation = spawn,
+}) {
   return new Promise((resolve, reject) => {
     const child = spawnImplementation(process.execPath, args, {
       cwd: workerDirectory,
-      env: childEnvironment,
+      env: wranglerEnvironment(configuration),
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -618,16 +676,29 @@ async function runWrangler(configuration, temporaryConfig, {
     child.on("error", () => reject(new Error("WRANGLER_START_FAILED")));
     child.on("close", (code) => {
       if (code === 0) {
-        resolve({
-          stdout: limitedUtf8Tail(sanitizedOutput(stdout, configuration)),
-          stderr: limitedUtf8Tail(sanitizedOutput(stderr, configuration)),
-        });
+        resolve({ stdout, stderr });
       }
       else reject(new WranglerExecutionError(
         limitedUtf8Tail(sanitizedOutput(`${stdout}\n${stderr}`, configuration)),
       ));
     });
   });
+}
+
+async function runWranglerDeploy(configuration, temporaryConfig, {
+  dryRun,
+  sourceCommit,
+  spawnImplementation = spawn,
+}) {
+  const result = await runWranglerCommand(
+    configuration,
+    buildWranglerArguments(temporaryConfig, { dryRun, sourceCommit }),
+    { spawnImplementation },
+  );
+  return {
+    stdout: limitedUtf8Tail(sanitizedOutput(result.stdout, configuration)),
+    stderr: limitedUtf8Tail(sanitizedOutput(result.stderr, configuration)),
+  };
 }
 
 export async function resolveSourceProvenance({
@@ -685,37 +756,46 @@ async function fetchCloudflareResult(configuration, pathname, fetchImplementatio
 
 export async function queryWorkerVersions(
   configuration,
-  fetchImplementation = globalThis.fetch,
+  temporaryConfig,
+  { spawnImplementation = spawn } = {},
 ) {
-  const result = await fetchCloudflareResult(
-    configuration,
-    `/workers/scripts/${encodeURIComponent(configuration.WORKER_NAME)}/versions?deployable=true`,
-    fetchImplementation,
-  );
-  if (!Array.isArray(result.items) || result.items.length > 1_000) {
-    fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+  let result;
+  try {
+    const commandResult = await runWranglerCommand(
+      configuration,
+      buildWranglerVersionListArguments(temporaryConfig),
+      { spawnImplementation },
+    );
+    result = JSON.parse(commandResult.stdout);
+  } catch {
+    fail("WORKER_VERSION_PROVENANCE_UNAVAILABLE");
   }
-  for (const version of result.items) {
+  if (!Array.isArray(result) || result.length > 100) {
+    fail("WORKER_VERSION_PROVENANCE_UNAVAILABLE");
+  }
+  for (const version of result) {
     if (!version
       || typeof version !== "object"
-      || !cloudflareIdentifierPattern.test(version.id ?? "")
+      || !cloudflareVersionIdPattern.test(version.id ?? "")
       || typeof version.metadata?.created_on !== "string") {
-      fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
+      fail("WORKER_VERSION_PROVENANCE_UNAVAILABLE");
     }
   }
-  return result.items;
+  return result;
 }
 
 export function identifyUploadedVersion(beforeVersions, afterVersions, sourceCommit) {
   if (!sourceCommitPattern.test(sourceCommit ?? "")) fail("SOURCE_COMMIT_INVALID");
   const beforeIds = new Set(beforeVersions.map((version) => version.id));
-  const candidates = afterVersions.filter((version) => (
-    !beforeIds.has(version.id)
-    && version.annotations?.["workers/tag"] === sourceCommit
-    && version.annotations?.["workers/message"] === sourceCommit
-  ));
-  if (candidates.length !== 1) fail("WORKER_ACTIVE_VERSION_MISMATCH");
-  return candidates[0];
+  const candidates = afterVersions.filter((version) => !beforeIds.has(version.id));
+  if (candidates.length > 1) fail("WORKER_VERSION_PROVENANCE_AMBIGUOUS");
+  if (candidates.length !== 1) fail("WORKER_VERSION_PROVENANCE_UNAVAILABLE");
+  const [candidate] = candidates;
+  if (candidate.annotations?.["workers/tag"] !== sourceCommit
+    || candidate.annotations?.["workers/message"] !== sourceCommit) {
+    fail("WORKER_VERSION_PROVENANCE_UNAVAILABLE");
+  }
+  return candidate;
 }
 
 export async function queryActiveDeployment(
@@ -737,14 +817,14 @@ export function acceptActiveDeployment(deployment, intendedVersionId) {
   if (!deployment
     || typeof deployment !== "object"
     || !Array.isArray(deployment.versions)
-    || !cloudflareIdentifierPattern.test(intendedVersionId ?? "")) {
+    || !cloudflareVersionIdPattern.test(intendedVersionId ?? "")) {
     fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
   }
   if (deployment.versions.length > 1) fail("WORKER_TRAFFIC_SPLIT_UNEXPECTED");
   if (deployment.versions.length !== 1) fail("WORKER_ACTIVE_VERSION_MISMATCH");
   const [traffic] = deployment.versions;
   if (!traffic
-    || !cloudflareIdentifierPattern.test(traffic.version_id ?? "")
+    || !cloudflareVersionIdPattern.test(traffic.version_id ?? "")
     || typeof traffic.percentage !== "number"
     || !Number.isFinite(traffic.percentage)) {
     fail("WORKER_DEPLOYMENT_STATUS_UNAVAILABLE");
@@ -784,7 +864,7 @@ export async function persistDeploymentEvidence(evidence, {
     "deploymentTimestamp",
   ];
   if (Object.keys(evidence).join("\n") !== expectedKeys.join("\n")
-    || !cloudflareIdentifierPattern.test(evidence.workerVersionId ?? "")
+    || !cloudflareVersionIdPattern.test(evidence.workerVersionId ?? "")
     || (evidence.deploymentId !== undefined
       && !cloudflareIdentifierPattern.test(evidence.deploymentId))
     || evidence.trafficPercentage !== 100
@@ -880,7 +960,7 @@ export async function runDeployment({
       ...temporaryConfigOptions,
     });
     if (dryRun) {
-      await runWrangler(configuration, temporaryConfig, {
+      await runWranglerDeploy(configuration, temporaryConfig, {
         dryRun,
         sourceCommit: sourceProvenance.sourceCommit,
         spawnImplementation,
@@ -890,78 +970,90 @@ export async function runDeployment({
 
     const versionsBefore = await queryWorkerVersionsImplementation(
       configuration,
-      fetchImplementation,
+      temporaryConfig,
+      { spawnImplementation },
     );
     const sourceAtUpload = await resolveSourceProvenanceImplementation();
     if (sourceAtUpload?.sourceCommit !== sourceProvenance.sourceCommit) {
       fail("SOURCE_CHANGED_DURING_DEPLOYMENT");
     }
-    const wranglerResult = await runWrangler(configuration, temporaryConfig, {
+    const wranglerResult = await runWranglerDeploy(configuration, temporaryConfig, {
       dryRun,
       sourceCommit: sourceProvenance.sourceCommit,
       spawnImplementation,
     });
-    if (!wranglerResult
-      || typeof wranglerResult.stdout !== "string"
-      || typeof wranglerResult.stderr !== "string") {
-      fail("WRANGLER_RESULT_INVALID");
-    }
-    const sourceAfterUpload = await resolveSourceProvenanceImplementation();
-    if (sourceAfterUpload?.sourceCommit !== sourceProvenance.sourceCommit) {
-      fail("SOURCE_CHANGED_DURING_DEPLOYMENT");
-    }
-
-    const versionsAfter = await queryWorkerVersionsImplementation(
-      configuration,
-      fetchImplementation,
-    );
-    const uploadedVersion = identifyUploadedVersion(
-      versionsBefore,
-      versionsAfter,
-      sourceProvenance.sourceCommit,
-    );
-    const activeDeployment = await queryActiveDeploymentImplementation(
-      configuration,
-      fetchImplementation,
-    );
-    acceptActiveDeployment(activeDeployment, uploadedVersion.id);
-
-    const postDeploymentDomain = await preflightCustomDomainImplementation(
-      configuration,
-      fetchImplementation,
-    );
-    if (postDeploymentDomain.hostname !== customDomain.hostname
-      || postDeploymentDomain.zoneName !== customDomain.zoneName) {
-      fail("CUSTOM_DOMAIN_SET_MISMATCH");
-    }
-    await verifyHealth(configuration, fetchImplementation);
-
-    const finalActiveDeployment = await queryActiveDeploymentImplementation(
-      configuration,
-      fetchImplementation,
-    );
-    const deploymentEvidence = {
-      ...acceptActiveDeployment(finalActiveDeployment, uploadedVersion.id),
-      sourceCommit: sourceProvenance.sourceCommit,
+    const postUploadState = {
+      workerVersionId: null,
+      activeDeploymentVerified: false,
     };
-    const orderedDeploymentEvidence = {
-      workerVersionId: deploymentEvidence.workerVersionId,
-      ...(deploymentEvidence.deploymentId === undefined
-        ? {}
-        : { deploymentId: deploymentEvidence.deploymentId }),
-      trafficPercentage: deploymentEvidence.trafficPercentage,
-      sourceCommit: deploymentEvidence.sourceCommit,
-      deploymentTimestamp: deploymentEvidence.deploymentTimestamp,
-    };
-    await persistDeploymentEvidenceImplementation(orderedDeploymentEvidence, {
-      runtimeRoot,
-      ...temporaryConfigOptions,
-    });
-    return {
-      dryRun,
-      workerName: configuration.WORKER_NAME,
-      deploymentEvidence: orderedDeploymentEvidence,
-    };
+    try {
+      if (!wranglerResult
+        || typeof wranglerResult.stdout !== "string"
+        || typeof wranglerResult.stderr !== "string") {
+        fail("WRANGLER_RESULT_INVALID");
+      }
+      const sourceAfterUpload = await resolveSourceProvenanceImplementation();
+      if (sourceAfterUpload?.sourceCommit !== sourceProvenance.sourceCommit) {
+        fail("SOURCE_CHANGED_DURING_DEPLOYMENT");
+      }
+
+      const versionsAfter = await queryWorkerVersionsImplementation(
+        configuration,
+        temporaryConfig,
+        { spawnImplementation },
+      );
+      const uploadedVersion = identifyUploadedVersion(
+        versionsBefore,
+        versionsAfter,
+        sourceProvenance.sourceCommit,
+      );
+      postUploadState.workerVersionId = uploadedVersion.id;
+      const activeDeployment = await queryActiveDeploymentImplementation(
+        configuration,
+        fetchImplementation,
+      );
+      acceptActiveDeployment(activeDeployment, uploadedVersion.id);
+      postUploadState.activeDeploymentVerified = true;
+
+      const postDeploymentDomain = await preflightCustomDomainImplementation(
+        configuration,
+        fetchImplementation,
+      );
+      if (postDeploymentDomain.hostname !== customDomain.hostname
+        || postDeploymentDomain.zoneName !== customDomain.zoneName) {
+        fail("CUSTOM_DOMAIN_SET_MISMATCH");
+      }
+      await verifyHealth(configuration, fetchImplementation);
+
+      const finalActiveDeployment = await queryActiveDeploymentImplementation(
+        configuration,
+        fetchImplementation,
+      );
+      const deploymentEvidence = {
+        ...acceptActiveDeployment(finalActiveDeployment, uploadedVersion.id),
+        sourceCommit: sourceProvenance.sourceCommit,
+      };
+      const orderedDeploymentEvidence = {
+        workerVersionId: deploymentEvidence.workerVersionId,
+        ...(deploymentEvidence.deploymentId === undefined
+          ? {}
+          : { deploymentId: deploymentEvidence.deploymentId }),
+        trafficPercentage: deploymentEvidence.trafficPercentage,
+        sourceCommit: deploymentEvidence.sourceCommit,
+        deploymentTimestamp: deploymentEvidence.deploymentTimestamp,
+      };
+      await persistDeploymentEvidenceImplementation(orderedDeploymentEvidence, {
+        runtimeRoot,
+        ...temporaryConfigOptions,
+      });
+      return {
+        dryRun,
+        workerName: configuration.WORKER_NAME,
+        deploymentEvidence: orderedDeploymentEvidence,
+      };
+    } catch (error) {
+      throw postUploadVerificationError(error, postUploadState);
+    }
   } finally {
     if (temporaryConfig) {
       await removeTemporaryConfigImplementation(temporaryConfig, temporaryConfigOptions);
