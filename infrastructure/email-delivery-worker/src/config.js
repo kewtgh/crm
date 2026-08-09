@@ -52,6 +52,15 @@ export function validRoutePath(value) {
   ));
 }
 
+export function validResendApiKey(value) {
+  return typeof value === "string"
+    && value.length > 3
+    && value === value.trim()
+    && value.startsWith("re_")
+    && !/[\u0000-\u001f\u007f]/u.test(value)
+    && !/\s/u.test(value);
+}
+
 export function validatedRuntimeConfiguration(env) {
   const from = typeof env.EMAIL_FROM === "string" ? env.EMAIL_FROM.trim() : "";
   const replyTo = typeof env.EMAIL_REPLY_TO === "string" ? env.EMAIL_REPLY_TO.trim() : "";
@@ -60,13 +69,13 @@ export function validatedRuntimeConfiguration(env) {
     : "";
   const deliveryPath = typeof env.DELIVERY_PATH === "string" ? env.DELIVERY_PATH : "";
   const healthPath = typeof env.HEALTH_PATH === "string" ? env.HEALTH_PATH : "";
-  const apiKey = typeof env.RESEND_API_KEY === "string" ? env.RESEND_API_KEY : "";
+  const apiKey = env.RESEND_API_KEY;
   const webhookToken = typeof env.LUMINA_WEBHOOK_TOKEN === "string"
     ? env.LUMINA_WEBHOOK_TOKEN
     : "";
   const applicationUrl = parseHttpsUrl(env.CRM_APP_URL);
 
-  if (!apiKey
+  if (!validResendApiKey(apiKey)
     || !webhookToken
     || !applicationUrl
     || !validMailbox(from)

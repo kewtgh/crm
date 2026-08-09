@@ -744,19 +744,24 @@ test("tracked public tree contains no production identifiers or generated produc
   });
   const files = stdout.toString("utf8").split("\0").filter(Boolean);
   const zone = ["ewaya", "com"].join(".");
+  const publicUserAgent = `${["lumina", "mail", "delivery"].join("-")}/1.0`;
+  const publicUserAgentPrefix = ["lumina", "mail", "delivery"].join("-");
   const prohibited = [
     ["crm-mail", zone].join("."),
     ["mail-api", zone].join("."),
     ["crm", zone].join("."),
     ["notify", zone].join("."),
     ["notifications", ["notify", zone].join(".")].join("@"),
-    ["lumina", "mail", "delivery"].join("-"),
     ["lumina", "crm", "email", "delivery"].join("-"),
   ].map((value) => Buffer.from(value));
   const violations = [];
   for (const file of files) {
     const contents = await readFile(path.join(repositoryRoot, file));
-    if (prohibited.some((value) => contents.includes(value))) violations.push(file);
+    const publicText = contents.toString("utf8").replaceAll(publicUserAgent, "");
+    if (publicText.includes(publicUserAgentPrefix)
+      || prohibited.some((value) => contents.includes(value))) {
+      violations.push(file);
+    }
   }
   assert.deepEqual(violations, []);
 

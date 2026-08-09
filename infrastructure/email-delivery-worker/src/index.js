@@ -11,6 +11,13 @@ const MAX_PAYLOAD_BYTES = 32 * 1024;
 const MAX_JSON_DEPTH = 5;
 const MAX_JSON_NODES = 256;
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const PROVIDER_USER_AGENT = "lumina-mail-delivery/1.0";
+const SAFE_PROVIDER_ERROR_NAMES = new Set([
+  "TypeError",
+  "TimeoutError",
+  "AbortError",
+  "Error",
+]);
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const SAFE_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 const SAFE_TEMPLATE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -131,7 +138,28 @@ function safeLog(logger, entry) {
   }
 }
 
-function providerRequest(body, rendered, configuration, idempotencyKey, signal) {
+function safeProviderErrorName(error) {
+  const name = typeof error?.name === "string" ? error.name : "";
+  return SAFE_PROVIDER_ERROR_NAMES.has(name) ? name : "Other";
+}
+
+function providerFetchFailureType(error) {
+  const name = typeof error?.name === "string" ? error.name : "";
+  if (name === "TimeoutError") return "FETCH_TIMEOUT";
+  if (name === "AbortError") return "FETCH_ABORTED";
+  if (name === "TypeError") return "FETCH_TYPE_ERROR";
+  if (name === "Error" || name === "NetworkError") return "FETCH_NETWORK_ERROR";
+  return "FETCH_OTHER";
+}
+
+function providerRequest(
+  body,
+  rendered,
+  configuration,
+  idempotencyKey,
+  providerTimeoutMs,
+  RequestImplementation,
+) {
   const providerBody = {
     from: configuration.from,
     to: [body.to],
@@ -140,18 +168,19 @@ function providerRequest(body, rendered, configuration, idempotencyKey, signal) 
     text: rendered.text,
   };
   if (configuration.replyTo) providerBody.reply_to = configuration.replyTo;
-  return {
+  return new RequestImplementation(RESEND_ENDPOINT, {
     method: "POST",
     headers: {
       authorization: `Bearer ${configuration.apiKey}`,
       "content-type": "application/json",
       "idempotency-key": idempotencyKey,
+      "user-agent": PROVIDER_USER_AGENT,
     },
     body: JSON.stringify(providerBody),
     cache: "no-store",
     redirect: "error",
-    signal,
-  };
+    signal: AbortSignal.timeout(providerTimeoutMs),
+  });
 }
 
 async function deliver(request, {
@@ -159,6 +188,7 @@ async function deliver(request, {
   fetchImplementation,
   logger,
   providerTimeoutMs,
+  RequestImplementation,
 }) {
   if (!await authorized(request, configuration.webhookToken)) {
     return errorResponse(401, "UNAUTHORIZED");
@@ -195,25 +225,41 @@ async function deliver(request, {
     return errorResponse(422, "TEMPLATE_RENDER_FAILED");
   }
 
-  let providerResponse;
+  let outboundProviderRequest;
   try {
-    providerResponse = await fetchImplementation(
-      RESEND_ENDPOINT,
-      providerRequest(
-        parsed.body,
-        rendered,
-        configuration,
-        idempotencyKey,
-        AbortSignal.timeout(providerTimeoutMs),
-      ),
+    outboundProviderRequest = providerRequest(
+      parsed.body,
+      rendered,
+      configuration,
+      idempotencyKey,
+      providerTimeoutMs,
+      RequestImplementation,
     );
-  } catch {
+  } catch (error) {
     safeLog(logger, {
       event: "email_delivery",
       requestId: parsed.body.id,
       template: parsed.body.template,
       httpStatus: 503,
       providerResult: "unavailable",
+      providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
+      providerErrorName: safeProviderErrorName(error),
+    });
+    return errorResponse(503, "PROVIDER_UNAVAILABLE");
+  }
+
+  let providerResponse;
+  try {
+    providerResponse = await fetchImplementation(outboundProviderRequest);
+  } catch (error) {
+    safeLog(logger, {
+      event: "email_delivery",
+      requestId: parsed.body.id,
+      template: parsed.body.template,
+      httpStatus: 503,
+      providerResult: "unavailable",
+      providerFailureType: providerFetchFailureType(error),
+      providerErrorName: safeProviderErrorName(error),
     });
     return errorResponse(503, "PROVIDER_UNAVAILABLE");
   }
@@ -270,9 +316,13 @@ export function createEmailDeliveryWorker({
   fetchImplementation = globalThis.fetch,
   logger = console,
   providerTimeoutMs = 15_000,
+  RequestImplementation = globalThis.Request,
 } = {}) {
   if (typeof fetchImplementation !== "function") {
     throw new Error("FETCH_IMPLEMENTATION_REQUIRED");
+  }
+  if (typeof RequestImplementation !== "function") {
+    throw new Error("REQUEST_IMPLEMENTATION_REQUIRED");
   }
   if (!Number.isSafeInteger(providerTimeoutMs)
     || providerTimeoutMs < 1
@@ -300,6 +350,7 @@ export function createEmailDeliveryWorker({
         fetchImplementation,
         logger,
         providerTimeoutMs,
+        RequestImplementation,
       });
     },
   };
