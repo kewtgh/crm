@@ -96,6 +96,7 @@ export function createAcceptedRelease({
     rollbackVersion: previousAccepted?.version ?? null,
     rollbackImage: previousAccepted?.currentImage ?? null,
     rollbackOperationsImage: previousAccepted?.operationsImage ?? null,
+    rollbackDeploymentId: previousAccepted?.deploymentId ?? null,
     recentImages: [...new Set([
       target.currentImage,
       target.operationsImage,
@@ -114,12 +115,19 @@ export function releaseFailureRollbackPlan({ switched, previousAccepted }) {
   return { status: "REQUIRED" };
 }
 
-export async function runProductionReleaseWorkflow({ mode, operations }) {
+export async function runProductionReleaseWorkflow({
+  mode,
+  operations,
+  targetCommit = operations?.targetCommit,
+}) {
   if (!releaseModes.has(mode)) throw new Error(`Unsupported production release mode: ${mode}`);
+  if (!/^[0-9a-f]{40}$/.test(targetCommit ?? "")) {
+    throw new Error("Target controller commit must be a full SHA");
+  }
   let migrationMayHaveChanged = false;
   let switched = false;
   try {
-    const commit = await operations.updateSource();
+    const commit = targetCommit;
     const target = await operations.resolveTarget(commit);
     await operations.preflightSecretSources();
     await operations.preflightTargetRuntimeContract();

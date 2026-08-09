@@ -362,6 +362,7 @@ function dryRun() {
   const compose = readFileSync(path.join(sourceRoot, "compose.production.yml"), "utf8");
   const dockerfile = readFileSync(path.join(sourceRoot, "Dockerfile"), "utf8");
   const runner = readFileSync(path.join(sourceRoot, "scripts", "deploy-production-runner.mjs"), "utf8");
+  const bootstrap = readFileSync(path.join(sourceRoot, "scripts", "deploy-production-bootstrap.mjs"), "utf8");
   const workflow = readFileSync(
     path.join(sourceRoot, "scripts", "lib", "production-deploy-workflow.mjs"),
     "utf8",
@@ -375,7 +376,11 @@ function dryRun() {
     [compose, /127\.0\.0\.1:3200/, "loopback Web publication"],
     [compose, /internal: true/, "internal backend network"],
     [dockerfile, /com\.lumina\.crm\.managed="true"/, "image ownership label"],
+    [bootstrap, /spawnTargetController/, "stable bootstrap target-controller re-exec"],
+    [bootstrap, /--expected-target=/, "full target commit controller handoff"],
+    [deployUnit, /deploy-production-bootstrap\.mjs/, "two-stage deployment systemd entrypoint"],
     [runner, /lumina-crm-buildkit/, "isolated BuildKit builder"],
+    [runner, /TARGET_CONTROLLER_REEXEC_OK/, "target controller re-exec evidence"],
     [runner, /apply locked forward migration/, "forward migration gate"],
     [runner, /assertReleaseModeAllowed/, "accepted release mode gate"],
     [workflow, /mode === "initialize"/, "explicit initialization mode"],

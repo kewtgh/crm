@@ -231,6 +231,6 @@ test("production controller and runner use only tracked dependency-free validato
   assert.doesNotMatch(validator, /runtime-environment\.ts|from ["'](?:tsx|zod)["']/);
   assert.doesNotMatch(facade, /from "zod"|placeholderPattern|workerBudgetIssues/);
   assert.match(facade, /from "\.\/runtime-environment-core\.mjs"/);
-  assert.match(service, /\/usr\/bin\/node \/opt\/lumina-crm\/source\/scripts\/deploy-production-runner\.mjs/);
+  assert.match(service, /\/usr\/bin\/node \/opt\/lumina-crm\/source\/scripts\/deploy-production-bootstrap\.mjs/);
   assert.doesNotMatch(service, /tsx|npx|npm|node_modules/);
 });

@@ -2,9 +2,12 @@
 
 ## Scope
 
-v3.8.26 fixes the staff directory's 375px overflow, adds database-paginated lifecycle and role
-filters, completes keyboard focus behavior for staff action menus, and enforces README release-version
-parity. v3.8.25 atomically archives terminal deployment requests before publishing the final controller
+v3.8.26 replaces the self-mutating deployment runner with a stable bootstrap plus freshly spawned
+target controller, adds target-commit TOCTOU evidence, and performs bounded Lumina-only BuildKit,
+paired-image, deployment-history, and stale-env cleanup after application acceptance. It also fixes
+the staff directory's 375px overflow, adds database-paginated lifecycle and role filters, completes
+keyboard focus behavior for staff action menus, and enforces README release-version parity. v3.8.25
+atomically archives terminal deployment requests before publishing the final controller
 state, and reports archival faults as control-plane finalization failures without relabeling an
 accepted application release. v3.8.24 makes the target runtime environment preflight self-contained in a dependency-free
 authoritative core, with no host `tsx` or `node_modules` requirement and stable validator failure
@@ -41,6 +44,11 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - non-root storage preparation/cleanup through the fixed root-owned maintenance program;
 - bounded fixed-builder cache cleanup after acceptance, rootless and non-fatal, without global
   prune or accepted-image deletion;
+- a built-ins-only stable deployment bootstrap that alone fetches/fast-forwards source, then starts
+  a distinct target-controller PID with full-SHA handoff and pre-side-effect TOCTOU revalidation;
+- target-controller post-acceptance cleanup that protects running/current/rollback/target/recent
+  images, retains at least three complete app/operations pairs, applies history age-plus-count
+  retention, and never prunes volumes, networks, containers, global images, or other projects;
 - one owner-checked, non-symlink Docker configuration root shared by deploy, prepare, and cleanup,
   with fail-closed handling for the obsolete maintenance-local configuration path;
 - a credential-free HTTP(S) Docker build proxy allowlist, fixed rootless BuildKit `network=host`,
@@ -99,14 +107,15 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Check | Result |
 | --- | --- |
 | v3.8.26 staff directory targeted contracts | Pass: 9/9 |
+| v3.8.26 deployment bootstrap/cleanup targeted contracts | Pass: 16/16, including real fresh-process 3.8.24→3.8.25 generation fixture and HunterAI isolation |
 | Final `npm run typecheck` | Pass |
 | Final `npm run lint` | Pass |
 | Final `npm run test:contracts` | Pass: 68 application contracts + 8 CAPTCHA contracts |
 | `npm run db:migrations:verify` | Pass: 78 ordered checksum-managed migrations |
-| Final `npm run test:deploy` | Pass: 82/82, including README/package/runtime version parity |
+| Earlier v3.8.26 `npm run test:deploy` | Pass: 82/82 before the two-stage controller addition |
 | Final production `npm run build` | Pass: 85 application/API routes |
 | Final `ms-playwright/chromium-1228` staged matrix | Pass: 80 page/viewports, 10/10 stages, 0 errors, 0 warnings, QA identities 9/9 cleaned; Chromium 149.0.7827.55 from revision 1228 |
-| Root `npm ci` | Pass: 566 packages installed, 572 audited, 0 vulnerabilities |
+| Root `npm ci` (earlier v3.8.26 verification) | Pass: 566 packages installed; the current container build's registry audit summary differs and is recorded below |
 | Communication delivery Phase 2 application contracts | Pass: 9/9, including queue-only Web ownership, attempt-start ordering, durable idempotency, fenced completion, provider classification, uncertainty, time budget, heartbeat/readiness, Operations and UI |
 | Communication delivery Phase 1 migration | Pass: clean standard migration 76/76 through the Phase 2 switch; parent-069 representative QUEUED, FAILED, SENT, RECEIVED, and DELIVERED rows unchanged |
 | Communication delivery Phase 1 SQL behavior | Pass: concurrent claim isolation, `SKIP LOCKED`, fencing, safe/uncertain lease recovery, provider receipts, bounded backoff/attempts, consent, recipient, grants, audited retry, and synchronous Web compatibility |
@@ -122,7 +131,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| `npm run test:deploy:raw` | Pass: 69/69 application-runtime/target-runtime/version/rootless Compose/deploy/secret-source/atomic-switch/BuildKit/Tunnel contracts |
+| Final `npm run test:deploy:raw` | Pass: 98/98 application-runtime/target-runtime/version/rootless Compose/two-stage deploy/cleanup/secret-source/finalization/BuildKit/Tunnel contracts |
+| `npm run test:application-image:smoke` | Pass: application image loaded as `10001:10001`, Lumina ownership labels exact, runtime closure 29 modules |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
 | `npm run test:contracts:raw` | Pass: 68 application contracts + 8 CAPTCHA contracts |
@@ -136,6 +146,11 @@ firewall, rootless daemon, or real production Docker resource changed. The full 
 Chromium matrix passed; no complete database suite, production image publication, real Resend
 delivery, encrypted S3 lifecycle, Tunnel route, server reboot, or production recovery drill was run
 in this scoped implementation.
+
+The application image build completed, but its registry audit summary reported 4 high-severity
+production-dependency findings and 6 high-severity full-development-tree findings. No automatic
+`npm audit fix` or dependency mutation was attempted in this deployment-control task. A dedicated,
+reviewed dependency remediation remains an external release gate.
 
 The registry-backed `npm audit --omit=dev` was not run because approval policy rejected sending the
 lockfile dependency tree to the external npm registry without separate explicit authorization.

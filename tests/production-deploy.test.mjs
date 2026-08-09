@@ -128,8 +128,8 @@ function releaseWorkflowDouble({ failAt } = {}) {
     calls,
     target,
     operations: {
+      targetCommit: target.commit,
       prepare: operation("prepare"),
-      updateSource: operation("fetch", target.commit),
       resolveTarget: operation("resolve-target", target),
       buildImages: operation("build"),
       writeCandidateEnvironment: operation("candidate-env", "candidate.env"),
@@ -441,7 +441,6 @@ test("initialize follows the explicit first-install order", async () => {
   const { calls, operations } = releaseWorkflowDouble();
   const result = await runProductionReleaseWorkflow({ mode: "initialize", operations });
   assert.deepEqual(calls, [
-    "fetch",
     "resolve-target",
     "secret-preflight",
     "target-runtime-preflight",
@@ -467,7 +466,7 @@ test("unsafe secret metadata stops initialize before image build and PostgreSQL"
     runProductionReleaseWorkflow({ mode: "initialize", operations }),
     /failed at secret-preflight/,
   );
-  assert.deepEqual(calls, ["fetch", "resolve-target", "secret-preflight"]);
+  assert.deepEqual(calls, ["resolve-target", "secret-preflight"]);
 });
 
 test("target runtime preflight failure stops before every side effect", async () => {
@@ -478,7 +477,7 @@ test("target runtime preflight failure stops before every side effect", async ()
       && error.switched === false
       && error.migrationMayHaveChanged === false,
   );
-  assert.deepEqual(calls, ["fetch", "resolve-target", "secret-preflight", "target-runtime-preflight"]);
+  assert.deepEqual(calls, ["resolve-target", "secret-preflight", "target-runtime-preflight"]);
   for (const forbidden of ["prepare", "build", "candidate-env", "postgres", "migrate", "switch", "acceptance"]) {
     assert.equal(calls.includes(forbidden), false);
   }
@@ -962,6 +961,7 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
     migrationEnvironment,
     backupEnvironment,
     workflow,
+    bootstrap,
   ] = await Promise.all([
     source("scripts/deploy-production-runner.mjs"),
     source("scripts/lib/git-source-update.mjs"),
@@ -975,6 +975,7 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
     source("deploy/migration.env.example"),
     source("deploy/backup.env.example"),
     source("scripts/lib/production-deploy-workflow.mjs"),
+    source("scripts/deploy-production-bootstrap.mjs"),
   ]);
 
   const productionContract = [
@@ -988,10 +989,9 @@ test("Git proxy production contract is canonical, redacted, and container-isolat
   assert.match(deployEnvironment, /^LUMINA_GIT_PROXY=http:\/\/127\.0\.0\.1:20271$/m);
   assert.match(runner, /configuredGitProxy \? \[configuredGitProxy\] : \[\]/);
   assert.match(runner, /"LUMINA_GIT_PROXY"/);
-  assert.match(
-    workflow,
-    /await operations\.updateSource\(\);[\s\S]+await operations\.buildImages\(target\);/,
-  );
+  assert.doesNotMatch(workflow, /operations\.updateSource/);
+  assert.match(workflow, /const commit = targetCommit;[\s\S]+await operations\.buildImages\(target\);/);
+  assert.match(bootstrap, /fetch[\s\S]+merge[\s\S]+spawnTargetController/);
 
   for (const containerInput of [
     compose,
@@ -1518,9 +1518,10 @@ test("storage maintenance and all production units share one canonical Buildx na
 });
 
 test("post-acceptance BuildKit cleanup is rootless, bounded, and non-fatal", async () => {
-  const [runner, maintenance] = await Promise.all([
+  const [runner, maintenance, postDeploymentCleanup] = await Promise.all([
     source("scripts/deploy-production-runner.mjs"),
     source("deploy/libexec/lumina-crm-storage-maintenance.mjs"),
+    source("scripts/lib/post-deployment-cleanup.mjs"),
   ]);
   const prune = buildkitPruneArguments({
     cacheRetentionHours: 168,
@@ -1538,7 +1539,8 @@ test("post-acceptance BuildKit cleanup is rootless, bounded, and non-fatal", asy
     "--verbose",
   ]);
   assert.equal(prune.includes("--all"), false);
-  assert.match(runner, /async function requestCleanup[\s\S]+"docker"[\s\S]+"buildx", "--builder", builder[\s\S]+"until=168h"/);
+  assert.match(runner, /async function requestCleanup[\s\S]+performPostDeploymentCleanup/);
+  assert.match(postDeploymentCleanup, /"buildx", "--builder", LUMINA_BUILDER, "prune"[\s\S]+buildkitCacheMaxAge/);
   assert.match(runner, /allowFailure: true/);
   assert.match(maintenance, /mode === "cache-cleanup"[\s\S]+?cleanupBuildkitCache\(policy\)/);
   assert.doesNotMatch(runner, /\bsudo\b|docker system prune|volume prune|down -v/);
