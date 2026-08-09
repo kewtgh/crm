@@ -192,6 +192,7 @@ function providerRequest(
   headers,
   providerTimeoutMs,
   RequestImplementation,
+  timeoutSignalImplementation,
 ) {
   const providerBody = {
     from: configuration.from,
@@ -201,12 +202,69 @@ function providerRequest(
     text: rendered.text,
   };
   if (configuration.replyTo) providerBody.reply_to = configuration.replyTo;
-  return new RequestImplementation(RESEND_ENDPOINT, {
+  const construct = (providerRequestStage, init) => {
+    try {
+      return { request: new RequestImplementation(RESEND_ENDPOINT, init) };
+    } catch (error) {
+      return {
+        failure: {
+          providerRequestStage,
+          providerErrorName: safeProviderErrorName(error),
+        },
+      };
+    }
+  };
+
+  let result = construct("METHOD", { method: "POST" });
+  if (result.failure) return result;
+
+  result = construct("HEADERS", { method: "POST", headers });
+  if (result.failure) return result;
+
+  let serializedProviderBody;
+  try {
+    serializedProviderBody = JSON.stringify(providerBody);
+    result = construct("BODY", {
+      method: "POST",
+      headers,
+      body: serializedProviderBody,
+    });
+  } catch (error) {
+    return {
+      failure: {
+        providerRequestStage: "BODY",
+        providerErrorName: safeProviderErrorName(error),
+      },
+    };
+  }
+  if (result.failure) return result;
+
+  result = construct("REDIRECT", {
     method: "POST",
     headers,
-    body: JSON.stringify(providerBody),
+    body: serializedProviderBody,
     redirect: "error",
-    signal: AbortSignal.timeout(providerTimeoutMs),
+  });
+  if (result.failure) return result;
+
+  let signal;
+  try {
+    signal = timeoutSignalImplementation(providerTimeoutMs);
+  } catch (error) {
+    return {
+      failure: {
+        providerRequestStage: "SIGNAL_CREATION",
+        providerErrorName: safeProviderErrorName(error),
+      },
+    };
+  }
+
+  return construct("SIGNAL", {
+    method: "POST",
+    headers,
+    body: serializedProviderBody,
+    redirect: "error",
+    signal,
   });
 }
 
@@ -217,6 +275,7 @@ async function deliver(request, {
   providerTimeoutMs,
   HeadersImplementation,
   RequestImplementation,
+  timeoutSignalImplementation,
 }) {
   if (!await authorized(request, configuration.webhookToken)) {
     return errorResponse(401, "UNAUTHORIZED");
@@ -272,28 +331,27 @@ async function deliver(request, {
     return errorResponse(503, "PROVIDER_UNAVAILABLE");
   }
 
-  let outboundProviderRequest;
-  try {
-    outboundProviderRequest = providerRequest(
-      parsed.body,
-      rendered,
-      configuration,
-      providerHeaderResult.headers,
-      providerTimeoutMs,
-      RequestImplementation,
-    );
-  } catch (error) {
+  const providerRequestResult = providerRequest(
+    parsed.body,
+    rendered,
+    configuration,
+    providerHeaderResult.headers,
+    providerTimeoutMs,
+    RequestImplementation,
+    timeoutSignalImplementation,
+  );
+  if (providerRequestResult.failure) {
     safeLog(logger, {
       event: "email_delivery",
-      requestId: parsed.body.id,
-      template: parsed.body.template,
-      httpStatus: 503,
       providerResult: "unavailable",
       providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
-      providerErrorName: safeProviderErrorName(error),
+      providerRequestStage: providerRequestResult.failure.providerRequestStage,
+      providerErrorName: providerRequestResult.failure.providerErrorName,
+      httpStatus: 503,
     });
     return errorResponse(503, "PROVIDER_UNAVAILABLE");
   }
+  const outboundProviderRequest = providerRequestResult.request;
 
   let providerResponse;
   try {
@@ -365,6 +423,7 @@ export function createEmailDeliveryWorker({
   logger = console,
   providerTimeoutMs = 15_000,
   RequestImplementation = globalThis.Request,
+  timeoutSignalImplementation = (timeoutMs) => AbortSignal.timeout(timeoutMs),
 } = {}) {
   if (typeof fetchImplementation !== "function") {
     throw new Error("FETCH_IMPLEMENTATION_REQUIRED");
@@ -374,6 +433,9 @@ export function createEmailDeliveryWorker({
   }
   if (typeof RequestImplementation !== "function") {
     throw new Error("REQUEST_IMPLEMENTATION_REQUIRED");
+  }
+  if (typeof timeoutSignalImplementation !== "function") {
+    throw new Error("TIMEOUT_SIGNAL_IMPLEMENTATION_REQUIRED");
   }
   if (!Number.isSafeInteger(providerTimeoutMs)
     || providerTimeoutMs < 1
@@ -403,6 +465,7 @@ export function createEmailDeliveryWorker({
         logger,
         providerTimeoutMs,
         RequestImplementation,
+        timeoutSignalImplementation,
       });
     },
   };

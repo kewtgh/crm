@@ -469,10 +469,10 @@ test("payload cannot inject HTML or provider envelope fields", async () => {
 
 test("a valid request invokes Resend exactly once", async () => {
   const provider = providerDouble();
-  let requestInit;
+  const requestInits = [];
   class CapturingRequest extends Request {
     constructor(input, init) {
-      requestInit = init;
+      requestInits.push(init);
       super(input, init);
     }
   }
@@ -483,6 +483,16 @@ test("a valid request invokes Resend exactly once", async () => {
   const response = await worker.fetch(deliveryRequest(), environment());
   assert.equal(response.status, 200);
   assert.equal(provider.calls.length, 1);
+  assert.equal(requestInits.length, 5);
+  assert.deepEqual(Object.keys(requestInits[0]), ["method"]);
+  assert.deepEqual(Object.keys(requestInits[1]), ["method", "headers"]);
+  assert.deepEqual(Object.keys(requestInits[2]), ["method", "headers", "body"]);
+  assert.deepEqual(Object.keys(requestInits[3]), ["method", "headers", "body", "redirect"]);
+  assert.deepEqual(
+    Object.keys(requestInits[4]),
+    ["method", "headers", "body", "redirect", "signal"],
+  );
+  const requestInit = requestInits.at(-1);
   assert.equal(provider.calls[0].url, "https://api.resend.com/emails");
   assert.equal(provider.calls[0].request instanceof Request, true);
   assert.equal(provider.calls[0].request.method, "POST");
@@ -602,34 +612,92 @@ test("Resend timeout maps to stable 503", async () => {
   });
 });
 
-test("provider request construction failure is classified without leaking exception data", async () => {
+test("provider Request stages are classified without leaking exception data", async (t) => {
+  const stages = ["METHOD", "HEADERS", "BODY", "REDIRECT", "SIGNAL"];
+  for (const [index, providerRequestStage] of stages.entries()) {
+    await t.test(providerRequestStage, async () => {
+      const lines = [];
+      const marker = `request-construction-secret-${providerRequestStage}`;
+      let attempts = 0;
+      class StagedRequest extends Request {
+        constructor(input, init) {
+          attempts += 1;
+          if (attempts === index + 1) throw new TypeError(marker);
+          super(input, init);
+        }
+      }
+      const worker = createEmailDeliveryWorker({
+        fetchImplementation: async () => {
+          assert.fail("fetch must not run when Request construction fails");
+        },
+        logger: { info: (line) => lines.push(line) },
+        RequestImplementation: StagedRequest,
+      });
+      const response = await worker.fetch(deliveryRequest({
+        body: deliveryBody({
+          template: "staff-account-created",
+          payload: samplePayloads()["staff-account-created"],
+        }),
+      }), environment());
+      assert.equal(response.status, 503);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "PROVIDER_UNAVAILABLE" },
+      });
+      assert.equal(attempts, index + 1);
+      assert.deepEqual(JSON.parse(lines.at(-1)), {
+        event: "email_delivery",
+        providerResult: "unavailable",
+        providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
+        providerRequestStage,
+        providerErrorName: "TypeError",
+        httpStatus: 503,
+      });
+      const log = lines.join("\n");
+      for (const sensitive of [
+        marker,
+        RESEND_KEY,
+        RECIPIENT,
+        "unit-test-temporary-password",
+        "authorization",
+        "html",
+        "stack",
+      ]) {
+        assert.equal(log.includes(sensitive), false);
+      }
+    });
+  }
+});
+
+test("AbortSignal creation failure is classified before the final Request stage", async () => {
   const lines = [];
-  const marker = "request-construction-secret-message";
-  class ThrowingRequest {
-    constructor() {
-      throw new TypeError(marker);
+  const marker = "signal-creation-secret-message";
+  let requestAttempts = 0;
+  class CapturingRequest extends Request {
+    constructor(input, init) {
+      requestAttempts += 1;
+      super(input, init);
     }
   }
   const worker = createEmailDeliveryWorker({
     fetchImplementation: async () => {
-      assert.fail("fetch must not run when Request construction fails");
+      assert.fail("fetch must not run when AbortSignal construction fails");
     },
     logger: { info: (line) => lines.push(line) },
-    RequestImplementation: ThrowingRequest,
+    RequestImplementation: CapturingRequest,
+    timeoutSignalImplementation: () => {
+      throw new TypeError(marker);
+    },
   });
   const response = await worker.fetch(deliveryRequest(), environment());
   assert.equal(response.status, 503);
-  assert.deepEqual(await responseJson(response), {
-    error: { code: "PROVIDER_UNAVAILABLE" },
-  });
+  assert.equal(requestAttempts, 4);
   assert.deepEqual(JSON.parse(lines.at(-1)), {
     event: "email_delivery",
-    requestId: "job-123",
-    template: "device-verification",
-    httpStatus: 503,
     providerResult: "unavailable",
     providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
+    providerRequestStage: "SIGNAL_CREATION",
     providerErrorName: "TypeError",
+    httpStatus: 503,
   });
   assert.equal(lines.join("\n").includes(marker), false);
 });
