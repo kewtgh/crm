@@ -400,6 +400,46 @@ async function main(){
         }
         await page.keyboard.press("Escape");
         process.stdout.write("[QA] pass centered create-staff dialog\n");
+        const statusFilter=page.getByLabel("生命周期");
+        const roleFilter=page.getByLabel("角色筛选");
+        await Promise.all([
+          page.waitForResponse(response=>response.url().includes("/api/admin/users?")&&response.url().includes("role=SUPER_ADMIN")),
+          roleFilter.selectOption("SUPER_ADMIN"),
+        ]);
+        if(await page.locator(".staff-user-row").count()===0){
+          report.errors.push({kind:"interaction",url:"/admin/users",message:"Role filter returned no administrator rows"});
+        }
+        await Promise.all([
+          page.waitForResponse(response=>response.url().includes("/api/admin/users?")&&response.url().includes("status=PENDING")),
+          statusFilter.selectOption("PENDING"),
+        ]);
+        const filteredRows=page.locator(".staff-user-row");
+        if(await filteredRows.count()===0){
+          report.errors.push({kind:"interaction",url:"/admin/users",message:"Pending lifecycle filter returned no awaiting-confirmation rows"});
+        }else{
+          const actionTrigger=filteredRows.first().locator(".staff-action-trigger");
+          await actionTrigger.click();
+          const actionMenu=filteredRows.first().locator("[role='menu']");
+          await actionMenu.waitFor({state:"visible",timeout:5_000});
+          const enabledItem=actionMenu.locator("[role='menuitem']:not(:disabled)").first();
+          if(!await enabledItem.evaluate(element=>document.activeElement===element)){
+            report.errors.push({kind:"keyboard",url:"/admin/users",message:"Staff action menu did not focus its first enabled item"});
+          }
+          await page.keyboard.press("ArrowDown");
+          if(!await actionMenu.evaluate(element=>element.contains(document.activeElement))){
+            report.errors.push({kind:"keyboard",url:"/admin/users",message:"Staff action menu arrow navigation left the menu"});
+          }
+          await page.keyboard.press("Escape");
+          if(!await actionTrigger.evaluate(element=>document.activeElement===element)){
+            report.errors.push({kind:"keyboard",url:"/admin/users",message:"Staff action menu did not restore trigger focus after Escape"});
+          }
+        }
+        await Promise.all([
+          page.waitForResponse(response=>response.url().includes("/api/admin/users?")&&response.url().includes("status=ALL")&&response.url().includes("role=ALL")),
+          roleFilter.selectOption("ALL"),
+          statusFilter.selectOption("ALL"),
+        ]);
+        process.stdout.write("[QA] pass staff lifecycle/role filters and keyboard action menu\n");
         const activeAdminLinks=page.locator("#main-navigation .nav-children a.active");
         if(await activeAdminLinks.count()!==1||await activeAdminLinks.first().getAttribute("href")!=="/admin/users"){
           report.errors.push({kind:"navigation-active",url:"/admin/users",message:"Admin navigation must highlight only the current child entry"});

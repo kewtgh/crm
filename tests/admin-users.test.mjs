@@ -28,12 +28,43 @@ const item = {
 
 test("staff action trigger only opens a controlled menu and status changes require confirmation", async () => {
   const source = await readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8");
-  const trigger = source.match(/<button className="icon-button staff-action-trigger"[\s\S]+?<MoreHorizontal size=\{18\}\/\><\/button>/)?.[0] ?? "";
-  assert.match(trigger, /setActionMenuUserId/);
+  const trigger = source.match(/<button[^>]+className="icon-button staff-action-trigger"[\s\S]+?<MoreHorizontal size=\{18\}\/\><\/button>/)?.[0] ?? "";
+  assert.match(trigger, /setOpen/);
   assert.doesNotMatch(trigger, /updateStatus|apiFetch|PATCH|setStatusTarget/);
-  assert.match(source, /onClick=\{\(\) => \{ setActionMenuUserId\(null\); setStatusTarget\(item\); \}\}/);
+  assert.match(source, /onStatus=\{\(\)=>setStatusTarget\(item\)\}/);
   assert.match(source, /<ConfirmDialog[\s\S]+onConfirm=\{\(\) => void updateStatus\(statusTarget\)\}/);
   assert.doesNotMatch(source, /<details className="staff-action-menu"|<summary/);
+});
+
+test("staff directory filters before pagination and rejects unknown filter values", async () => {
+  const [route, repository, component] = await Promise.all([
+    readFile(new URL("../app/api/admin/users/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/admin-users-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /directoryStatusSchema = z\.enum\(\["ALL", "ACTIVE", "PENDING", "SUSPENDED"\]\)/);
+  assert.match(route, /directoryRoleSchema = z\.enum\(\["ALL", \.\.\.APP_ROLES\]\)/);
+  assert.match(route, /INVALID_STAFF_DIRECTORY_FILTER/);
+  assert.match(repository, /\$3 = 'PENDING'[\s\S]+membership\.must_change_password/);
+  assert.match(repository, /\$4 = 'ALL' or membership\.role = \$4/);
+  assert.match(repository, /offset \$5 limit \$6/);
+  assert.match(component, /status:statusFilter,role:roleFilter/);
+  assert.match(component, /setStatusFilter\("ALL"\);setRoleFilter\("ALL"\)/);
+});
+
+test("staff directory has responsive cards and a complete keyboard menu", async () => {
+  const [component, css] = await Promise.all([
+    readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  for (const key of ["ArrowDown", "ArrowUp", "Home", "End", "Escape"]) {
+    assert.match(component, new RegExp(`\\"${key}\\"`));
+  }
+  assert.match(component, /triggerRef\.current\?\.focus\(\);setOpen\(null\)/);
+  assert.match(component, /data-label=\{t\("admin\.users\.account"\)\}/);
+  assert.match(css, /@media\(max-width:680px\)\{\.staff-directory-filters/);
+  assert.match(css, /\.staff-user-head\{display:none\}/);
+  assert.match(css, /\.staff-user-row\{position:relative;min-width:0;min-height:0/);
 });
 
 test("persistent sessions last 15 days for administrators and 30 days for staff", () => {

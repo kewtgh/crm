@@ -1,8 +1,10 @@
-# Implementation status — v3.8.25 release candidate
+# Implementation status — v3.8.26 release candidate
 
 ## Scope
 
-v3.8.25 atomically archives terminal deployment requests before publishing the final controller
+v3.8.26 fixes the staff directory's 375px overflow, adds database-paginated lifecycle and role
+filters, completes keyboard focus behavior for staff action menus, and enforces README release-version
+parity. v3.8.25 atomically archives terminal deployment requests before publishing the final controller
 state, and reports archival faults as control-plane finalization failures without relabeling an
 accepted application release. v3.8.24 makes the target runtime environment preflight self-contained in a dependency-free
 authoritative core, with no host `tsx` or `node_modules` requirement and stable validator failure
@@ -83,15 +85,27 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - a dedicated communication delivery category with durable queue acceptance, distinct provider
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
-- synchronized application package, lockfile, runtime, Compose test fixture, and documentation
-  version 3.8.25; the independently deployed Cloudflare Worker code and metadata are unchanged;
+- synchronized application package, lockfile, runtime, README, Compose test fixture, and documentation
+  version 3.8.26; the independently deployed Cloudflare Worker code and metadata are unchanged;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
+- database-paginated staff lifecycle/role filters, a contained mobile staff-card layout, and complete
+  keyboard focus behavior for staff action menus;
+- correct nested-relation cardinality when a foreign-key column participates in a composite unique
+  index, retaining arrays for one-to-many relations such as household members;
 
 ## Local verification recorded
 
 | Check | Result |
 | --- | --- |
+| v3.8.26 staff directory targeted contracts | Pass: 9/9 |
+| Final `npm run typecheck` | Pass |
+| Final `npm run lint` | Pass |
+| Final `npm run test:contracts` | Pass: 68 application contracts + 8 CAPTCHA contracts |
+| `npm run db:migrations:verify` | Pass: 78 ordered checksum-managed migrations |
+| Final `npm run test:deploy` | Pass: 82/82, including README/package/runtime version parity |
+| Final production `npm run build` | Pass: 85 application/API routes |
+| Final `ms-playwright/chromium-1228` staged matrix | Pass: 80 page/viewports, 10/10 stages, 0 errors, 0 warnings, QA identities 9/9 cleaned; Chromium 149.0.7827.55 from revision 1228 |
 | Root `npm ci` | Pass: 566 packages installed, 572 audited, 0 vulnerabilities |
 | Communication delivery Phase 2 application contracts | Pass: 9/9, including queue-only Web ownership, attempt-start ordering, durable idempotency, fenced completion, provider classification, uncertainty, time budget, heartbeat/readiness, Operations and UI |
 | Communication delivery Phase 1 migration | Pass: clean standard migration 76/76 through the Phase 2 switch; parent-069 representative QUEUED, FAILED, SENT, RECEIVED, and DELIVERED rows unchanged |
@@ -111,17 +125,20 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | `npm run test:deploy:raw` | Pass: 69/69 application-runtime/target-runtime/version/rootless Compose/deploy/secret-source/atomic-switch/BuildKit/Tunnel contracts |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
-| `npm run test:contracts:raw` | Pass: 67 application contracts + 8 CAPTCHA contracts |
+| `npm run test:contracts:raw` | Pass: 68 application contracts + 8 CAPTCHA contracts |
 | Tracked-tree production identifier / retired Env / deployment-command scans | Pass |
 | `git diff --check` | Pass before release commit |
 
 ## Not performed / external release gates
 
 No production SSH/deployment, Cloudflare Worker deployment, DNS, Cloudflare Tunnel, Caddy, systemd,
-firewall, rootless daemon, or real production Docker resource changed. No full ten-phase Chromium
-matrix, complete database suite, production image publication, real Resend
+firewall, rootless daemon, or real production Docker resource changed. The full ten-phase local
+Chromium matrix passed; no complete database suite, production image publication, real Resend
 delivery, encrypted S3 lifecycle, Tunnel route, server reboot, or production recovery drill was run
 in this scoped implementation.
+
+The registry-backed `npm audit --omit=dev` was not run because approval policy rejected sending the
+lockfile dependency tree to the external npm registry without separate explicit authorization.
 
 Before production deployment, operators must provision non-overlapping subordinate UID/GID ranges,
 the lingering rootless user service, cgroup v2 delegation, exact file ownership, real secrets,

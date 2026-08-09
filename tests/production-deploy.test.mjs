@@ -399,17 +399,18 @@ test("classifies every active systemd oneshot state and fixed deployment lock", 
   }
 });
 
-test("release metadata, runtime APP_VERSION, health responses, and verification stay aligned", async () => {
-  const [packageText, versionSource, healthRoute, runner, dockerfile] = await Promise.all([
+test("release metadata, runtime APP_VERSION, README, health responses, and verification stay aligned", async () => {
+  const [packageText, versionSource, readme, healthRoute, runner, dockerfile] = await Promise.all([
     source("package.json"),
     source("lib/version.ts"),
+    source("README.md"),
     source("app/api/health/route.ts"),
     source("scripts/deploy-production-runner.mjs"),
     source("Dockerfile"),
   ]);
   const packageVersion = JSON.parse(packageText).version;
   assert.equal(
-    assertReleaseVersionConsistency({ packageVersion, appVersionSource: versionSource }),
+    assertReleaseVersionConsistency({ packageVersion, appVersionSource: versionSource, readmeSource: readme }),
     packageVersion,
   );
   assert.equal(appVersionFromSource(versionSource), packageVersion);
@@ -426,6 +427,14 @@ test("release version contract rejects a stale runtime APP_VERSION", () => {
     packageVersion: "3.8.12",
     appVersionSource: 'export const APP_VERSION = "3.8.1";\n',
   }), /LUMINA_RELEASE_VERSION_MISMATCH/);
+});
+
+test("release version contract rejects a stale README release candidate", () => {
+  assert.throws(() => assertReleaseVersionConsistency({
+    packageVersion: "3.8.26",
+    appVersionSource: 'export const APP_VERSION = "3.8.26";\n',
+    readmeSource: "# Lumina CRM\n\nCurrent release candidate: **v3.8.19**\n",
+  }), /LUMINA_README_RELEASE_VERSION_MISMATCH/);
 });
 
 test("initialize follows the explicit first-install order", async () => {

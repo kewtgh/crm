@@ -24,6 +24,8 @@ export type StaffUserRecord = {
 
 export type StaffInvitationDeliveryStatus = "SENT" | "UNCONFIRMED";
 export type StaffInvitationStatus = "QUEUED" | "SENT" | "FAILED" | "UNCERTAIN";
+export type StaffDirectoryStatus = "ALL" | "ACTIVE" | "PENDING" | "SUSPENDED";
+export type StaffDirectoryRole = "ALL" | AppRole;
 
 type StaffRow = {
   id: string;
@@ -74,10 +76,18 @@ function normalizeWriteError(error: unknown): never {
   throw error;
 }
 
-export async function listStaffUsers(input: { query?: string; page?: number; pageSize?: number }) {
+export async function listStaffUsers(input: {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+  status?: StaffDirectoryStatus;
+  role?: StaffDirectoryRole;
+}) {
   const page = Math.max(1, input.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 20));
   const query = input.query?.trim() ?? "";
+  const status = input.status ?? "ALL";
+  const role = input.role ?? "ALL";
   const result = await withPoolClient("system", (client) => client.query<StaffRow>(
     `
       select
@@ -106,15 +116,24 @@ export async function listStaffUsers(input: { query?: string; page?: number; pag
         where delivery.workspace_id=membership.workspace_id and delivery.user_id=account.id
         order by delivery.created_at desc limit 1
       ) invitation on true
-      where $2 = ''
+      where (
+        $2 = ''
         or profile.username::text ilike '%' || $2 || '%'
         or profile.display_name_zh ilike '%' || $2 || '%'
         or profile.display_name_en ilike '%' || $2 || '%'
         or account.email::text ilike '%' || $2 || '%'
+      )
+        and (
+          $3 = 'ALL'
+          or ($3 = 'ACTIVE' and membership.status = 'ACTIVE' and not membership.must_change_password)
+          or ($3 = 'PENDING' and membership.status = 'ACTIVE' and membership.must_change_password)
+          or ($3 = 'SUSPENDED' and membership.status = 'SUSPENDED')
+        )
+        and ($4 = 'ALL' or membership.role = $4)
       order by profile.display_name_en, profile.username
-      offset $3 limit $4
+      offset $5 limit $6
     `,
-    [configuredWorkspaceId(), query, (page - 1) * pageSize, pageSize],
+    [configuredWorkspaceId(), query, status, role, (page - 1) * pageSize, pageSize],
   ));
   return {
     total: Number(result.rows[0]?.total_count ?? 0),

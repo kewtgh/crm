@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyRound, MailPlus, MoreHorizontal, RotateCcw, ShieldCheck, UserRoundPlus, X } from "lucide-react";
-import type { StaffInvitationDeliveryStatus, StaffUserRecord } from "@/lib/admin-users-repository";
+import type { StaffDirectoryRole, StaffDirectoryStatus, StaffInvitationDeliveryStatus, StaffUserRecord } from "@/lib/admin-users-repository";
 import type { AppRole } from "@/lib/roles";
-import { roleMessageKey } from "@/lib/roles";
+import { APP_ROLES, roleMessageKey } from "@/lib/roles";
 import { useAppUser } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { ConfirmDialog, InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
@@ -53,6 +53,8 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StaffDirectoryStatus>("ALL");
+  const [roleFilter, setRoleFilter] = useState<StaffDirectoryRole>("ALL");
   const [page, setPage] = useState(1);
   const [pageSize,setPageSize]=useState(10);
   const [loading, setLoading] = useState(false);
@@ -72,10 +74,8 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
       if (target instanceof Node && document.querySelector(`[data-staff-action-menu="${actionMenuUserId}"]`)?.contains(target)) return;
       setActionMenuUserId(null);
     };
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setActionMenuUserId(null); };
     document.addEventListener("mousedown", closeMenu);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => { document.removeEventListener("mousedown", closeMenu); document.removeEventListener("keydown", closeOnEscape); };
+    return () => { document.removeEventListener("mousedown", closeMenu); };
   }, [actionMenuUserId]);
 
   useEffect(() => {
@@ -83,7 +83,10 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
     const timer = window.setTimeout(async () => {
       setLoading(true); setLoadError("");
       try {
-        const result = await apiFetch<{ items?: StaffUserRecord[]; total?: number }>(`/api/admin/users?page=${page}&pageSize=${pageSize}&query=${encodeURIComponent(query)}`, { signal: controller.signal });
+        const params = new URLSearchParams({
+          page:String(page),pageSize:String(pageSize),query,status:statusFilter,role:roleFilter,
+        });
+        const result = await apiFetch<{ items?: StaffUserRecord[]; total?: number }>(`/api/admin/users?${params}`, { signal: controller.signal });
         if (!result.items) throw new Error();
         setItems(result.items); setTotal(result.total ?? 0);
       } catch (error) {
@@ -91,7 +94,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
       } finally { setLoading(false); }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [page, pageSize, query, reloadKey, t]);
+  }, [page, pageSize, query, reloadKey, roleFilter, statusFilter, t]);
 
   const updateStatus = async (item: StaffUserRecord) => {
     const status = item.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
@@ -100,6 +103,7 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
       await apiFetch(`/api/admin/users/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
     } catch { setLoadError(t("admin.users.updateFailed")); setStatusPending(false); return; }
     setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status } : entry));
+    setReloadKey((value) => value + 1);
     setToast(t(status === "ACTIVE" ? "admin.users.activated" : "admin.users.suspended", { name: `${item.displayNameZh} / ${item.displayNameEn}` }));
     setStatusPending(false);
     setStatusTarget(null);
@@ -129,17 +133,43 @@ export function StaffUsersPage({ initialItems, initialTotal }: { initialItems: S
   return <div className="page-stack">
     <section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.crmUsers")}</p><h1>{t("admin.users.title")}</h1><p>{t("admin.users.description")}</p></div><button className="primary-button" type="button" onClick={() => setInviteOpen(true)}><UserRoundPlus size={17}/>{t("admin.inviteUser")}</button></section>
     <section className="quick-summary"><span><b>{total}</b><small>{t("admin.registeredUsers")}</small></span><span><b>{items.filter((item) => item.status === "ACTIVE" && item.onboardingStatus === "ACTIVE").length}</b><small>{t("admin.users.activeOnPage")}</small></span><span><b>{items.filter((item) => item.mfaEnabled).length}</b><small>{t("admin.users.mfaOnPage")}</small></span><span><b>{items.filter((item) => item.role === "SUPER_ADMIN" || item.role === "ADMIN").length}</b><small>{t("admin.users.adminsOnPage")}</small></span></section>
-    <section className="surface staff-directory"><div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("admin.users.search")} />{loading && <span role="status">{t("admin.users.loading")}</span>}</div>
+    <section className="surface staff-directory"><div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("admin.users.search")} /><div className="filter-chips staff-directory-filters"><label className="compact-select"><span>{t("admin.users.statusFilter")}</span><select value={statusFilter} onChange={(event)=>{setStatusFilter(event.target.value as StaffDirectoryStatus);setPage(1);}}><option value="ALL">{t("common.all")}</option><option value="ACTIVE">{t("common.active")}</option><option value="PENDING">{t("admin.users.status.pending")}</option><option value="SUSPENDED">{t("common.inactive")}</option></select></label><label className="compact-select"><span>{t("admin.users.roleFilter")}</span><select value={roleFilter} onChange={(event)=>{setRoleFilter(event.target.value as StaffDirectoryRole);setPage(1);}}><option value="ALL">{t("common.all")}</option>{APP_ROLES.map((role)=><option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select></label></div>{loading && <span role="status">{t("admin.users.loading")}</span>}</div>
       {loadError && <InlineMessage type="error">{loadError}</InlineMessage>}
       <div className="staff-user-head"><span>{t("admin.users.identity")}</span><span>{t("admin.users.account")}</span><span>{t("settings.role")}</span><span>{t("common.mfa")}</span><span>{t("admin.lastLogin")}</span><span>{t("common.actions")}</span></div>
-      <div className="staff-user-list">{items.map((item) => { const protectedAccount = item.role === "SUPER_ADMIN" || (currentUser.role !== "SUPER_ADMIN" && item.role === "ADMIN"); const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; const menuOpen = actionMenuUserId === item.id; return <article className="staff-user-row" key={item.id}><div><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge><span><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? `admin.users.invitationStatus.${(item.invitationDeliveryStatus ?? "UNCERTAIN").toLowerCase()}` : "common.active")}</small></span><div className="staff-action-menu" data-staff-action-menu={item.id}><button className="icon-button staff-action-trigger" type="button" aria-label={t("common.actions")} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setActionMenuUserId((current) => current === item.id ? null : item.id)}><MoreHorizontal size={18}/></button>{menuOpen && <div role="menu"><button type="button" role="menuitem" disabled={protectedAccount || item.id === currentUser.id} onClick={() => { setActionMenuUserId(null); setStatusTarget(item); }}>{t(item.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: item.displayNameEn })}</button>{awaitingConfirmation && <button type="button" role="menuitem" onClick={() => { setActionMenuUserId(null); void resendInvitation(item); }}><RotateCcw size={15}/>{t("admin.users.resendInvitation")}</button>}</div>}</div></article>; })}</div>
+      <div className="staff-user-list">{items.map((item) => { const awaitingConfirmation = item.status === "ACTIVE" && item.onboardingStatus === "AWAITING_EMAIL_CONFIRMATION"; return <article className="staff-user-row" key={item.id}><div className="staff-user-identity"><span className="record-avatar user">{item.displayNameEn.split(/\s+/).map((part) => part[0]).join("").slice(0,2)}</span><span><b>{item.displayNameZh} / {item.displayNameEn}</b><small>{item.email}</small></span></div><span className="staff-user-account" data-label={t("admin.users.account")}><b>@{item.username}</b><small>{item.id.slice(0,8)}</small></span><div className="staff-user-role" data-label={t("settings.role")}><StatusBadge tone={item.role.includes("ADMIN") ? "purple" : item.role === "SALES_SUPPORT" ? "green" : "blue"}>{t(roleMessageKey[item.role])}</StatusBadge></div><div className="staff-user-mfa" data-label={t("common.mfa")}><StatusBadge tone={item.mfaEnabled ? "green" : "amber"}>{t(item.mfaEnabled ? "common.enabled" : "common.pending")}</StatusBadge></div><span className="staff-user-last-sign-in" data-label={t("admin.lastLogin")}><b>{awaitingConfirmation ? t("admin.users.awaitingEmailConfirmation") : item.lastSignInAt ? formatDate(item.lastSignInAt, { includeTime: true }) : t("admin.users.neverSignedIn")}</b><small>{t(item.status !== "ACTIVE" ? "common.inactive" : awaitingConfirmation ? `admin.users.invitationStatus.${(item.invitationDeliveryStatus ?? "UNCERTAIN").toLowerCase()}` : "common.active")}</small></span><StaffActionMenu item={item} currentUser={currentUser} open={actionMenuUserId === item.id} setOpen={setActionMenuUserId} onStatus={()=>setStatusTarget(item)} onResend={()=>void resendInvitation(item)}/></article>; })}</div>
       {!items.length && !loading && <div className="empty-state"><span>{t("admin.users.empty")}</span></div>}
       <Pagination page={Math.min(page,pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);}}/>
     </section>
-    <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={(item, deliveryStatus) => { setInviteOpen(false); setPage(1); setQuery(""); setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)]); setTotal((current) => current + (items.some((entry) => entry.id === item.id) ? 0 : 1)); setReloadKey((value) => value + 1); setToast(t(staffCreationMessageKey(deliveryStatus))); }} />
+    <CreateStaffDialog open={inviteOpen} canCreateAdmin={currentUser.role === "SUPER_ADMIN"} close={() => setInviteOpen(false)} onCreated={(item, deliveryStatus) => { setInviteOpen(false); setPage(1); setQuery(""); setStatusFilter("ALL");setRoleFilter("ALL");setItems((current) => [item, ...current.filter((entry) => entry.id !== item.id)]); setTotal((current) => current + (items.some((entry) => entry.id === item.id) ? 0 : 1)); setReloadKey((value) => value + 1); setToast(t(staffCreationMessageKey(deliveryStatus))); }} />
     {statusTarget && <ConfirmDialog title={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendConfirmTitle" : "admin.users.activateConfirmTitle", { name: statusTarget.displayNameEn })} description={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendConfirmDescription" : "admin.users.activateConfirmDescription", { name: `${statusTarget.displayNameZh} / ${statusTarget.displayNameEn}` })} confirmLabel={t(statusTarget.status === "ACTIVE" ? "admin.users.suspendAction" : "admin.users.activateAction", { name: statusTarget.displayNameEn })} pending={statusPending} tone={statusTarget.status === "ACTIVE" ? "danger" : "primary"} onClose={() => { if (!statusPending) setStatusTarget(null); }} onConfirm={() => void updateStatus(statusTarget)} />}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
+}
+
+function StaffActionMenu({item,currentUser,open,setOpen,onStatus,onResend}:{item:StaffUserRecord;currentUser:ReturnType<typeof useAppUser>;open:boolean;setOpen:React.Dispatch<React.SetStateAction<string|null>>;onStatus:()=>void;onResend:()=>void}){
+  const{t}=useI18n();
+  const triggerRef=useRef<HTMLButtonElement>(null);
+  const menuRef=useRef<HTMLDivElement>(null);
+  const protectedAccount=item.role==="SUPER_ADMIN"||(currentUser.role!=="SUPER_ADMIN"&&item.role==="ADMIN");
+  const awaitingConfirmation=item.status==="ACTIVE"&&item.onboardingStatus==="AWAITING_EMAIL_CONFIRMATION";
+  useEffect(()=>{
+    if(!open)return;
+    const frame=window.requestAnimationFrame(()=>menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus());
+    return()=>window.cancelAnimationFrame(frame);
+  },[open]);
+  const onKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
+    if(event.key==="Escape"){
+      event.preventDefault();triggerRef.current?.focus();setOpen(null);return;
+    }
+    if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;
+    const options=Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)")??[]);
+    if(!options.length)return;
+    event.preventDefault();
+    const index=options.indexOf(document.activeElement as HTMLButtonElement);
+    const next=event.key==="Home"?0:event.key==="End"?options.length-1:event.key==="ArrowDown"?(index+1+options.length)%options.length:(index-1+options.length)%options.length;
+    options[next]?.focus();
+  };
+  return <div className="staff-action-menu" data-staff-action-menu={item.id}><button ref={triggerRef} className="icon-button staff-action-trigger" type="button" aria-label={t("common.actions")} aria-haspopup="menu" aria-expanded={open} aria-controls={open?`staff-actions-${item.id}`:undefined} onClick={()=>setOpen((current)=>current===item.id?null:item.id)}><MoreHorizontal size={18}/></button>{open&&<div ref={menuRef} id={`staff-actions-${item.id}`} role="menu" onKeyDown={onKeyDown}><button type="button" role="menuitem" disabled={protectedAccount||item.id===currentUser.id} onClick={()=>{setOpen(null);onStatus();}}>{t(item.status==="ACTIVE"?"admin.users.suspendAction":"admin.users.activateAction",{name:item.displayNameEn})}</button>{awaitingConfirmation&&<button type="button" role="menuitem" onClick={()=>{setOpen(null);onResend();}}><RotateCcw size={15}/>{t("admin.users.resendInvitation")}</button>}</div>}</div>;
 }
 
 function CreateStaffDialog({ open, canCreateAdmin, close, onCreated }: { open: boolean; canCreateAdmin: boolean; close: () => void; onCreated: (item: StaffUserRecord, deliveryStatus: StaffInvitationDeliveryStatus) => void }) {
