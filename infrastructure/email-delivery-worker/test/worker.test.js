@@ -12,7 +12,7 @@ import {
 } from "../src/templates.js";
 
 const CRM_TOKEN = "unit-test-crm-delivery-token";
-const RESEND_KEY = "unit-test-resend-api-key";
+const RESEND_KEY = "re_unit-test-resend-api-key";
 const RECIPIENT = "recipient@example.test";
 const APPLICATION_URL = "https://crm.example.test";
 const DELIVERY_PATH = "/test-delivery";
@@ -130,8 +130,17 @@ function providerDouble({
   error,
 } = {}) {
   const calls = [];
-  const fetchImplementation = async (url, init) => {
-    calls.push({ url, init });
+  const fetchImplementation = async (request) => {
+    const capturedRequest = request.clone();
+    const init = {
+      method: capturedRequest.method,
+      headers: capturedRequest.headers,
+      body: await capturedRequest.text(),
+      cache: capturedRequest.cache,
+      redirect: capturedRequest.redirect,
+      signal: capturedRequest.signal,
+    };
+    calls.push({ request, url: request.url, init });
     if (error) throw error;
     return new Response(JSON.stringify(responseBody), {
       status,
@@ -241,6 +250,35 @@ test("missing required runtime configuration fails closed", async (t) => {
       });
     });
   }
+});
+
+test("malformed Resend API key configuration fails closed", async (t) => {
+  const provider = providerDouble();
+  const worker = createEmailDeliveryWorker({ fetchImplementation: provider.fetchImplementation });
+  const invalidApiKeys = [
+    null,
+    123,
+    "",
+    "not-a-resend-key",
+    `${RESEND_KEY}\r\nInjected: value`,
+    `${RESEND_KEY} suffix`,
+    ` ${RESEND_KEY}`,
+    `${RESEND_KEY}\t`,
+    `${RESEND_KEY}\u0000suffix`,
+  ];
+  for (const apiKey of invalidApiKeys) {
+    await t.test(typeof apiKey === "string" ? JSON.stringify(apiKey) : String(apiKey), async () => {
+      const response = await worker.fetch(
+        deliveryRequest(),
+        environment({ RESEND_API_KEY: apiKey }),
+      );
+      assert.equal(response.status, 503);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "SERVICE_NOT_CONFIGURED" },
+      });
+    });
+  }
+  assert.equal(provider.calls.length, 0);
 });
 
 test("invalid URL, mailbox, and route configuration fails closed", async (t) => {
@@ -434,6 +472,12 @@ test("a valid request invokes Resend exactly once", async () => {
   assert.equal(response.status, 200);
   assert.equal(provider.calls.length, 1);
   assert.equal(provider.calls[0].url, "https://api.resend.com/emails");
+  assert.equal(provider.calls[0].request instanceof Request, true);
+  assert.equal(provider.calls[0].request.method, "POST");
+  assert.equal(provider.calls[0].request.cache, "no-store");
+  assert.equal(provider.calls[0].request.redirect, "error");
+  assert.equal(provider.calls[0].request.signal instanceof AbortSignal, true);
+  assert.equal(provider.calls[0].request.headers.get("user-agent"), "lumina-mail-delivery/1.0");
 });
 
 test("Resend receives the unchanged CRM Idempotency-Key", async () => {
@@ -496,6 +540,25 @@ test("Resend 4xx maps to stable 502", async () => {
   });
 });
 
+test("provider HTTP failures retain bounded provider status evidence", async (t) => {
+  for (const [status, expectedResult] of [[403, "rejected"], [500, "unavailable"]]) {
+    await t.test(String(status), async () => {
+      const lines = [];
+      const provider = providerDouble({ status });
+      const worker = createEmailDeliveryWorker({
+        fetchImplementation: provider.fetchImplementation,
+        logger: { info: (line) => lines.push(line) },
+      });
+      await worker.fetch(deliveryRequest(), environment());
+      const evidence = JSON.parse(lines.at(-1));
+      assert.equal(evidence.providerStatus, status);
+      assert.equal(evidence.providerResult, expectedResult);
+      assert.equal("providerFailureType" in evidence, false);
+      assert.equal("providerErrorName" in evidence, false);
+    });
+  }
+});
+
 test("Resend 5xx maps to stable 503", async () => {
   const provider = providerDouble({
     status: 500,
@@ -510,8 +573,8 @@ test("Resend 5xx maps to stable 503", async () => {
 });
 
 test("Resend timeout maps to stable 503", async () => {
-  const fetchImplementation = (_url, init) => new Promise((_resolve, reject) => {
-    init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+  const fetchImplementation = (request) => new Promise((_resolve, reject) => {
+    request.signal.addEventListener("abort", () => reject(request.signal.reason), { once: true });
   });
   const worker = createEmailDeliveryWorker({
     fetchImplementation,
@@ -522,6 +585,78 @@ test("Resend timeout maps to stable 503", async () => {
   assert.deepEqual(await responseJson(response), {
     error: { code: "PROVIDER_UNAVAILABLE" },
   });
+});
+
+test("provider request construction failure is classified without leaking exception data", async () => {
+  const lines = [];
+  const marker = "request-construction-secret-message";
+  class ThrowingRequest {
+    constructor() {
+      throw new TypeError(marker);
+    }
+  }
+  const worker = createEmailDeliveryWorker({
+    fetchImplementation: async () => {
+      assert.fail("fetch must not run when Request construction fails");
+    },
+    logger: { info: (line) => lines.push(line) },
+    RequestImplementation: ThrowingRequest,
+  });
+  const response = await worker.fetch(deliveryRequest(), environment());
+  assert.equal(response.status, 503);
+  assert.deepEqual(await responseJson(response), {
+    error: { code: "PROVIDER_UNAVAILABLE" },
+  });
+  assert.deepEqual(JSON.parse(lines.at(-1)), {
+    event: "email_delivery",
+    requestId: "job-123",
+    template: "device-verification",
+    httpStatus: 503,
+    providerResult: "unavailable",
+    providerFailureType: "REQUEST_CONSTRUCTION_FAILED",
+    providerErrorName: "TypeError",
+  });
+  assert.equal(lines.join("\n").includes(marker), false);
+});
+
+test("provider fetch failures use bounded classifications and safe error names", async (t) => {
+  const cases = [
+    ["type", new TypeError("type-error-secret"), "FETCH_TYPE_ERROR", "TypeError"],
+    ["timeout", new DOMException("timeout-secret", "TimeoutError"), "FETCH_TIMEOUT", "TimeoutError"],
+    ["abort", new DOMException("abort-secret", "AbortError"), "FETCH_ABORTED", "AbortError"],
+    ["network", new Error("network-secret"), "FETCH_NETWORK_ERROR", "Error"],
+    ["other", { name: "UnexpectedProviderError", message: "other-secret" }, "FETCH_OTHER", "Other"],
+  ];
+  for (const [name, error, failureType, errorName] of cases) {
+    await t.test(name, async () => {
+      const lines = [];
+      const provider = providerDouble({ error });
+      const worker = createEmailDeliveryWorker({
+        fetchImplementation: provider.fetchImplementation,
+        logger: { info: (line) => lines.push(line) },
+      });
+      const response = await worker.fetch(deliveryRequest({
+        body: deliveryBody({
+          template: "staff-account-created",
+          payload: samplePayloads()["staff-account-created"],
+        }),
+      }), environment());
+      assert.equal(response.status, 503);
+      const log = lines.join("\n");
+      const evidence = JSON.parse(lines.at(-1));
+      assert.equal(evidence.providerFailureType, failureType);
+      assert.equal(evidence.providerErrorName, errorName);
+      assert.equal("providerStatus" in evidence, false);
+      assert.equal(log.includes(error.message), false);
+      assert.equal(log.includes(RECIPIENT), false);
+      assert.equal(log.includes(RESEND_KEY), false);
+      assert.equal(log.includes("unit-test-temporary-password"), false);
+      assert.equal(log.includes("authorization"), false);
+      assert.equal(log.includes("html"), false);
+      assert.equal(log.includes("stack"), false);
+      assert.equal(log.includes("cause"), false);
+    });
+  }
 });
 
 test("logs exclude recipient, payload, HTML, Bearer token, and Resend API key", async () => {
