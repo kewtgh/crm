@@ -45,7 +45,7 @@ import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
 import { AccessibleDrawer } from "./ui";
 
-type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; children?: { labelKey: string; href: string; badge?: string }[] };
+type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; documentChildNavigation?: boolean; children?: { labelKey: string; href: string; badge?: string }[] };
 type NavigationGroup = { titleKey: string; items: NavItem[] };
 type GlobalSearchResult = { title: string; detail: string; href: string; source: "page" | "record" };
 
@@ -92,7 +92,7 @@ const navigation: NavigationGroup[] = [
     ]},
   ]},
   { titleKey: "nav.admin", items: [
-    { labelKey: "nav.admin", icon: ShieldCheck, children: [
+    { labelKey: "nav.admin", icon: ShieldCheck, documentChildNavigation: true, children: [
       { labelKey: "nav.dashboard", href: "/admin" },
       { labelKey: "nav.approvals", href: "/admin/approvals" },
       { labelKey: "nav.operationsCenter", href: "/admin/operations" },
@@ -414,7 +414,7 @@ function NavEntry({ item, activeHref, expanded, onExpand, onNavigate }: { item: 
   const active = item.href ? activeHref === item.href : item.children?.some((child) => child.href === activeHref);
   if (item.children) return <div className={`nav-parent ${active ? "active" : ""}`}>
     <button type="button" className="nav-link" aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
-    {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=activeHref===child.href;return <Link className={childActive ? "active" : ""} aria-current={childActive?"page":undefined} href={child.href} key={child.href} onClick={onNavigate}><span>{t(child.labelKey)}</span>{child.badge && <b className="nav-badge">{child.badge}</b>}</Link>;})}</div>}
+    {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=activeHref===child.href;const properties={className:childActive?"active":"",...(childActive?{"aria-current":"page" as const}:{}),href:child.href,onClick:onNavigate};const content=<><span>{t(child.labelKey)}</span>{child.badge&&<b className="nav-badge">{child.badge}</b>}</>;return item.documentChildNavigation?<a {...properties} data-navigation="document" key={child.href}>{content}</a>:<Link {...properties} key={child.href}>{content}</Link>;})}</div>}
   </div>;
   return <Link className={`nav-link ${active ? "active" : ""}`} aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-current={active?"page":undefined} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
 }
