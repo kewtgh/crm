@@ -243,7 +243,7 @@ function providerRequest(
     method: "POST",
     headers,
     body: serializedProviderBody,
-    redirect: "error",
+    redirect: "manual",
   });
   if (result.failure) return result;
 
@@ -263,7 +263,7 @@ function providerRequest(
     method: "POST",
     headers,
     body: serializedProviderBody,
-    redirect: "error",
+    redirect: "manual",
     signal,
   });
 }
@@ -367,6 +367,16 @@ async function deliver(request, {
       providerErrorName: safeProviderErrorName(error),
     });
     return errorResponse(503, "PROVIDER_UNAVAILABLE");
+  }
+
+  if (providerResponse.status >= 300 && providerResponse.status < 400) {
+    safeLog(logger, {
+      event: "email_delivery",
+      providerResult: "redirect_rejected",
+      providerStatus: providerResponse.status,
+      httpStatus: 502,
+    });
+    return errorResponse(502, "PROVIDER_REDIRECT_REJECTED");
   }
 
   if (providerResponse.status >= 400 && providerResponse.status < 500) {

@@ -127,6 +127,7 @@ function deliveryRequest({
 function providerDouble({
   status = 200,
   responseBody = { id: "resend-message-id" },
+  responseHeaders = {},
   error,
 } = {}) {
   const calls = [];
@@ -144,7 +145,7 @@ function providerDouble({
     if (error) throw error;
     return new Response(JSON.stringify(responseBody), {
       status,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...responseHeaders },
     });
   };
   return { calls, fetchImplementation };
@@ -499,7 +500,9 @@ test("a valid request invokes Resend exactly once", async () => {
   assert.equal(Object.hasOwn(requestInit, "cache"), false);
   assert.equal(requestInit.headers instanceof Headers, true);
   assert.equal(provider.calls[0].request.cache, "default");
-  assert.equal(provider.calls[0].request.redirect, "error");
+  assert.equal(requestInits[3].redirect, "manual");
+  assert.equal(requestInit.redirect, "manual");
+  assert.equal(provider.calls[0].request.redirect, "manual");
   assert.equal(provider.calls[0].request.signal instanceof AbortSignal, true);
   assert.equal(provider.calls[0].request.headers.get("authorization"), `Bearer ${RESEND_KEY}`);
   assert.equal(provider.calls[0].request.headers.get("user-agent"), "lumina-mail-delivery/1.0");
@@ -550,6 +553,49 @@ test("successful Resend response returns its message id", async () => {
   const response = await worker.fetch(deliveryRequest(), environment());
   assert.equal(response.status, 200);
   assert.deepEqual(await responseJson(response), { id: "provider-message-123" });
+});
+
+test("provider redirects are rejected without following or leaking Location", async (t) => {
+  for (const status of [301, 302, 307, 308]) {
+    await t.test(String(status), async () => {
+      const lines = [];
+      const location = `https://redirect-target.example.test/${status}?credential=must-not-log`;
+      const provider = providerDouble({
+        status,
+        responseHeaders: { Location: location },
+      });
+      const worker = createEmailDeliveryWorker({
+        fetchImplementation: provider.fetchImplementation,
+        logger: { info: (line) => lines.push(line) },
+      });
+      const response = await worker.fetch(deliveryRequest({
+        body: deliveryBody({
+          template: "staff-account-created",
+          payload: samplePayloads()["staff-account-created"],
+        }),
+      }), environment());
+
+      assert.equal(response.status, 502);
+      assert.deepEqual(await responseJson(response), {
+        error: { code: "PROVIDER_REDIRECT_REJECTED" },
+      });
+      assert.equal(provider.calls.length, 1);
+      assert.equal(provider.calls[0].request.redirect, "manual");
+      assert.deepEqual(JSON.parse(lines.at(-1)), {
+        event: "email_delivery",
+        providerResult: "redirect_rejected",
+        providerStatus: status,
+        httpStatus: 502,
+      });
+      const log = lines.join("\n");
+      assert.equal(log.includes(location), false);
+      assert.equal(log.includes("Location"), false);
+      assert.equal(log.includes(RESEND_KEY), false);
+      assert.equal(log.includes("Authorization"), false);
+      assert.equal(log.includes(RECIPIENT), false);
+      assert.equal(log.includes("unit-test-temporary-password"), false);
+    });
+  }
 });
 
 test("Resend 4xx maps to stable 502", async () => {
