@@ -69,7 +69,10 @@ test("deploy runner requires public Tunnel liveness without any origin secret", 
   assert.match(acceptance, /loopback readiness/);
   assert.match(acceptance, /Cloudflare Tunnel public liveness/);
   assert.match(acceptance, /`https:\/\/\$\{publicHostname\(\)\}\/api\/health`/);
-  assert.match(runner, /try \{\s*publicHostname\(\);\s*persist\(\);/);
+  assert.match(
+    runner,
+    /try \{[\s\S]+verifyTargetControllerSource[\s\S]+publicHostname\(\);\s*persist\(\);[\s\S]+runProductionReleaseWorkflow/,
+  );
   assert.match(
     runner,
     /acceptRuntime,[\s\S]*atomicWrite\(composeEnvPath,[\s\S]*atomicWrite\(acceptedPath,/,

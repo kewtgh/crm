@@ -14,8 +14,11 @@ replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Cad
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
 
-Version 3.8.26 makes staff-account governance usable on mobile, adds server-side lifecycle and role
-filters before pagination, completes keyboard focus behavior for account action menus, and brings the
+Version 3.8.26 introduces a stable production bootstrap that updates the source and starts a fresh
+target-controller Node process before any release work. It also performs bounded, Lumina-labeled
+post-acceptance BuildKit, paired-image, deployment-history, and stale-env cleanup without touching
+volumes or other Docker projects. The same release makes staff-account governance usable on mobile,
+adds server-side lifecycle and role filters, completes action-menu keyboard focus, and brings the
 README into the enforced release-version contract. Versions 3.8.20–3.8.25 hardened target-runtime
 preflight, application image closure, staff-account confirmations, invitation RLS, atomic Web/Worker
 release switching, and deployment-request finalization.
@@ -156,12 +159,21 @@ database role/extension and initial-admin bootstrap around the forward-only migr
 the first accepted release with no rollback image. Ordinary deploy refuses to run before this
 accepted state exists and never invokes either bootstrap step.
 
-The persistent deployment runner performs:
+Production deployment is a two-stage control plane. A long-lived-protocol bootstrap performs the
+single source fast-forward and then starts a fresh Node process from the target commit. A controller
+never deploys a release after mutating its own source tree.
 
 ```text
-rootless Docker/state capacity gate
+stable bootstrap: lock -> validate request/source -> fetch -> exact target SHA -> ff-only update
+fresh target controller: source/commit TOCTOU verification -> release workflow
+```
+
+The target controller performs:
+
+```text
+target-controller re-exec and exact commit evidence
+-> rootless Docker/state capacity gate
 -> isolated Lumina BuildKit verification
--> one exact Git fetch and fast-forward
 -> metadata-only Compose secret-source permission gate
 -> containerized checks and commit-tagged app/ops images
 -> migration verification and locked forward migration
@@ -169,7 +181,7 @@ rootless Docker/state capacity gate
 -> independent PostgreSQL/Web/Worker health
 -> loopback readiness and Cloudflare Tunnel public liveness
 -> persist accepted/rollback images
--> Lumina-only image/BuildKit cleanup
+-> bounded Lumina-only BuildKit, paired-image, history, and stale-env cleanup
 post-switch failure -> application-image rollback; database stays forward
 ```
 
@@ -182,11 +194,12 @@ copied, or deleted automatically; its presence requires operator review. After a
 fast-forward, the audited maintenance program must be installed separately as the fixed root-owned
 `/usr/local/libexec/lumina-crm-storage-maintenance.mjs` before first initialization or deployment.
 
-Every automatic image-build sequence triggers bounded cleanup of only the fixed
-`lumina-crm-buildkit` cache, including when verification or a later image build fails. The
-server-local retention, maximum-cache, reserved-cache, and minimum-free-space policy remains
-authoritative; no `docker system prune`, volume/network prune, or accepted-image deletion is used
-by this post-build mode.
+Every accepted release triggers bounded cleanup of only the fixed `lumina-crm-buildkit`, exactly
+labeled `kewtgh/crm` image pairs, and expired deployment history. Current, rollback, running, target,
+and recent accepted images remain protected, with at least three complete releases retained.
+Volumes are never automatically pruned. Generic Docker system/image/container/volume/network prune
+commands are prohibited. Cleanup failure is warning-only and never changes application acceptance
+or triggers rollback.
 
 The configured Git proxy, when present, is used for the first and only fetch; otherwise that single
 fetch is direct. It is never persisted as Git, Docker, or systemd configuration. Containers clear

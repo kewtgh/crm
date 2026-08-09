@@ -5,8 +5,10 @@ import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -19,7 +21,6 @@ import {
   assertRootlessDockerInfo,
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "./lib/rootless-docker.mjs";
-import { updateProductionSource } from "./lib/git-source-update.mjs";
 import { assertProductionSecretSources } from "./lib/production-secret-sources.mjs";
 import {
   dockerBuildEnvironment,
@@ -42,6 +43,11 @@ import {
   ControlPlaneFinalizationError,
   finalizeTerminalDeployment,
 } from "./lib/deployment-finalization.mjs";
+import {
+  parseTargetControllerArguments,
+  verifyTargetControllerSource,
+} from "./lib/target-controller-source.mjs";
+import { performPostDeploymentCleanup } from "./lib/post-deployment-cleanup.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -60,6 +66,7 @@ const allowedOrigins = new Set([
   "git@github.com:kewtgh/crm.git",
   "https://github.com/kewtgh/crm.git",
 ]);
+const controllerArguments = process.argv.slice(2);
 const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
   "http_proxy", "https_proxy", "all_proxy",
@@ -73,6 +80,11 @@ if (process.platform !== "linux" || typeof process.getuid !== "function" || proc
 }
 assertRootlessDockerHost();
 if (sourceRoot !== expectedSourceRoot) throw new Error(`Runner must execute from ${expectedSourceRoot}`);
+const sourceMetadata = lstatSync(sourceRoot);
+if (!sourceMetadata.isDirectory() || sourceMetadata.isSymbolicLink()
+  || realpathSync(sourceRoot) !== sourceRoot) {
+  throw new Error("TARGET_CONTROLLER_SOURCE_CHANGED");
+}
 if (!existsSync(requestPath)) throw new Error("Deployment request is missing");
 mkdirSync(stateRoot, { recursive: true, mode: 0o750 });
 mkdirSync(logRoot, { recursive: true, mode: 0o750 });
@@ -448,17 +460,6 @@ async function prepareBuilderAndCapacity() {
   });
 }
 
-async function updateSource() {
-  return updateProductionSource({
-    git,
-    baseEnvironment: directEnvironment(),
-    configuredProxy: configuredGitProxy,
-    expectedBranch,
-    allowedOrigins,
-    onConfiguredProxy: () => log("INFO", "Git fetch is using the configured Git proxy"),
-  });
-}
-
 async function buildImages(release) {
   const buildEnvironment = dockerBuildEnvironment(directEnvironment(), configuredDockerProxy);
   const common = [
@@ -567,21 +568,31 @@ async function rollbackApplication(reason) {
   };
 }
 
-async function requestCleanup() {
-  try {
-    const result = await run(
-      "bounded Lumina BuildKit cache cleanup",
+async function requestCleanup(accepted) {
+  const cleanup = await performPostDeploymentCleanup({
+    accepted,
+    target,
+    currentDeploymentId: deploymentId,
+    stateRoot,
+    logRoot,
+    environment: process.env,
+    runDocker: (args) => run(
+      `Lumina cleanup ${args.slice(0, 3).join(" ")}`,
       "docker",
-      ["buildx", "--builder", builder, "prune", "--filter", "until=168h", "--max-used-space", "12GB", "--reserved-space", "2GB", "--force"],
-      { timeoutMs: 360_000, allowFailure: true },
-    );
-    return result.code === 0
-      ? { status: "BUILDKIT_CACHE_CLEANUP_COMPLETED" }
-      : { status: "BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL" };
-  } catch {
-    log("WARN", "BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL");
-    return { status:"BUILDKIT_CACHE_CLEANUP_FAILED_NON_FATAL" };
-  }
+      args,
+      { timeoutMs: 360_000, allowFailure: true, quiet: true },
+    ),
+  }).catch(() => ({
+    status: "FAILED_NON_FATAL",
+    buildkitBytesReclaimed: 0,
+    imageBytesReclaimed: 0,
+    historyBytesReclaimed: 0,
+    freeBytesBefore: null,
+    freeBytesAfter: null,
+    warnings: ["POST_DEPLOYMENT_CLEANUP_FAILED"],
+  }));
+  for (const warning of cleanup.warnings) log("WARN", warning);
+  return cleanup;
 }
 
 function finish(context, currentState, result, update = {}) {
@@ -606,6 +617,24 @@ const finalizationContext = {
 };
 
 try {
+  const controllerLaunch = parseTargetControllerArguments(controllerArguments);
+  const controllerSource = await verifyTargetControllerSource({
+    launch: controllerLaunch,
+    git: async (args) => (await git(`verify target controller source: ${args[0]} ${args[1]}`, args, {
+      quiet: true,
+    })).stdout,
+    readPackageVersion: () => JSON.parse(
+      readFileSync(path.join(sourceRoot, "package.json"), "utf8"),
+    ).version,
+    expectedBranch,
+    allowedOrigins,
+  });
+  log("INFO", `BOOTSTRAP_SOURCE_COMMIT=${controllerLaunch.bootstrapSource}`);
+  log("INFO", `TARGET_SOURCE_COMMIT=${controllerLaunch.expectedTarget}`);
+  log("INFO", `TARGET_CONTROLLER_PID=${process.pid}`);
+  log("INFO", `TARGET_CONTROLLER_COMMIT=${controllerSource.commit}`);
+  log("INFO", `TARGET_APPLICATION_VERSION=${controllerSource.version}`);
+  log("INFO", "TARGET_CONTROLLER_REEXEC_OK");
   publicHostname();
   persist();
   const initialRuntime = await runtimeSnapshot();
@@ -645,12 +674,14 @@ try {
       atomicWrite(composeEnvPath, readFileSync(recoveryEnv, "utf8"));
       rmSync(recoveryEnv, { force:true });
     }
+    const cleanup = await requestCleanup(previousAccepted);
     finish(finalizationContext, persisted, "RECOVERED", {
       applicationAccepted:true,
       acceptedAt:previousAccepted.acceptedAt,
       targetCommit:previousAccepted.commit,
       targetImage:previousAccepted.currentImage,
       recovery:alreadyHealthy ? "ALREADY_HEALTHY" : "RECREATED",
+      cleanup,
     });
   } else if (request.mode === "rollback") {
     if (!previousAccepted?.rollbackImage || !previousAccepted?.rollbackOperationsImage) {
@@ -680,6 +711,7 @@ try {
       rollbackVersion: old.version,
       rollbackImage: old.currentImage,
       rollbackOperationsImage: old.operationsImage,
+      rollbackDeploymentId: old.deploymentId,
       recentImages: [...new Set([
         old.rollbackImage,
         old.rollbackOperationsImage,
@@ -689,12 +721,15 @@ try {
       database: "FORWARD_SCHEMA_RETAINED",
     };
     atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
+    rmSync(rollbackEnv, { force: true });
+    const cleanup = await requestCleanup(accepted);
     log("WARN", "Application rolled back; database remains on the forward schema.");
     finish(finalizationContext, persisted, "ROLLBACK_OK", {
       applicationAccepted: true,
       acceptedAt,
       rollback: { status: "SUCCEEDED", database: "FORWARD_SCHEMA_RETAINED" },
       targetImage: target.currentImage,
+      cleanup,
     });
   } else {
     const interrupted = priorLatest;
@@ -728,9 +763,9 @@ try {
       });
       const workflow = await runProductionReleaseWorkflow({
         mode: request.mode,
+        targetCommit: controllerLaunch.expectedTarget,
         operations: {
           prepare: prepareBuilderAndCapacity,
-          updateSource,
           resolveTarget: async (commit) => {
             const packageJson = JSON.parse(readFileSync(path.join(sourceRoot, "package.json"), "utf8"));
             target = { ...imageReferences(commit), version: String(packageJson.version) };

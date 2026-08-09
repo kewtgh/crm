@@ -1,5 +1,5 @@
 [Unit]
-Description=Lumina CRM post-success project storage cleanup
+Description=Lumina CRM compatibility bounded BuildKit cleanup
 After=network-online.target
 Wants=network-online.target
 
@@ -11,7 +11,7 @@ EnvironmentFile=/etc/lumina-crm/deploy.env
 Environment=DOCKER_CONFIG=/var/lib/lumina-crm/docker-config
 Environment=BUILDX_CONFIG=/var/lib/lumina-crm/docker-config/buildx
 UnsetEnvironment=DOCKER_CONTEXT
-ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs cleanup
+ExecStart=/usr/bin/node /usr/local/libexec/lumina-crm-storage-maintenance.mjs cache-cleanup
 TimeoutStartSec=360s
 UMask=0027
 PrivateTmp=true

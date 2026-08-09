@@ -143,8 +143,32 @@ The installed file must remain `root:root`, regular rather than a symlink, and n
 writable. Updating this program does not itself require starting storage prepare or CRM
 initialization.
 
-The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, or `rollback`.
-The systemd runner records that mode in its log, per-deployment state, and `latest.json`.
+The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, `rollback`, or
+`recover`. Production deployment is always two-stage: the stable bootstrap reads the request while
+the systemd `flock` owns the deployment lock, validates/fetches/fast-forwards the exact production
+branch, and spawns a fresh target-controller Node process. The target controller reloads its complete
+ES module graph from the target commit, repeats branch/origin/HEAD/clean/version checks, and only then
+may run preflight, build, migration, service switching, acceptance, cleanup, and finalization. A
+controller never deploys a release after mutating its own source tree.
+
+The journal and deployment log expose non-secret evidence as `BOOTSTRAP_SOURCE_COMMIT`,
+`TARGET_SOURCE_COMMIT`, `TARGET_CONTROLLER_PID`, `TARGET_CONTROLLER_COMMIT`,
+`TARGET_APPLICATION_VERSION`, and `TARGET_CONTROLLER_REEXEC_OK`. The target SHA is always a full
+40-character lowercase commit. A mismatch fails before build with
+`TARGET_CONTROLLER_SOURCE_CHANGED`.
+
+### One-time pre-3.8.26 controller-unit transition
+
+A host whose installed `lumina-crm-deploy.service` still points directly at
+`deploy-production-runner.mjs` cannot acquire the new boundary by starting that old unit: systemd
+would load the old runner before its source update. Before the first 3.8.26 deployment, use the
+project's existing reviewed systemd-asset installation procedure to install the tracked 3.8.26
+`lumina-crm-deploy.service`, verify its `ExecStart` names `deploy-production-bootstrap.mjs`, and run
+`systemctl daemon-reload`. Do not start a deployment until that one-time control-plane asset upgrade
+is verified. The bootstrap stays in the source tree as the deliberately small, backward-compatible
+protocol layer; it is not copied to `/etc` or `/usr/local`.
+
+The target controller records the mode in its log, per-deployment state, and `latest.json`.
 `last-success.json` remains the accepted release contract used by later deploy and rollback
 requests. An interrupted, non-terminal request remains in place: rerun the same mode to recover its
 existing request ID. Do not delete or edit these files to bypass a deployment gate.
@@ -197,15 +221,12 @@ keeps `builder-owner.json`, `latest.json`, and reports only; it is not a Docker 
 root. If an obsolete Docker configuration directory exists below that state tree, prepare fails
 with `LEGACY_BUILDX_CONFIG_REQUIRES_REVIEW` and neither adopts, copies, nor removes it.
 
-Install `lumina-crm-build-cache-cleanup.service` with the prepare and post-acceptance cleanup units,
-and install the matching sudoers update before deploying. After every three-image build sequence,
-the runner starts this one-shot service from a `finally` path, so a failed verification or image
-build cannot silently skip cache maintenance. This mode validates the owned
-`lumina-crm-buildkit` builder, then applies `LUMINA_BUILDKIT_CACHE_RETENTION_HOURS`,
-`LUMINA_BUILDKIT_MAX_CACHE_GB`, `LUMINA_BUILDKIT_RESERVED_CACHE_GB`, and the Docker
-minimum-free-space threshold. It does not require an accepted-release cleanup request, enumerate
-or delete images, or run any global Docker prune. A cache-cleanup failure is reported for operator
-review without replacing the authoritative build failure.
+Install `lumina-crm-build-cache-cleanup.service` with the prepare and compatibility storage-cleanup
+unit, and install the matching sudoers update. The target controller's normal successful-release
+path performs its own bounded BuildKit cleanup after acceptance. The separately installed
+cache-cleanup unit remains available for an operator-reviewed Lumina-builder-only capacity action;
+it validates the owned `lumina-crm-buildkit` builder and never enumerates images or invokes a global
+Docker prune. Neither path changes the authoritative application result when cache cleanup fails.
 
 ## Credential boundaries
 
@@ -308,9 +329,9 @@ accepted release exists and directs the operator to the initialize command. Once
 succeeds, another initialize request fails before image building or database changes. The first
 accepted release records every rollback field as `null`.
 
-The initialize runner performs capacity/builder/rootless checks, the single proxied-or-direct
-ff-only Git update, all three image builds, and candidate Compose environment creation before it
-starts PostgreSQL. Database work is then strictly:
+The stable bootstrap performs the single proxied-or-direct ff-only Git update. The newly loaded
+initialize target controller performs capacity/builder/rootless checks, all three image builds, and
+candidate Compose environment creation before it starts PostgreSQL. Database work is then strictly:
 
 ```text
 PostgreSQL healthy
@@ -513,12 +534,13 @@ npm run deploy:production:recover
 npm run deploy:production:dry-run
 ```
 
-For initialization, the persistent runner performs:
+For initialization, the two-stage controller performs:
 
 ```text
 exclusive Lumina lock
 -> reject if accepted state already exists
--> exact clean main/origin verification and one fetch
+-> stable bootstrap exact clean main/origin verification, one fetch and ff-only update
+-> fresh target-controller PID and exact target-commit TOCTOU verification
 -> target-checkout Web/Worker runtime contract and Secret metadata preflight
 -> isolated rootless builder verification
 -> containerized type/lint/contracts plus commit-tagged app/ops builds
@@ -531,10 +553,10 @@ exclusive Lumina lock
 -> loopback detailed readiness
 -> Cloudflare Tunnel public liveness at https://<LUMINA_PUBLIC_HOSTNAME>/api/health
 -> atomically persist compose.env and accepted state with null rollback images
--> bounded rootless Lumina BuildKit cleanup (non-fatal)
+-> bounded Lumina BuildKit, paired-image, deployment-history and stale-env cleanup (non-fatal)
 ```
 
-Ordinary deploy first requires accepted state, then uses the same prepare, fetch, build, PostgreSQL,
+Ordinary deploy first requires accepted state, then uses the same bootstrap, prepare, build, PostgreSQL,
 migration, switch, acceptance, persistence, and cleanup path. It never invokes `db-bootstrap` or
 `bootstrap-admin`.
 
@@ -546,9 +568,45 @@ Post-switch failure force-recreates both Web and Worker at last-success and rech
 initialization has no prior image and records rollback as unavailable. Neither path reverses a
 migration, and application rollback reports: “Application rolled back; database remains on the
 forward schema.” Each migration must remain compatible with the rollback application until
-acceptance. `deploy:production:recover` performs no build or migration: it idempotently reconciles
+acceptance. Only after PostgreSQL, target Web/Worker health, loopback readiness, and public liveness
+all succeed may the controller atomically write `compose.env` and `last-success.json`.
+`deploy:production:recover` performs no build or migration: it idempotently reconciles
 both services and compose.env to a complete last-success release, failing closed if that state is
-missing. Cleanup starts only after acceptance and its failure is a non-fatal warning.
+missing. Cleanup starts only after acceptance and accepted-state persistence; its failure is a
+non-fatal warning and cannot trigger rollback or change `applicationResult`.
+
+### Post-deployment storage cleanup
+
+The target controller—not the bootstrap—runs cleanup with `SAFE`, `BOUNDED`, `LUMINA-ONLY`,
+`NON-FATAL`, and `AUDITABLE` semantics. It always uses the named `lumina-crm-buildkit` builder.
+Images are eligible only when both `com.lumina.crm.managed=true` and
+`com.lumina.crm.repository=kewtgh/crm` match, their full commit label is valid, application and
+operations images form a complete release pair, no running container references either image, and
+the release is outside every protection and retention set.
+
+The permanent protection set includes active Web/Worker image IDs, last-success current/operations
+and rollback pairs, recent accepted images, this deployment's target pair, and any running-container
+image. At least `LUMINA_IMAGE_RELEASES_TO_KEEP=3` complete release pairs are retained (allowed range
+3–10), which means current + rollback + at least one additional release. Unknown ownership, missing
+labels, malformed commits, incomplete pairs, or Docker inspect failure all fail closed.
+
+BuildKit defaults are maximum `12GB`, reserved `2GB`, and maximum age `168h`, configurable through
+`LUMINA_BUILDKIT_MAX_USED_SPACE`, `LUMINA_BUILDKIT_RESERVED_SPACE`, and
+`LUMINA_BUILDKIT_CACHE_MAX_AGE`. Only `docker buildx --builder lumina-crm-buildkit prune ...` is
+allowed. Generic Docker prune commands and every volume/network/container prune are prohibited;
+volumes are never automatically pruned.
+
+Deployment records, archived requests, and deployment logs require both age beyond
+`LUMINA_DEPLOYMENT_HISTORY_RETENTION_DAYS=30` and position beyond the newest
+`LUMINA_DEPLOYMENT_HISTORY_MIN_KEEP=20`. `latest.json`, `last-success.json`, `compose.env`, the current
+request/deployment, and accepted/rollback-related records remain protected. Candidate, recovery, and
+rollback env artifacts are removed normally; an orphan is eligible only after its deployment is
+terminal and its mtime exceeds 24 hours. Their contents are never printed.
+
+Cleanup state uses `COMPLETED`, `PARTIAL`, `SKIPPED`, or `FAILED_NON_FATAL` and stable warning codes.
+Low post-cleanup space emits `STORAGE_PRESSURE_REMAINS`; it never broadens deletion to databases,
+object storage, backups, Caddy, Cloudflare Tunnel, HunterAI, other Compose projects, global Docker
+resources, `/etc/lumina-crm`, or Git history.
 
 v3.8.15 is the first asynchronous communication-delivery release. Forward application switching
 replaces and health-checks Web before replacing Worker, so the old synchronous Web is gone before a
@@ -595,7 +653,14 @@ Diagnose only exact Lumina resources:
 ```sh
 systemctl status lumina-crm-deploy.service lumina-crm-backup.timer lumina-crm-restore-test.timer
 journalctl -u lumina-crm-deploy.service -n 200 --no-pager
+df -B1 / /var/lib/lumina-crm/docker /var/lib/lumina-crm/deployments
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" \
+  docker buildx --builder lumina-crm-buildkit du
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" docker system df -v
 ```
+
+These are diagnostic commands, not a routine manual cleanup procedure. Review the automatic cleanup
+fields and stable warning codes first. Do not respond to storage pressure with a generic prune.
 
 Do not print secret files, use `docker inspect` to read secrets, or paste full database URLs into
 logs/tickets. Report variable names, component status, image commit, and redacted error codes.
