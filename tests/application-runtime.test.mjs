@@ -29,6 +29,7 @@ test("application runtime closure fails when the Outbox crypto dependency is abs
     "scripts/worker-heartbeat.mjs",
     "scripts/lib/bounded-concurrency.mjs",
     "scripts/lib/delivery-webhook.mjs",
+    "scripts/lib/notification-delivery-protocol.mjs",
     "scripts/lib/worker-database.mjs",
   ];
   for (const relativePath of files) {
@@ -57,6 +58,7 @@ test("Docker application stage runs the closure gate after minimal owned copies"
   );
   assert.match(applicationStage, /lib\/invitation-credential-crypto\.mjs/);
   assert.match(applicationStage, /scripts\/verify-application-runtime-closure\.mjs/);
+  assert.match(applicationStage, /scripts\/lib\/notification-delivery-protocol\.mjs/);
   assert.match(applicationStage, /scripts\/lib\/worker-process-diagnostics\.mjs/);
   assert.ok(
     applicationStage.indexOf("USER 10001:10001")

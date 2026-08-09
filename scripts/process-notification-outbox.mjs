@@ -4,7 +4,14 @@ import {
   mapWithConcurrency,
   workerJobConcurrency,
 } from "./lib/bounded-concurrency.mjs";
-import { postDeliveryWebhook } from "./lib/delivery-webhook.mjs";
+import {
+  deliveryWebhookFailureCode,
+  postDeliveryWebhook,
+} from "./lib/delivery-webhook.mjs";
+import {
+  externalNotificationPayload,
+  notificationInvitationDeliveryId,
+} from "./lib/notification-delivery-protocol.mjs";
 import { workerJson, workerQuery } from "./lib/worker-database.mjs";
 import { decryptInvitationCredential } from "../lib/invitation-credential-crypto.mjs";
 
@@ -41,20 +48,17 @@ try {
     lease_seconds:300,
   });
   const outcomes = await mapWithConcurrency(jobs, workerJobConcurrency(), async (job) => {
-    const invitationDeliveryId = job.template_key === "staff-account-created"
-      ? job.payload?.invitationDeliveryId
-      : null;
+    const invitationDeliveryId = notificationInvitationDeliveryId(job.template_key, job.payload);
+    let invitationFailureRecorded = false;
     try {
       const identity = (await workerQuery(
         "select email::text from app_auth.accounts where id=$1 and status='ACTIVE'",
         [job.recipient_id],
       )).rows[0];
       if (!identity?.email) throw new Error("Recipient email is unavailable");
-      const payload = invitationDeliveryId ? {
-        ...job.payload,
-        encryptedTemporaryPassword:undefined,
-        temporaryPassword:decryptInvitationCredential(job.payload?.encryptedTemporaryPassword),
-      } : job.payload;
+      const payload = externalNotificationPayload(job.template_key, job.payload, {
+        decryptCredential:decryptInvitationCredential,
+      });
       const delivery = await postDeliveryWebhook({
         endpoint:process.env.EMAIL_DELIVERY_WEBHOOK_URL,
         bearerToken:process.env.EMAIL_DELIVERY_WEBHOOK_TOKEN,
@@ -62,11 +66,13 @@ try {
         payload:{ id:job.id,to:identity.email,template:job.template_key,payload },
       });
       if (!delivery.ok) {
+        const failureCode = await deliveryWebhookFailureCode(delivery);
         if (invitationDeliveryId) await rpc("record_staff_invitation_delivery", {
           delivery_id:invitationDeliveryId,delivery_status:"FAILED",
-          failure:`DELIVERY_HTTP_${delivery.status}`,http_status:delivery.status,
+          failure:failureCode,http_status:delivery.status,
         });
-        throw new Error(`DELIVERY_HTTP_${delivery.status}`);
+        invitationFailureRecorded = Boolean(invitationDeliveryId);
+        throw new Error(failureCode);
       }
       if (invitationDeliveryId) await rpc("record_staff_invitation_delivery", {
         delivery_id:invitationDeliveryId,delivery_status:"SENT",failure:null,http_status:delivery.status,
@@ -75,7 +81,7 @@ try {
       return true;
     } catch (error) {
       const failure = deliveryFailure(error);
-      if (invitationDeliveryId && !String(failure.code).startsWith("DELIVERY_HTTP_")) {
+      if (invitationDeliveryId && !invitationFailureRecorded) {
         await rpc("record_staff_invitation_delivery", {
           delivery_id:invitationDeliveryId,delivery_status:failure.status,
           failure:failure.code,http_status:failure.httpStatus,

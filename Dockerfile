@@ -84,6 +84,7 @@ COPY --chown=lumina:lumina \
     scripts/lib/backup-policy.mjs \
     scripts/lib/bounded-concurrency.mjs \
     scripts/lib/delivery-webhook.mjs \
+    scripts/lib/notification-delivery-protocol.mjs \
     scripts/lib/worker-process-diagnostics.mjs \
     scripts/lib/worker-database.mjs \
     scripts/lib/worker-object-store.mjs \

@@ -1,7 +1,12 @@
-# Implementation status — v3.8.26 release candidate
+# Implementation status — v3.8.27 release candidate
 
 ## Scope
 
+v3.8.27 separates internal staff-invitation delivery metadata from the external Email Delivery
+Worker protocol. The Notification Outbox retains invitation reconciliation state and encrypted
+credentials locally, decrypts only at delivery time, and emits exactly the seven fields accepted by
+the strict `staff-account-created` template. A shared producer/consumer contract prevents schema
+drift, while bounded allow-listed remote 4xx diagnostics avoid persisting arbitrary response text.
 v3.8.26 replaces the self-mutating deployment runner with a stable bootstrap plus freshly spawned
 target controller, adds target-commit TOCTOU evidence, and performs bounded Lumina-only BuildKit,
 paired-image, deployment-history, and stale-env cleanup after application acceptance. It also fixes
@@ -93,8 +98,11 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - a dedicated communication delivery category with durable queue acceptance, distinct provider
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
-- synchronized application package, lockfile, runtime, README, Compose test fixture, and documentation
-  version 3.8.26; the independently deployed Cloudflare Worker code and metadata are unchanged;
+- synchronized application package, lockfile, runtime, README, and documentation version 3.8.27;
+  the independently deployed Cloudflare Worker code, template allow-list, and metadata are unchanged;
+- an explicit seven-field staff-account-created delivery projection that keeps invitation IDs,
+  encrypted credentials, and future internal metadata inside CRM, plus a cross-package contract
+  against the Email Worker template definition and bounded stable remote-error mapping;
 - durable staff-account creation with transactional base audit, non-destructive ambiguous invitation
   handling, immediate pending-directory visibility, dialog closure, and explicit bilingual status.
 - database-paginated staff lifecycle/role filters, a contained mobile staff-card layout, and complete
@@ -106,11 +114,12 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 
 | Check | Result |
 | --- | --- |
+| v3.8.27 staff invitation delivery protocol contracts | Pass: 6/6, including exact CRM/Email Worker field-set parity, local metadata retention, bounded diagnostics, and log redaction |
 | v3.8.26 staff directory targeted contracts | Pass: 9/9 |
 | v3.8.26 deployment bootstrap/cleanup targeted contracts | Pass: 16/16, including real fresh-process 3.8.24→3.8.25 generation fixture and HunterAI isolation |
-| Final `npm run typecheck` | Pass |
-| Final `npm run lint` | Pass |
-| Final `npm run test:contracts` | Pass: 68 application contracts + 8 CAPTCHA contracts |
+| Final `npm run typecheck:raw` | Pass |
+| Final `npm run lint:raw` | Pass |
+| Final `npm run test:contracts:raw` | Pass: 74 application contracts + 8 CAPTCHA contracts |
 | `npm run db:migrations:verify` | Pass: 78 ordered checksum-managed migrations |
 | Earlier v3.8.26 `npm run test:deploy` | Pass: 82/82 before the two-stage controller addition |
 | Final production `npm run build` | Pass: 85 application/API routes |
