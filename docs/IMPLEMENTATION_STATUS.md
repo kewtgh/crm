@@ -1,7 +1,10 @@
-# Implementation status — v3.8.28 release candidate
+# Implementation status — v3.8.29 release candidate
 
 ## Scope
 
+v3.8.29 moves management submenu links onto a same-tab document navigation boundary so cold route
+loads do not depend on the client RSC transition that could leave the first click apparently inert.
+A pinned Chromium regression verifies a new document, the exact target URL, and no additional tab.
 v3.8.28 separates Docker Worker liveness, operational readiness, and production release acceptance.
 Container health now fails only for process/runtime, schema, database, or required-heartbeat faults;
 failed and stuck jobs remain visible as normal readiness and Operations degradation. The target
@@ -108,7 +111,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - a dedicated communication delivery category with durable queue acceptance, distinct provider
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
-- synchronized application package, lockfile, runtime, README, and documentation version 3.8.28;
+- synchronized application package, lockfile, runtime, README, and documentation version 3.8.29;
   the independently deployed Cloudflare Worker code, template allow-list, and metadata are unchanged;
 - an explicit seven-field staff-account-created delivery projection that keeps invitation IDs,
   encrypted credentials, and future internal metadata inside CRM, plus a cross-package contract
@@ -124,6 +127,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 
 | Check | Result |
 | --- | --- |
+| v3.8.29 management submenu cold-navigation regression | Pass: same-tab document navigation, exact admin target, no additional tab; Chromium 149.0.7827.55 from revision 1228 |
 | v3.8.28 Worker/release-health targeted contracts | Pass: 11/11, including Docker liveness separation, failed-job baseline matrix, recovery, rollback triggering, Operations visibility, evidence minimization, and cycle timing |
 | v3.8.27 staff invitation delivery protocol contracts | Pass: 6/6, including exact CRM/Email Worker field-set parity, local metadata retention, bounded diagnostics, and log redaction |
 | v3.8.26 staff directory targeted contracts | Pass: 9/9 |

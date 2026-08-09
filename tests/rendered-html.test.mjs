@@ -204,3 +204,14 @@ test("keeps the retired platform source only as a read-only migration archive", 
     await assert.rejects(access(repositoryFile(path)));
   }
 });
+
+test("keeps cold admin submenu navigation on a same-tab document boundary", async () => {
+  const [shell, browserQa] = await Promise.all([
+    readFile(repositoryFile("components/app-shell.tsx"), "utf8"),
+    readFile(repositoryFile("scripts/browser-qa-chromium-1228.cjs"), "utf8"),
+  ]);
+  assert.match(shell, /labelKey:\s*"nav\.admin"[^\n]+documentChildNavigation:\s*true/);
+  assert.match(shell, /item\.documentChildNavigation\?<a[^>]+data-navigation="document"/);
+  assert.match(browserQa, /__LUMINA_QA_DOCUMENT_MARKER__/);
+  assert.match(browserQa, /context\.pages\(\)\.length!==1/);
+});

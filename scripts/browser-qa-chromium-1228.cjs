@@ -382,6 +382,29 @@ async function main(){
       const routes=(env.QA_ROUTES||"/dashboard").split(",").filter(Boolean);
       const mobile=new Set((env.QA_MOBILE_ROUTES||"").split(",").filter(Boolean));
       const tablet=new Set((env.QA_TABLET_ROUTES||"").split(",").filter(Boolean));
+      if(role==="SUPER_ADMIN"&&env.QA_LABEL==="admin"){
+        await page.setViewportSize({width:1440,height:900});
+        await page.goto(`${base}/dashboard`,{waitUntil:"networkidle"});
+        await page.getByRole("button",{name:"管理后台"}).click();
+        const coldAdminLink=page.locator('#main-navigation .nav-children a[href="/admin/operations"]');
+        if(await coldAdminLink.getAttribute("data-navigation")!=="document"){
+          report.errors.push({kind:"navigation-contract",url:"/admin/operations",message:"Admin submenu is missing its document-navigation boundary"});
+        }
+        const documentMarker=`admin-cold-navigation-${Date.now()}`;
+        await page.evaluate(marker=>{globalThis.__LUMINA_QA_DOCUMENT_MARKER__=marker;},documentMarker);
+        await coldAdminLink.click({noWaitAfter:true});
+        const navigatedInCurrentTab=await page.waitForURL(url=>url.pathname==="/admin/operations",{timeout:5_000}).then(()=>true).catch(()=>false);
+        const retainedDocument=await page.evaluate(marker=>globalThis.__LUMINA_QA_DOCUMENT_MARKER__===marker,documentMarker).catch(()=>false);
+        if(!navigatedInCurrentTab){
+          report.errors.push({kind:"navigation-cold",url:"/admin/operations",message:"Cold admin submenu click did not navigate in the current tab"});
+        }else if(retainedDocument){
+          report.errors.push({kind:"navigation-boundary",url:"/admin/operations",message:"Admin submenu still depends on the unreliable client RSC navigation boundary"});
+        }else if(context.pages().length!==1){
+          report.errors.push({kind:"navigation-tab",url:"/admin/operations",message:"Admin submenu opened an additional browser tab"});
+        }else{
+          process.stdout.write("[QA] pass cold admin submenu document navigation in current tab\n");
+        }
+      }
       for(const route of routes){
         const label=route.slice(1).replaceAll("/","-")||"home";
         await inspect(page,`${label}-1440`,route,{width:1440,height:900});

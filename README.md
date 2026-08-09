@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.28**
+Current release candidate: **v3.8.29**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -13,6 +13,10 @@ It also verifies each encrypted database backup with its matching encrypted loca
 replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
+
+Version 3.8.29 makes the management submenu use a same-tab document navigation boundary. This
+avoids the unreliable cold client-RSC transition that could make a first submenu click appear inert
+until the route had been opened in another tab, while preserving standard modified-click behavior.
 
 Version 3.8.28 separates Worker container liveness from operational queue degradation and release
 acceptance. Docker health still requires current schema, database access, and complete fresh Worker
