@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.27**
+Current release candidate: **v3.8.28**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -13,6 +13,13 @@ It also verifies each encrypted database backup with its matching encrypted loca
 replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
+
+Version 3.8.28 separates Worker container liveness from operational queue degradation and release
+acceptance. Docker health still requires current schema, database access, and complete fresh Worker
+heartbeats, while retryable/stuck job counts remain visible through degraded loopback readiness and
+Operations. Deployment captures a sanitized pre-switch queue baseline and rejects only newly
+increased failed jobs or unsafe infrastructure/stuck-work conditions; accepted pre-existing failures
+produce a stable warning without rollback. Recovery uses the same infrastructure contract.
 
 Version 3.8.27 fixes the staff-invitation delivery protocol boundary. Invitation delivery IDs and
 encrypted credentials remain local to the CRM Worker, while the external Email Delivery Worker
@@ -183,9 +190,10 @@ target-controller re-exec and exact commit evidence
 -> metadata-only Compose secret-source permission gate
 -> containerized checks and commit-tagged app/ops images
 -> migration verification and locked forward migration
+-> sanitized pre-switch queue-health baseline
 -> Compose Web/Worker image switch
 -> independent PostgreSQL/Web/Worker health
--> loopback readiness and Cloudflare Tunnel public liveness
+-> loopback release-health acceptance and Cloudflare Tunnel public liveness
 -> persist accepted/rollback images
 -> bounded Lumina-only BuildKit, paired-image, history, and stale-env cleanup
 post-switch failure -> application-image rollback; database stays forward
@@ -243,7 +251,8 @@ in the [migration audit](docs/SUPABASE_EXIT_AUDIT_AND_TARGET_ARCHITECTURE_2026-0
 - `GET /api/health` checks Web process liveness and release version.
 - `GET /api/health?mode=ready` is loopback-only and reports environment, authentication schema,
   database, Worker and queue status independently with stable reason codes for local deployment
-  probes. Public requests receive only the minimal liveness endpoint.
+  probes. Failed or stuck jobs keep this endpoint degraded even when Docker Worker health is healthy.
+  Public requests receive only the minimal liveness endpoint.
 
 External providers remain disabled until genuine credentials and data-processing approval are
 supplied. The UI does not present a simulated provider connection, delivery, Worker heartbeat,

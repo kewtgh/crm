@@ -53,6 +53,16 @@ test("distinguishes authentication, database, Worker, and queue readiness causes
   assert.equal(databaseFailure.components.database.code, "DATABASE_CONNECTION_FAILED");
   assert.equal(databaseFailure.components.workers.status, "blocked");
   assert.equal(databaseFailure.components.queues.status, "blocked");
+  const queueFailure = buildReadinessDiagnostics({
+    environmentValid: true,
+    auth: { ok: true },
+    database: { ok: true },
+    snapshot: { ...healthySnapshot, failedJobs: 1 },
+  });
+  assert.equal(queueFailure.ready, false);
+  assert.equal(queueFailure.checks.queues, false);
+  assert.equal(queueFailure.components.queues.code, "QUEUES_FAILED");
+  assert.equal(queueFailure.metrics.failedJobs, 1);
 });
 
 test("owns an ordered, checksum-managed standard PostgreSQL migration history", async () => {

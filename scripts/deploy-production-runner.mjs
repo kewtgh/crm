@@ -48,6 +48,11 @@ import {
   verifyTargetControllerSource,
 } from "./lib/target-controller-source.mjs";
 import { performPostDeploymentCleanup } from "./lib/post-deployment-cleanup.mjs";
+import {
+  evaluateProductionReleaseHealth,
+  sanitizeReleaseHealthEvidence,
+  sanitizeReleaseHealthSnapshot,
+} from "./lib/production-release-health.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const expectedSourceRoot = "/opt/lumina-crm/source";
@@ -143,6 +148,7 @@ let persisted = {
   workerSwitch: "PENDING",
   webHealth: "PENDING",
   workerHealth: "PENDING",
+  releaseHealth: null,
   logPath,
   error: null,
 };
@@ -379,7 +385,7 @@ async function waitForContainerHealth(envFile, service, timeoutMs) {
   throw new Error(`${service} did not become healthy`);
 }
 
-async function fetchHealth(label, url, { readiness = false, headers } = {}) {
+async function fetchHealth(label, url, { headers } = {}) {
   stage(label);
   const response = await fetch(url, {
     headers,
@@ -389,33 +395,94 @@ async function fetchHealth(label, url, { readiness = false, headers } = {}) {
   const text = await response.text();
   let body;
   try { body = JSON.parse(text); } catch { body = null; }
-  if (!response.ok || body?.status !== "ok" || (readiness && body?.ready === false)) {
+  if (!response.ok || body?.status !== "ok") {
     throw new Error(`${label} failed with HTTP ${response.status}`);
   }
-  if (readiness && !Object.values(body?.checks ?? {}).every(Boolean)) {
-    throw new Error(`${label} did not pass every readiness component`);
-  }
-  if (body?.version && target?.version && body.version !== target.version) {
-    throw new Error(`${label} returned version ${body.version}, expected ${target.version}`);
+  if (target?.version && body?.version !== target.version) {
+    throw new Error("PUBLIC_LIVENESS_VERSION_MISMATCH");
   }
 }
 
-async function acceptRuntime(envFile, { publicChecks = true } = {}) {
+async function fetchReleaseReadiness(label, { expectedVersion } = {}) {
+  stage(label);
+  const response = await fetch("http://127.0.0.1:3200/api/health?mode=ready", {
+    redirect: "manual",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const text = await response.text();
+  if (text.length > 65_536) throw new Error("RELEASE_HEALTH_RESPONSE_TOO_LARGE");
+  let body;
+  try { body = JSON.parse(text); } catch { throw new Error("RELEASE_HEALTH_RESPONSE_INVALID"); }
+  if (![200, 503].includes(response.status)
+    || !["ok", "degraded"].includes(body?.status)) {
+    throw new Error(`RELEASE_HEALTH_HTTP_${response.status}`);
+  }
+  if (expectedVersion && body?.version !== expectedVersion) {
+    throw new Error("RELEASE_HEALTH_VERSION_MISMATCH");
+  }
+  sanitizeReleaseHealthSnapshot(body);
+  return body;
+}
+
+function emptyReleaseHealthBaseline() {
+  return {
+    checks:{ environment:true,auth:true,database:true,workers:true },
+    metrics:{ failedJobs:0,stuckJobs:0,missingWorkers:0,staleWorkers:0 },
+  };
+}
+
+async function captureReleaseHealthBaseline() {
+  if (request.mode === "initialize") return emptyReleaseHealthBaseline();
+  const readiness = await fetchReleaseReadiness("capture release health baseline", {
+    expectedVersion:previousAccepted?.version,
+  });
+  return sanitizeReleaseHealthSnapshot(readiness);
+}
+
+async function captureRecoveryHealthBaseline() {
+  try {
+    const readiness = await fetchReleaseReadiness("capture recovery health baseline");
+    return sanitizeReleaseHealthSnapshot(readiness);
+  } catch {
+    log("WARN", "RELEASE_HEALTH_BASELINE_UNAVAILABLE");
+    return null;
+  }
+}
+
+async function acceptRuntime(envFile, {
+  publicChecks = true,
+  baseline,
+  acceptanceMode = "release",
+} = {}) {
   await waitForContainerHealth(envFile, "postgres", 120_000);
   await waitForContainerHealth(envFile, "web", 120_000);
   persist({ webHealth:"HEALTHY" });
   await waitForContainerHealth(envFile, "worker", 240_000);
   persist({ workerHealth:"HEALTHY" });
-  await fetchHealth(
-    "loopback readiness",
-    "http://127.0.0.1:3200/api/health?mode=ready",
-    { readiness: true },
-  );
-  if (!publicChecks) return;
+  if (!/^[0-9a-f]{40}$/.test(target?.commit ?? "")
+    || !target.currentImage.endsWith(`:${target.commit}`)) {
+    throw new Error("TARGET_RELEASE_COMMIT_EVIDENCE_MISSING");
+  }
+  const runtime = await runtimeSnapshot(envFile);
+  if (runtime.web.image !== target?.currentImage || runtime.worker.image !== target?.currentImage) {
+    throw new Error("TARGET_RELEASE_IMAGE_MISMATCH");
+  }
+  const readiness = await fetchReleaseReadiness("loopback release acceptance", {
+    expectedVersion:target?.version,
+  });
+  const releaseHealth = evaluateProductionReleaseHealth({
+    baseline:baseline ?? null,
+    final:readiness,
+    allowMissingBaseline:acceptanceMode === "recovery",
+  });
+  persist({ releaseHealth });
+  for (const warning of releaseHealth.warnings) log("WARN", warning);
+  if (!publicChecks) return releaseHealth;
   await fetchHealth(
     "Cloudflare Tunnel public liveness",
     `https://${publicHostname()}/api/health`,
   );
+  return releaseHealth;
 }
 
 async function prepareBuilderAndCapacity() {
@@ -547,16 +614,22 @@ async function rollbackApplication(reason) {
     return { status: "UNAVAILABLE", reason: "No accepted application image exists" };
   }
   const previous = {
+    commit: previousAccepted.commit,
     currentImage: previousAccepted.currentImage,
     operationsImage: previousAccepted.operationsImage,
   };
+  const recoveryHealthBaseline = await captureRecoveryHealthBaseline();
   const rollbackEnv = path.join(stateRoot, `${deploymentId}.rollback.env`);
   atomicWrite(rollbackEnv, composeEnvironment(previous));
   await compose("force recreate Web and Worker at the previous release", rollbackEnv, [
     "up", "-d", "--no-deps", "--force-recreate", "web", "worker",
   ], { timeoutMs: 300_000 });
   target = { ...previous, version: previousAccepted.version };
-  await acceptRuntime(rollbackEnv, { publicChecks: false });
+  const releaseHealth = await acceptRuntime(rollbackEnv, {
+    publicChecks:false,
+    baseline:recoveryHealthBaseline,
+    acceptanceMode:"recovery",
+  });
   atomicWrite(composeEnvPath, previousComposeEnvironment ?? composeEnvironment(previous));
   rmSync(rollbackEnv, { force:true });
   log("WARN", "Application rolled back; database remains on the forward schema.");
@@ -565,6 +638,7 @@ async function rollbackApplication(reason) {
     reason,
     restoredImage: previous.currentImage,
     database: "FORWARD_SCHEMA_RETAINED",
+    releaseHealth,
   };
 }
 
@@ -661,16 +735,25 @@ try {
       operationsImage:previousAccepted.operationsImage,
       version:previousAccepted.version,
     };
+    const recoveryHealthBaseline = await captureRecoveryHealthBaseline();
     const alreadyHealthy = initialRuntime.web.image === target.currentImage
       && initialRuntime.worker.image === target.currentImage
       && initialRuntime.web.health === "healthy"
       && initialRuntime.worker.health === "healthy";
+    const recoveryEnv = alreadyHealthy
+      ? composeEnvPath
+      : path.join(stateRoot, `${deploymentId}.recovery.env`);
     if (!alreadyHealthy) {
-      const recoveryEnv = path.join(stateRoot, `${deploymentId}.recovery.env`);
       atomicWrite(recoveryEnv, composeEnvironment(target));
       switched = true;
       await switchApplication(recoveryEnv);
-      await acceptRuntime(recoveryEnv, { publicChecks:false });
+    }
+    const releaseHealth = await acceptRuntime(recoveryEnv, {
+      publicChecks:false,
+      baseline:recoveryHealthBaseline,
+      acceptanceMode:"recovery",
+    });
+    if (!alreadyHealthy) {
       atomicWrite(composeEnvPath, readFileSync(recoveryEnv, "utf8"));
       rmSync(recoveryEnv, { force:true });
     }
@@ -681,22 +764,28 @@ try {
       targetCommit:previousAccepted.commit,
       targetImage:previousAccepted.currentImage,
       recovery:alreadyHealthy ? "ALREADY_HEALTHY" : "RECREATED",
+      releaseHealth,
       cleanup,
     });
   } else if (request.mode === "rollback") {
     if (!previousAccepted?.rollbackImage || !previousAccepted?.rollbackOperationsImage) {
       throw new Error("No explicit rollback image is recorded");
     }
+    const old = previousAccepted;
     target = {
+      commit: old.rollbackCommit,
       currentImage: previousAccepted.rollbackImage,
       operationsImage: previousAccepted.rollbackOperationsImage,
       version: previousAccepted.rollbackVersion,
     };
     const rollbackEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
     atomicWrite(rollbackEnv, composeEnvironment(target));
-    const old = previousAccepted;
+    const rollbackHealthBaseline = await captureRecoveryHealthBaseline();
     await switchApplication(rollbackEnv);
-    await acceptRuntime(rollbackEnv);
+    const releaseHealth = await acceptRuntime(rollbackEnv, {
+      baseline:rollbackHealthBaseline,
+      acceptanceMode:"recovery",
+    });
     atomicWrite(composeEnvPath, readFileSync(rollbackEnv, "utf8"));
     const acceptedAt = new Date().toISOString();
     const accepted = {
@@ -719,6 +808,7 @@ try {
       ])].slice(0, 10),
       acceptedAt,
       database: "FORWARD_SCHEMA_RETAINED",
+      releaseHealth,
     };
     atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
     rmSync(rollbackEnv, { force: true });
@@ -729,6 +819,7 @@ try {
       acceptedAt,
       rollback: { status: "SUCCEEDED", database: "FORWARD_SCHEMA_RETAINED" },
       targetImage: target.currentImage,
+      releaseHealth,
       cleanup,
     });
   } else {
@@ -753,6 +844,11 @@ try {
         migrationMayHaveChanged: interrupted?.migrationMayHaveChanged ?? true,
         applicationAccepted: true,
         acceptedAt: previousAccepted.acceptedAt,
+        releaseHealth:previousAccepted.releaseHealth || interrupted?.releaseHealth
+          ? sanitizeReleaseHealthEvidence(
+            previousAccepted.releaseHealth ?? interrupted.releaseHealth,
+          )
+          : null,
         cleanup,
       });
     } else {
@@ -793,13 +889,14 @@ try {
           },
           migrate: applyMigrations,
           bootstrapAdmin,
+          captureReleaseHealthBaseline,
           switchApplication,
           acceptRuntime,
         },
       });
       migrationMayHaveChanged = workflow.migrationMayHaveChanged;
       switched = workflow.switched;
-      const { candidateEnvironment: candidateEnv, commit } = workflow;
+      const { candidateEnvironment: candidateEnv, commit, releaseHealth } = workflow;
 
       const acceptedAt = new Date().toISOString();
       const accepted = createAcceptedRelease({
@@ -808,10 +905,11 @@ try {
         target: { ...target, commit },
         previousAccepted,
         acceptedAt,
+        releaseHealth,
       });
       atomicWrite(composeEnvPath, readFileSync(candidateEnv, "utf8"));
       atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
-      persist({ applicationAccepted: true, acceptedAt });
+      persist({ applicationAccepted: true, acceptedAt, releaseHealth });
       const cleanup = await requestCleanup(accepted);
       log("INFO", `Accepted immutable application image ${target.currentImage}`);
       if (request.mode === "initialize") {
@@ -822,7 +920,12 @@ try {
         );
       }
       rmSync(candidateEnv, { force: true });
-      finish(finalizationContext, persisted, "SUCCESS", { applicationAccepted: true, acceptedAt, cleanup });
+      finish(finalizationContext, persisted, "SUCCESS", {
+        applicationAccepted:true,
+        acceptedAt,
+        releaseHealth,
+        cleanup,
+      });
     }
   }
 } catch (error) {

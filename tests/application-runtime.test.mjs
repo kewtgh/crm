@@ -59,6 +59,7 @@ test("Docker application stage runs the closure gate after minimal owned copies"
   assert.match(applicationStage, /lib\/invitation-credential-crypto\.mjs/);
   assert.match(applicationStage, /scripts\/verify-application-runtime-closure\.mjs/);
   assert.match(applicationStage, /scripts\/lib\/notification-delivery-protocol\.mjs/);
+  assert.match(applicationStage, /scripts\/lib\/worker-container-health\.mjs/);
   assert.match(applicationStage, /scripts\/lib\/worker-process-diagnostics\.mjs/);
   assert.ok(
     applicationStage.indexOf("USER 10001:10001")

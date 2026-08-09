@@ -83,6 +83,7 @@ export function createAcceptedRelease({
   target,
   previousAccepted,
   acceptedAt,
+  releaseHealth,
 }) {
   return {
     deploymentId,
@@ -104,6 +105,7 @@ export function createAcceptedRelease({
     ])].slice(0, 10),
     acceptedAt,
     database: "FORWARD_ONLY",
+    ...(releaseHealth ? { releaseHealth } : {}),
   };
 }
 
@@ -145,15 +147,22 @@ export async function runProductionReleaseWorkflow({
     if (mode === "initialize") {
       await operations.bootstrapAdmin(candidateEnvironment);
     }
+    const releaseHealthBaseline = await operations.captureReleaseHealthBaseline(
+      candidateEnvironment,
+    );
     switched = true;
     await operations.switchApplication(candidateEnvironment);
-    await operations.acceptRuntime(candidateEnvironment);
+    const releaseHealth = await operations.acceptRuntime(candidateEnvironment, {
+      baseline: releaseHealthBaseline,
+      acceptanceMode: "release",
+    });
     return {
       candidateEnvironment,
       commit,
       migrationMayHaveChanged,
       switched,
       target,
+      releaseHealth,
     };
   } catch (error) {
     throw new ProductionReleaseWorkflowError(error, {

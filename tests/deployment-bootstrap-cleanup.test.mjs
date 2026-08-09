@@ -384,7 +384,10 @@ test("static deployment contract orders acceptance, accepted state, cleanup, and
   assert.doesNotMatch(service, /deploy-production-runner\.mjs/);
   assert.doesNotMatch(bootstrap, /from .*production-deploy-workflow|docker|acceptRuntime|requestCleanup|compose\.production/);
   assert.doesNotMatch(runner, /updateProductionSource|async function updateSource/);
-  assert.match(workflow, /switchApplication\(candidateEnvironment\)[\s\S]+acceptRuntime\(candidateEnvironment\)/);
+  assert.match(
+    workflow,
+    /captureReleaseHealthBaseline\([\s\S]+switchApplication\(candidateEnvironment\)[\s\S]+acceptRuntime\(candidateEnvironment, \{/,
+  );
   assert.match(runner, /atomicWrite\(composeEnvPath[\s\S]+atomicWrite\(acceptedPath[\s\S]+requestCleanup\(accepted\)[\s\S]+finish/);
   assert.match(runner, /request\.mode === "recover"[\s\S]+requestCleanup\(previousAccepted\)/);
   const failureHandler = runner.slice(runner.lastIndexOf("} catch (error) {"));

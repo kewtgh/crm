@@ -1,7 +1,14 @@
-# Implementation status — v3.8.27 release candidate
+# Implementation status — v3.8.28 release candidate
 
 ## Scope
 
+v3.8.28 separates Docker Worker liveness, operational readiness, and production release acceptance.
+Container health now fails only for process/runtime, schema, database, or required-heartbeat faults;
+failed and stuck jobs remain visible as normal readiness and Operations degradation. The target
+controller captures a sanitized pre-switch baseline and permits only a non-increasing failed-job
+count, while always rejecting stuck work, missing/stale Workers, failed core checks, wrong images,
+or target-version/commit drift. Recover uses the infrastructure contract without allowing an old
+business failure to deadlock runtime reconciliation.
 v3.8.27 separates internal staff-invitation delivery metadata from the external Email Delivery
 Worker protocol. The Notification Outbox retains invitation reconciliation state and encrypted
 credentials locally, decrypts only at delivery time, and emits exactly the seven fields accepted by
@@ -93,12 +100,15 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - explicit separation between CRM application initialization and email Worker deployment;
 - a containerized release-version contract that keeps package metadata, runtime `APP_VERSION`,
   health responses, and strict deployment acceptance aligned;
+- distinct Worker-container and release-health contracts: queue failures never determine Docker
+  liveness, normal readiness remains operationally strict, and release acceptance compares only
+  sanitized aggregate counts against the immediately pre-switch baseline;
 - Worker-only active consumption of CRM email delivery credentials, with Web template values
   retained solely for one-release rollback compatibility and no provider readiness probe;
 - a dedicated communication delivery category with durable queue acceptance, distinct provider
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
-- synchronized application package, lockfile, runtime, README, and documentation version 3.8.27;
+- synchronized application package, lockfile, runtime, README, and documentation version 3.8.28;
   the independently deployed Cloudflare Worker code, template allow-list, and metadata are unchanged;
 - an explicit seven-field staff-account-created delivery projection that keeps invitation IDs,
   encrypted credentials, and future internal metadata inside CRM, plus a cross-package contract
@@ -114,6 +124,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 
 | Check | Result |
 | --- | --- |
+| v3.8.28 Worker/release-health targeted contracts | Pass: 11/11, including Docker liveness separation, failed-job baseline matrix, recovery, rollback triggering, Operations visibility, evidence minimization, and cycle timing |
 | v3.8.27 staff invitation delivery protocol contracts | Pass: 6/6, including exact CRM/Email Worker field-set parity, local metadata retention, bounded diagnostics, and log redaction |
 | v3.8.26 staff directory targeted contracts | Pass: 9/9 |
 | v3.8.26 deployment bootstrap/cleanup targeted contracts | Pass: 16/16, including real fresh-process 3.8.24→3.8.25 generation fixture and HunterAI isolation |
@@ -140,7 +151,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 | Windows production deployment rejection | Pass: `PRODUCTION_DEPLOY_REQUIRES_LINUX` before Env access or Wrangler |
 | Initialize/first-install targeted deploy contracts | Pass: 26/26 |
 | `npm run tunnel:test` | Pass: 9/9 Tunnel/Caddy contracts |
-| Final `npm run test:deploy:raw` | Pass: 98/98 application-runtime/target-runtime/version/rootless Compose/two-stage deploy/cleanup/secret-source/finalization/BuildKit/Tunnel contracts |
+| Final `npm run test:deploy:raw` | Pass: 109/109 application-runtime/target-runtime/version/rootless Compose/two-stage deploy/release-health/cleanup/secret-source/finalization/BuildKit/Tunnel contracts |
 | `npm run test:application-image:smoke` | Pass: application image loaded as `10001:10001`, Lumina ownership labels exact, runtime closure 29 modules |
 | `npm run typecheck:raw` | Pass |
 | `npm run lint:raw` | Pass |
