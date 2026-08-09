@@ -1,6 +1,6 @@
 # Lumina CRM
 
-Current release candidate: **v3.8.19**
+Current release candidate: **v3.8.26**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
@@ -13,6 +13,12 @@ It also verifies each encrypted database backup with its matching encrypted loca
 replaces the public Worker gateway with Cloudflare Tunnel to a loopback-only Caddy listener, fixes
 the Compose disk monitor and secure sign-out flow, removes stale deployment code, and trims the
 runtime image to required scripts.
+
+Version 3.8.26 makes staff-account governance usable on mobile, adds server-side lifecycle and role
+filters before pagination, completes keyboard focus behavior for account action menus, and brings the
+README into the enforced release-version contract. Versions 3.8.20–3.8.25 hardened target-runtime
+preflight, application image closure, staff-account confirmations, invitation RLS, atomic Web/Worker
+release switching, and deployment-request finalization.
 
 Version 3.8.19 preserves successful asynchronous staff-account creation, adds durable invitation resend delivery, role-specific session retention, and safe staff action menus. Version 3.8.18 separated strict pre-authentication origin checks from authenticated Session CSRF,
 so stale browser Session Cookies cannot block CAPTCHA verification, sign-in, SSO, device verification,

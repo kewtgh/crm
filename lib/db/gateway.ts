@@ -116,6 +116,9 @@ async function resolveRelation(
         select 1 from pg_index index_record
         where index_record.indrelid = child.oid
           and index_record.indisunique
+          and index_record.indisvalid
+          and index_record.indpred is null
+          and index_record.indnkeyatts = 1
           and child_column.attnum = any(index_record.indkey)
       ) as "childUnique"
     from pg_constraint constraint_record

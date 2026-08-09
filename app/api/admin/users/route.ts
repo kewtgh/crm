@@ -16,6 +16,8 @@ const createSchema = z.object({
   team: z.string().trim().min(1).max(80),
   managerMemberId: z.uuid().nullable().optional(),
 });
+const directoryStatusSchema = z.enum(["ALL", "ACTIVE", "PENDING", "SUSPENDED"]);
+const directoryRoleSchema = z.enum(["ALL", ...APP_ROLES]);
 
 function failure(error: unknown) {
   if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
@@ -28,7 +30,13 @@ async function get(request: Request) {
   try {
     const url = new URL(request.url);
     const {page,pageSize}=parsePagination(url.searchParams,20);
-    return NextResponse.json(await listStaffUsers({ query: url.searchParams.get("query") ?? "", page, pageSize }));
+    const status=directoryStatusSchema.safeParse((url.searchParams.get("status")??"ALL").toUpperCase());
+    const role=directoryRoleSchema.safeParse((url.searchParams.get("role")??"ALL").toUpperCase());
+    if(!status.success||!role.success)return NextResponse.json({code:"INVALID_STAFF_DIRECTORY_FILTER"},{status:400});
+    return NextResponse.json(await listStaffUsers({
+      query: url.searchParams.get("query") ?? "", page, pageSize,
+      status:status.data,role:role.data,
+    }));
   } catch (error) { return failure(error); }
 }
 
