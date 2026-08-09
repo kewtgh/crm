@@ -379,8 +379,16 @@ lease tokens, per-category bounded concurrency, heartbeat/queue state, idempoten
 four-minute cycle limit, and 210-second external budget remain unchanged. Another cycle cannot
 overlap while the advisory lock is held.
 
-Worker health queries the real schema version, database readiness, required heartbeat freshness,
-and failed/stuck queue counts. A live Node process alone is not healthy.
+Docker Worker health queries the real schema version, database readiness, and required heartbeat
+presence/freshness. A live Node process alone is not healthy, but retryable failed jobs and stuck-job
+telemetry are operational degradation rather than container liveness predicates. Those counts remain
+in detailed readiness and Operations and can still make normal readiness return HTTP 503.
+
+The default `WORKER_LOOP_INTERVAL_SECONDS=300` is the delay after a cycle, not a startup delay: a
+new Worker performs its schema check and first bounded cycle immediately. The deploy controller's
+240-second Worker-health window therefore does not need to wait for a 300-second recurrence. Docker
+also has a three-minute start period, and health no longer waits for business-job success. The
+interval and timeout remain unchanged and bounded.
 
 ## Env-driven email delivery Worker
 
@@ -548,9 +556,10 @@ exclusive Lumina lock
 -> repeat-safe database role/extension bootstrap
 -> migration manifest verification and locked forward migration
 -> repeat-safe initial administrator bootstrap
+-> capture sanitized failed/stuck/missing/stale Worker baseline
 -> force-recreate Web/Worker together (never down) so replaced Secret files are remounted
 -> independent PostgreSQL/Web/Worker health
--> loopback detailed readiness
+-> loopback release-health acceptance against the pre-switch baseline
 -> Cloudflare Tunnel public liveness at https://<LUMINA_PUBLIC_HOSTNAME>/api/health
 -> atomically persist compose.env and accepted state with null rollback images
 -> bounded Lumina BuildKit, paired-image, deployment-history and stale-env cleanup (non-fatal)
@@ -568,11 +577,19 @@ Post-switch failure force-recreates both Web and Worker at last-success and rech
 initialization has no prior image and records rollback as unavailable. Neither path reverses a
 migration, and application rollback reports: “Application rolled back; database remains on the
 forward schema.” Each migration must remain compatible with the rollback application until
-acceptance. Only after PostgreSQL, target Web/Worker health, loopback readiness, and public liveness
-all succeed may the controller atomically write `compose.env` and `last-success.json`.
+acceptance. Release health requires PostgreSQL and exact target Web/Worker images, healthy containers,
+the exact target version/commit, valid environment/auth/database/Worker checks, zero missing/stale
+Workers, and zero stuck jobs. Failed jobs must not increase: `0 -> 1` and `1 -> 2` fail and trigger
+rollback; `0 -> 0` is healthy; `1 -> 0` is healthy; `1 -> 1` and `2 -> 1` are accepted with only
+`PREEXISTING_QUEUE_DEGRADATION`. The persisted `releaseHealth` evidence contains aggregate counts and
+stable warnings only—never queue rows, errors, recipients, payloads, URLs, or credentials. Normal
+loopback readiness remains HTTP 503 while any failed/stuck job exists. Only after release health and
+public liveness succeed may the controller atomically write `compose.env` and `last-success.json`.
 `deploy:production:recover` performs no build or migration: it idempotently reconciles
-both services and compose.env to a complete last-success release, failing closed if that state is
-missing. Cleanup starts only after acceptance and accepted-state persistence; its failure is a
+both services and compose.env to a complete last-success release. It accepts pre-existing failed
+business jobs but still fails closed for incomplete last-success state, image mismatch, container,
+schema/database/auth/environment faults, missing/stale Workers, or stuck jobs. Cleanup starts only
+after acceptance and accepted-state persistence; its failure is a
 non-fatal warning and cannot trigger rollback or change `applicationResult`.
 
 ### Post-deployment storage cleanup
@@ -631,8 +648,11 @@ curl -fsS "https://${LUMINA_PUBLIC_HOSTNAME}/api/health"
 ```
 
 Detailed loopback readiness independently reports Web environment, auth schema, database, Worker
-heartbeats, and queues. A live Web with failed database is not ready. Public acceptance traverses
-the Cloudflare Tunnel and remains a mandatory release condition.
+heartbeats, and queues. A live Web with failed database or failed/stuck jobs is not generally ready.
+The deployment controller evaluates the same sanitized document through its stricter release-health
+baseline contract rather than requiring general readiness HTTP 200. Public acceptance traverses the
+Cloudflare Tunnel, checks minimal liveness and exact target application version, and remains a
+mandatory release condition without treating queue degradation as a transport failure.
 
 ## Backup, object storage, reboot, and diagnosis
 

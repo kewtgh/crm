@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { closeWorkerDatabase, workerJson, workerQuery } from "./lib/worker-database.mjs";
+import { assertWorkerContainerHealth } from "./lib/worker-container-health.mjs";
 
 const allWorkers = [
   "REMINDERS",
@@ -18,9 +19,6 @@ try {
     .sort();
   const expected = migrationFiles.at(-1);
   const schema = await workerQuery("select public.service_schema_version() as version");
-  if (!expected || schema.rows[0]?.version !== expected) {
-    throw new Error("WORKER_SCHEMA_NOT_CURRENT");
-  }
   const snapshot = await workerJson("/db/rpc/service_readiness_snapshot_for_workers", {
     method: "POST",
     body: JSON.stringify({
@@ -28,11 +26,13 @@ try {
       enabled_workers: allWorkers,
     }),
   });
-  if (snapshot?.database !== true) throw new Error("WORKER_DATABASE_NOT_READY");
-  for (const key of ["missingWorkers", "staleWorkers", "failedJobs", "stuckJobs"]) {
-    if (Number(snapshot?.[key] ?? 0) !== 0) throw new Error(`WORKER_HEALTH_${key.toUpperCase()}`);
-  }
-  process.stdout.write("[worker-health] heartbeat, queue, database and schema are healthy.\n");
+  assertWorkerContainerHealth({
+    schemaCurrent:Boolean(expected && schema.rows[0]?.version === expected),
+    snapshot,
+  });
+  process.stdout.write(
+    "[worker-health] process, heartbeat, database and schema are healthy; queue state is operational telemetry.\n",
+  );
 } finally {
   await closeWorkerDatabase().catch(() => undefined);
 }

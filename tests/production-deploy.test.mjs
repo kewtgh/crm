@@ -141,8 +141,14 @@ function releaseWorkflowDouble({ failAt } = {}) {
       markMigrationMayHaveChanged: operation("migration-may-have-changed"),
       migrate: operation("migrate"),
       bootstrapAdmin: operation("bootstrap-admin"),
+      captureReleaseHealthBaseline: operation("release-health-baseline", {
+        checks:{environment:true,auth:true,database:true,workers:true},
+        metrics:{failedJobs:0,stuckJobs:0,missingWorkers:0,staleWorkers:0},
+      }),
       switchApplication: operation("switch"),
-      acceptRuntime: operation("acceptance"),
+      acceptRuntime: operation("acceptance", {
+        status:"HEALTHY",baselineFailedJobs:0,finalFailedJobs:0,stuckJobs:0,warnings:[],
+      }),
     },
   };
 }
@@ -417,8 +423,11 @@ test("release metadata, runtime APP_VERSION, README, health responses, and verif
   assert.match(healthRoute, /import \{ APP_VERSION \} from "@\/lib\/version"/);
   assert.equal((healthRoute.match(/version: APP_VERSION/g) ?? []).length, 3);
   assert.doesNotMatch(healthRoute, /version:\s*["'`]\d+\.\d+\.\d+/);
-  assert.match(runner, /body\?\.version && target\?\.version && body\.version !== target\.version/);
-  assert.match(runner, /returned version \$\{body\.version\}, expected \$\{target\.version\}/);
+  assert.match(runner, /expectedVersion && body\?\.version !== expectedVersion/);
+  assert.match(runner, /RELEASE_HEALTH_VERSION_MISMATCH/);
+  assert.match(runner, /target\?\.version && body\?\.version !== target\.version/);
+  assert.match(runner, /PUBLIC_LIVENESS_VERSION_MISMATCH/);
+  assert.match(runner, /TARGET_RELEASE_COMMIT_EVIDENCE_MISSING/);
   assert.match(dockerfile, /npm run test:deploy:raw/);
 });
 
@@ -453,6 +462,7 @@ test("initialize follows the explicit first-install order", async () => {
     "migration-may-have-changed",
     "migrate",
     "bootstrap-admin",
+    "release-health-baseline",
     "switch",
     "acceptance",
   ]);

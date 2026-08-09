@@ -66,7 +66,8 @@ test("deploy runner requires public Tunnel liveness without any origin secret", 
     /async function acceptRuntime[\s\S]+?\n\}\n\nasync function prepareBuilderAndCapacity/,
   )?.[0] ?? "";
   assert.match(acceptance, /waitForContainerHealth\(envFile, "postgres"/);
-  assert.match(acceptance, /loopback readiness/);
+  assert.match(acceptance, /loopback release acceptance/);
+  assert.match(acceptance, /evaluateProductionReleaseHealth/);
   assert.match(acceptance, /Cloudflare Tunnel public liveness/);
   assert.match(acceptance, /`https:\/\/\$\{publicHostname\(\)\}\/api\/health`/);
   assert.match(
