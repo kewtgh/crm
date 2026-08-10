@@ -8,7 +8,6 @@ import {
 import {
   csrfCookieName,
   loadSession,
-  persistentSessionMaxAgeForRole,
   rotateSessionToken,
 } from "@/lib/auth/session-store";
 import { applicationOrigin } from "@/lib/application-origin.mjs";
@@ -52,10 +51,8 @@ export async function GET(request: Request) {
   setAuthSessionCookies(response, {
     token: nextToken,
     csrfToken,
-    persistent: cookieStore.get(authCookieNames.persistence)?.value === "1",
-    maxAge: cookieStore.get(authCookieNames.persistence)?.value === "1"
-      ? persistentSessionMaxAgeForRole(session.user.role)
-      : 60 * 60 * 12,
+    persistent: session.persistent,
+    maxAge: session.maxAge,
   });
   response.headers.set("cache-control", "no-store");
   return response;

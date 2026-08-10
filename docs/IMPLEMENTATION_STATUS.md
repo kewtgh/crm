@@ -1,7 +1,13 @@
-# Implementation status — v3.8.29 release candidate
+# Implementation status — v3.8.30 release candidate
 
 ## Scope
 
+v3.8.30 persists the remember-login choice on the server and aligns database expiry, refresh, and
+Cookie lifetime with the 15-day administrator / 30-day staff absolute boundary. A compatibility
+migration restores unrevoked remembered sessions that remain inside that boundary. The release
+also updates fixed vulnerable dependency versions and replaces Vinext's vulnerable metadata-image
+parser with a bounded common-format implementation that rejects ICNS/JXL/HEIF while preserving the
+moderate-severity CI audit gate.
 v3.8.29 moves management submenu links onto a same-tab document navigation boundary so cold route
 loads do not depend on the client RSC transition that could leave the first click apparently inert.
 A pinned Chromium regression verifies a new document, the exact target URL, and no additional tab.
@@ -111,7 +117,7 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 - a dedicated communication delivery category with durable queue acceptance, distinct provider
   attempts, fenced leases/completion, bounded retry/time budget, conservative uncertainty handling,
   independent heartbeat/readiness and audited retry;
-- synchronized application package, lockfile, runtime, README, and documentation version 3.8.29;
+- synchronized application package, lockfile, runtime, README, and documentation version 3.8.30;
   the independently deployed Cloudflare Worker code, template allow-list, and metadata are unchanged;
 - an explicit seven-field staff-account-created delivery projection that keeps invitation IDs,
   encrypted credentials, and future internal metadata inside CRM, plus a cross-package contract
@@ -127,6 +133,8 @@ the `lumina-crm` host user. Cloudflare Tunnel is user-facing and reaches Caddy o
 
 | Check | Result |
 | --- | --- |
+| v3.8.30 remembered-session targeted contracts | Pass: 10/10, including server-owned persistence, 15/30-day role bounds, refresh continuity, and migration backfill guards |
+| v3.8.30 dependency security contracts and online audit | Pass: 3/3; common metadata formats preserved, ICNS/JXL/HEIF rejected, `npm audit --audit-level=moderate` reports 0 vulnerabilities |
 | v3.8.29 management submenu cold-navigation regression | Pass: same-tab document navigation, exact admin target, no additional tab; Chromium 149.0.7827.55 from revision 1228 |
 | v3.8.28 Worker/release-health targeted contracts | Pass: 11/11, including Docker liveness separation, failed-job baseline matrix, recovery, rollback triggering, Operations visibility, evidence minimization, and cycle timing |
 | v3.8.27 staff invitation delivery protocol contracts | Pass: 6/6, including exact CRM/Email Worker field-set parity, local metadata retention, bounded diagnostics, and log redaction |

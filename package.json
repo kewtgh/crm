@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.8.29",
+  "version": "3.8.30",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -18,9 +18,9 @@
     "build:raw": "vinext build",
     "start": "vinext start",
     "test": "node scripts/run-bounded.mjs --label test --timeout-seconds 360 --idle-seconds 120 -- npm run test:raw",
-    "test:raw": "npm run build:raw && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/production-deploy.test.mjs tests/root-redirect.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs tests/v381-behavior.test.mjs tests/v382-behavior.test.mjs tests/notification-delivery-protocol.test.mjs tests/request-security.test.mjs tests/preauth-routes.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
+    "test:raw": "npm run build:raw && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/production-deploy.test.mjs tests/root-redirect.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs tests/v381-behavior.test.mjs tests/v382-behavior.test.mjs tests/notification-delivery-protocol.test.mjs tests/request-security.test.mjs tests/preauth-routes.test.mjs tests/dependency-security.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:contracts": "node scripts/run-bounded.mjs --label contracts --timeout-seconds 120 --idle-seconds 60 -- npm run test:contracts:raw",
-    "test:contracts:raw": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs tests/v381-behavior.test.mjs tests/v382-behavior.test.mjs tests/notification-delivery-protocol.test.mjs tests/request-security.test.mjs tests/preauth-routes.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
+    "test:contracts:raw": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/rendered-html.test.mjs tests/v290-behavior.test.mjs tests/v310-behavior.test.mjs tests/v320-behavior.test.mjs tests/v330-behavior.test.mjs tests/v340-behavior.test.mjs tests/v350-behavior.test.mjs tests/v380-behavior.test.mjs tests/v381-behavior.test.mjs tests/v382-behavior.test.mjs tests/notification-delivery-protocol.test.mjs tests/request-security.test.mjs tests/preauth-routes.test.mjs tests/dependency-security.test.mjs && node --import tsx --test --test-isolation=none --test-concurrency=1 tests/captcha.test.mjs",
     "test:deploy": "node scripts/run-bounded.mjs --label deploy-tests --timeout-seconds 120 --idle-seconds 60 -- npm run test:deploy:raw",
     "test:deploy:raw": "node --test --test-isolation=none tests/production-deploy.test.mjs tests/deployment-bootstrap-cleanup.test.mjs tests/cloudflare-tunnel-caddy.test.mjs tests/application-runtime.test.mjs tests/target-runtime-preflight.test.mjs tests/release-health.test.mjs",
     "test:deploy-control-plane:raw": "node --test --test-isolation=none tests/deployment-bootstrap-cleanup.test.mjs",
@@ -125,7 +125,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
-    "brace-expansion-secure": "npm:brace-expansion@5.0.8",
+    "brace-expansion-secure": "npm:brace-expansion@5.0.9",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.11",
     "playwright-core": "1.61.1",
@@ -138,6 +138,10 @@
   },
   "overrides": {
     "brace-expansion": "file:vendor/brace-expansion-compat",
+    "fast-uri": "3.1.5",
+    "image-size": "file:vendor/image-size-safe",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.17",
     "postcss": "8.5.23",
     "sharp": "0.35.3",
     "tsx": {

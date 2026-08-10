@@ -19,6 +19,7 @@ export function persistentSessionMaxAgeForRole(role: AppRole) {
 
 type SessionRow = {
   session_id: string;
+  session_persistent: boolean;
   user_id: string;
   email: string;
   account_status: string;
@@ -26,6 +27,7 @@ type SessionRow = {
   account_must_change_password: boolean;
   session_aal: "aal1" | "aal2";
   last_seen_at: string;
+  absolute_expires_at: string;
   workspace_id: string;
   membership_status: string;
   membership_must_change_password: boolean;
@@ -82,7 +84,9 @@ const sessionSelect = `
     account.email_confirmed_at,
     account.must_change_password as account_must_change_password,
     session.aal as session_aal,
+    session.persistent as session_persistent,
     session.last_seen_at,
+    session.absolute_expires_at,
     membership.workspace_id,
     membership.status as membership_status,
     membership.must_change_password as membership_must_change_password,
@@ -120,7 +124,10 @@ export async function loadSession(token: string | null | undefined) {
       "system",
       `update app_auth.sessions
        set last_seen_at = now(),
-           idle_expires_at = least(absolute_expires_at, now() + interval '12 hours')
+           idle_expires_at = case
+             when persistent then absolute_expires_at
+             else least(absolute_expires_at, now() + interval '12 hours')
+           end
        where id = $1 and revoked_at is null`,
       [row.session_id],
     ).catch(() => undefined);
@@ -128,6 +135,10 @@ export async function loadSession(token: string | null | undefined) {
   return {
     id: row.session_id,
     token,
+    persistent: row.session_persistent,
+    maxAge: Math.max(0, Math.floor(
+      (new Date(row.absolute_expires_at).getTime() - Date.now()) / 1000,
+    )),
     user,
     authorization: {
       userId: row.user_id,
@@ -166,11 +177,12 @@ export async function createSession({
     "system",
     `insert into app_auth.sessions(
       user_id, token_hash, csrf_hash, aal, password_version,
-      source_hash, user_agent_hash, idle_expires_at, absolute_expires_at
+      source_hash, user_agent_hash, persistent, idle_expires_at, absolute_expires_at
     ) values(
       $1, $2, $3, $4, $5, $6, $7,
-      now() + interval '12 hours',
-      now() + ($8::text || ' seconds')::interval
+      $8,
+      now() + ($9::text || ' seconds')::interval,
+      now() + ($9::text || ' seconds')::interval
     ) returning id`,
     [
       userId,
@@ -180,6 +192,7 @@ export async function createSession({
       passwordVersion,
       source ? hashOpaqueValue(source) : null,
       userAgent ? hashOpaqueValue(userAgent) : null,
+      persistent,
       maxAge,
     ],
   );
@@ -233,7 +246,10 @@ export async function rotateSessionToken(token: string) {
     "system",
     `update app_auth.sessions
      set token_hash = $2, last_seen_at = now(),
-         idle_expires_at = least(absolute_expires_at, now() + interval '12 hours')
+         idle_expires_at = case
+           when persistent then absolute_expires_at
+           else least(absolute_expires_at, now() + interval '12 hours')
+         end
      where token_hash = $1 and revoked_at is null
        and idle_expires_at > now() and absolute_expires_at > now()
      returning id`,
