@@ -73,6 +73,28 @@ test("persistent sessions last 15 days for administrators and 30 days for staff"
   assert.equal(persistentSessionMaxAgeForRole("SALES_SPECIALIST"), 30 * 24 * 60 * 60);
 });
 
+test("remembered-session retention is enforced by the server and survives refresh", async () => {
+  const [sessionStore, refreshRoute, migration] = await Promise.all([
+    readFile(new URL("../lib/auth/session-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/refresh/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/migrations/202608100074_persistent_session_retention.sql", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(sessionStore, /session\.persistent as session_persistent/);
+  assert.match(sessionStore, /source_hash, user_agent_hash, persistent, idle_expires_at/);
+  assert.match(sessionStore, /when persistent then absolute_expires_at/g);
+  assert.match(sessionStore, /persistent: row\.session_persistent/);
+  assert.match(refreshRoute, /persistent: session\.persistent/);
+  assert.match(refreshRoute, /maxAge: session\.maxAge/);
+  assert.doesNotMatch(refreshRoute, /crm_session_persistent/);
+
+  assert.match(migration, /add column if not exists persistent boolean not null default false/);
+  assert.match(migration, /absolute_expires_at - created_at > interval '12 hours'/);
+  assert.match(migration, /set idle_expires_at = absolute_expires_at/);
+  assert.match(migration, /revoked_at is null/);
+  assert.match(migration, /absolute_expires_at > now\(\)/);
+});
+
 test("202 creation resets the stable form and calls onCreated without UNKNOWN", async () => {
   let resolveRequest;
   const request = new Promise((resolve) => { resolveRequest = resolve; });
