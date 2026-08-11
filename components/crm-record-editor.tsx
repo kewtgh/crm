@@ -95,6 +95,14 @@ export function CrmRecordEditor({
       patch.contactStatus=String(form.get("contactStatus")??detail.contactStatus??"NEW");
       patch.communicationLevel=Number(form.get("communicationLevel")??detail.communicationLevel??1);
       patch.notesMarkdown=String(form.get("notesMarkdown")??"");
+      patch.ownerId=owner||detail.ownerId;
+      patch.preferredContactMethod=String(form.get("preferredContactMethod")??detail.preferredContactMethod??"EMAIL");
+      patch.preferredLanguage=String(form.get("preferredLanguage")??"").trim();
+      patch.acquisitionSource=String(form.get("acquisitionSource")??"").trim();
+      patch.decisionRole=String(form.get("decisionRole")??detail.decisionRole??"UNKNOWN");
+      patch.tags=String(form.get("tags")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean);
+      const nextFollowUpAt=String(form.get("nextFollowUpAt")??"");
+      patch.nextFollowUpAt=nextFollowUpAt?localDateTimeToIso(nextFollowUpAt):null;
     }else{
       patch.priority=String(form.get("priority")??detail.priority);
       patch.ownerId=owner||detail.ownerId;
@@ -150,6 +158,7 @@ export function CrmRecordEditor({
           <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} defaultValue={detail.organizationOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} defaultValue={detail.structureOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource==="people"&&<>
+          <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} placeholder={detail.ownerName} onChange={setOwner} onSearch={searchOwners}/>
           <label className="field"><span>{t("modules.title")}</span><input name="title" defaultValue={detail.title} maxLength={120}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email" defaultValue={detail.email}/></label>
@@ -157,6 +166,9 @@ export function CrmRecordEditor({
           </div>
           <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue={detail.contactType??"CONTACT"}>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option value={value} key={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue={detail.contactStatus??"NEW"}>{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option value={value} key={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
           <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue={detail.communicationLevel??1}>{[1,2,3,4].map(value=><option value={value} key={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.preferredContactMethod")}</span><select name="preferredContactMethod" defaultValue={detail.preferredContactMethod??"EMAIL"}>{["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"].map(value=><option value={value} key={value}>{t(`contact.method.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.preferredLanguage")}</span><input name="preferredLanguage" defaultValue={detail.preferredLanguage} maxLength={80}/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.acquisitionSource")}</span><input name="acquisitionSource" defaultValue={detail.acquisitionSource} maxLength={160}/></label><label className="field"><span>{t("contact.decisionRole")}</span><select name="decisionRole" defaultValue={detail.decisionRole??"UNKNOWN"}>{["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"].map(value=><option value={value} key={value}>{t(`contact.decisionRole.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.tags")}</span><input name="tags" defaultValue={detail.tags?.join(", ")} placeholder={t("contact.tagsHelp")}/></label><label className="field"><span>{t("contact.nextFollowUp")}</span><input name="nextFollowUpAt" type="datetime-local" defaultValue={detail.nextFollowUpAt?localDateTimeInput(detail.nextFollowUpAt):""}/></label></div>
           <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} defaultValue={detail.notesMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
           <section className="record-households"><h3>{t("contact.households")}</h3>{detail.households?.map(household=><p key={household.id}><b>{household.nameZh} / {household.nameEn}</b><small>{t(`education.memberRole.${household.role.toLowerCase()}`)}{household.primary?` · ${t("education.primaryContact")}`:""}</small></p>)}{!detail.households?.length&&<p className="select-empty">{t("contact.noHouseholds")}</p>}</section>
         </>}

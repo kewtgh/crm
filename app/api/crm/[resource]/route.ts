@@ -29,6 +29,11 @@ const resourceSchemas={
     contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).default("NEW"),
     communicationLevel:z.number().int().min(1).max(4).default(1),
     notesMarkdown:z.string().max(20000).default(""),
+    preferredContactMethod:z.enum(["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"]).default("EMAIL"),
+    preferredLanguage:z.string().trim().max(80).default(""),acquisitionSource:z.string().trim().max(160).default(""),
+    decisionRole:z.enum(["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"]).default("UNKNOWN"),
+    tags:z.array(z.string().trim().min(1).max(60)).max(30).default([]),nextFollowUpAt:z.string().datetime().nullable().optional(),
+    ownerId:z.uuid().optional(),
   }).refine(value=>Boolean(value.email||value.phone),{path:["email"],message:"CONTACT_METHOD_REQUIRED"}),
   tasks:baseRecordSchema.extend({
     dueAt:z.string().datetime(),

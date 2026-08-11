@@ -69,7 +69,7 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   const migrationNames = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.ok(migrationNames.length >= 77);
+  assert.ok(migrationNames.length >= 78);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
   for (const requiredMigration of [
     "202608020073_staff_invitation_system_rls.sql",
@@ -77,6 +77,7 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
     "202608110075_structured_profiles_teams_and_terminal_approvals.sql",
     "202608110076_product_contact_and_multi_team_profiles.sql",
     "202608110077_crm_system_team_membership_permissions.sql",
+    "202608110078_product_lifecycle_and_contact_operating_profile.sql",
   ]) {
     assert.ok(migrationNames.includes(requiredMigration), `${requiredMigration} must remain in migration history`);
   }

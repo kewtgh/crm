@@ -3,7 +3,8 @@ import { DatabaseRequestError } from "./db/gateway";
 import { withPoolClient } from "./db/pools";
 
 export type TeamMembership={teamId:string;code:string;nameZh:string;nameEn:string;role:"MEMBER"|"LEAD";status:"PENDING"|"ACTIVE"|"REJECTED"};
-export type TeamRecord={id:string;code:string;nameZh:string;nameEn:string;descriptionMarkdown:string;active:boolean;leadMemberId:string|null;leadUserId:string|null;leadUserIds:string[];leadName:string;leadNames:string[];memberCount:number};
+export type TeamMemberSummary={userId:string;memberId:string;nameZh:string;nameEn:string;role:string;membershipRole:"MEMBER"|"LEAD";status:"PENDING"|"ACTIVE"};
+export type TeamRecord={id:string;code:string;nameZh:string;nameEn:string;descriptionMarkdown:string;active:boolean;leadMemberId:string|null;leadUserId:string|null;leadUserIds:string[];leadName:string;leadNames:string[];memberCount:number;members:TeamMemberSummary[]};
 export type TeamLeadCandidate={userId:string;memberId:string;name:string;role:string;teamIds:string[]};
 export type TeamMembershipOverview={teams:Array<{id:string;code:string;nameZh:string;nameEn:string}>;memberships:TeamMembership[]};
 
@@ -13,16 +14,16 @@ function workspaceId(){
   return value;
 }
 
-type TeamRow={id:string;code:string;name_zh:string;name_en:string;description_markdown:string;active:boolean;lead_member_id:string|null;leads:Array<{userId:string;memberId:string;nameZh:string;nameEn:string}>|null;member_count:string|number};
+type TeamRow={id:string;code:string;name_zh:string;name_en:string;description_markdown:string;active:boolean;lead_member_id:string|null;leads:Array<{userId:string;memberId:string;nameZh:string;nameEn:string}>|null;members:TeamMemberSummary[]|null;member_count:string|number};
 function mapTeam(row:TeamRow):TeamRecord{
   const leads=row.leads??[];
-  return{id:row.id,code:row.code,nameZh:row.name_zh,nameEn:row.name_en,descriptionMarkdown:row.description_markdown,active:row.active,leadMemberId:row.lead_member_id,leadUserId:leads[0]?.userId??null,leadUserIds:leads.map(item=>item.userId),leadName:leads[0]?`${leads[0].nameZh} / ${leads[0].nameEn}`:"",leadNames:leads.map(item=>`${item.nameZh} / ${item.nameEn}`),memberCount:Number(row.member_count)};
+  return{id:row.id,code:row.code,nameZh:row.name_zh,nameEn:row.name_en,descriptionMarkdown:row.description_markdown,active:row.active,leadMemberId:row.lead_member_id,leadUserId:leads[0]?.userId??null,leadUserIds:leads.map(item=>item.userId),leadName:leads[0]?`${leads[0].nameZh} / ${leads[0].nameEn}`:"",leadNames:leads.map(item=>`${item.nameZh} / ${item.nameEn}`),memberCount:Number(row.member_count),members:row.members??[]};
 }
 
 export async function listTeams():Promise<TeamRecord[]>{
   const result=await withPoolClient("system",client=>client.query<TeamRow>(`
     select team.id,team.code::text,team.name_zh,team.name_en,team.description_markdown,team.active,team.lead_member_id,
-      coalesce(leads.items,'[]'::jsonb) leads,coalesce(members.member_count,0) member_count
+      coalesce(leads.items,'[]'::jsonb) leads,coalesce(member_rows.items,'[]'::jsonb) members,coalesce(member_rows.member_count,0) member_count
     from public.sales_teams team
     left join lateral (
       select jsonb_agg(jsonb_build_object('userId',member.auth_user_id,'memberId',member.id,'nameZh',member.name_zh,'nameEn',member.name_en) order by member.name_en) items
@@ -30,9 +31,14 @@ export async function listTeams():Promise<TeamRecord[]>{
       where membership.team_id=team.id and membership.workspace_id=team.workspace_id and membership.status='ACTIVE' and membership.membership_role='LEAD' and member.active
     ) leads on true
     left join lateral (
-      select count(*) member_count from public.sales_team_memberships membership join public.sales_team_members member on member.id=membership.member_id
-      where membership.team_id=team.id and membership.workspace_id=team.workspace_id and membership.status='ACTIVE' and member.active
-    ) members on true
+      select jsonb_agg(jsonb_build_object(
+        'userId',member.auth_user_id,'memberId',member.id,'nameZh',member.name_zh,'nameEn',member.name_en,
+        'role',member.role,'membershipRole',membership.membership_role,'status',membership.status
+      ) order by case membership.status when 'PENDING' then 0 else 1 end,member.name_en) items,
+      count(*) filter(where membership.status='ACTIVE') member_count
+      from public.sales_team_memberships membership join public.sales_team_members member on member.id=membership.member_id
+      where membership.team_id=team.id and membership.workspace_id=team.workspace_id and membership.status in ('ACTIVE','PENDING') and member.active
+    ) member_rows on true
     where team.workspace_id=$1 order by team.active desc,team.name_en
   `,[workspaceId()]));
   return result.rows.map(mapTeam);
