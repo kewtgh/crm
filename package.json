@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.9.0",
+  "version": "3.9.1",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
