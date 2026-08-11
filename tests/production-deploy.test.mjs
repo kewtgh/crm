@@ -1098,7 +1098,7 @@ test("Docker maintenance allowlist rejects host-global destructive commands", ()
   }
 });
 
-test("verification build context includes only the deployment contract from docs", async () => {
+test("verification build context includes only required documentation and CI contracts", async () => {
   const dockerIgnore = (await source(".dockerignore"))
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -1109,6 +1109,16 @@ test("verification build context includes only the deployment contract from docs
   assert.deepEqual(
     dockerIgnore.filter((line) => line.startsWith("!docs/")),
     ["!docs/DEPLOYMENT.md"],
+  );
+  assert.equal(dockerIgnore.includes(".github"), false);
+  assert.deepEqual(
+    dockerIgnore.filter((line) => line.includes(".github")),
+    [
+      ".github/*",
+      "!.github/workflows/",
+      ".github/workflows/*",
+      "!.github/workflows/ci.yml",
+    ],
   );
 });
 
