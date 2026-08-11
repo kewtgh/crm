@@ -8,7 +8,7 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 const schema=z.object({
   id:z.uuid().optional(),code:z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9-]+$/),
   nameZh:z.string().trim().min(1).max(100),nameEn:z.string().trim().min(1).max(120),
-  descriptionMarkdown:z.string().max(4000).default(""),leadUserId:z.uuid().nullable().optional(),active:z.boolean().default(true),
+  descriptionMarkdown:z.string().max(4000).default(""),leadUserIds:z.array(z.uuid()).max(50).default([]),active:z.boolean().default(true),
 });
 const fail=(error:unknown)=>error instanceof DatabaseRequestError
   ?NextResponse.json({code:error.code},{status:error.status})

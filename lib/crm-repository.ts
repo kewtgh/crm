@@ -5,6 +5,7 @@ export type PersistentResource = "schools" | "people" | "tasks";
 export type CrmMetrics = { total: number; needsAttention: number; averageCompleteness: number };
 export type PagedRows = { items: DataRow[]; total: number; page: number; pageSize: number; metrics: CrmMetrics };
 export type CrmHistoryEntry = { action: string; changedAt: string; actorId: string | null; actorName: string };
+export type ContactHousehold={id:string;nameZh:string;nameEn:string;role:string;primary:boolean};
 export type CrmRecordDetail = {
   id: string;
   resource: PersistentResource;
@@ -24,6 +25,11 @@ export type CrmRecordDetail = {
   phone?: string;
   title?: string;
   organizationId?: string | null;
+  contactType?:string;
+  contactStatus?:string;
+  communicationLevel?:number;
+  notesMarkdown?:string;
+  households?:ContactHousehold[];
   priority?: string;
   dueAt?: string | null;
   slaDueAt?: string | null;
@@ -35,15 +41,15 @@ export type CrmRecordDetail = {
 
 const resourceConfig = {
   schools: { table: "organizations", search: ["name_zh", "name_en", "city", "curriculum"], sort: { primary: "name_zh", secondary: "city", status: "status", meta: "key_contact_coverage", extra: "last_contact_at", completeness: "completeness" } },
-  people: { table: "contacts", search: ["name_zh", "name_en", "email", "phone", "title"], sort: { primary: "name_zh", secondary: "title", status: "status", meta: "email", extra: "last_interaction_at", completeness: "completeness" } },
+  people: { table: "contacts", search: ["name_zh", "name_en", "email", "phone", "title", "notes_markdown"], sort: { primary: "name_zh", secondary: "title", status: "contact_status", meta: "email", extra: "last_interaction_at", completeness: "completeness" } },
   tasks: { table: "crm_tasks", search: ["title_zh", "title_en", "related_label"], sort: { primary: "title_zh", secondary: "related_label", status: "status", meta: "owner_id", extra: "due_at", completeness: "updated_at" } },
 } as const;
 
 const toneByStatus: Record<string, StatusTone> = {
-  HEALTHY: "green", ACTIVE: "green", VERIFIED: "blue", DONE: "green",
+  HEALTHY: "green", ACTIVE: "green", VERIFIED: "blue", DONE: "green", CONNECTED:"green",
   ATTENTION: "amber", FOLLOW_UP: "amber", TODO: "amber", WAITING_APPROVAL: "amber",
   DEVELOPING: "blue", IN_PROGRESS: "blue", PROTECTED: "purple",
-  RISK: "red", OVERDUE: "red", UNVERIFIED: "gray",
+  RISK: "red", OVERDUE: "red", UNVERIFIED: "gray", NEW:"gray", ATTEMPTING:"amber", DORMANT:"red",
 };
 
 const statusKeys: Record<string, string> = {
@@ -61,10 +67,10 @@ function toRow(resource: PersistentResource, record: Record<string, unknown>,own
     id: String(record.id),href:`/schools/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en), secondary: `${record.city} · ${record.curriculum}`,secondaryEn:`${record.city} · ${record.curriculum}`,
     owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: `${record.key_contact_coverage}%`, extra: isoDate(record.last_contact_at), completeness: Number(record.completeness),
   };
-  if (resource === "people") return {
+  if (resource === "people") {const contactStatus=String(record.contact_status??"NEW");const communicationLevel=Math.min(4,Math.max(1,Number(record.communication_level??1)));return {
     id: String(record.id),href:`/people/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en),bilingualName:true, secondary: String(record.title || record.contact_type),
-    owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: String(record.email ?? record.phone ?? "—"), extra: isoDate(record.last_interaction_at), completeness: Number(record.completeness),
-  };
+    owner, status:contactStatus, statusKey:`contact.status.${contactStatus.toLowerCase()}`,statusDetailKey:`contact.communication.level${communicationLevel}`, statusTone: toneByStatus[contactStatus] ?? "gray", meta: String(record.email ?? record.phone ?? "—"), extra: isoDate(record.last_interaction_at), completeness: Number(record.completeness),
+  };}
   return {
     id: String(record.id),href:`/tasks/${record.id}`, primary: String(record.title_zh),primaryEn:String(record.title_en), secondary: String(record.related_label || "—"),
     owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: String(record.priority), extra: isoDate(record.due_at), completeness: status === "DONE" ? 100 : 70,
@@ -80,7 +86,7 @@ export async function listCrmRows(resource: PersistentResource, options: { query
   params.set("archived_at", "is.null");
   const query = cleanSearch(options.query ?? "");
   if (query) params.set("or", `(${config.search.map((field) => `${field}.ilike.*${query}*`).join(",")})`);
-  if (options.status && options.status !== "all") params.set("status", `eq.${options.status}`);
+  if (options.status && options.status !== "all") params.set(resource==="people"?"contact_status":"status", `eq.${options.status}`);
   const sortKey = options.sort && options.sort in config.sort ? options.sort as keyof typeof config.sort : "primary";
   params.set("order", `${config.sort[sortKey]}.${options.direction === "desc" ? "desc" : "asc"}`);
   const [response,metrics] = await Promise.all([
@@ -128,7 +134,7 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
       course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
       organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",
       founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
-    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type: "CONTACT", status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
+    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type:input.contactType??"CONTACT",contact_status:input.contactStatus??"NEW",communication_level:input.communicationLevel??1,notes_markdown:input.notesMarkdown??"", status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
       : { title_zh: input.nameZh, title_en: input.nameEn, related_type:input.relatedType,related_id:input.relatedId||null,related_label:input.contact ?? "", status: "TODO", priority: input.priority, due_at: input.dueAt,owner_id:requestedOwner };
   const table = resourceConfig[resource].table;
   const created = await databaseJson<Record<string, unknown>[]>(`/db/table/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
@@ -143,11 +149,12 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
   const rows=await databaseJson<Record<string,unknown>[]>(`/db/table/${table}?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
   const record=rows[0];
   if(!record)throw new Error("CRM_RECORD_NOT_FOUND");
-  const [profiles,history]=await Promise.all([
+  const [profiles,history,householdRows]=await Promise.all([
     record.owner_id?databaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=eq.${record.owner_id}&limit=1`):Promise.resolve([]),
     databaseJson<Array<{action:string;changed_at:string;actor_id:string|null;actor_name:string}>>("/db/rpc/crm_record_history",{
       method:"POST",body:JSON.stringify({resource_key:resource,target_id:id,page_size:30}),
     }),
+    resource==="people"?databaseJson<Array<{member_role:string;primary_contact:boolean;households:{id:string;name_zh:string;name_en:string}|null}>>(`/db/table/household_members?select=member_role,primary_contact,households:households!household_members_household_id_fkey(id,name_zh,name_en)&contact_id=eq.${encodeURIComponent(id)}`):Promise.resolve([]),
   ]);
   const profile=profiles[0];
   const common={
@@ -162,7 +169,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
     history:history.map(item=>({action:item.action,changedAt:item.changed_at,actorId:item.actor_id,actorName:item.actor_name})),
   };
   if(resource==="schools")return{...common,city:String(record.city??""),curriculum:String(record.curriculum??""),courseCategories:(record.course_categories as string[]|undefined)??[],affiliationType:String(record.affiliation_type??"INDEPENDENT"),parentOrganizationId:record.parent_organization_id?String(record.parent_organization_id):null,organizationOverviewMarkdown:String(record.organization_overview_markdown??""),structureOverviewMarkdown:String(record.structure_overview_markdown??""),website:String(record.website??""),foundedYear:record.founded_year===null?null:Number(record.founded_year),studentCount:record.student_count===null?null:Number(record.student_count),facultyCount:record.faculty_count===null?null:Number(record.faculty_count),campusCount:record.campus_count===null?null:Number(record.campus_count)};
-  if(resource==="people")return{...common,email:String(record.email??""),phone:String(record.phone??""),title:String(record.title??""),organizationId:record.organization_id?String(record.organization_id):null};
+  if(resource==="people")return{...common,email:String(record.email??""),phone:String(record.phone??""),title:String(record.title??""),organizationId:record.organization_id?String(record.organization_id):null,contactType:String(record.contact_type??"CONTACT"),contactStatus:String(record.contact_status??"NEW"),communicationLevel:Number(record.communication_level??1),notesMarkdown:String(record.notes_markdown??""),households:householdRows.flatMap(item=>item.households?[{id:item.households.id,nameZh:item.households.name_zh,nameEn:item.households.name_en,role:item.member_role,primary:item.primary_contact}]:[])};
   return{...common,priority:String(record.priority),dueAt:record.due_at?String(record.due_at):null,slaDueAt:record.sla_due_at?String(record.sla_due_at):null,relatedType:String(record.related_type??""),relatedId:record.related_id?String(record.related_id):null,relatedLabel:String(record.related_label??"")};
 }
 
@@ -172,6 +179,12 @@ export async function updateCrmRecord(resource:PersistentResource,id:string,expe
     next_curriculum:patch.curriculum,next_status:patch.status,next_course_categories:patch.courseCategories??[],next_affiliation_type:patch.affiliationType??"INDEPENDENT",
     next_parent_organization:patch.parentOrganizationId||null,next_overview_markdown:patch.organizationOverviewMarkdown??"",next_structure_markdown:patch.structureOverviewMarkdown??"",
     next_website:patch.website??"",next_founded_year:patch.foundedYear??null,next_student_count:patch.studentCount??null,next_faculty_count:patch.facultyCount??null,next_campus_count:patch.campusCount??null,
+  })});
+  if(resource==="people"&&!patch.archived)return databaseJson<Record<string,unknown>>("/db/rpc/update_contact_profile",{method:"POST",body:JSON.stringify({
+    target_contact:id,expected_updated_at:expectedUpdatedAt,next_name_zh:patch.nameZh,next_name_en:patch.nameEn,
+    next_email:patch.email??"",next_phone:patch.phone??"",next_title:patch.title??"",next_record_status:patch.status,
+    next_contact_type:patch.contactType??"CONTACT",next_contact_status:patch.contactStatus??"NEW",
+    next_communication_level:patch.communicationLevel??1,next_notes_markdown:patch.notesMarkdown??"",
   })});
   return databaseJson<Record<string,unknown>>("/db/rpc/save_crm_record",{
     method:"POST",
