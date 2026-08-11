@@ -32,6 +32,11 @@ const schemas={
     contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).optional(),
     communicationLevel:z.number().int().min(1).max(4).optional(),
     notesMarkdown:z.string().max(20000).optional(),
+    preferredContactMethod:z.enum(["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"]).optional(),
+    preferredLanguage:z.string().trim().max(80).optional(),acquisitionSource:z.string().trim().max(160).optional(),
+    decisionRole:z.enum(["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"]).optional(),
+    tags:z.array(z.string().trim().min(1).max(60)).max(30).optional(),nextFollowUpAt:z.string().datetime().nullable().optional(),
+    ownerId:z.uuid().nullable().optional(),
   }).strict(),
   tasks:basePatch.extend({
     priority:z.enum(["LOW","NORMAL","HIGH","URGENT"]).optional(),

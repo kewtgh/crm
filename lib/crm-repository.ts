@@ -29,6 +29,12 @@ export type CrmRecordDetail = {
   contactStatus?:string;
   communicationLevel?:number;
   notesMarkdown?:string;
+  preferredContactMethod?:string;
+  preferredLanguage?:string;
+  acquisitionSource?:string;
+  decisionRole?:string;
+  tags?:string[];
+  nextFollowUpAt?:string|null;
   households?:ContactHousehold[];
   priority?: string;
   dueAt?: string | null;
@@ -134,7 +140,7 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
       course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
       organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",
       founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
-    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type:input.contactType??"CONTACT",contact_status:input.contactStatus??"NEW",communication_level:input.communicationLevel??1,notes_markdown:input.notesMarkdown??"", status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
+    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type:input.contactType??"CONTACT",contact_status:input.contactStatus??"NEW",communication_level:input.communicationLevel??1,notes_markdown:input.notesMarkdown??"",preferred_contact_method:input.preferredContactMethod??"EMAIL",preferred_language:input.preferredLanguage??"",acquisition_source:input.acquisitionSource??"",decision_role:input.decisionRole??"UNKNOWN",tags:input.tags??[],next_follow_up_at:input.nextFollowUpAt??null,status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
       : { title_zh: input.nameZh, title_en: input.nameEn, related_type:input.relatedType,related_id:input.relatedId||null,related_label:input.contact ?? "", status: "TODO", priority: input.priority, due_at: input.dueAt,owner_id:requestedOwner };
   const table = resourceConfig[resource].table;
   const created = await databaseJson<Record<string, unknown>[]>(`/db/table/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
@@ -169,7 +175,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
     history:history.map(item=>({action:item.action,changedAt:item.changed_at,actorId:item.actor_id,actorName:item.actor_name})),
   };
   if(resource==="schools")return{...common,city:String(record.city??""),curriculum:String(record.curriculum??""),courseCategories:(record.course_categories as string[]|undefined)??[],affiliationType:String(record.affiliation_type??"INDEPENDENT"),parentOrganizationId:record.parent_organization_id?String(record.parent_organization_id):null,organizationOverviewMarkdown:String(record.organization_overview_markdown??""),structureOverviewMarkdown:String(record.structure_overview_markdown??""),website:String(record.website??""),foundedYear:record.founded_year===null?null:Number(record.founded_year),studentCount:record.student_count===null?null:Number(record.student_count),facultyCount:record.faculty_count===null?null:Number(record.faculty_count),campusCount:record.campus_count===null?null:Number(record.campus_count)};
-  if(resource==="people")return{...common,email:String(record.email??""),phone:String(record.phone??""),title:String(record.title??""),organizationId:record.organization_id?String(record.organization_id):null,contactType:String(record.contact_type??"CONTACT"),contactStatus:String(record.contact_status??"NEW"),communicationLevel:Number(record.communication_level??1),notesMarkdown:String(record.notes_markdown??""),households:householdRows.flatMap(item=>item.households?[{id:item.households.id,nameZh:item.households.name_zh,nameEn:item.households.name_en,role:item.member_role,primary:item.primary_contact}]:[])};
+  if(resource==="people")return{...common,email:String(record.email??""),phone:String(record.phone??""),title:String(record.title??""),organizationId:record.organization_id?String(record.organization_id):null,contactType:String(record.contact_type??"CONTACT"),contactStatus:String(record.contact_status??"NEW"),communicationLevel:Number(record.communication_level??1),notesMarkdown:String(record.notes_markdown??""),preferredContactMethod:String(record.preferred_contact_method??"EMAIL"),preferredLanguage:String(record.preferred_language??""),acquisitionSource:String(record.acquisition_source??""),decisionRole:String(record.decision_role??"UNKNOWN"),tags:(record.tags as string[]|undefined)??[],nextFollowUpAt:record.next_follow_up_at?String(record.next_follow_up_at):null,households:householdRows.flatMap(item=>item.households?[{id:item.households.id,nameZh:item.households.name_zh,nameEn:item.households.name_en,role:item.member_role,primary:item.primary_contact}]:[])};
   return{...common,priority:String(record.priority),dueAt:record.due_at?String(record.due_at):null,slaDueAt:record.sla_due_at?String(record.sla_due_at):null,relatedType:String(record.related_type??""),relatedId:record.related_id?String(record.related_id):null,relatedLabel:String(record.related_label??"")};
 }
 
@@ -184,7 +190,10 @@ export async function updateCrmRecord(resource:PersistentResource,id:string,expe
     target_contact:id,expected_updated_at:expectedUpdatedAt,next_name_zh:patch.nameZh,next_name_en:patch.nameEn,
     next_email:patch.email??"",next_phone:patch.phone??"",next_title:patch.title??"",next_record_status:patch.status,
     next_contact_type:patch.contactType??"CONTACT",next_contact_status:patch.contactStatus??"NEW",
-    next_communication_level:patch.communicationLevel??1,next_notes_markdown:patch.notesMarkdown??"",
+    next_communication_level:patch.communicationLevel??1,next_notes_markdown:patch.notesMarkdown??"",next_owner_id:patch.ownerId??null,
+    next_preferred_contact_method:patch.preferredContactMethod??"EMAIL",next_preferred_language:patch.preferredLanguage??"",
+    next_acquisition_source:patch.acquisitionSource??"",next_decision_role:patch.decisionRole??"UNKNOWN",
+    next_tags:patch.tags??[],next_follow_up_at:patch.nextFollowUpAt??null,
   })});
   return databaseJson<Record<string,unknown>>("/db/rpc/save_crm_record",{
     method:"POST",

@@ -100,6 +100,13 @@ export function ModulePage({
       contactStatus:String(data.get("contactStatus")??"NEW"),
       communicationLevel:Number(data.get("communicationLevel")??1),
       notesMarkdown:String(data.get("notesMarkdown")??""),
+      preferredContactMethod:String(data.get("preferredContactMethod")??"EMAIL"),
+      preferredLanguage:String(data.get("preferredLanguage")??"").trim(),
+      acquisitionSource:String(data.get("acquisitionSource")??"").trim(),
+      decisionRole:String(data.get("decisionRole")??"UNKNOWN"),
+      tags:String(data.get("tags")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean),
+      nextFollowUpAt:data.get("nextFollowUpAt")?localDateTimeToIso(String(data.get("nextFollowUpAt"))):null,
+      ownerId:owner||undefined,
     };
     if (resource === "tasks") {
       const [relatedType = "", relatedId = ""] = related.split(":");
@@ -265,6 +272,7 @@ export function ModulePage({
         </>}
         {resource === "people" && <>
           <SearchableSelect label={`${t("modules.organization")} *`} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
+          <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>
           <label className="field"><span>{t("modules.title")} *</span><input name="title" required maxLength={120}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
@@ -272,6 +280,9 @@ export function ModulePage({
           </div>
           <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT">{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW">{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
           <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue="1">{[1,2,3,4].map(value=><option key={value} value={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.preferredContactMethod")}</span><select name="preferredContactMethod" defaultValue="EMAIL">{["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"].map(value=><option value={value} key={value}>{t(`contact.method.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.preferredLanguage")}</span><input name="preferredLanguage" maxLength={80}/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.acquisitionSource")}</span><input name="acquisitionSource" maxLength={160}/></label><label className="field"><span>{t("contact.decisionRole")}</span><select name="decisionRole" defaultValue="UNKNOWN">{["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"].map(value=><option value={value} key={value}>{t(`contact.decisionRole.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.tags")}</span><input name="tags" placeholder={t("contact.tagsHelp")}/></label><label className="field"><span>{t("contact.nextFollowUp")}</span><input name="nextFollowUpAt" type="datetime-local"/></label></div>
           <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
           <InlineMessage type="info">{t("modules.contactMethodRequired")}</InlineMessage>
         </>}

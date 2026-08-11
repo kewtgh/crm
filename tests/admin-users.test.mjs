@@ -24,6 +24,7 @@ const item = {
   mfaEnabled:false,
   onboardingStatus:"AWAITING_EMAIL_CONFIRMATION",
   invitationDeliveryStatus:"QUEUED",
+  teams:[],
 };
 
 test("staff action trigger only opens a controlled menu and status changes require confirmation", async () => {

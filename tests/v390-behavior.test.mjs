@@ -46,3 +46,41 @@ test("keeps team dialogs reopenable and models multi-team staff, leads, and requ
   assert.match(selfRoute,/requestTeamMembership/);
   assert.match(directory,/team_membership\.status in \('ACTIVE','PENDING'\)/);
 });
+
+test("exposes complete team management and a discoverable staff assignment action",async()=>{
+  const[repository,page,css]=await Promise.all([source("lib/team-repository.ts"),source("components/staff-users-page.tsx"),source("app/globals.css")]);
+  assert.match(repository,/members:TeamMemberSummary\[\]/);
+  assert.match(repository,/membership\.status in \('ACTIVE','PENDING'\)/);
+  assert.match(page,/className="surface team-management-panel"/);
+  assert.match(page,/setTeamDetail\(team\)/);
+  assert.match(page,/setTeamEditor\(\{mode:"edit",team\}\)/);
+  assert.match(page,/className="secondary-button compact staff-team-button"/);
+  assert.match(page,/teamDetail\.members\.map/);
+  assert.match(css,/\.team-management-grid\{display:grid/);
+});
+
+test("supports draft, active, and paused product lifecycles with usable list actions",async()=>{
+  const[migration,repository,route,page,css]=await Promise.all([source("db/migrations/202608110078_product_lifecycle_and_contact_operating_profile.sql"),source("lib/product-repository.ts"),source("app/api/products/route.ts"),source("components/products-page.tsx"),source("app/globals.css")]);
+  assert.match(migration,/lifecycle_status in \('DRAFT','ACTIVE','PAUSED'\)/);
+  assert.match(migration,/active=normalized_status='ACTIVE'/);
+  assert.match(migration,/idempotent_set_product_lifecycle/);
+  assert.match(repository,/ProductLifecycleStatus="DRAFT"\|"ACTIVE"\|"PAUSED"/);
+  assert.match(route,/operation:z\.literal\("lifecycle"\)/);
+  assert.match(page,/ProductLifecycleField/);
+  assert.match(page,/className="product-action-button edit"/);
+  assert.match(page,/statusFilter/);
+  assert.match(css,/grid-template-columns:minmax\(240px,1\.8fr\)/);
+  assert.match(css,/\.product-row-actions \{ justify-self:end/);
+});
+
+test("adds the operating fields a usable customer profile needs",async()=>{
+  const[migration,repository,editor,detail,createRoute]=await Promise.all([source("db/migrations/202608110078_product_lifecycle_and_contact_operating_profile.sql"),source("lib/crm-repository.ts"),source("components/crm-record-editor.tsx"),source("components/contact-consent-page.tsx"),source("app/api/crm/[resource]/route.ts")]);
+  for(const field of ["preferred_contact_method","preferred_language","acquisition_source","decision_role","tags","next_follow_up_at"])assert.match(migration,new RegExp(field));
+  assert.match(migration,/next_owner_id uuid/);
+  assert.match(repository,/preferredContactMethod/);
+  assert.match(editor,/name="nextFollowUpAt"/);
+  assert.match(editor,/name="decisionRole"/);
+  assert.match(detail,/data\.ownerName/);
+  assert.match(detail,/className="contact-tags"/);
+  assert.match(createRoute,/preferredContactMethod:z\.enum/);
+});
