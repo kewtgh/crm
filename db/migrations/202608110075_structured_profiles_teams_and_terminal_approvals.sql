@@ -24,10 +24,10 @@ create table if not exists public.sales_teams (
 alter table public.sales_team_members add column if not exists team_id uuid references public.sales_teams(id) on delete set null;
 alter table public.sales_teams add column if not exists lead_member_id uuid references public.sales_team_members(id) on delete set null;
 
-insert into public.sales_teams(workspace_id,code,name_zh,name_en,created_by)
+insert into public.sales_teams(workspace_id,code,name_zh,name_en)
 select distinct m.workspace_id,
   coalesce(nullif(trim(both '-' from left(regexp_replace(lower(trim(m.team)),'[^a-z0-9]+','-','g'),40)),''),'legacy-'||substr(md5(lower(trim(m.team))),1,12)),
-  trim(m.team),trim(m.team),null
+  trim(m.team),trim(m.team)
 from public.sales_team_members m
 where nullif(trim(m.team),'') is not null
 on conflict do nothing;

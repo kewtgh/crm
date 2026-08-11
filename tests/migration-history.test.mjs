@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -67,4 +67,19 @@ test("forbidden platform SQL remains rejected by the canonical verifier", async 
   context.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(path.join(directory, "001_forbidden.sql"), "select auth.uid();\n");
   await assert.rejects(() => verifyMigrationDirectory(directory), /contains forbidden platform SQL/);
+});
+
+test("migration 075 has a pinned PostgreSQL execution regression", async () => {
+  const [script, packageSource] = await Promise.all([
+    readFile(repositoryPath("scripts/test-migration-075-postgres.ps1"), "utf8"),
+    readFile(repositoryPath("package.json"), "utf8"),
+  ]);
+  assert.match(script, /postgres:18\.4-bookworm/);
+  assert.match(script, /Foundation-through-074 migration failed/);
+  assert.match(script, /Migration 075 failed against PostgreSQL/);
+  assert.match(script, /created_by is null/);
+  assert.match(script, /count\(distinct team_id\)/);
+  assert.match(script, /Security\.Cryptography\.SHA256\]::Create/);
+  assert.match(script, /Complete foundation-through-075 chain was not recorded/);
+  assert.match(packageSource, /"test:db:migration-075:postgres"/);
 });

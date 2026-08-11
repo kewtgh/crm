@@ -106,10 +106,17 @@ try {
   if ($backupRole -ne "0:0:0:1") {
     throw "crm_backup role boundary is invalid"
   }
-  docker exec --env PGPASSWORD=$backupPassword $containerId `
-    psql --host 127.0.0.1 --username crm_backup --dbname lumina_crm `
-    --command "begin; delete from app_meta.schema_migrations where false; rollback" 2>$null
-  if ($LASTEXITCODE -eq 0) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    docker exec --env PGPASSWORD=$backupPassword $containerId `
+      psql --host 127.0.0.1 --username crm_backup --dbname lumina_crm `
+      --command "begin; delete from app_meta.schema_migrations where false; rollback" 2>$null
+    $backupWriteExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($backupWriteExitCode -eq 0) {
     throw "crm_backup unexpectedly has database write permission"
   }
 
