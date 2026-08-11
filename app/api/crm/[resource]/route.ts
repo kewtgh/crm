@@ -18,6 +18,9 @@ const resourceSchemas={
   schools:baseRecordSchema.extend({
     city:z.string().trim().min(1).max(80),
     curriculum:z.string().trim().min(1).max(120),
+    courseCategories:z.array(z.string().trim().min(1).max(100)).max(40).default([]),affiliationType:z.enum(["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"]).default("INDEPENDENT"),
+    parentOrganizationId:z.uuid().nullable().optional(),organizationOverviewMarkdown:z.string().max(10000).default(""),structureOverviewMarkdown:z.string().max(10000).default(""),
+    website:z.url().or(z.literal("")).default(""),foundedYear:z.number().int().min(1000).max(9999).nullable().optional(),studentCount:z.number().int().nonnegative().nullable().optional(),facultyCount:z.number().int().nonnegative().nullable().optional(),campusCount:z.number().int().nonnegative().nullable().optional(),
   }),
   people:baseRecordSchema.extend({
     title:z.string().trim().min(1).max(120),

@@ -13,7 +13,7 @@ const createSchema = z.object({
   displayNameEn: z.string().trim().min(1).max(80),
   email: z.email(),
   role: z.enum(APP_ROLES.filter((role) => role !== "SUPER_ADMIN") as ["ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]),
-  team: z.string().trim().min(1).max(80),
+  teamId: z.uuid().nullable().optional(),
   managerMemberId: z.uuid().nullable().optional(),
 });
 const directoryStatusSchema = z.enum(["ALL", "ACTIVE", "PENDING", "SUSPENDED"]);

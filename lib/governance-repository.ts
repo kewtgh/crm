@@ -1,7 +1,7 @@
 import { databaseJson, databaseRequest } from "./db/gateway";
 
 export type ApprovalRecord = {
-  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"|"crmExport"; object: string; requester: string; submitted: string; level: "admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
+  id: string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"|"crmExport"; object: string; requester: string; submitted: string; level: "teamLead"|"admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
 };
 
 const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation",QUOTE_DISCOUNT:"quoteDiscount",REFUND:"refund",MARKETING_CONTACT_EXPORT:"marketingContactExport",CRM_EXPORT:"crmExport" };
@@ -21,7 +21,7 @@ export async function listApprovals(options:{query?:string;type?:string;status?:
     approvalCount("&status=eq.PENDING"),approvalCount("&status=eq.APPROVED"),approvalCount("&status=eq.REJECTED"),approvalCount("&status=eq.PENDING&required_role=eq.SUPER_ADMIN"),
   ]);
   const names=new Map(profiles.map((item)=>[item.user_id,`${item.display_name_zh} / ${item.display_name_en}`]));
-  const items=requests.map((item)=>({ id:String(item.id),requestNumber:String(item.request_number),type:approvalTypes[String(item.request_type)]??"performanceSummary",object:`${item.business_object_type} · ${item.business_object_id}`,requester:names.get(String(item.requester_id))??String(item.requester_id).slice(0,8),submitted:String(item.created_at),level:item.required_role==="SUPER_ADMIN"?"superAdmin" as const:"admin" as const,reason:String(item.reason),status:String(item.status).toLowerCase() as ApprovalRecord["status"],executionStatus:String(item.execution_status??"NOT_STARTED") as ApprovalRecord["executionStatus"] }));
+  const items=requests.map((item)=>({ id:String(item.id),requestNumber:String(item.request_number),type:approvalTypes[String(item.request_type)]??"performanceSummary",object:`${item.business_object_type} · ${item.business_object_id}`,requester:names.get(String(item.requester_id))??String(item.requester_id).slice(0,8),submitted:String(item.created_at),level:item.required_role==="SUPER_ADMIN"?"superAdmin" as const:item.required_role==="TEAM_LEAD"?"teamLead" as const:"admin" as const,reason:String(item.reason),status:String(item.status).toLowerCase() as ApprovalRecord["status"],executionStatus:String(item.execution_status??"NOT_STARTED") as ApprovalRecord["executionStatus"] }));
   return {items,total,page,pageSize,summary:{pending,approved,rejected,highPrivilegePending}};
 }
 

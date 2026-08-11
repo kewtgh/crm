@@ -168,6 +168,7 @@ export async function createAccount({
   mustChangePassword,
   emailVerified,
   team,
+  teamId,
   managerMemberId,
   afterCreate,
 }: {
@@ -181,6 +182,7 @@ export async function createAccount({
   mustChangePassword: boolean;
   emailVerified: boolean;
   team?: string;
+  teamId?: string | null;
   managerMemberId?: string | null;
   afterCreate?: (client: PoolClient, userId: string) => Promise<void>;
 }) {
@@ -214,9 +216,9 @@ export async function createAccount({
       if (role.startsWith("SALES_")) {
         await client.query(
           `insert into public.sales_team_members(
-            workspace_id, auth_user_id, name_zh, name_en, role, team, manager_member_id, active
-          ) values($1, $2, $3, $4, $5, $6, $7, true)`,
-          [workspaceId, id, displayNameZh.trim(), displayNameEn.trim(), role, team ?? "", managerMemberId ?? null],
+            workspace_id, auth_user_id, name_zh, name_en, role, team, team_id, manager_member_id, active
+          ) values($1, $2, $3, $4, $5, $6, $7, $8, true)`,
+          [workspaceId, id, displayNameZh.trim(), displayNameEn.trim(), role, team ?? "", teamId ?? null, managerMemberId ?? null],
         );
       }
       await afterCreate?.(client, id);

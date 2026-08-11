@@ -2,6 +2,7 @@ import type { AppRole } from "./roles";
 
 export const CAPABILITIES = [
   "admin.access",
+  "approvals.decide",
   "users.manage",
   "catalog.manage",
   "exchangeRates.manage",
@@ -46,6 +47,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
   SUPER_ADMIN: administrator,
   ADMIN: administrator,
   SALES_DIRECTOR: new Set([
+    "approvals.decide",
     "catalog.manage",
     "finance.view",
     "finance.quote.create",
@@ -78,6 +80,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "exports.request",
   ]),
   SALES_MANAGER: new Set([
+    "approvals.decide",
     "finance.view",
     "finance.quote.create",
     "imports.view",
@@ -149,6 +152,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
 
 export const aal2Capabilities = new Set<Capability>([
   "admin.access",
+  "approvals.decide",
   "users.manage",
   "catalog.manage",
   "exchangeRates.manage",

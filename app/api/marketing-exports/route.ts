@@ -13,7 +13,7 @@ async function post(request:Request){
   try{
     const item=await databaseJson("/db/rpc/request_marketing_contact_export",{method:"POST",body:JSON.stringify({export_channel:parsed.data.channel,business_reason:parsed.data.reason})});
     const approvalId=approvalRecordId(item);
-    const direct=user.role==="SUPER_ADMIN";
+    const direct=["SUPER_ADMIN","ADMIN"].includes(user.role);
     const execution=direct&&approvalId?await executeSuperAdminApproval(approvalId):undefined;
     return NextResponse.json({item,execution,direct});
   }catch{return NextResponse.json({code:"MARKETING_EXPORT_BLOCKED"},{status:409});}

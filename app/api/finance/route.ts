@@ -26,7 +26,7 @@ async function post(request:Request){
       :parsed.data.operation==="requestRefund"
         ?record?.approval_request_id
         :undefined;
-    const direct=user.role==="SUPER_ADMIN"&&(parsed.data.operation==="submitQuote"||parsed.data.operation==="requestRefund");
+    const direct=["SUPER_ADMIN","ADMIN"].includes(user.role)&&(parsed.data.operation==="submitQuote"||parsed.data.operation==="requestRefund");
     const execution=direct&&typeof approvalId==="string"?await executeSuperAdminApproval(approvalId):undefined;
     return NextResponse.json({item,execution,direct});
   }catch(error){return fail(error);}

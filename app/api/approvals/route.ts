@@ -11,6 +11,16 @@ const schema=z.discriminatedUnion("type",[
 ]);
 const fail=(error:unknown)=>error instanceof DatabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_FAILED"},{status:500});
 async function get(request:Request){await requireApiUser();const params=new URL(request.url).searchParams;const{page,pageSize}=parsePagination(params,10);try{return NextResponse.json(await listApprovals({query:params.get("q")??"",type:params.get("type")??"all",status:params.get("status")??"pending",page,pageSize}));}catch(error){return fail(error);}}
-async function post(request:Request){if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});const user=await requireApiUser();const parsed=schema.safeParse(await request.json().catch(()=>({})));if(!parsed.success)return NextResponse.json({code:"INVALID_INPUT",field:String(parsed.error.issues[0]?.path[0]??"form")},{status:400});try{const created=await createApproval(parsed.data);if(user.role!=="SUPER_ADMIN")return NextResponse.json({item:created,direct:false},{status:201});const id=approvalRecordId(created);if(!id)return NextResponse.json({code:"APPROVAL_ID_MISSING"},{status:500});const item=await executeSuperAdminApproval(id);return NextResponse.json({item,direct:true});}catch(error){return fail(error);}}
+async function post(request:Request){
+  if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});
+  const user=await requireApiUser();const parsed=schema.safeParse(await request.json().catch(()=>({})));
+  if(!parsed.success)return NextResponse.json({code:"INVALID_INPUT",field:String(parsed.error.issues[0]?.path[0]??"form")},{status:400});
+  try{
+    const created=await createApproval(parsed.data);
+    if(!["SUPER_ADMIN","ADMIN"].includes(user.role))return NextResponse.json({item:created,direct:false},{status:201});
+    const id=approvalRecordId(created);if(!id)return NextResponse.json({code:"APPROVAL_ID_MISSING"},{status:500});
+    return NextResponse.json({item:await executeSuperAdminApproval(id),direct:true});
+  }catch(error){return fail(error);}
+}
 export const GET=apiRoute(get,"APPROVAL_LOAD_FAILED");
 export const POST=apiRoute(post,"APPROVAL_FAILED");

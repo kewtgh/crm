@@ -86,6 +86,11 @@ export function ModulePage({
       ...common,
       city: String(data.get("city") ?? "").trim(),
       curriculum: String(data.get("curriculum") ?? "").trim(),
+      courseCategories:String(data.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean),
+      affiliationType:String(data.get("affiliationType")??"INDEPENDENT"),parentOrganizationId:organization||null,
+      organizationOverviewMarkdown:String(data.get("organizationOverviewMarkdown")??""),structureOverviewMarkdown:String(data.get("structureOverviewMarkdown")??""),
+      website:String(data.get("website")??"").trim(),foundedYear:data.get("foundedYear")?Number(data.get("foundedYear")):null,
+      studentCount:data.get("studentCount")?Number(data.get("studentCount")):null,facultyCount:data.get("facultyCount")?Number(data.get("facultyCount")):null,campusCount:data.get("campusCount")?Number(data.get("campusCount")):null,
     };
     if (resource === "people") return {
       ...common,
@@ -247,6 +252,12 @@ export function ModulePage({
             <label className="field"><span>{t("modules.curriculum")} *</span><input name="curriculum" required maxLength={120}/></label>
           </div>
           <label className="field"><span>{t("modules.contact")}</span><input name="contact" maxLength={200}/></label>
+          <label className="field"><span>{t("education.courseCategories")}</span><input name="courseCategories" placeholder={t("education.courseCategoriesHelp")}/></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue="INDEPENDENT">{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={(query)=>searchRelated(query,"organization")}/></div>
+          <label className="field"><span>{t("education.website")}</span><input name="website" type="url" placeholder="https://"/></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><input name="foundedYear" type="number" min="1000" max="9999"/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0"/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.studentCount")}</span><input name="studentCount" type="number" min="0"/></label><label className="field"><span>{t("education.facultyCount")}</span><input name="facultyCount" type="number" min="0"/></label></div>
+          <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource === "people" && <>
           <SearchableSelect label={`${t("modules.organization")} *`} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>

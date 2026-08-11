@@ -187,7 +187,7 @@ export type CreateStaffInput = {
   displayNameEn: string;
   email: string;
   role: Exclude<AppRole, "SUPER_ADMIN">;
-  team: string;
+  teamId?: string | null;
   managerMemberId?: string | null;
 };
 
@@ -258,6 +258,16 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   }
   const username = input.username.trim().toLowerCase();
   const workspaceId = configuredWorkspaceId();
+  const selectedTeam = input.role.startsWith("SALES_")
+    ? (await withPoolClient("system", (client) => client.query<{id:string;name_zh:string;name_en:string;lead_member_id:string|null}>(
+        `select id,name_zh,name_en,lead_member_id from public.sales_teams
+         where id=$1 and workspace_id=$2 and active limit 1`,
+        [input.teamId, workspaceId],
+      ))).rows[0]
+    : null;
+  if (input.role.startsWith("SALES_") && !selectedTeam) {
+    throw new DatabaseRequestError(400, "TEAM_NOT_FOUND", "Select an active team");
+  }
   const temporaryPassword = generateTemporaryPassword();
   let created: { id: string };
   try {
@@ -271,8 +281,9 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       role: input.role,
       mustChangePassword: true,
       emailVerified: true,
-      team: input.team,
-      managerMemberId: input.managerMemberId,
+      team: selectedTeam?.name_zh || selectedTeam?.name_en || "",
+      teamId: selectedTeam?.id ?? null,
+      managerMemberId: input.managerMemberId ?? selectedTeam?.lead_member_id ?? null,
       afterCreate: async (client, userId) => {
         await client.query(
           `insert into public.audit_events(
@@ -386,7 +397,6 @@ export async function resendStaffInvitation(
         displayNameZh: target.display_name_zh,
         displayNameEn: target.display_name_en,
         role: target.role,
-        team: "",
       }, userId, actor.id, temporaryPassword, requestKey);
       await client.query("commit");
       return queued;
