@@ -20,6 +20,9 @@ const schemas={
   schools:basePatch.extend({
     city:z.string().trim().min(1).max(80).optional(),
     curriculum:z.string().trim().min(1).max(120).optional(),
+    courseCategories:z.array(z.string().trim().min(1).max(100)).max(40).optional(),affiliationType:z.enum(["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"]).optional(),
+    parentOrganizationId:z.uuid().nullable().optional(),organizationOverviewMarkdown:z.string().max(10000).optional(),structureOverviewMarkdown:z.string().max(10000).optional(),
+    website:z.url().or(z.literal("")).optional(),foundedYear:z.number().int().min(1000).max(9999).nullable().optional(),studentCount:z.number().int().nonnegative().nullable().optional(),facultyCount:z.number().int().nonnegative().nullable().optional(),campusCount:z.number().int().nonnegative().nullable().optional(),
   }).strict(),
   people:basePatch.extend({
     email:z.string().email().or(z.literal("")).optional(),

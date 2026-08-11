@@ -36,6 +36,8 @@ export function CrmRecordEditor({
   const [error,setError]=useState("");
   const [toast,setToast]=useState("");
   const [owner,setOwner]=useState(initial?.ownerId??"");
+  const [parentOrganization,setParentOrganization]=useState(initial?.parentOrganizationId??"");
+  const [parentOptions,setParentOptions]=useState<Array<{value:string;label:string;detail?:string}>>([]);
   const [ownerOptions,setOwnerOptions]=useState<Array<{value:string;label:string;detail?:string}>>([]);
   const ownerSearch=useRef<AbortController|null>(null);
 
@@ -43,7 +45,7 @@ export function CrmRecordEditor({
     setLoading(true);setError("");
     try{
       const result=await apiFetch<CrmRecordDetail>(`/api/crm/${resource}/${id}`);
-      setDetail(result);setOwner(result.ownerId??"");
+      setDetail(result);setOwner(result.ownerId??"");setParentOrganization(result.parentOrganizationId??"");
     }catch(caught){
       const requestId=caught instanceof ApiClientError?caught.requestId:undefined;
       setError(`${t("modules.loadFailed")}${requestId?` · ${t("common.requestId")}: ${requestId}`:""}`);
@@ -63,6 +65,9 @@ export function CrmRecordEditor({
       })));
     }catch{if(!controller.signal.aborted)setError(t("modules.relatedSearchFailed"));}
   },[t]);
+  const searchParents=useCallback(async(query:string)=>{
+    try{const result=await apiFetch<{items:RelatedSearchItem[]}>(`/api/search/related?q=${encodeURIComponent(query)}`);setParentOptions(result.items.filter(item=>item.type==="ORGANIZATION"&&item.value.split(":")[1]!==id).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`})));}catch{setError(t("modules.relatedSearchFailed"));}
+  },[id,t]);
 
   const save=async(event:React.FormEvent<HTMLFormElement>)=>{
     event.preventDefault();if(!detail)return;
@@ -75,6 +80,11 @@ export function CrmRecordEditor({
     if(resource==="schools"){
       patch.city=String(form.get("city")??"").trim();
       patch.curriculum=String(form.get("curriculum")??"").trim();
+      patch.courseCategories=String(form.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean);
+      patch.affiliationType=String(form.get("affiliationType")??"INDEPENDENT");patch.parentOrganizationId=parentOrganization||null;
+      patch.organizationOverviewMarkdown=String(form.get("organizationOverviewMarkdown")??"");patch.structureOverviewMarkdown=String(form.get("structureOverviewMarkdown")??"");
+      patch.website=String(form.get("website")??"").trim();
+      for(const field of ["foundedYear","studentCount","facultyCount","campusCount"] as const){const value=String(form.get(field)??"");patch[field]=value?Number(value):null;}
     }else if(resource==="people"){
       patch.email=String(form.get("email")??"").trim();
       patch.phone=String(form.get("phone")??"").trim();
@@ -123,10 +133,15 @@ export function CrmRecordEditor({
           <label className="field"><span>{t("products.nameZh")} *</span><input name="nameZh" defaultValue={detail.nameZh} required maxLength={120}/></label>
           <label className="field"><span>{t("products.nameEn")} *</span><input name="nameEn" defaultValue={detail.nameEn} required maxLength={160}/></label>
         </div>
-        {resource==="schools"&&<div className="form-grid two-column">
-          <label className="field"><span>{t("modules.city")} *</span><input name="city" defaultValue={detail.city} required maxLength={80}/></label>
-          <label className="field"><span>{t("modules.curriculum")} *</span><input name="curriculum" defaultValue={detail.curriculum} required maxLength={120}/></label>
-        </div>}
+        {resource==="schools"&&<>
+          <div className="form-grid two-column"><label className="field"><span>{t("modules.city")} *</span><input name="city" defaultValue={detail.city} required maxLength={80}/></label><label className="field"><span>{t("modules.curriculum")} *</span><input name="curriculum" defaultValue={detail.curriculum} required maxLength={120}/></label></div>
+          <label className="field"><span>{t("education.courseCategories")}</span><input name="courseCategories" defaultValue={detail.courseCategories?.join(", ")}/></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue={detail.affiliationType}>{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={parentOptions} value={parentOrganization} onChange={setParentOrganization} onSearch={searchParents}/></div>
+          <label className="field"><span>{t("education.website")}</span><input name="website" type="url" defaultValue={detail.website}/></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><input name="foundedYear" type="number" min="1000" max="9999" defaultValue={detail.foundedYear??""}/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0" defaultValue={detail.campusCount??""}/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.studentCount")}</span><input name="studentCount" type="number" min="0" defaultValue={detail.studentCount??""}/></label><label className="field"><span>{t("education.facultyCount")}</span><input name="facultyCount" type="number" min="0" defaultValue={detail.facultyCount??""}/></label></div>
+          <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} defaultValue={detail.organizationOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} defaultValue={detail.structureOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
+        </>}
         {resource==="people"&&<>
           <label className="field"><span>{t("modules.title")}</span><input name="title" defaultValue={detail.title} maxLength={120}/></label>
           <div className="form-grid two-column">

@@ -17,7 +17,12 @@ import {
   isImportExecutionTerminal,
 } from "@/lib/import-execution";
 
-const targetFields = ["nameZh", "nameEn", "email", "phone", "city", "title"];
+const targetFieldsByResource={
+  CONTACTS:["nameZh","nameEn","email","phone","title"],
+  ORGANIZATIONS:["nameZh","nameEn","city","curriculum","courseCategories","affiliationType","parentOrganizationId","website","foundedYear","studentCount","facultyCount","campusCount","organizationOverviewMarkdown","structureOverviewMarkdown"],
+  HOUSEHOLDS:["nameZh","nameEn","address","primaryParentOccupation","secondaryParentOccupation","annualIncomeAmount","incomeCurrency","preferredContactMethod","preferredLanguage","educationExpectationsMarkdown","familyBackgroundMarkdown"],
+  STUDENTS:["nameZh","nameEn","personId","householdId","studentNumber","birthDate","currentGrade","currentClass","academicYear","interests","preferredLearningStyle","personalityMarkdown","learningExpectationsMarkdown","strengthsMarkdown","supportNeedsMarkdown"],
+} as const;
 type RelatedSearchItem={value:string;labelZh:string;labelEn:string;type:string};
 
 async function hashFile(file: File) {
@@ -41,7 +46,8 @@ export function ImportsPage({
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [pageSize,setPageSize]=useState(10);
-  const [resource, setResource] = useState<"CONTACTS" | "ORGANIZATIONS">("CONTACTS");
+  const [resource, setResource] = useState<keyof typeof targetFieldsByResource>("CONTACTS");
+  const targetFields=targetFieldsByResource[resource] as readonly string[];
   const [fileName, setFileName] = useState("");
   const [fileHash, setFileHash] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -387,7 +393,7 @@ export function ImportsPage({
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
       <div className="import-template-actions"><a className="secondary-button" href={`/api/imports/template?resource=${resource}`}><Download size={16}/>{t("imports.downloadTemplate")}</a><small>{t("imports.templateHelp")}</small></div>
       <div className="form-grid two-column">
-        <label className="field"><span>{t("imports.resource")}</span><select value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label>
+        <label className="field"><span>{t("imports.resource")}</span><select value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option></select></label>
         <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => event.target.files?.[0] && void chooseFile(event.target.files[0])}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
       </div>
       {headers.length > 0 && <>
@@ -397,7 +403,7 @@ export function ImportsPage({
           <button className="secondary-button import-mapping-save" type="button" disabled={pending||!mappingName.trim()} onClick={()=>void saveMapping()}><Save size={16}/>{t("imports.saveMapping")}</button>
         </div>
         <div className="mapping-grid">
-          {targetFields.filter((field) => resource === "CONTACTS" || !["email", "phone", "title"].includes(field)).map((field) => <SearchableSelect key={field} label={`${t(`imports.field.${field}`)}${["nameZh", "nameEn"].includes(field) ? " *" : ""}`} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
+          {targetFields.map((field) => <SearchableSelect key={field} label={`${t(`imports.field.${field}`)}${["nameZh", "nameEn"].includes(field) ? " *" : ""}`} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
         <button className="primary-button" type="button" disabled={pending} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>

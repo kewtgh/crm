@@ -22,16 +22,20 @@ async function exactPage<T>(path: string, options: PageOptions) {
 
 export type HouseholdRecord = {
   id: string; nameZh: string; nameEn: string; status: string; address: string;
-  memberCount: number; updatedAt: string;
+  memberCount: number; updatedAt: string; primaryParentOccupation:string;secondaryParentOccupation:string;
+  annualIncomeAmount:number|null;incomeCurrency:string;preferredContactMethod:string;preferredLanguage:string;
+  educationExpectationsMarkdown:string;familyBackgroundMarkdown:string;
 };
 type HouseholdRow = {
   id: string; name_zh: string; name_en: string; status: string; address: string;
   updated_at: string; household_members?: Array<{ count: number }>;
+  primary_parent_occupation:string;secondary_parent_occupation:string;annual_income_amount:number|string|null;income_currency:string;
+  preferred_contact_method:string;preferred_language:string;education_expectations_markdown:string;family_background_markdown:string;
 };
 
 export async function listHouseholds(options: PageOptions = {}): Promise<PageResult<HouseholdRecord>> {
   const params = new URLSearchParams({
-    select: "id,name_zh,name_en,status,address,updated_at,household_members:household_members!household_members_household_id_fkey(count)",
+    select: "id,name_zh,name_en,status,address,updated_at,primary_parent_occupation,secondary_parent_occupation,annual_income_amount,income_currency,preferred_contact_method,preferred_language,education_expectations_markdown,family_background_markdown,household_members:household_members!household_members_household_id_fkey(count)",
     order: "updated_at.desc",
   });
   const query = options.query?.replace(/[*,()]/g, " ").trim();
@@ -43,14 +47,22 @@ export async function listHouseholds(options: PageOptions = {}): Promise<PageRes
     items: result.items.map((row) => ({
       id: row.id, nameZh: row.name_zh, nameEn: row.name_en, status: row.status,
       address: row.address, memberCount: Number(row.household_members?.[0]?.count ?? 0), updatedAt: row.updated_at,
+      primaryParentOccupation:row.primary_parent_occupation,secondaryParentOccupation:row.secondary_parent_occupation,
+      annualIncomeAmount:row.annual_income_amount===null?null:Number(row.annual_income_amount),incomeCurrency:row.income_currency,
+      preferredContactMethod:row.preferred_contact_method,preferredLanguage:row.preferred_language,
+      educationExpectationsMarkdown:row.education_expectations_markdown,familyBackgroundMarkdown:row.family_background_markdown,
     })),
   };
 }
 
-export async function createHousehold(input: { nameZh: string; nameEn: string; address: string }) {
+export async function createHousehold(input: { nameZh: string; nameEn: string; address: string;primaryParentOccupation:string;secondaryParentOccupation:string;annualIncomeAmount?:number|null;incomeCurrency:string;preferredContactMethod:string;preferredLanguage:string;educationExpectationsMarkdown:string;familyBackgroundMarkdown:string }) {
   const rows = await databaseJson<HouseholdRow[]>("/db/table/households", {
     method: "POST", headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ name_zh: input.nameZh, name_en: input.nameEn, address: input.address }),
+    body: JSON.stringify({ name_zh: input.nameZh, name_en: input.nameEn, address: input.address,
+      primary_parent_occupation:input.primaryParentOccupation,secondary_parent_occupation:input.secondaryParentOccupation,
+      annual_income_amount:input.annualIncomeAmount??null,income_currency:input.incomeCurrency,
+      preferred_contact_method:input.preferredContactMethod,preferred_language:input.preferredLanguage,
+      education_expectations_markdown:input.educationExpectationsMarkdown,family_background_markdown:input.familyBackgroundMarkdown }),
   });
   return rows[0];
 }
@@ -95,7 +107,8 @@ export async function listStudents(options: PageOptions = {}): Promise<PageResul
 }
 
 export type StudentDetail = StudentRecord & {
-  householdId: string;
+  householdId: string;birthDate:string;currentClass:string;personalityMarkdown:string;learningExpectationsMarkdown:string;
+  strengthsMarkdown:string;supportNeedsMarkdown:string;interests:string[];preferredLearningStyle:string;
   academicRecords: Array<{
     id: string; curriculum: string; grade: string; academicYear: string; validFrom: string;
     validTo: string; status: string; schoolZh: string; schoolEn: string;
@@ -106,7 +119,8 @@ export type StudentDetail = StudentRecord & {
   }>;
 };
 type StudentDetailRow = StudentRow & {
-  student_number: string | null; household_id: string | null;
+  student_number: string | null; household_id: string | null;birth_date:string|null;current_class:string;personality_markdown:string;
+  learning_expectations_markdown:string;strengths_markdown:string;support_needs_markdown:string;interests:string[];preferred_learning_style:string;
   student_academic_records?: Array<{
     id: string; curriculum: string; grade: string; academic_year: string; valid_from: string;
     valid_to: string | null; status: string; organizations: { name_zh: string; name_en: string } | null;
@@ -118,7 +132,7 @@ type StudentDetailRow = StudentRow & {
 };
 
 export async function getStudentDetail(id: string): Promise<StudentDetail | null> {
-  const rows = await databaseJson<StudentDetailRow[]>(`/db/table/students?select=id,person_id,student_number,household_id,current_grade,academic_year,status,updated_at,contacts:contacts!students_person_id_fkey(name_zh,name_en),households:households!students_household_id_fkey(name_zh,name_en),student_academic_records:student_academic_records!student_academic_records_student_id_fkey(id,curriculum,grade,academic_year,valid_from,valid_to,status,organizations:organizations!student_academic_records_school_id_fkey(name_zh,name_en)),student_guardian_relationships:student_guardian_relationships!student_guardian_relationships_student_id_fkey(id,guardian_contact_id,relationship_type,primary_guardian,emergency_contact,legal_authority,contacts:contacts!student_guardian_relationships_guardian_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await databaseJson<StudentDetailRow[]>(`/db/table/students?select=id,person_id,student_number,birth_date,household_id,current_grade,current_class,academic_year,status,personality_markdown,learning_expectations_markdown,strengths_markdown,support_needs_markdown,interests,preferred_learning_style,updated_at,contacts:contacts!students_person_id_fkey(name_zh,name_en),households:households!students_household_id_fkey(name_zh,name_en),student_academic_records:student_academic_records!student_academic_records_student_id_fkey(id,curriculum,grade,academic_year,valid_from,valid_to,status,organizations:organizations!student_academic_records_school_id_fkey(name_zh,name_en)),student_guardian_relationships:student_guardian_relationships!student_guardian_relationships_student_id_fkey(id,guardian_contact_id,relationship_type,primary_guardian,emergency_contact,legal_authority,contacts:contacts!student_guardian_relationships_guardian_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   if (!row) return null;
   return {
@@ -126,6 +140,9 @@ export async function getStudentDetail(id: string): Promise<StudentDetail | null
     householdZh: row.households?.name_zh ?? "", householdEn: row.households?.name_en ?? "",
     householdId: row.household_id ?? "", studentNumber: row.student_number ?? "",
     grade: row.current_grade, academicYear: row.academic_year, status: row.status, updatedAt: row.updated_at,
+    birthDate:row.birth_date??"",currentClass:row.current_class,personalityMarkdown:row.personality_markdown,
+    learningExpectationsMarkdown:row.learning_expectations_markdown,strengthsMarkdown:row.strengths_markdown,
+    supportNeedsMarkdown:row.support_needs_markdown,interests:row.interests??[],preferredLearningStyle:row.preferred_learning_style,
     academicRecords: (row.student_academic_records ?? []).map((item) => ({
       id: item.id, curriculum: item.curriculum, grade: item.grade, academicYear: item.academic_year,
       validFrom: item.valid_from, validTo: item.valid_to ?? "", status: item.status,
@@ -140,13 +157,16 @@ export async function getStudentDetail(id: string): Promise<StudentDetail | null
 }
 
 export function updateStudent(input: {
-  id: string; expectedUpdatedAt: string; grade: string; academicYear: string; householdId?: string | null; status: string;
+  id: string; expectedUpdatedAt: string;studentNumber:string;birthDate?:string|null; grade: string;currentClass:string; academicYear: string; householdId?: string | null; status: string;
+  personalityMarkdown:string;learningExpectationsMarkdown:string;strengthsMarkdown:string;supportNeedsMarkdown:string;interests:string[];preferredLearningStyle:string;
 }) {
-  return databaseJson<StudentRow>("/db/rpc/update_student_record", {
+  return databaseJson<StudentRow>("/db/rpc/update_student_profile", {
     method: "POST", body: JSON.stringify({
-      target_student: input.id, expected_updated_at: input.expectedUpdatedAt,
-      next_grade: input.grade, next_academic_year: input.academicYear,
-      next_household: input.householdId || null, next_status: input.status,
+      target_student: input.id, expected_updated_at: input.expectedUpdatedAt,next_student_number:input.studentNumber,next_birth_date:input.birthDate||null,
+      next_grade: input.grade,next_class:input.currentClass, next_academic_year: input.academicYear,
+      next_household: input.householdId || null, next_status: input.status,next_personality_markdown:input.personalityMarkdown,
+      next_learning_expectations_markdown:input.learningExpectationsMarkdown,next_strengths_markdown:input.strengthsMarkdown,
+      next_support_needs_markdown:input.supportNeedsMarkdown,next_interests:input.interests,next_learning_style:input.preferredLearningStyle,
     }),
   });
 }
@@ -166,13 +186,16 @@ export function addStudentAcademicRecord(input: {
 }
 
 export async function createStudent(input: {
-  personId: string; householdId?: string | null; studentNumber?: string; grade: string; academicYear: string;
+  personId: string; householdId?: string | null; studentNumber?: string;birthDate?:string|null; grade: string;currentClass:string; academicYear: string;
+  personalityMarkdown:string;learningExpectationsMarkdown:string;strengthsMarkdown:string;supportNeedsMarkdown:string;interests:string[];preferredLearningStyle:string;
 }) {
   const rows = await databaseJson<StudentRow[]>("/db/table/students", {
     method: "POST", headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       person_id: input.personId, household_id: input.householdId || null,
-      student_number: input.studentNumber || null, current_grade: input.grade, academic_year: input.academicYear,
+      student_number: input.studentNumber || null,birth_date:input.birthDate||null, current_grade: input.grade,current_class:input.currentClass, academic_year: input.academicYear,
+      personality_markdown:input.personalityMarkdown,learning_expectations_markdown:input.learningExpectationsMarkdown,strengths_markdown:input.strengthsMarkdown,
+      support_needs_markdown:input.supportNeedsMarkdown,interests:input.interests,preferred_learning_style:input.preferredLearningStyle,
     }),
   });
   return rows[0];
@@ -189,12 +212,16 @@ type HouseholdDetailRow = Omit<HouseholdRow, "household_members"> & {
 };
 
 export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | null> {
-  const rows = await databaseJson<HouseholdDetailRow[]>(`/db/table/households?select=id,name_zh,name_en,status,address,updated_at,household_members:household_members!household_members_household_id_fkey(id,contact_id,member_role,primary_contact,contacts:contacts!household_members_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await databaseJson<HouseholdDetailRow[]>(`/db/table/households?select=id,name_zh,name_en,status,address,updated_at,primary_parent_occupation,secondary_parent_occupation,annual_income_amount,income_currency,preferred_contact_method,preferred_language,education_expectations_markdown,family_background_markdown,household_members:household_members!household_members_household_id_fkey(id,contact_id,member_role,primary_contact,contacts:contacts!household_members_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   if (!row) return null;
   return {
     id: row.id, nameZh: row.name_zh, nameEn: row.name_en, status: row.status,
     address: row.address, memberCount: row.household_members?.length ?? 0, updatedAt: row.updated_at,
+    primaryParentOccupation:row.primary_parent_occupation,secondaryParentOccupation:row.secondary_parent_occupation,
+    annualIncomeAmount:row.annual_income_amount===null?null:Number(row.annual_income_amount),incomeCurrency:row.income_currency,
+    preferredContactMethod:row.preferred_contact_method,preferredLanguage:row.preferred_language,
+    educationExpectationsMarkdown:row.education_expectations_markdown,familyBackgroundMarkdown:row.family_background_markdown,
     members: (row.household_members ?? []).map((item) => ({
       id: item.id, contactId: item.contact_id, role: item.member_role, primary: item.primary_contact,
       nameZh: item.contacts?.name_zh ?? "", nameEn: item.contacts?.name_en ?? "",
@@ -204,12 +231,17 @@ export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | 
 
 export function updateHousehold(input: {
   id: string; expectedUpdatedAt: string; nameZh: string; nameEn: string; address: string; status: string;
+  primaryParentOccupation:string;secondaryParentOccupation:string;annualIncomeAmount?:number|null;incomeCurrency:string;
+  preferredContactMethod:string;preferredLanguage:string;educationExpectationsMarkdown:string;familyBackgroundMarkdown:string;
 }) {
-  return databaseJson<HouseholdRow>("/db/rpc/update_household_record", {
+  return databaseJson<HouseholdRow>("/db/rpc/update_household_profile", {
     method: "POST", body: JSON.stringify({
       target_household: input.id, expected_updated_at: input.expectedUpdatedAt,
       next_name_zh: input.nameZh, next_name_en: input.nameEn,
-      next_address: input.address, next_status: input.status,
+      next_address: input.address, next_status: input.status,next_primary_parent_occupation:input.primaryParentOccupation,
+      next_secondary_parent_occupation:input.secondaryParentOccupation,next_annual_income_amount:input.annualIncomeAmount??null,
+      next_income_currency:input.incomeCurrency,next_preferred_contact_method:input.preferredContactMethod,next_preferred_language:input.preferredLanguage,
+      next_education_expectations_markdown:input.educationExpectationsMarkdown,next_family_background_markdown:input.familyBackgroundMarkdown,
     }),
   });
 }
