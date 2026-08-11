@@ -69,13 +69,14 @@ test("owns an ordered, checksum-managed standard PostgreSQL migration history", 
   const migrationNames = (await readdir(repositoryFile("db/migrations")))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.ok(migrationNames.length >= 76);
+  assert.ok(migrationNames.length >= 77);
   assert.equal(migrationNames[0], "202607150000_self_hosted_foundation.sql");
   for (const requiredMigration of [
     "202608020073_staff_invitation_system_rls.sql",
     "202608100074_persistent_session_retention.sql",
     "202608110075_structured_profiles_teams_and_terminal_approvals.sql",
     "202608110076_product_contact_and_multi_team_profiles.sql",
+    "202608110077_crm_system_team_membership_permissions.sql",
   ]) {
     assert.ok(migrationNames.includes(requiredMigration), `${requiredMigration} must remain in migration history`);
   }
@@ -221,4 +222,14 @@ test("keeps cold admin submenu navigation on a same-tab document boundary", asyn
   assert.match(shell, /item\.documentChildNavigation\?<a[^>]+data-navigation="document"/);
   assert.match(browserQa, /__LUMINA_QA_DOCUMENT_MARKER__/);
   assert.match(browserQa, /context\.pages\(\)\.length!==1/);
+});
+
+test("restores the sidebar position across document navigation", async () => {
+  const shell = await readFile(repositoryFile("components/app-shell.tsx"), "utf8");
+  assert.match(shell, /SIDEBAR_SCROLL_STORAGE_KEY = "lumina\.sidebar\.scroll-top"/);
+  assert.match(shell, /sessionStorage\.getItem\(SIDEBAR_SCROLL_STORAGE_KEY\)/);
+  assert.match(shell, /sidebarNavigation\.scrollTop = storedPosition/);
+  assert.match(shell, /sessionStorage\.setItem\(SIDEBAR_SCROLL_STORAGE_KEY, String\(sidebarNavigation\.scrollTop\)\)/);
+  assert.match(shell, /addEventListener\("pagehide", persistScrollPosition\)/);
+  assert.match(shell, /<nav ref=\{sidebarNavRef\} className="sidebar-nav">/);
 });
