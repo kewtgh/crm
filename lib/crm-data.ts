@@ -11,6 +11,7 @@ export type DataRow = {
   owner: string;
   status: string;
   statusKey?: string;
+  statusDetailKey?: string;
   statusTone: StatusTone;
   meta: string;
   extra: string;

@@ -9,6 +9,7 @@ import { InlineMessage, StatusBadge, Toast } from "./ui";
 import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
 import { CrmRecordEditor } from "@/components/crm-record-editor";
+import { MarkdownContent } from "@/components/markdown-content";
 
 export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   const { t } = useI18n();
@@ -65,7 +66,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
   return <div className="page-stack consent-page">
     <section className="page-heading-row">
       <div><p className="eyebrow">{t("consent.eyebrow")}</p><h1>{data.nameZh} / {data.nameEn}</h1><p>{t("consent.description")}</p></div>
-      <div className="page-actions"><Link className="secondary-button" href="/people">{t("consent.back")}</Link><CrmRecordEditor resource="people" id={initial.id}/><button className={data.doNotContact ? "secondary-button" : "danger-button"} type="button" disabled={pending} onClick={handleDnc}><Ban size={16} />{t(data.doNotContact ? "consent.removeDnc" : "consent.enableDnc")}</button></div>
+      <div className="page-actions"><Link className="secondary-button" href="/people">{t("consent.back")}</Link><CrmRecordEditor resource="people" id={initial.id} onSaved={item=>setData(current=>({...current,nameZh:item.nameZh,nameEn:item.nameEn,email:item.email??"",phone:item.phone??"",title:item.title??"",contactType:item.contactType??"CONTACT",recordStatus:item.status,contactStatus:item.contactStatus??"NEW",communicationLevel:item.communicationLevel??1,notesMarkdown:item.notesMarkdown??"",households:item.households??current.households}))}/><button className={data.doNotContact ? "secondary-button" : "danger-button"} type="button" disabled={pending} onClick={handleDnc}><Ban size={16} />{t(data.doNotContact ? "consent.removeDnc" : "consent.enableDnc")}</button></div>
     </section>
     {dncOpen && <form className="surface dnc-form" onSubmit={(event) => { event.preventDefault(); void updateDnc(true); }}>
       <label className="field"><span>{t("consent.dncReasonPrompt")}</span><textarea value={dncReason} onChange={(event) => setDncReason(event.target.value)} rows={3} maxLength={300} required autoFocus /></label>
@@ -74,6 +75,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     </form>}
     {!dncOpen && dncError && <InlineMessage type="error">{dncError}</InlineMessage>}
     {data.doNotContact && <InlineMessage type="warning">{t("consent.dncActive", { reason: data.doNotContactReason })}</InlineMessage>}
+    <section className="contact-profile-grid"><article className="surface"><div className="surface-heading"><div><p className="eyebrow">{t("contact.profileEyebrow")}</p><h2>{t("contact.profile")}</h2></div><StatusBadge tone={data.contactStatus==="CONNECTED"?"green":data.contactStatus==="DORMANT"?"red":"amber"}>{t(`contact.status.${data.contactStatus.toLowerCase()}`)}</StatusBadge></div><dl><div><dt>{t("contact.type")}</dt><dd>{t(`contact.type.${data.contactType.toLowerCase()}`)}</dd></div><div><dt>{t("contact.communicationLevel")}</dt><dd>{t(`contact.communication.level${data.communicationLevel}`)}</dd></div><div><dt>{t("modules.email")}</dt><dd>{data.email||"—"}</dd></div><div><dt>{t("modules.phone")}</dt><dd>{data.phone||"—"}</dd></div></dl></article><article className="surface"><div className="surface-heading"><div><p className="eyebrow">{t("contact.familyEyebrow")}</p><h2>{t("contact.households")}</h2></div></div>{data.households.map(household=><p className="contact-household" key={household.id}><b>{household.nameZh} / {household.nameEn}</b><small>{t(`education.memberRole.${household.role.toLowerCase()}`)}{household.primary?` · ${t("education.primaryContact")}`:""}</small></p>)}{!data.households.length&&<p className="select-empty">{t("contact.noHouseholds")}</p>}</article><article className="surface contact-notes"><div className="surface-heading"><div><p className="eyebrow">{t("contact.notesEyebrow")}</p><h2>{t("contact.notes")}</h2></div></div><MarkdownContent value={data.notesMarkdown} empty={t("contact.notesEmpty")}/></article></section>
     <section className="consent-layout">
       <div className="surface consent-history">
         <div className="surface-heading"><div><p className="eyebrow">{t("consent.currentEyebrow")}</p><h2>{t("consent.current")}</h2></div><ShieldCheck size={21} /></div>

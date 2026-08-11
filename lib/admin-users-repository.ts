@@ -20,6 +20,7 @@ export type StaffUserRecord = {
   mfaEnabled: boolean;
   onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" | "ACTIVE";
   invitationDeliveryStatus: StaffInvitationStatus | null;
+  teams:Array<{id:string;code:string;nameZh:string;nameEn:string;role:"MEMBER"|"LEAD";status:"PENDING"|"ACTIVE"}>;
 };
 
 export type StaffInvitationDeliveryStatus = "SENT" | "UNCONFIRMED";
@@ -40,6 +41,7 @@ type StaffRow = {
   membership_must_change_password: boolean;
   total_count: number | string;
   invitation_delivery_status: StaffInvitationStatus | null;
+  teams:Array<{id:string;code:string;nameZh:string;nameEn:string;role:"MEMBER"|"LEAD";status:"PENDING"|"ACTIVE"}>|null;
 };
 
 function mapStaff(row: StaffRow): StaffUserRecord {
@@ -57,6 +59,7 @@ function mapStaff(row: StaffRow): StaffUserRecord {
       ? "AWAITING_EMAIL_CONFIRMATION"
       : "ACTIVE",
     invitationDeliveryStatus: row.invitation_delivery_status,
+    teams:row.teams??[],
   };
 }
 
@@ -105,7 +108,11 @@ export async function listStaffUsers(input: {
           where factor.user_id = account.id and factor.status = 'VERIFIED'
         ) as mfa_enabled,
         count(*) over() as total_count,
-        invitation.invitation_delivery_status
+        invitation.invitation_delivery_status,
+        coalesce((select jsonb_agg(jsonb_build_object('id',team.id,'code',team.code,'nameZh',team.name_zh,'nameEn',team.name_en,'role',team_membership.membership_role,'status',team_membership.status) order by team.name_en)
+          from public.sales_team_members sales_member join public.sales_team_memberships team_membership on team_membership.member_id=sales_member.id and team_membership.status in ('ACTIVE','PENDING')
+          join public.sales_teams team on team.id=team_membership.team_id and team.active
+          where sales_member.workspace_id=membership.workspace_id and sales_member.auth_user_id=account.id),'[]'::jsonb) teams
       from app_auth.accounts account
       join public.user_profiles profile on profile.user_id = account.id
       join public.workspace_memberships membership
@@ -159,7 +166,11 @@ export async function getStaffUser(userId: string): Promise<StaffUserRecord> {
           where factor.user_id = account.id and factor.status = 'VERIFIED'
         ) as mfa_enabled,
         1 as total_count,
-        invitation.invitation_delivery_status
+        invitation.invitation_delivery_status,
+        coalesce((select jsonb_agg(jsonb_build_object('id',team.id,'code',team.code,'nameZh',team.name_zh,'nameEn',team.name_en,'role',team_membership.membership_role,'status',team_membership.status) order by team.name_en)
+          from public.sales_team_members sales_member join public.sales_team_memberships team_membership on team_membership.member_id=sales_member.id and team_membership.status in ('ACTIVE','PENDING')
+          join public.sales_teams team on team.id=team_membership.team_id and team.active
+          where sales_member.workspace_id=membership.workspace_id and sales_member.auth_user_id=account.id),'[]'::jsonb) teams
       from app_auth.accounts account
       join public.user_profiles profile on profile.user_id = account.id
       join public.workspace_memberships membership
@@ -259,8 +270,8 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   const username = input.username.trim().toLowerCase();
   const workspaceId = configuredWorkspaceId();
   const selectedTeam = input.role.startsWith("SALES_")
-    ? (await withPoolClient("system", (client) => client.query<{id:string;name_zh:string;name_en:string;lead_member_id:string|null}>(
-        `select id,name_zh,name_en,lead_member_id from public.sales_teams
+    ? (await withPoolClient("system", (client) => client.query<{id:string;code:string;name_zh:string;name_en:string;lead_member_id:string|null}>(
+        `select id,code::text,name_zh,name_en,lead_member_id from public.sales_teams
          where id=$1 and workspace_id=$2 and active limit 1`,
         [input.teamId, workspaceId],
       ))).rows[0]
@@ -284,6 +295,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       team: selectedTeam?.name_zh || selectedTeam?.name_en || "",
       teamId: selectedTeam?.id ?? null,
       managerMemberId: input.managerMemberId ?? selectedTeam?.lead_member_id ?? null,
+      teamAssignmentActorId:actor.id,
       afterCreate: async (client, userId) => {
         await client.query(
           `insert into public.audit_events(
@@ -328,6 +340,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       mfaEnabled: false,
       onboardingStatus: "AWAITING_EMAIL_CONFIRMATION" as const,
       invitationDeliveryStatus: "QUEUED" as const,
+      teams:selectedTeam?[{id:selectedTeam.id,code:selectedTeam.code,nameZh:selectedTeam.name_zh,nameEn:selectedTeam.name_en,role:"MEMBER" as const,status:"ACTIVE" as const}]:[],
     },
     emailDeliveryStatus: "UNCONFIRMED" as StaffInvitationDeliveryStatus,
   };

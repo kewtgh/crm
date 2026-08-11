@@ -96,6 +96,10 @@ export function ModulePage({
       ...common,
       title: String(data.get("title") ?? "").trim(),
       organizationId: organization,
+      contactType:String(data.get("contactType")??"CONTACT"),
+      contactStatus:String(data.get("contactStatus")??"NEW"),
+      communicationLevel:Number(data.get("communicationLevel")??1),
+      notesMarkdown:String(data.get("notesMarkdown")??""),
     };
     if (resource === "tasks") {
       const [relatedType = "", relatedId = ""] = related.split(":");
@@ -266,6 +270,9 @@ export function ModulePage({
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
             <label className="field"><span>{t("modules.phone")}</span><input name="phone" maxLength={40}/></label>
           </div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT">{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW">{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue="1">{[1,2,3,4].map(value=><option key={value} value={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
+          <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
           <InlineMessage type="info">{t("modules.contactMethodRequired")}</InlineMessage>
         </>}
         {resource === "tasks" && <>

@@ -20,10 +20,12 @@ export function CrmRecordEditor({
   resource,
   id,
   initial,
+  onSaved,
 }:{
   resource:PersistentResource;
   id:string;
   initial?:CrmRecordDetail;
+  onSaved?:(item:CrmRecordDetail)=>void;
 }){
   const {t}=useI18n();
   const {formatDate,localDateTimeInput,localDateTimeToIso}=useUserPreferences();
@@ -89,6 +91,10 @@ export function CrmRecordEditor({
       patch.email=String(form.get("email")??"").trim();
       patch.phone=String(form.get("phone")??"").trim();
       patch.title=String(form.get("title")??"").trim();
+      patch.contactType=String(form.get("contactType")??detail.contactType??"CONTACT");
+      patch.contactStatus=String(form.get("contactStatus")??detail.contactStatus??"NEW");
+      patch.communicationLevel=Number(form.get("communicationLevel")??detail.communicationLevel??1);
+      patch.notesMarkdown=String(form.get("notesMarkdown")??"");
     }else{
       patch.priority=String(form.get("priority")??detail.priority);
       patch.ownerId=owner||detail.ownerId;
@@ -102,6 +108,7 @@ export function CrmRecordEditor({
         body:JSON.stringify({expectedUpdatedAt:detail.updatedAt,patch}),
       });
       setDetail(result.item);setOwner(result.item.ownerId??"");setOpen(false);
+      onSaved?.(result.item);
       setToast(t("crm.saved"));router.refresh();
     }catch(caught){
       setError(t(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT"?"crm.conflict":"crm.saveFailed"));
@@ -148,6 +155,10 @@ export function CrmRecordEditor({
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email" defaultValue={detail.email}/></label>
             <label className="field"><span>{t("modules.phone")}</span><input name="phone" defaultValue={detail.phone} maxLength={40}/></label>
           </div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue={detail.contactType??"CONTACT"}>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option value={value} key={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue={detail.contactStatus??"NEW"}>{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option value={value} key={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue={detail.communicationLevel??1}>{[1,2,3,4].map(value=><option value={value} key={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
+          <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} defaultValue={detail.notesMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
+          <section className="record-households"><h3>{t("contact.households")}</h3>{detail.households?.map(household=><p key={household.id}><b>{household.nameZh} / {household.nameEn}</b><small>{t(`education.memberRole.${household.role.toLowerCase()}`)}{household.primary?` · ${t("education.primaryContact")}`:""}</small></p>)}{!detail.households?.length&&<p className="select-empty">{t("contact.noHouseholds")}</p>}</section>
         </>}
         {resource==="tasks"&&<>
           <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} placeholder={detail.ownerName} onChange={setOwner} onSearch={searchOwners}/>

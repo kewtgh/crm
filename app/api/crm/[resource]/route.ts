@@ -25,6 +25,10 @@ const resourceSchemas={
   people:baseRecordSchema.extend({
     title:z.string().trim().min(1).max(120),
     organizationId:z.string().uuid(),
+    contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"]).default("CONTACT"),
+    contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).default("NEW"),
+    communicationLevel:z.number().int().min(1).max(4).default(1),
+    notesMarkdown:z.string().max(20000).default(""),
   }).refine(value=>Boolean(value.email||value.phone),{path:["email"],message:"CONTACT_METHOD_REQUIRED"}),
   tasks:baseRecordSchema.extend({
     dueAt:z.string().datetime(),
