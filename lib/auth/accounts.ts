@@ -215,15 +215,13 @@ export async function createAccount({
         ) values($1, $2, $3, 'ACTIVE', $4)`,
         [workspaceId, id, role, mustChangePassword],
       );
-      if (role.startsWith("SALES_")) {
-        const salesMember=await client.query<{id:string}>(
-          `insert into public.sales_team_members(
-            workspace_id, auth_user_id, name_zh, name_en, role, team, team_id, manager_member_id, active
-          ) values($1, $2, $3, $4, $5, $6, $7, $8, true) returning id`,
-          [workspaceId, id, displayNameZh.trim(), displayNameEn.trim(), role, team ?? "", teamId ?? null, managerMemberId ?? null],
-        );
-        if(teamId)await client.query(`insert into public.sales_team_memberships(workspace_id,team_id,member_id,membership_role,status,requested_by,reviewed_by,reviewed_at) values($1,$2,$3,'MEMBER','ACTIVE',$4,$4,now()) on conflict(workspace_id,team_id,member_id) do update set status='ACTIVE',reviewed_by=$4,reviewed_at=now(),updated_at=now()`,[workspaceId,teamId,salesMember.rows[0].id,teamAssignmentActorId??id]);
-      }
+      const staffMember=await client.query<{id:string}>(
+        `insert into public.sales_team_members(
+          workspace_id, auth_user_id, name_zh, name_en, role, team, team_id, manager_member_id, active
+        ) values($1, $2, $3, $4, $5, $6, $7, $8, true) returning id`,
+        [workspaceId, id, displayNameZh.trim(), displayNameEn.trim(), role, team ?? "", teamId ?? null, managerMemberId ?? null],
+      );
+      if(teamId)await client.query(`insert into public.sales_team_memberships(workspace_id,team_id,member_id,membership_role,status,requested_by,reviewed_by,reviewed_at) values($1,$2,$3,'MEMBER','ACTIVE',$4,$4,now()) on conflict(workspace_id,team_id,member_id) do update set status='ACTIVE',reviewed_by=$4,reviewed_at=now(),updated_at=now()`,[workspaceId,teamId,staffMember.rows[0].id,teamAssignmentActorId??id]);
       await afterCreate?.(client, id);
       await client.query("commit");
       return { id };

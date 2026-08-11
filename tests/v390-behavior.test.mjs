@@ -48,13 +48,24 @@ test("keeps team dialogs reopenable and models multi-team staff, leads, and requ
 });
 
 test("exposes complete team management and a discoverable staff assignment action",async()=>{
-  const[repository,page,css]=await Promise.all([source("lib/team-repository.ts"),source("components/staff-users-page.tsx"),source("app/globals.css")]);
+  const[migration,repository,accounts,directory,bootstrap,page,css]=await Promise.all([source("db/migrations/202608110079_all_staff_team_membership.sql"),source("lib/team-repository.ts"),source("lib/auth/accounts.ts"),source("lib/admin-users-repository.ts"),source("scripts/bootstrap-admin.mjs"),source("components/staff-users-page.tsx"),source("app/globals.css")]);
+  assert.match(migration,/check\(role in \('SUPER_ADMIN','ADMIN','SALES_DIRECTOR'/);
+  assert.match(migration,/insert into public\.sales_team_members/);
+  assert.match(migration,/from public\.workspace_memberships membership/);
   assert.match(repository,/members:TeamMemberSummary\[\]/);
   assert.match(repository,/membership\.status in \('ACTIVE','PENDING'\)/);
+  assert.doesNotMatch(repository,/member\.role in \('SALES_DIRECTOR','SALES_MANAGER'\)/);
+  assert.doesNotMatch(accounts,/if \(role\.startsWith\("SALES_"\)\) \{/);
+  assert.match(directory,/set role = \$3,[\s\S]+active = \(\$4 = 'ACTIVE'\)/);
+  assert.match(bootstrap,/role='SUPER_ADMIN',active=true/);
+  assert.match(bootstrap,/insert into public\.sales_team_members/);
   assert.match(page,/className="surface team-management-panel"/);
   assert.match(page,/setTeamDetail\(team\)/);
   assert.match(page,/setTeamEditor\(\{mode:"edit",team\}\)/);
   assert.match(page,/className="secondary-button compact staff-team-button"/);
+  assert.doesNotMatch(page,/item\.role\.startsWith\("SALES_"\)&&<button className="secondary-button compact staff-team-button"/);
+  assert.match(page,/onTeam=\{\(\)=>setTeamTarget\(item\)\}/);
+  assert.match(page,/role="menuitem" onClick=\{\(\)=>\{setOpen\(null\);onTeam\(\);\}\}/);
   assert.match(page,/teamDetail\.members\.map/);
   assert.match(css,/\.team-management-grid\{display:grid/);
 });

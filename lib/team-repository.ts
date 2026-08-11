@@ -49,7 +49,7 @@ export async function listTeamLeadCandidates():Promise<TeamLeadCandidate[]>{
     select member.auth_user_id user_id,member.id member_id,member.name_zh,member.name_en,member.role,
       array_remove(array_agg(membership.team_id order by membership.team_id) filter(where membership.status='ACTIVE'),null) team_ids
     from public.sales_team_members member left join public.sales_team_memberships membership on membership.member_id=member.id and membership.workspace_id=member.workspace_id
-    where member.workspace_id=$1 and member.active and member.auth_user_id is not null and member.role in ('SALES_DIRECTOR','SALES_MANAGER')
+    where member.workspace_id=$1 and member.active and member.auth_user_id is not null
     group by member.id order by member.name_en
   `,[workspaceId()]));
   return result.rows.map(row=>({userId:row.user_id,memberId:row.member_id,name:`${row.name_zh} / ${row.name_en}`,role:row.role,teamIds:row.team_ids??[]}));
@@ -64,8 +64,8 @@ export async function saveTeam(input:{id?:string;code:string;nameZh:string;nameE
       const teamId=input.id??crypto.randomUUID();
       await client.query(`insert into public.sales_teams(id,workspace_id,code,name_zh,name_en,description_markdown,active,created_by)
         values($1,$2,$3,$4,$5,$6,$7,$8) on conflict(id) do update set code=excluded.code,name_zh=excluded.name_zh,name_en=excluded.name_en,description_markdown=excluded.description_markdown,active=excluded.active,updated_at=now() where sales_teams.workspace_id=excluded.workspace_id`,[teamId,ws,input.code.trim().toUpperCase(),input.nameZh.trim(),input.nameEn.trim(),input.descriptionMarkdown,input.active??true,actor.id]);
-      const leadResult=selectedLeadUsers.length?await client.query<{id:string;auth_user_id:string}>(`select id,auth_user_id from public.sales_team_members where workspace_id=$1 and auth_user_id=any($2::uuid[]) and active and role in ('SALES_DIRECTOR','SALES_MANAGER') for update`,[ws,selectedLeadUsers]):{rows:[]};
-      if(leadResult.rows.length!==selectedLeadUsers.length)throw new DatabaseRequestError(400,"TEAM_LEAD_NOT_ELIGIBLE","Select active sales leaders");
+      const leadResult=selectedLeadUsers.length?await client.query<{id:string;auth_user_id:string}>(`select id,auth_user_id from public.sales_team_members where workspace_id=$1 and auth_user_id=any($2::uuid[]) and active for update`,[ws,selectedLeadUsers]):{rows:[]};
+      if(leadResult.rows.length!==selectedLeadUsers.length)throw new DatabaseRequestError(400,"TEAM_LEAD_NOT_ELIGIBLE","Select active staff members");
       const leadMemberIds=leadResult.rows.map(item=>item.id);
       await client.query(`update public.sales_team_memberships set membership_role='MEMBER',updated_at=now() where workspace_id=$1 and team_id=$2 and membership_role='LEAD' and not(member_id=any($3::uuid[]))`,[ws,teamId,leadMemberIds]);
       for(const lead of leadResult.rows)await client.query(`insert into public.sales_team_memberships(workspace_id,team_id,member_id,membership_role,status,requested_by,reviewed_by,reviewed_at) values($1,$2,$3,'LEAD','ACTIVE',$4,$4,now()) on conflict(workspace_id,team_id,member_id) do update set membership_role='LEAD',status='ACTIVE',reviewed_by=$4,reviewed_at=now(),updated_at=now()`,[ws,teamId,lead.id,actor.id]);
@@ -92,7 +92,7 @@ export async function requestTeamMembership(userId:string,teamId:string){
   const ws=workspaceId();
   return withPoolClient("system",async client=>{
     const member=await client.query<{id:string}>(`select id from public.sales_team_members where workspace_id=$1 and auth_user_id=$2 and active`,[ws,userId]);
-    if(!member.rows[0])throw new DatabaseRequestError(403,"TEAM_REQUEST_NOT_ELIGIBLE","Only active sales staff can request team membership");
+    if(!member.rows[0])throw new DatabaseRequestError(403,"TEAM_REQUEST_NOT_ELIGIBLE","Only active staff can request team membership");
     const team=await client.query(`select id from public.sales_teams where workspace_id=$1 and id=$2 and active`,[ws,teamId]);if(!team.rows[0])throw new DatabaseRequestError(404,"TEAM_NOT_FOUND","Team not found");
     const existing=await client.query<{status:string}>(`select status from public.sales_team_memberships where workspace_id=$1 and team_id=$2 and member_id=$3`,[ws,teamId,member.rows[0].id]);
     if(existing.rows[0]?.status==="ACTIVE"||existing.rows[0]?.status==="PENDING")throw new DatabaseRequestError(409,"TEAM_REQUEST_EXISTS","Membership or request already exists");
@@ -105,7 +105,7 @@ export async function setUserTeamMemberships(userId:string,teamIds:string[],acto
   if(actor.role!=="SUPER_ADMIN"&&actor.role!=="ADMIN")throw new DatabaseRequestError(403,"TEAM_MANAGEMENT_FORBIDDEN","Administrator required");
   const ws=workspaceId();const selected=[...new Set(teamIds)];
   await withPoolClient("system",async client=>{await client.query("begin");try{
-    const memberResult=await client.query<{id:string}>(`select id from public.sales_team_members where workspace_id=$1 and auth_user_id=$2 and active for update`,[ws,userId]);const member=memberResult.rows[0];if(!member)throw new DatabaseRequestError(400,"TEAM_MEMBER_NOT_ELIGIBLE","Active sales member required");
+    const memberResult=await client.query<{id:string}>(`select id from public.sales_team_members where workspace_id=$1 and auth_user_id=$2 and active for update`,[ws,userId]);const member=memberResult.rows[0];if(!member)throw new DatabaseRequestError(400,"TEAM_MEMBER_NOT_ELIGIBLE","Active staff member required");
     const valid=selected.length?await client.query<{id:string}>(`select id from public.sales_teams where workspace_id=$1 and id=any($2::uuid[]) and active`,[ws,selected]):{rows:[]};if(valid.rows.length!==selected.length)throw new DatabaseRequestError(400,"TEAM_NOT_FOUND","Select active teams");
     await client.query(`update public.sales_team_memberships set status='REJECTED',reviewed_by=$3,reviewed_at=now(),updated_at=now() where workspace_id=$1 and member_id=$2 and status in ('ACTIVE','PENDING') and not(team_id=any($4::uuid[]))`,[ws,member.id,actor.id,selected]);
     for(const teamId of selected)await client.query(`insert into public.sales_team_memberships(workspace_id,team_id,member_id,membership_role,status,requested_by,reviewed_by,reviewed_at) values($1,$2,$3,'MEMBER','ACTIVE',$4,$4,now()) on conflict(workspace_id,team_id,member_id) do update set status='ACTIVE',reviewed_by=$4,reviewed_at=now(),updated_at=now()`,[ws,teamId,member.id,actor.id]);
