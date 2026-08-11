@@ -52,6 +52,19 @@ test("staff directory filters before pagination and rejects unknown filter value
   assert.match(component, /setStatusFilter\("ALL"\);setRoleFilter\("ALL"\)/);
 });
 
+test("CRM system can read and manage the team relations used by the staff directory", async () => {
+  const migration = await readFile(
+    new URL("../db/migrations/202608110077_crm_system_team_membership_permissions.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /grant select, insert, update on public\.sales_team_memberships to crm_system/);
+  assert.match(migration, /on public\.sales_teams for select to crm_system[\s\S]+using \(true\)/);
+  assert.match(migration, /on public\.sales_team_memberships for select to crm_system[\s\S]+using \(true\)/);
+  assert.match(migration, /on public\.sales_team_memberships for insert to crm_system[\s\S]+with check \(true\)/);
+  assert.match(migration, /on public\.sales_team_memberships for update to crm_system[\s\S]+using \(true\)[\s\S]+with check \(true\)/);
+  assert.doesNotMatch(migration, /to crm_worker|bypassrls/i);
+});
+
 test("staff directory has responsive cards and a complete keyboard menu", async () => {
   const [component, css] = await Promise.all([
     readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8"),

@@ -48,6 +48,7 @@ import { AccessibleDrawer } from "./ui";
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; documentChildNavigation?: boolean; children?: { labelKey: string; href: string; badge?: string }[] };
 type NavigationGroup = { titleKey: string; items: NavItem[] };
 type GlobalSearchResult = { title: string; detail: string; href: string; source: "page" | "record" };
+const SIDEBAR_SCROLL_STORAGE_KEY = "lumina.sidebar.scroll-top";
 
 const navigation: NavigationGroup[] = [
   { titleKey: "nav.dashboard", items: [
@@ -166,6 +167,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarNavRef = useRef<HTMLElement>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef=useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -178,6 +180,33 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     localeSynchronized.current=true;
     if(locale!==preferredLocale)void setLocale(preferredLocale);
   },[locale,preferredLocale,setLocale]);
+  useEffect(() => {
+    const sidebarNavigation = sidebarNavRef.current;
+    if (!sidebarNavigation) return;
+    const restoreScrollPosition = () => {
+      try {
+        const storedPosition = Number(window.sessionStorage.getItem(SIDEBAR_SCROLL_STORAGE_KEY));
+        if (Number.isFinite(storedPosition) && storedPosition > 0) sidebarNavigation.scrollTop = storedPosition;
+      } catch {
+        // Storage can be unavailable in hardened browser contexts; navigation still works.
+      }
+    };
+    const persistScrollPosition = () => {
+      try {
+        window.sessionStorage.setItem(SIDEBAR_SCROLL_STORAGE_KEY, String(sidebarNavigation.scrollTop));
+      } catch {
+        // Do not make navigation depend on browser storage availability.
+      }
+    };
+    const frame = window.requestAnimationFrame(restoreScrollPosition);
+    sidebarNavigation.addEventListener("scroll", persistScrollPosition, { passive: true });
+    window.addEventListener("pagehide", persistScrollPosition);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      sidebarNavigation.removeEventListener("scroll", persistScrollPosition);
+      window.removeEventListener("pagehide", persistScrollPosition);
+    };
+  }, []);
   const visibleNavigation = useMemo(() => {
     const canVisit = (href?: string) => (!href || href!=="/admin/recycle-bin" || user.role==="SUPER_ADMIN") && (!href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]));
     const canAllocate = hasCapability(user.role, "performance.manage");
@@ -333,7 +362,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
           </Link>
           <button className="mobile-close" type="button" onClick={closeMobile} aria-label={t("nav.close")}><X size={20} /></button>
         </div>
-        <nav className="sidebar-nav">
+        <nav ref={sidebarNavRef} className="sidebar-nav">
           {visibleNavigation.map((group) => <div className="nav-group" key={group.titleKey}>
             <p>{t(group.titleKey)}</p>
             {group.items.map((item) => <NavEntry key={item.labelKey} item={item} activeHref={activeNavigationHref} expanded={expanded.includes(item.labelKey) || Boolean(item.children?.some((child) => child.href === activeNavigationHref))} onExpand={() => { if (collapsed) setCollapsed(false); setExpanded((current) => current.includes(item.labelKey) ? current.filter((value) => value !== item.labelKey) : [...current, item.labelKey]); }} onNavigate={closeMobile} />)}
