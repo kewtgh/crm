@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.9.3",
+  "version": "3.9.4",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -43,6 +43,7 @@
     "test:db:staff-invitation-transaction:raw": "node --env-file-if-exists=.env.local --import tsx scripts/test-staff-invitation-transaction.mjs",
     "test:db:staff-invitation-rls:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-staff-invitation-rls-postgres.ps1",
     "test:db:migration-075:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-migration-075-postgres.ps1",
+    "test:db:migration-079:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-migration-079-postgres.ps1",
     "smoke:v350:timezone": "node --env-file-if-exists=.env.local --import tsx scripts/v350-business-timezone-smoke.ts",
     "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs",
     "db:backup:crypto:smoke": "node --env-file-if-exists=.env.local scripts/backup-crypto-smoke.mjs",

@@ -269,7 +269,7 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   }
   const username = input.username.trim().toLowerCase();
   const workspaceId = configuredWorkspaceId();
-  const selectedTeam = input.role.startsWith("SALES_")
+  const selectedTeam = input.teamId
     ? (await withPoolClient("system", (client) => client.query<{id:string;code:string;name_zh:string;name_en:string;lead_member_id:string|null}>(
         `select id,code::text,name_zh,name_en,lead_member_id from public.sales_teams
          where id=$1 and workspace_id=$2 and active limit 1`,
@@ -533,8 +533,8 @@ export async function updateStaffUser(
       }
       await client.query(
         `update public.sales_team_members
-         set role = case when $3 like 'SALES_%' then $3 else role end,
-             active = ($3 like 'SALES_%' and $4 = 'ACTIVE')
+         set role = $3,
+             active = ($4 = 'ACTIVE')
          where workspace_id = $1 and auth_user_id = $2`,
         [workspaceId, target.id, nextRole, nextStatus],
       );

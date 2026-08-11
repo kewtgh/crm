@@ -90,6 +90,20 @@ try {
       must_change_password=case when $3 then true else workspace_memberships.must_change_password end`,
     [workspaceId, id, createPassword],
   );
+  const teamMember = await client.query(
+    `update public.sales_team_members set
+       name_zh=$3,name_en=$4,role='SUPER_ADMIN',active=true
+     where workspace_id=$1 and auth_user_id=$2`,
+    [workspaceId, id, displayNameZh, displayNameEn],
+  );
+  if (!teamMember.rowCount) {
+    await client.query(
+      `insert into public.sales_team_members(
+         workspace_id,auth_user_id,name_zh,name_en,role,team,active
+       ) values($1,$2,$3,$4,'SUPER_ADMIN','',true)`,
+      [workspaceId, id, displayNameZh, displayNameEn],
+    );
+  }
   if (rotatePassword) {
     await client.query(
       `update app_auth.sessions set revoked_at=now(),revoked_reason='ADMIN_PASSWORD_ROTATED'
