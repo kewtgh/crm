@@ -34,16 +34,37 @@ test("vulnerable and unknown image metadata formats fail closed", () => {
 });
 
 test("dependency policy pins patched advisories without weakening CI", async () => {
-  const [manifest, workflow, safePackage] = await Promise.all([
+  const [manifest, workflow, safePackage, lock] = await Promise.all([
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
     readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
     readFile(new URL("../vendor/image-size-safe/package.json", import.meta.url), "utf8").then(JSON.parse),
+    readFile(new URL("../package-lock.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
   assert.equal(manifest.devDependencies["brace-expansion-secure"], "npm:brace-expansion@5.0.9");
-  assert.equal(manifest.overrides["fast-uri"], "3.1.5");
+  assert.equal(manifest.dependencies.next, "16.3.6");
+  assert.equal(manifest.devDependencies["eslint-config-next"], manifest.dependencies.next);
+  assert.equal(manifest.overrides["baseline-browser-mapping"], "2.11.0");
+  assert.equal(manifest.overrides.browserslist, "4.28.7");
+  assert.equal(manifest.overrides["fast-uri"], "3.1.6");
+  assert.equal(manifest.overrides["fflate@^0.7.0"], "0.7.5");
   assert.equal(manifest.overrides["image-size"], "file:vendor/image-size-safe");
-  assert.equal(manifest.overrides["js-yaml"], "4.3.1");
-  assert.equal(manifest.overrides.nanoid, "3.3.17");
+  assert.equal(manifest.overrides["js-yaml"], "4.3.2");
+  assert.equal(manifest.overrides.nanoid, "3.3.18");
+  assert.equal(manifest.overrides.sharp, "0.35.4");
+  for (const [name, versions] of Object.entries({
+    next: ["16.3.6"],
+    "baseline-browser-mapping": ["2.11.0"],
+    browserslist: ["4.28.7"],
+    "fast-uri": ["3.1.6"],
+    fflate: ["0.7.5", "0.8.3"],
+    "js-yaml": ["4.3.2"],
+    nanoid: ["3.3.18"],
+    sharp: ["0.35.4"],
+  })) {
+    const entries = Object.entries(lock.packages).filter(([path]) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`));
+    assert.ok(entries.length, `${name} must be present in the lockfile`);
+    for (const [path, metadata] of entries) assert.ok(versions.includes(metadata.version), `${path} must use a patched version, got ${metadata.version}`);
+  }
   assert.equal(safePackage.version, "2.0.3-lumina.1");
   assert.match(workflow, /npm audit --audit-level=moderate/);
 });
