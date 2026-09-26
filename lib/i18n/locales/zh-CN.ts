@@ -14,6 +14,7 @@ import { zhV270 } from "./v270";
 import { zhV350 } from "./v350";
 import { zhV383 } from "./v383";
 import { zhV390 } from "./v390";
+import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
   "pipeline.currencyScope":"币种范围",
@@ -32,6 +33,7 @@ export const zhCN: Messages = {
   ...zhV350,
   ...zhV383,
   ...zhV390,
+  ...zhAudit20260926,
   "locale.name": "简体中文",
   "locale.switch": "切换语言",
   "locale.persistFailed": "语言已在本设备切换，但未能保存到账号；请稍后重试。",
@@ -106,7 +108,7 @@ export const zhCN: Messages = {
   "nav.calendar": "双月日历",
   "nav.tasks": "任务列表",
   "nav.operations": "运营协作",
-  "nav.messages": "消息中心",
+  "nav.messages": "沟通收件箱",
   "nav.data": "数据治理",
   "nav.duplicates": "重复数据",
   "nav.imports": "导入中心",

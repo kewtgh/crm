@@ -1,7 +1,7 @@
 export type CsvDocument={headers:string[];rows:Array<Record<string,string>>;delimiter:string};
 
 export class CsvParseError extends Error{
-  constructor(public code:"EMPTY"|"UNCLOSED_QUOTE"|"DUPLICATE_HEADER"|"TOO_MANY_ROWS"){super(code);}
+  constructor(public code:"EMPTY"|"UNCLOSED_QUOTE"|"DUPLICATE_HEADER"|"TOO_MANY_ROWS"|"COLUMN_COUNT"|"INVALID_QUOTE",public row?:number){super(code);}
 }
 
 function detectDelimiter(text:string){
@@ -24,25 +24,39 @@ export function parseCsvDocument(source:string,maxRows=10_000):CsvDocument{
   let row:string[]=[];
   let value="";
   let quoted=false;
-  const pushCell=()=>{row.push(value.trim());value="";};
+  let closedQuote=false;
+  let line=1;
+  let rowLine=1;
+  const pushCell=()=>{row.push(value.trim());value="";closedQuote=false;};
   const pushRow=()=>{
     pushCell();
-    if(row.some(cell=>cell.length))parsed.push(row);
+    if(row.some(cell=>cell.length)){
+      if(parsed.length&&row.length!==parsed[0].length)throw new CsvParseError("COLUMN_COUNT",rowLine);
+      if(parsed.length>=maxRows+1)throw new CsvParseError("TOO_MANY_ROWS",rowLine);
+      parsed.push(row);
+    }
     row=[];
   };
   for(let index=0;index<text.length;index+=1){
     const char=text[index];
     if(char==='"'&&quoted&&text[index+1]==='"'){value+='"';index+=1;continue;}
-    if(char==='"'){quoted=!quoted;continue;}
+    if(char==='"'){
+      if(quoted){quoted=false;closedQuote=true;}
+      else{if(closedQuote||value.trim())throw new CsvParseError("INVALID_QUOTE",line);quoted=true;}
+      continue;
+    }
     if(char===delimiter&&!quoted){pushCell();continue;}
     if((char==="\n"||char==="\r")&&!quoted){
       if(char==="\r"&&text[index+1]==="\n")index+=1;
       pushRow();
+      line+=1;rowLine=line;
       continue;
     }
+    if(closedQuote&&!/\s/.test(char))throw new CsvParseError("INVALID_QUOTE",line);
+    if(char==="\n"||(char==="\r"&&text[index+1]!=="\n"))line+=1;
     value+=char;
   }
-  if(quoted)throw new CsvParseError("UNCLOSED_QUOTE");
+  if(quoted)throw new CsvParseError("UNCLOSED_QUOTE",rowLine);
   if(value.length||row.length)pushRow();
   if(parsed.length<2)throw new CsvParseError("EMPTY");
   const headers=parsed[0].map(header=>header.trim());

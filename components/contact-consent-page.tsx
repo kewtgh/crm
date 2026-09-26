@@ -31,7 +31,8 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     event.preventDefault();
     setPending(true);
     setConsentError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const body = { operation: "consent", channel: form.get("channel"), purpose: form.get("purpose"), status: form.get("status"), source: form.get("source"), evidence: form.get("evidence"), retentionUntil: form.get("retentionUntil") || null, quietStart: form.get("quietStart") || null, quietEnd: form.get("quietEnd") || null };
     try{await apiFetch(`/api/contacts/${initial.id}/consents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });}catch(caught){
       setPending(false);
@@ -41,7 +42,7 @@ export function ContactConsentPage({ initial }: { initial: ContactPrivacy }) {
     setPending(false);
     await reload();
     setToast(t("consent.saved"));
-    event.currentTarget.reset();
+    formElement.reset();
   };
 
   const updateDnc = async (enabled: boolean) => {

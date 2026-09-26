@@ -4,11 +4,11 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright-core");
 
-const executable = process.env.PLAYWRIGHT_CHROMIUM_1228_PATH
-  || "C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe";
+const executable = process.env.PLAYWRIGHT_CHROMIUM_1243_PATH
+  || "C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe";
 const base = (process.env.QA_BASE_URL || "http://localhost:3200").replace(/\/$/, "");
 const output = path.resolve(
-  process.env.QA_OUTPUT_DIR || "work/browser-qa-chromium-1228/captcha-fallback",
+  process.env.QA_OUTPUT_DIR || "work/browser-qa-chromium-1243/captcha-fallback",
 );
 fs.mkdirSync(output, { recursive: true });
 
@@ -55,7 +55,7 @@ async function runScenario(browser, name, intercept, timing) {
 }
 
 async function main() {
-  assert.ok(fs.existsSync(executable), `Pinned Chromium 1228 is missing: ${executable}`);
+  assert.ok(fs.existsSync(executable), `Pinned Chromium 1243 is missing: ${executable}`);
   const browser = await chromium.launch({
     executablePath: executable,
     headless: true,
@@ -81,7 +81,7 @@ async function main() {
     ));
     const report = {
       runAt: new Date().toISOString(),
-      browser: "ms-playwright/chromium-1228",
+      browser: "ms-playwright/chromium-1243",
       executable,
       browserVersion: browser.version(),
       baseUrl: base,

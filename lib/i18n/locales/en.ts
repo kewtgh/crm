@@ -14,6 +14,7 @@ import { enV270 } from "./v270";
 import { enV350 } from "./v350";
 import { enV383 } from "./v383";
 import { enV390 } from "./v390";
+import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
   "pipeline.currencyScope":"Currency scope",
@@ -32,6 +33,7 @@ export const en: Messages = {
   ...enV350,
   ...enV383,
   ...enV390,
+  ...enAudit20260926,
   "locale.name": "English",
   "locale.switch": "Switch language",
   "locale.persistFailed": "Language changed on this device, but the account preference could not be saved. Try again later.",
@@ -106,7 +108,7 @@ export const en: Messages = {
   "nav.calendar": "Two-month calendar",
   "nav.tasks": "Task list",
   "nav.operations": "Operations",
-  "nav.messages": "Messages",
+  "nav.messages": "Communications inbox",
   "nav.data": "Data governance",
   "nav.duplicates": "Duplicates",
   "nav.imports": "Import center",

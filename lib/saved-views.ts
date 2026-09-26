@@ -16,7 +16,7 @@ export async function listSharedViews(resource:string,currentUserId:string){
 }
 
 export async function saveSharedView(resource:string,name:string,visibility:"PERSONAL"|"TEAM",config:ViewConfig){
-  return databaseJson("/db/rpc/save_shared_view",{method:"POST",body:JSON.stringify({p_resource_key:resource,p_view_name:name,p_view_visibility:visibility,p_view_config:config})});
+  return databaseJson<SharedViewRow>("/db/rpc/save_shared_view",{method:"POST",body:JSON.stringify({p_resource_key:resource,p_view_name:name,p_view_visibility:visibility,p_view_config:config})});
 }
 
 export async function deleteSharedView(id:string){

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppUser } from "@/components/app-user-context";
 import { ArrowDown, ArrowUp, ArrowUpDown, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { DataRow, ModuleConfig } from "@/lib/crm-data";
@@ -17,6 +18,9 @@ const validPageSize=(value:string|null)=>[10,20,50].includes(Number(value))?Numb
 
 export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMetrics, savedViewsOpen=false, onCloseSavedViews }: { config: ModuleConfig; resource?: PersistentResource; initialTotal?: number; refreshKey?: number; onMetrics?:(metrics:CrmMetrics)=>void;savedViewsOpen?:boolean;onCloseSavedViews?:()=>void }) {
   const { t } = useI18n();
+  const user = useAppUser();
+  const [savePending, setSavePending] = useState(false);
+  const savingView = useRef(false);
   const prefix = `modules.${config.key}`;
   const {
     query,setQuery,page,setPage,pageSize,setPageSize,status,setStatus,sort,setSort,
@@ -35,9 +39,10 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
   const [savedViewError,setSavedViewError]=useState("");
   const [deleteConfirmation,setDeleteConfirmation]=useState<SavedView|null>(null);
   const [deletePending,setDeletePending]=useState(false);
-  const storageKey=`lumina-saved-views:${resource??config.key}`;
+  const storageKey=`lumina-saved-views:${user.id}:${resource??config.key}`;
 
   useEffect(()=>{
+    const controller=new AbortController();
     const timer=window.setTimeout(()=>{
       try{
         const raw=JSON.parse(window.localStorage.getItem(storageKey)??"[]") as unknown;
@@ -51,10 +56,10 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
         setSavedViews(local);
       }catch{setSavedViews([]);setSavedViewError(t("savedViews.versionInvalid"));}
       if(resource){
-        void apiFetch<{items:SavedView[]}>(`/api/views?resource=${resource}`).then(result=>setSavedViews(current=>[...current.filter(item=>item.source==="LOCAL"),...result.items])).catch(()=>setSavedViewError(t("savedViews.loadFailed")));
+        void apiFetch<{items:SavedView[]}>(`/api/views?resource=${resource}`,{signal:controller.signal}).then(result=>{if(!controller.signal.aborted)setSavedViews(current=>[...current.filter(item=>item.source==="LOCAL"),...result.items]);}).catch(()=>{if(!controller.signal.aborted)setSavedViewError(t("savedViews.loadFailed"));});
       }
     },0);
-    return()=>window.clearTimeout(timer);
+    return()=>{window.clearTimeout(timer);controller.abort();};
   },[resource,storageKey,t]);
   const persistViews=(views:SavedView[])=>{try{window.localStorage.setItem(storageKey,JSON.stringify(views.filter(item=>item.source==="LOCAL")));setSavedViews(views);return true;}catch{setSavedViewError(t("savedViews.saveFailed"));return false;}};
 
@@ -72,7 +77,26 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
   const changeSort = (key: SortKey) => { if (sort === key) setDirection((value) => value === "asc" ? "desc" : "asc"); else { setSort(key); setDirection("asc"); } setPage(1); };
   const setSearch = (value: string) => { setQuery(value); };
   const applyView=(view:SavedView)=>{setQuery(view.query);setStatus(view.status);setSort(view.sort);setDirection(view.direction);setPageSize(validPageSize(String(view.pageSize)));setPage(1);onCloseSavedViews?.();};
-  const saveView=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const form=new FormData(event.currentTarget);const name=String(form.get("name")??"").trim();const visibility=String(form.get("visibility")??"PERSONAL") as "PERSONAL"|"TEAM";if(!name)return;const config={version:1 as const,query,status,sort,direction,pageSize:pageSize as 10|20|50};setSavedViewError("");if(visibility==="TEAM"&&resource){try{await apiFetch("/api/views",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"save",resource,name,visibility,config})});const result=await apiFetch<{items:SavedView[]}>(`/api/views?resource=${resource}`);setSavedViews(current=>[...current.filter(item=>item.source==="LOCAL"),...result.items]);}catch{setSavedViewError(t("savedViews.saveFailed"));return;}}else{persistViews([...savedViews.filter(item=>item.source!=="LOCAL"||item.name!==name),{...config,id:crypto.randomUUID(),name,visibility:"PERSONAL",source:"LOCAL",owned:true}]);}event.currentTarget.reset();};
+  const saveView=async(event:React.FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();
+    if(savingView.current)return;
+    const formElement=event.currentTarget;
+    const form=new FormData(formElement);
+    const name=String(form.get("name")??"").trim();
+    const visibility=String(form.get("visibility")??"PERSONAL") as "PERSONAL"|"TEAM";
+    if(!name)return;
+    const config={version:1 as const,query,status,sort,direction,pageSize:pageSize as 10|20|50};
+    savingView.current=true;setSavePending(true);setSavedViewError("");
+    try{
+      if(visibility==="TEAM"&&resource){
+        const result=await apiFetch<{item:{id:string}}>("/api/views",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"save",resource,name,visibility,config})});
+        // Commit the accepted write locally; a separate read failure must not invite a duplicate save.
+        setSavedViews(current=>[...current.filter(item=>item.id!==result.item.id),{...config,id:result.item.id,name,visibility,source:"SERVER",owned:true}]);
+      }else if(!persistViews([...savedViews.filter(item=>item.source!=="LOCAL"||item.name!==name),{...config,id:crypto.randomUUID(),name,visibility:"PERSONAL",source:"LOCAL",owned:true}]))return;
+      formElement.reset();
+    }catch{setSavedViewError(t("savedViews.saveFailed"));}
+    finally{savingView.current=false;setSavePending(false);}
+  };
   const deleteView=async(view:SavedView)=>{setSavedViewError("");setDeletePending(true);if(view.source==="SERVER"){if(!view.owned){setDeletePending(false);return;}try{await apiFetch("/api/views",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"delete",id:view.id})});setSavedViews(current=>current.filter(item=>item.id!==view.id));}catch{setSavedViewError(t("savedViews.saveFailed"));}}else persistViews(savedViews.filter(item=>item.id!==view.id));setDeletePending(false);setDeleteConfirmation(null);};
   const labels = {
     primary: t(`${prefix}.column.primary`),
@@ -90,7 +114,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
       <SortHead field="primary" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.primary`)}</SortHead><SortHead field="secondary" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.secondary`)}</SortHead><SortHead field="status" active={sort} direction={direction} onSort={changeSort}>{t("common.status")}</SortHead><SortHead field="meta" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.meta`)}</SortHead><SortHead field="extra" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.extra`)}</SortHead><SortHead field="completeness" active={sort} direction={direction} onSort={changeSort}>{t("modules.completeness")}</SortHead></tr></thead>
       <tbody>{visible.map((row) => <DataTableRow key={row.id} row={row} labels={labels} />)}</tbody></table>{!visible.length && !loading && !error && <div className="empty-state"><span>{t("modules.noRecords")}</span><p>{t("modules.noRecordsHelp")}</p></div>}</div>
     <Pagination page={safePage} totalPages={totalPages} total={effectiveTotal} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);}} />
-  </div>{savedViewsOpen&&<AccessibleDrawer title={t("modules.savedViews")} eyebrow={t("modules.savedViewsEyebrow")} description={t("modules.savedViewsHelp")} onClose={()=>onCloseSavedViews?.()}><form className="saved-view-form" onSubmit={saveView}><label className="field"><span>{t("modules.savedViewName")}</span><input name="name" required maxLength={60}/></label><label className="field"><span>{t("savedViews.source")}</span><select name="visibility" defaultValue="PERSONAL"><option value="PERSONAL">{t("savedViews.personal")}</option>{resource&&<option value="TEAM">{t("savedViews.team")}</option>}</select></label><button className="primary-button" type="submit"><Save size={16}/>{t("modules.saveCurrentView")}</button></form>{savedViewError&&<InlineMessage type="error">{savedViewError}</InlineMessage>}<div className="saved-view-list">{savedViews.map(view=><article key={`${view.source}:${view.id}`}><button type="button" className="saved-view-main" onClick={()=>applyView(view)}><b>{view.name}</b><small>{view.query||t("common.all")} · {view.status==="all"?t("common.all"):t(`crm.status.${view.status}`)} · {view.pageSize} · {t(view.visibility==="TEAM"?"savedViews.team":"savedViews.personal")}</small></button>{view.owned&&<button className="icon-button" type="button" aria-label={t("modules.deleteSavedView",{name:view.name})} onClick={()=>setDeleteConfirmation(view)}><Trash2 size={16}/></button>}</article>)}{!savedViews.length&&<p className="select-empty">{t("modules.noSavedViews")}</p>}</div><button className="secondary-button" type="button" onClick={()=>{setQuery("");setStatus("all");setSort("primary");setDirection("asc");setPageSize(10);setPage(1);onCloseSavedViews?.();}}>{t("modules.restoreDefaultView")}</button></AccessibleDrawer>}{deleteConfirmation&&<ConfirmDialog title={t("common.confirmAction")} description={t("savedViews.deleteConfirm",{name:deleteConfirmation.name})} confirmLabel={t("common.delete")} pending={deletePending} onClose={()=>setDeleteConfirmation(null)} onConfirm={()=>void deleteView(deleteConfirmation)}/>}</>;
+  </div>{savedViewsOpen&&<AccessibleDrawer pending={savePending} title={t("modules.savedViews")} eyebrow={t("modules.savedViewsEyebrow")} description={t("modules.savedViewsHelp")} onClose={()=>onCloseSavedViews?.()}><form className="saved-view-form" onSubmit={saveView}><label className="field"><span>{t("modules.savedViewName")}</span><input name="name" required maxLength={60}/></label><label className="field"><span>{t("savedViews.source")}</span><select name="visibility" defaultValue="PERSONAL"><option value="PERSONAL">{t("savedViews.personal")}</option>{resource&&<option value="TEAM">{t("savedViews.team")}</option>}</select></label><button className="primary-button" type="submit" disabled={savePending}><Save size={16}/>{t("modules.saveCurrentView")}</button></form>{savedViewError&&<InlineMessage type="error">{savedViewError}</InlineMessage>}<div className="saved-view-list">{savedViews.map(view=><article key={`${view.source}:${view.id}`}><button type="button" className="saved-view-main" onClick={()=>applyView(view)}><b>{view.name}</b><small>{view.query||t("common.all")} · {view.status==="all"?t("common.all"):t(`crm.status.${view.status}`)} · {view.pageSize} · {t(view.visibility==="TEAM"?"savedViews.team":"savedViews.personal")}</small></button>{view.owned&&<button className="icon-button" type="button" aria-label={t("modules.deleteSavedView",{name:view.name})} onClick={()=>setDeleteConfirmation(view)}><Trash2 size={16}/></button>}</article>)}{!savedViews.length&&<p className="select-empty">{t("modules.noSavedViews")}</p>}</div><button className="secondary-button" type="button" onClick={()=>{setQuery("");setStatus("all");setSort("primary");setDirection("asc");setPageSize(10);setPage(1);onCloseSavedViews?.();}}>{t("modules.restoreDefaultView")}</button></AccessibleDrawer>}{deleteConfirmation&&<ConfirmDialog title={t("common.confirmAction")} description={t("savedViews.deleteConfirm",{name:deleteConfirmation.name})} confirmLabel={t("common.delete")} pending={deletePending} onClose={()=>setDeleteConfirmation(null)} onConfirm={()=>void deleteView(deleteConfirmation)}/>}</>;
 }
 
 function SortHead({ field, active, direction, onSort, children }: { field: SortKey; active: SortKey; direction: "asc" | "desc"; onSort: (field: SortKey) => void; children: React.ReactNode }) {

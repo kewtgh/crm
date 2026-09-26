@@ -36,13 +36,13 @@ import { APP_VERSION } from "@/lib/version";
 import { AppUserProvider } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { LocaleSwitcher } from "./locale-switcher";
-import type { NotificationRecord } from "@/lib/notifications-repository";
+import { useNotifications } from "@/hooks/use-notifications";
+import { notificationHref } from "@/lib/notification-link";
 import type { RelationshipHealth } from "@/lib/workspace-metrics";
 import type { UserSettings } from "@/lib/settings-repository";
 import { UserPreferencesProvider } from "./user-preferences-context";
 import { useUserPreferences } from "./user-preferences-context";
 import { apiFetch } from "@/lib/api-client";
-import { presentApiError } from "@/lib/api-error-presenter";
 import { AccessibleDrawer } from "./ui";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; documentChildNavigation?: boolean; children?: { labelKey: string; href: string; badge?: string }[] };
@@ -59,6 +59,7 @@ const navigation: NavigationGroup[] = [
     { labelKey: "nav.tasks", href: "/tasks" },
     ]},
     { labelKey: "nav.messages", href: "/messages", icon: MessageSquareText },
+    { labelKey: "nav.notifications", href: "/notifications", icon: Bell },
   ]},
   { titleKey: "nav.relationships", items: [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
@@ -133,6 +134,7 @@ const routeCapabilities: Partial<Record<string, Capability>> = {
   "/calendar": "calendar.view",
   "/tasks": "tasks.view",
   "/messages": "messages.view",
+  "/notifications": "messages.view",
   "/guardian-portal": "portal.manage",
   "/growth": "leads.view",
   "/automation": "automation.manage",
@@ -451,16 +453,14 @@ function NavEntry({ item, activeHref, expanded, onExpand, onNavigate }: { item: 
 }
 
 function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {
-  const {t} = useI18n();const {formatDate}=useUserPreferences();const [items,setItems]=useState<NotificationRecord[]>([]);const [total,setTotal]=useState(0);const [error,setError]=useState("");const dialogRef=useRef<HTMLDivElement>(null);const restoreFocus=useRef(true);
+  const {t} = useI18n();const {formatDate}=useUserPreferences();const {items,total,error,loading,pending,load,markRead}=useNotifications();const dialogRef=useRef<HTMLDivElement>(null);const restoreFocus=useRef(true);
   useEffect(()=>{const trigger=triggerRef.current;const frame=window.requestAnimationFrame(()=>dialogRef.current?.querySelector<HTMLElement>("button:not([disabled]),a[href]")?.focus());const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();close();return;}if(event.key!=="Tab"||!dialogRef.current)return;const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],[tabindex]:not([tabindex='-1'])"));const first=focusable[0],last=focusable[focusable.length-1];if((event.shiftKey&&document.activeElement===first)||(!event.shiftKey&&document.activeElement===last)){event.preventDefault();restoreFocus.current=false;const next=findAdjacentFocusable(trigger,dialogRef.current,event.shiftKey);close();window.requestAnimationFrame(()=>next?.focus());}};const current=dialogRef.current;current?.addEventListener("keydown",key);return()=>{window.cancelAnimationFrame(frame);current?.removeEventListener("keydown",key);if(restoreFocus.current)trigger?.focus();};},[close,triggerRef]);
-  useEffect(()=>{let active=true;void apiFetch<{items:NotificationRecord[];total:number}>("/api/notifications").then(result=>{if(active){setItems(result.items);setTotal(result.total??result.items.length);}}).catch(caught=>active&&setError(presentApiError(caught,t,"nav.notification.loadFailed").message));return()=>{active=false};},[t]);
-  const markAll=async()=>{try{await apiFetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:"{}"});setItems([]);setTotal(0);}catch(caught){setError(presentApiError(caught,t,"nav.notification.markFailed").message);}};
-  const href=(item:NotificationRecord)=>item.sourceType==="CONTRACT"?"/contracts":item.sourceType==="APPOINTMENT"?"/calendar":item.sourceType==="EXPORT"?"/reports/exports":"/tasks";
   const notificationTime=(date:string)=>formatDate(date,{includeTime:true});
-  return <div ref={dialogRef} className="top-popover notifications" role="dialog" aria-modal="false" aria-label={t("nav.notifications")}><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: total })}</small></span><button type="button" disabled={!items.length} onClick={markAll}>{t("nav.markAllRead")}</button></div>
-    {error&&<p className="popover-error" role="alert">{error}</p>}{items.map((item)=><Link href={href(item)} onClick={close} key={item.id}><span className="notification-icon purple"><Bell size={17}/></span><span><b>{t(item.titleKey,item.values)}</b><small>{t(item.bodyKey,item.values)}</small><time>{notificationTime(item.createdAt)}</time></span></Link>)}
-    {!items.length&&!error&&<p className="popover-empty">{t("nav.notification.empty")}</p>}
-    <Link className="popover-footer" href="/messages" onClick={close}>{t("nav.notification.viewAll")} <ChevronRight size={15} /></Link>
+  return <div ref={dialogRef} className="top-popover notifications" role="dialog" aria-modal="false" aria-busy={loading||pending} aria-label={t("nav.notifications")}><div className="popover-heading"><span><b>{t("nav.notifications")}</b><small>{t("nav.unreadCount", { count: total })}</small></span><button type="button" disabled={!total||loading||pending} onClick={()=>void markRead({all:true})}>{t("nav.markAllRead")}</button></div>
+    {error&&<div className="popover-error" role="alert"><p>{error}</p><button className="secondary-button" disabled={loading||pending} type="button" onClick={()=>void load(1)}>{t("common.retry")}</button></div>}{items.map((item)=><Link href={notificationHref(item)} onClick={close} key={item.id}><span className="notification-icon purple"><Bell size={17}/></span><span><b>{t(item.titleKey,item.values)}</b><small>{t(item.bodyKey,item.values)}</small><time>{notificationTime(item.createdAt)}</time></span></Link>)}
+    {loading&&<p className="popover-empty" role="status">{t("notifications.loading")}</p>}
+    {!items.length&&!error&&!loading&&<p className="popover-empty">{t("nav.notification.empty")}</p>}
+    <Link className="popover-footer" href="/notifications" onClick={close}>{t("nav.notification.viewAll")} <ChevronRight size={15} /></Link>
   </div>;
 }
 

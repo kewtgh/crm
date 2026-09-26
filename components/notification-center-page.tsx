@@ -1,17 +1,25 @@
 "use client";
-import { useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+
+import Link from "next/link";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import type { NotificationRecord } from "@/lib/notifications-repository";
 import { useI18n } from "./i18n-provider";
-import { InlineMessage,Pagination } from "./ui";
-import { apiFetch } from "@/lib/api-client";
+import { InlineMessage, Pagination } from "./ui";
 import { useUserPreferences } from "./user-preferences-context";
-import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { useNotifications } from "@/hooks/use-notifications";
+import { notificationHref } from "@/lib/notification-link";
 
 export function NotificationCenterPage({initialItems,initialTotal}:{initialItems:NotificationRecord[];initialTotal:number}){
-  const {t}=useI18n();const {formatDate}=useUserPreferences();const [items,setItems]=useState(initialItems);const [total,setTotal]=useState(initialTotal);const [page,setPage]=useState(1);const [pageSize,setPageSize]=useState(10);const [error,setError]=useState("");
-  const runLatest=useRemoteSearch();
-  const load=async(next:number,nextPageSize=pageSize)=>{setError("");const request=await runLatest(signal=>apiFetch<{items:NotificationRecord[];total:number}>(`/api/notifications?page=${next}&pageSize=${nextPageSize}`,{signal}));if(!request.current)return;if("error" in request){setError(t("nav.notification.loadFailed"));return;}setPage(next);setItems(request.value.items);setTotal(request.value.total);};
-  const read=async(item:NotificationRecord)=>{try{await apiFetch("/api/notifications",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({ids:[item.id]})});}catch{setError(t("nav.notification.markFailed"));return;}setItems(current=>current.filter(entry=>entry.id!==item.id));setTotal(value=>Math.max(0,value-1));};
-  return <div className="page-stack"><section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.teamInbox")}</p><h1>{t("ops.messages.title")}</h1><p>{t("ops.messages.description")}</p></div></section>{error&&<InlineMessage type="error">{error}</InlineMessage>}<section className="surface notification-center">{items.map(item=><article key={item.id}><span><Bell size={18}/></span><div><b>{t(item.titleKey,item.values)}</b><p>{t(item.bodyKey,item.values)}</p><time>{formatDate(item.createdAt,{includeTime:true})}</time></div><button className="secondary-button" type="button" onClick={()=>read(item)}><CheckCheck size={16}/>{t("nav.markRead")}</button></article>)}{!items.length&&<div className="empty-state"><span>{t("nav.notification.empty")}</span></div>}<Pagination page={page} totalPages={Math.max(1,Math.ceil(total/pageSize))} total={total} pageSize={pageSize} onPage={load} onPageSize={(value)=>{setPageSize(value);void load(1,value);}}/></section></div>;
+  const {t}=useI18n();
+  const {formatDate}=useUserPreferences();
+  const {items,total,page,pageSize,error,loading,pending,load,markRead}=useNotifications({items:initialItems,total:initialTotal});
+  return <div className="page-stack">
+    <section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.teamInbox")}</p><h1>{t("nav.notifications")}</h1><p>{t("notifications.description")}</p></div><button className="secondary-button" type="button" disabled={loading||pending} onClick={()=>void load(page)}><RefreshCw size={16}/>{t("notifications.refresh")}</button></section>
+    {error&&<div className="table-error"><InlineMessage type="error">{error}</InlineMessage><button className="secondary-button" type="button" disabled={loading||pending} onClick={()=>void load(page)}>{t("common.retry")}</button></div>}
+    <section className="surface notification-center" aria-busy={loading||pending}>
+      {items.map(item=><article key={item.id}><span><Bell size={18}/></span><div><Link href={notificationHref(item)}><b>{t(item.titleKey,item.values)}</b></Link><p>{t(item.bodyKey,item.values)}</p><time>{formatDate(item.createdAt,{includeTime:true})}</time></div><button className="secondary-button" type="button" disabled={pending||loading} onClick={()=>void markRead({ids:[item.id]})}><CheckCheck size={16}/>{t("nav.markRead")}</button></article>)}
+      {!items.length&&!loading&&!error&&<div className="empty-state"><span>{t("nav.notification.empty")}</span></div>}
+      <Pagination page={Math.min(page,Math.max(1,Math.ceil(total/pageSize)))} totalPages={Math.max(1,Math.ceil(total/pageSize))} total={total} pageSize={pageSize} onPage={value=>{if(!pending)void load(value);}} onPageSize={value=>{if(!pending)void load(1,value);}}/>
+    </section>
+  </div>;
 }

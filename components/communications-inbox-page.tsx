@@ -229,7 +229,8 @@ export function CommunicationsInboxPage({
   const send=async(event:React.FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     if(!thread||threadLoading)return;
-    const form=new FormData(event.currentTarget);
+    const formElement=event.currentTarget;
+    const form=new FormData(formElement);
     const submitter=(event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement|null;
     const operation:"send"|"inbound"=submitter?.value==="inbound"?"inbound":"send";
     const body=String(form.get("body")??"").trim();
@@ -241,7 +242,7 @@ export function CommunicationsInboxPage({
     const result=await operate({operation,threadId:thread.id,body,idempotencyKey:request.key});
     if(!result)return;
     messageRequest.current=null;
-    event.currentTarget.reset();
+    formElement.reset();
     refresh(result.threadId);
     setToast(t(operation==="inbound"?"communications.recorded":"communications.sent"));
   };

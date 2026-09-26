@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { runBounded } from "./lib/bounded-process.mjs";
 
-const rootOutput = path.resolve(process.env.QA_OUTPUT_DIR || "work/browser-qa-chromium-1228");
-const browserScript = path.resolve("scripts/browser-qa-chromium-1228.cjs");
+const rootOutput = path.resolve(process.env.QA_OUTPUT_DIR || "work/browser-qa-chromium-1243");
+const browserScript = path.resolve("scripts/browser-qa-chromium-1243.cjs");
 const baseEnvironment = { ...process.env, QA_BASE_URL: process.env.QA_BASE_URL || process.env.APP_URL || "http://localhost:3200" };
 fs.mkdirSync(rootOutput, { recursive: true });
 
@@ -175,6 +175,6 @@ const combined = {
 };
 fs.writeFileSync(path.join(rootOutput, "report.json"), JSON.stringify(combined, null, 2));
 process.stdout.write(
-  `\nStaged Chromium 1228 QA passed ${combined.pages.length} page/viewports in `
+  `\nStaged Chromium 1243 QA passed ${combined.pages.length} page/viewports in `
   + `${Math.round(combined.totalElapsedMs / 1_000)}s across ${phases.length} bounded stages.\n`,
 );

@@ -10,7 +10,7 @@ test("signs out through the CSRF-aware API client with pending and error states"
     source("app/api/auth/logout/route.ts"),
     source("components/app-shell.tsx"),
     source("app/globals.css"),
-    source("scripts/browser-qa-chromium-1228.cjs"),
+    source("scripts/browser-qa-chromium-1243.cjs"),
   ]);
   assert.match(route, /mutationIsTrusted\(request\)/);
   assert.match(route, /includes\("application\/json"\)[\s\S]+status: 204/);

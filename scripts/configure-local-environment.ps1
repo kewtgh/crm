@@ -129,23 +129,30 @@ $lines = @(
 $lines += $values.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
 [System.IO.File]::WriteAllLines($envPath, $lines, [System.Text.UTF8Encoding]::new($false))
 
-docker compose -f compose.postgres.yml up -d
-$deadline = (Get-Date).AddSeconds(60)
-do {
-  $health = docker inspect --format='{{.State.Health.Status}}' crm-postgres-1 2>$null
-  if ($health -eq 'healthy') { break }
-  Start-Sleep -Seconds 1
-} while ((Get-Date) -lt $deadline)
-if ($health -ne 'healthy') { throw 'The local PostgreSQL container did not become healthy.' }
+try {
+  docker compose -f compose.postgres.yml up -d
+  if ($LASTEXITCODE -ne 0) { throw "The local PostgreSQL container could not be started." }
+  $deadline = (Get-Date).AddSeconds(60)
+  do {
+    $health = docker inspect --format='{{.State.Health.Status}}' crm-postgres-1 2>$null
+    if ($health -eq 'healthy') { break }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $deadline)
+  if ($health -ne 'healthy') { throw 'The local PostgreSQL container did not become healthy.' }
 
-npm run db:bootstrap
-npm run db:migrate
-npm run auth:bootstrap-admin
-$values.Remove('ADMIN_PASSWORD')
-$lines = @(
-  '# Generated for the isolated Lumina CRM PostgreSQL stack. Existing and unknown keys are preserved.',
-  '# External integration URLs remain blank until a real local adapter is configured.'
-)
-$lines += $values.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
-[System.IO.File]::WriteAllLines($envPath, $lines, [System.Text.UTF8Encoding]::new($false))
+  npm run db:bootstrap
+  if ($LASTEXITCODE -ne 0) { throw "Database bootstrap failed." }
+  npm run db:migrate
+  if ($LASTEXITCODE -ne 0) { throw "Database migration failed." }
+  npm run auth:bootstrap-admin
+  if ($LASTEXITCODE -ne 0) { throw "Admin bootstrap failed." }
+} finally {
+  $values.Remove('ADMIN_PASSWORD')
+  $lines = @(
+    '# Generated for the isolated Lumina CRM PostgreSQL stack. Existing and unknown keys are preserved.',
+    '# External integration URLs remain blank until a real local adapter is configured.'
+  )
+  $lines += $values.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
+  [System.IO.File]::WriteAllLines($envPath, $lines, [System.Text.UTF8Encoding]::new($false))
+}
 Write-Output 'Configured the isolated PostgreSQL development environment without exposing secret values.'

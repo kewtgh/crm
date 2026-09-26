@@ -38,14 +38,14 @@ export function PrivacyRequestsWorkspace({ initial }: { initial: PageResult<Priv
     })));
   }, [locale, t]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setError("");
+    event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setError("");
     if (!contact) { setError(t("privacyRequests.contactRequired")); return; }
     setPending(true);
     try {
       const changes=requestType==="CORRECTION"?Object.fromEntries(["nameZh","nameEn","email","phone","title"].map(key=>[key,String(form.get(key)??"").trim()]).filter(([,value])=>value)):undefined;
       if(requestType==="CORRECTION"&&!Object.keys(changes??{}).length){setError(t("privacyRequests.correctionRequired"));setPending(false);return;}
       await apiFetch("/api/privacy-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "create", type: requestType, note: form.get("note"), contactId: contact,changes }) });
-      event.currentTarget.reset(); setContact("");setRequestType("ACCESS"); await reload(1); setToast(t("privacyRequests.created"));
+      formElement.reset(); setContact("");setRequestType("ACCESS"); await reload(1); setToast(t("privacyRequests.created"));
     } catch (caught) { setError(presentApiError(caught, t, "privacyRequests.failed").message); } finally { setPending(false); }
   };
   const availableStatuses = (item: PrivacyRequestRecord) => {

@@ -114,7 +114,7 @@ try {
     { ...process.env, AUTH_SMOKE_BASE_URL: appUrl },
   );
   assertServerRunning(server);
-  await npmStage("pinned Chromium 1228 UI QA", ["run", "qa:chromium-1228"], 480, 45);
+  await npmStage("pinned Chromium 1243 UI QA", ["run", "qa:chromium-1243"], 480, 45);
 } finally {
   stopProcessTree(server);
 }
@@ -122,5 +122,5 @@ try {
 process.stdout.write(
   `\nRelease gate passed in ${Math.round((Date.now() - gateStartedAt) / 1_000)}s: `
   + "types, lint, build, dependency audit, Node, PostgreSQL migrations/auth/RLS, smokes, "
-  + "production assets, and ms-playwright/chromium-1228 UI QA.\n",
+  + "production assets, and ms-playwright/chromium-1243 UI QA.\n",
 );

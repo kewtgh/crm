@@ -90,11 +90,11 @@ export function FinancePage({ initial }: { initial: FinanceOverview }) {
     }
   };
   const createQuote = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
+    event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement);
     if (!organization) { setError(t("finance.organizationRequired")); return; }
     if (!quoteProduct && !quoteBundle) { setError(t("finance.productOrBundleRequired")); return; }
     const ok = await execute({ operation: "createQuote", quote_no: form.get("number"), target_organization: organization, target_opportunity: null, target_product: quoteProduct || null, target_bundle: quoteBundle || null, target_exchange_rate: form.get("exchangeRate") || null, quote_currency: quoteCurrency, quote_subtotal: Number(form.get("subtotal")), quote_discount: Number(form.get("discount")), valid_through: form.get("validUntil"), terms_zh: form.get("termsZh"), terms_en: form.get("termsEn") });
-    if (ok) { setCreateOpen(false); setQuoteProduct(""); setQuoteBundle(""); setQuoteCurrency("CNY"); event.currentTarget.reset(); }
+    if (ok) { setCreateOpen(false); setQuoteProduct(""); setQuoteBundle(""); setQuoteCurrency("CNY"); formElement.reset(); }
   };
   const submitAction = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!action) return; const form = new FormData(event.currentTarget);
