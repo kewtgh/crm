@@ -11,6 +11,8 @@ import { useI18n } from "@/components/i18n-provider";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { TaskWorkspacePanel } from "@/components/task-workspace";
+import type { TaskWorkspace } from "@/lib/task-workspace-repository";
 
 type Duplicate = { nameZh: string; nameEn: string; reason: string };
 type RelatedResult = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" };
@@ -20,13 +22,13 @@ export function ModulePage({
   resource,
   initialTotal,
   initialMetrics,
-  workspacePanel,
+  taskWorkspace,
 }: {
   config: ModuleConfig;
   resource?: PersistentResource;
   initialTotal?: number;
   initialMetrics?: CrmMetrics;
-  workspacePanel?:React.ReactNode;
+  taskWorkspace?:TaskWorkspace;
 }) {
   const { locale, t } = useI18n();
   const searchParams=useSearchParams();
@@ -235,7 +237,7 @@ export function ModulePage({
       <span><b>{metrics.averageCompleteness}%</b><small>{t("modules.averageCompleteness")}</small></span>
       <button type="button" onClick={() => setSavedViewsOpen(true)}><SlidersHorizontal size={16}/>{t("modules.savedViews")}</button>
     </section>
-    {workspacePanel}
+    {taskWorkspace&&<TaskWorkspacePanel initial={taskWorkspace} refreshKey={refreshKey} onMutated={()=>setRefreshKey(value=>value+1)}/>}
     <DataTable
       config={config}
       resource={resource}

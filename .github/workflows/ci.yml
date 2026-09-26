@@ -66,13 +66,27 @@ jobs:
         run: npm audit --audit-level=moderate
 
   database:
-    name: Migration, schema lint, and pgTAP
+    name: PostgreSQL migrations and auth/RLS smoke
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       CI: true
       DO_NOT_TRACK: "1"
-      SUPABASE_TELEMETRY_DISABLED: "1"
+      DATABASE_ADMIN_URL: postgresql://postgres:lumina-local-admin-only@127.0.0.1:55432/lumina_crm
+      DATABASE_URL: postgresql://crm_app:local-app-password@127.0.0.1:55432/lumina_crm
+      SYSTEM_DATABASE_URL: postgresql://crm_system:local-system-password@127.0.0.1:55432/lumina_crm
+      WORKER_DATABASE_URL: postgresql://crm_worker:local-worker-password@127.0.0.1:55432/lumina_crm
+      MIGRATION_DATABASE_URL: postgresql://crm_migrator:local-migrator-password@127.0.0.1:55432/lumina_crm
+      CRM_APP_DB_PASSWORD: local-app-password
+      CRM_SYSTEM_DB_PASSWORD: local-system-password
+      CRM_WORKER_DB_PASSWORD: local-worker-password
+      CRM_MIGRATOR_DB_PASSWORD: local-migrator-password
+      CRM_BACKUP_DB_PASSWORD: local-backup-password
+      CRM_WORKSPACE_ID: 00000000-0000-4000-8000-000000000001
+      TOTP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      INVITATION_CREDENTIAL_ENCRYPTION_KEY: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      LOGIN_THROTTLE_HASH_SECRET: local-ci-login-throttle-hash-secret-2026
+      TRUSTED_DEVICE_HASH_SECRET: local-ci-trusted-device-hash-secret-2026
 
     steps:
       - name: Check out repository
@@ -93,17 +107,21 @@ jobs:
 
       - name: Start pinned local database stack
         timeout-minutes: 10
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+        run: docker compose -f compose.postgres.yml up -d --wait
 
-      - name: Lint the migrated schema
+      - name: Bootstrap least-privilege database roles
         timeout-minutes: 3
-        run: npx supabase db lint --local --level warning
+        run: npm run db:bootstrap
 
-      - name: Run pgTAP database contracts
-        timeout-minutes: 6
-        run: npx supabase test db --local
+      - name: Apply and verify PostgreSQL migrations
+        timeout-minutes: 4
+        run: npm run db:migrate && npm run db:migrations:verify
+
+      - name: Validate schema and auth/RLS behavior
+        timeout-minutes: 4
+        run: npm run db:validate && npm run db:smoke
 
       - name: Stop local database stack
         if: always()
         timeout-minutes: 3
-        run: npx supabase stop --no-backup
+        run: docker compose -f compose.postgres.yml down

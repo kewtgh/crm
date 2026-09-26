@@ -52,7 +52,7 @@ test("exposes organization settings behind admin AAL2 and trusted-origin checks"
     source("components/captcha-widget.tsx"),
     source("app/(auth)/login/page.tsx"),
     source("app/(auth)/forgot-password/page.tsx"),
-    source("scripts/browser-qa-chromium-1228.cjs"),
+    source("scripts/browser-qa-chromium-1243.cjs"),
     source("proxy.ts"),
   ]);
   assert.match(migration, /add column if not exists turnstile_enabled boolean not null default true/);

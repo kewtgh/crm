@@ -23,8 +23,28 @@ export class ApiClientError extends Error {
   }
 }
 
-async function payloadFrom(response: Response) {
-  return response.json().catch(() => ({})) as Promise<ApiFailurePayload>;
+function transportFailure(error: unknown, signal: AbortSignal): ApiClientError {
+  const reason = signal.aborted ? signal.reason : error;
+  const name = reason instanceof Error ? reason.name : "";
+  return new ApiClientError(name === "TimeoutError" ? "REQUEST_TIMEOUT" : signal.aborted || name === "AbortError" ? "REQUEST_ABORTED" : "NETWORK_ERROR", 0);
+}
+
+async function payloadFrom(response: Response, signal: AbortSignal) {
+  try { return await response.json() as ApiFailurePayload; }
+  catch (error) {
+    if (signal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) throw transportFailure(error, signal);
+    return {};
+  }
+}
+
+// A caller may stop waiting without cancelling the refresh shared by other calls.
+function waitForRefresh(promise: Promise<boolean>, signal: AbortSignal): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(transportFailure(signal.reason, signal));
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
 }
 
 const refreshSession = createSingleFlight(async () => {
@@ -54,31 +74,31 @@ export async function apiFetch<T>(
   timeoutMs = 15_000,
 ): Promise<T> {
   let response: Response;
+  const request = input instanceof Request ? input : undefined;
+  const method = (init.method ?? request?.method ?? "GET").toUpperCase();
+  const headers = new Headers(request?.headers);
+  new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  if (!headers.has("accept")) headers.set("accept", "application/json");
+  const signal = init.signal ?? request?.signal;
+  const attemptSignal = boundedSignal(signal, timeoutMs);
   try {
-    const method = (init.method ?? "GET").toUpperCase();
     const csrf = !["GET", "HEAD", "OPTIONS"].includes(method) ? csrfToken() : undefined;
-    response = await fetch(input, {
+    if (csrf) headers.set("x-csrf-token", csrf);
+    // Keep Request bodies available for the single authenticated retry below.
+    response = await fetch(request ? request.clone() : input, {
       ...init,
-      headers: {
-        accept: "application/json",
-        ...(csrf ? { "x-csrf-token": csrf } : {}),
-        ...init.headers,
-      },
-      signal: boundedSignal(init.signal, timeoutMs),
+      method,
+      headers,
+      signal: attemptSignal,
     });
   } catch (error) {
-    const code = error instanceof DOMException && error.name === "TimeoutError"
-      ? "REQUEST_TIMEOUT"
-      : error instanceof DOMException && error.name === "AbortError"
-        ? "REQUEST_ABORTED"
-        : "NETWORK_ERROR";
-    throw new ApiClientError(code, 0);
+    throw transportFailure(error, attemptSignal);
   }
 
   if (!response.ok) {
-    const payload = await payloadFrom(response);
+    const payload = await payloadFrom(response, attemptSignal);
     const code = payload.error?.code ?? payload.code ?? `HTTP_${response.status}`;
-    if (retry && response.status === 401 && code === "SESSION_REFRESH_REQUIRED" && await refreshSession()) {
+    if (retry && response.status === 401 && code === "SESSION_REFRESH_REQUIRED" && await waitForRefresh(refreshSession(), attemptSignal)) {
       return apiFetch<T>(input, init, false, timeoutMs);
     }
     throw new ApiClientError(
@@ -94,7 +114,8 @@ export async function apiFetch<T>(
   if (!contentType.includes("application/json")) throw new ApiClientError("INVALID_API_RESPONSE", 502);
   try {
     return await response.json() as T;
-  } catch {
+  } catch (error) {
+    if (attemptSignal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) throw transportFailure(error, attemptSignal);
     throw new ApiClientError(
       "INVALID_API_RESPONSE",
       502,

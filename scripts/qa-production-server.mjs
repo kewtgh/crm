@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const action = process.argv[2];
-const evidenceDirectory = path.resolve("work/browser-qa-chromium-1228");
+const evidenceDirectory = path.resolve("work/browser-qa-chromium-1243");
 const pidFile = path.join(evidenceDirectory, "server.pid");
 const stdoutFile = path.join(evidenceDirectory, "server.stdout.log");
 const stderrFile = path.join(evidenceDirectory, "server.stderr.log");

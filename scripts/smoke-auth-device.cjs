@@ -5,7 +5,7 @@ const http = require("node:http");
 const pg = require("pg");
 const argon2 = require("argon2");
 
-const executable = process.env.PLAYWRIGHT_CHROMIUM_1228_PATH
+const executable = process.env.PLAYWRIGHT_CHROMIUM_1243_PATH
   || "<workspace>";
 const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || "playwright-core");
 const base = (process.env.AUTH_SMOKE_BASE_URL || process.env.APP_URL || "http://localhost:3200").replace(/\/$/, "");

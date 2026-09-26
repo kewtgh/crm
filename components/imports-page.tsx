@@ -11,18 +11,13 @@ import { useUserPreferences } from "@/components/user-preferences-context";
 import { CsvParseError, parseCsvDocument } from "@/lib/csv";
 import { parseXlsxDocument } from "@/lib/xlsx";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { importFields, importFieldsByResource as targetFieldsByResource } from "@/lib/import-fields";
 import {
   IMPORT_EXECUTION_BATCH_SIZE,
   importExecutionPassLimit,
   isImportExecutionTerminal,
 } from "@/lib/import-execution";
 
-const targetFieldsByResource={
-  CONTACTS:["nameZh","nameEn","email","phone","title"],
-  ORGANIZATIONS:["nameZh","nameEn","city","curriculum","courseCategories","affiliationType","parentOrganizationId","website","foundedYear","studentCount","facultyCount","campusCount","organizationOverviewMarkdown","structureOverviewMarkdown"],
-  HOUSEHOLDS:["nameZh","nameEn","address","primaryParentOccupation","secondaryParentOccupation","annualIncomeAmount","incomeCurrency","preferredContactMethod","preferredLanguage","educationExpectationsMarkdown","familyBackgroundMarkdown"],
-  STUDENTS:["nameZh","nameEn","personId","householdId","studentNumber","birthDate","currentGrade","currentClass","academicYear","interests","preferredLearningStyle","personalityMarkdown","learningExpectationsMarkdown","strengthsMarkdown","supportNeedsMarkdown"],
-} as const;
 type RelatedSearchItem={value:string;labelZh:string;labelEn:string;type:string};
 
 async function hashFile(file: File) {
@@ -49,6 +44,7 @@ export function ImportsPage({
   const [resource, setResource] = useState<keyof typeof targetFieldsByResource>("CONTACTS");
   const targetFields=targetFieldsByResource[resource] as readonly string[];
   const [fileName, setFileName] = useState("");
+  const [fileLoading, setFileLoading] = useState(false);
   const [fileHash, setFileHash] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<Array<Record<string, string>>>([]);
@@ -85,9 +81,11 @@ export function ImportsPage({
   const [mergeOptions,setMergeOptions]=useState<Array<{value:string;label:string;detail?:string}>>([]);
   const [rollbackOpen,setRollbackOpen]=useState(false);
   const [repairRow,setRepairRow]=useState<ImportRowRecord|null>(null);
+  const [repairFields,setRepairFields]=useState<readonly string[]>([]);
   const runMergeSearch=useRemoteSearch();
   const runBatchLoad=useRemoteSearch();
   const runRowLoad=useRemoteSearch();
+  const runFileLoad=useRemoteSearch();
 
   useEffect(()=>{
     if(duplicatesOnly)return;
@@ -105,7 +103,13 @@ export function ImportsPage({
   const headerOptions = [{ value: "", label: t("imports.ignore") }, ...headers.map((header) => ({ value: header, label: header }))];
 
   const loadBatches = async (nextPage = page, nextPageSize = pageSize) => {
-    const request=await runBatchLoad(signal=>apiFetch<{ items: ImportBatchRecord[]; total?: number }>(`/api/imports?page=${nextPage}&pageSize=${nextPageSize}`,{signal}));
+    const request=await runBatchLoad(async signal=>{
+      const fetchPage=(value:number)=>apiFetch<{items:ImportBatchRecord[];total?:number}>(`/api/imports?page=${value}&pageSize=${nextPageSize}`,{signal});
+      let result=await fetchPage(nextPage);
+      const validPage=Math.min(nextPage,Math.max(1,Math.ceil((result.total??0)/nextPageSize)));
+      if(validPage!==nextPage)result=await fetchPage(validPage);
+      return {...result,page:validPage};
+    });
     if(!request.current)return;
     if("error" in request){
       setError(t("imports.loadFailed"));
@@ -114,39 +118,52 @@ export function ImportsPage({
     setError("");
     setBatches(request.value.items);
     setTotal(request.value.total ?? 0);
+    setPage(request.value.page);setPageSize(nextPageSize);
   };
 
   const open = async (id: string, nextRowPage = 1, nextRowPageSize = rowPageSize) => {
     setSelected(id);
-    setRows([]);
-    setRowTotal(0);
+    if(id!==selected){setRows([]);setRowTotal(0);}
     setDryRun(null);
-    const request=await runRowLoad(signal=>Promise.all([
-      apiFetch<{ items: ImportRowRecord[]; total?: number }>(`/api/imports?batch=${id}&rowPage=${nextRowPage}&rowPageSize=${nextRowPageSize}`,{signal}),
-      apiFetch<{ summary: NonNullable<typeof dryRun> }>(`/api/imports/${id}/dry-run`,{signal}),
-    ]));
+    const request=await runRowLoad(async signal=>{
+      const fetchPage=(value:number)=>apiFetch<{items:ImportRowRecord[];total?:number}>(`/api/imports?batch=${id}&rowPage=${value}&rowPageSize=${nextRowPageSize}`,{signal});
+      const [firstResult,dryRunResult]=await Promise.all([fetchPage(nextRowPage),apiFetch<{summary:NonNullable<typeof dryRun>}>(`/api/imports/${id}/dry-run`,{signal})]);
+      let result=firstResult;
+      const validPage=Math.min(nextRowPage,Math.max(1,Math.ceil((result.total??0)/nextRowPageSize)));
+      if(validPage!==nextRowPage)result=await fetchPage(validPage);
+      return {result,dryRunResult,page:validPage};
+    });
     if(!request.current)return;
     if("error" in request){
       setError(t("imports.loadFailed"));
       setDryRun(null);
       return;
     }
-    const [result,dryRunResult]=request.value;
+    const {result,dryRunResult}=request.value;
     setError("");
     setRows(result.items);
     setRowTotal(result.total ?? 0);
-    setRowPage(nextRowPage);
+    setRowPage(request.value.page);setRowPageSize(nextRowPageSize);
     setDryRun(dryRunResult.summary);
   };
 
   const chooseFile = async (file: File) => {
     setError("");
-    try {
+    setFileName("");setFileHash("");setHeaders([]);setRawRows([]);setMapping({});setMappingProfileId("");
+    setFileLoading(true);
+    const request=await runFileLoad(async()=>{
+      if(file.size>10*1024*1024)throw new Error("IMPORT_FILE_TOO_LARGE");
       const parsed = file.name.toLowerCase().endsWith(".xlsx")
         ? await parseXlsxDocument(file,10_000)
         : parseCsvDocument(await file.text(),10_000);
+      return {parsed,hash:await hashFile(file)};
+    });
+    if(!request.current)return;
+    setFileLoading(false);
+    if("value" in request){
+      const {parsed,hash}=request.value;
       setFileName(file.name);
-      setFileHash(await hashFile(file));
+      setFileHash(hash);
       setHeaders(parsed.headers);
       setRawRows(parsed.rows);
       const automatic: Record<string, string> = {};
@@ -155,18 +172,22 @@ export function ImportsPage({
         if (match) automatic[field] = match;
       }
       setMapping(automatic);
-    } catch(caught) {
+    } else {
+      const caught=request.error;
       const key=caught instanceof CsvParseError
         ?caught.code==="TOO_MANY_ROWS"?"imports.tooManyRows"
           :caught.code==="UNCLOSED_QUOTE"?"imports.unclosedQuote"
             :caught.code==="DUPLICATE_HEADER"?"imports.duplicateHeader"
+              :caught.code==="COLUMN_COUNT"?"imports.columnCount"
+                :caught.code==="INVALID_QUOTE"?"imports.invalidQuote"
               :"imports.parseFailed"
-        :"imports.parseFailed";
-      setError(t(key));
+        :caught instanceof Error&&caught.message==="IMPORT_FILE_TOO_LARGE"?"imports.fileTooLarge":"imports.parseFailed";
+      setError(t(key,{row:caught instanceof CsvParseError?caught.row??1:1}));
     }
   };
 
   const createBatch = async () => {
+    if(fileLoading||pending)return;
     if (!rawRows.length || !mapping.nameZh || !mapping.nameEn) {
       setError(t("imports.mappingRequired"));
       return;
@@ -181,7 +202,6 @@ export function ImportsPage({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ operation: "create", resource, filename: fileName, content_hash: hash, request_key: `${resource}:${hash}`, mapping, rows: normalized }),
       });
-      setPage(1);
       await loadBatches(1);
       await open(result.item.id);
       setToast(t("imports.validated"));
@@ -226,9 +246,9 @@ export function ImportsPage({
     await loadBatches();
   };
   const repair = async (event:React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();if(!repairRow)return;
+    event.preventDefault();if(!repairRow||!repairFields.length||pending)return;
     const form=new FormData(event.currentTarget);
-    const replacement=Object.fromEntries(targetFields.map(field=>[field,String(form.get(field)??"")]));
+    const replacement=Object.fromEntries(repairFields.map(field=>[field,String(form.get(field)??"")]));
     setPending(true);setError("");
     try{
       await apiFetch("/api/imports",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"repair",target_row:repairRow.id,replacement})});
@@ -393,9 +413,10 @@ export function ImportsPage({
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
       <div className="import-template-actions"><a className="secondary-button" href={`/api/imports/template?resource=${resource}`}><Download size={16}/>{t("imports.downloadTemplate")}</a><small>{t("imports.templateHelp")}</small></div>
       <div className="form-grid two-column">
-        <label className="field"><span>{t("imports.resource")}</span><select value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option></select></label>
-        <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => event.target.files?.[0] && void chooseFile(event.target.files[0])}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
+        <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option></select></label>
+        <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
       </div>
+      {fileLoading&&<InlineMessage type="info">{t("imports.readingFile")}</InlineMessage>}
       {headers.length > 0 && <>
         <div className="form-grid three-column import-mapping-profiles">
           <label className="field"><span>{t("imports.mappingProfile")}</span><select value={mappingProfileId} onChange={event=>applyMappingProfile(event.target.value)}><option value="">{t("imports.mappingNone")}</option>{mappingProfiles.filter(item=>item.resource===resource).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -406,7 +427,7 @@ export function ImportsPage({
           {targetFields.map((field) => <SearchableSelect key={field} label={`${t(`imports.field.${field}`)}${["nameZh", "nameEn"].includes(field) ? " *" : ""}`} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
-        <button className="primary-button" type="button" disabled={pending} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>
+        <button className="primary-button" type="button" disabled={pending||fileLoading} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>
       </>}
       {error && <InlineMessage type="error">{error}</InlineMessage>}
     </section>}
@@ -419,7 +440,7 @@ export function ImportsPage({
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}
-        <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); void loadBatches(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);void loadBatches(1,value);}} />
+        <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => void loadBatches(next)} onPageSize={(value)=>void loadBatches(1,value)} />
       </div>
 
       <div className="surface import-rows">
@@ -435,10 +456,10 @@ export function ImportsPage({
             {row.lastError && <small className="error-text">{row.lastError}</small>}
           </div>
           <StatusBadge tone={row.status === "APPLIED" ? "green" : row.status === "INVALID" || row.status === "FAILED" ? "red" : row.status === "DUPLICATE" ? "amber" : "blue"}>{t(`imports.rowStatus.${row.status.toLowerCase()}`)}</StatusBadge>
-          {(row.status === "INVALID" || row.status === "FAILED") && <button className="secondary-button" type="button" onClick={()=>{setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
+          {(row.status === "INVALID" || row.status === "FAILED") && <button className="secondary-button" type="button" disabled={!current||!importFields(current.resourceType).length} onClick={()=>{setRepairFields(importFields(current?.resourceType??""));setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
           {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {row.reasons.join(", ")}</small>{["CREATE", "UPDATE", "MERGE", "SKIP"].map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
         </article>)}
-        {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} onPageSize={(value)=>{setRowPageSize(value);void open(selected,1,value);}} />}
+        {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} onPageSize={(value)=>void open(selected,1,value)} />}
         {current && !rows.length && <div className="empty-state"><span>{t("imports.noRows")}</span></div>}
         {current && <div className="import-actions">
           {["READY", "PROCESSING", "PARTIAL_FAILED"].includes(current.status) && !visibleDuplicateRows.length && <button className="primary-button" disabled={pending} onClick={() => void process()}><Play size={16} />{t("imports.execute")}</button>}
@@ -447,7 +468,7 @@ export function ImportsPage({
         {error && <InlineMessage type="error">{error}</InlineMessage>}
       </div>
     </section>
-    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{targetFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span><input name={field} defaultValue={repairRow.normalized[field]??""} required={field==="nameZh"||field==="nameEn"}/></label>)}</div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
+    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span><input name={field} defaultValue={repairRow.normalized[field]??""} required={field==="nameZh"||field==="nameEn"}/></label>)}</div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
     {rollbackOpen&&current&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("common.actionCannotUndo")} onClose={()=>setRollbackOpen(false)}><InlineMessage type="warning">{t("imports.rollbackConfirm",{count:current.applied})}</InlineMessage><div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRollbackOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void rollback()}>{pending?t("common.processing"):t("imports.rollback")}</button></div></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;

@@ -1,10 +1,20 @@
 # Lumina CRM
 
-Current release candidate: **v3.9.4**
+Current release candidate: **v3.10.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.10 adds a dedicated notification center with same-page synchronization, manual refresh,
+and task-detail links, plus priority-task filters and row-specific import diagnostics. It hardens
+notification mutations, asynchronous forms, user-isolated saved views, CSV/XLSX validation,
+historical import repair, pagination failure handling, and API cancellation/session-refresh behavior.
+QA now pins Playwright Core 1.63.0 and Chromium 1243; CI uses the repository PostgreSQL workflow,
+and a forward migration validates the nine communication-delivery constraints. The two audit
+reports and implementation records are in [round one](docs/AUDIT_2026-09-26.md) and
+[round two](docs/AUDIT_2026-09-26_ROUND2.md). Their local QA evidence predates this version-only bump;
+production deployment and the complete release matrix have not been run for this release.
 
 Version 3.8 closes the shared-host isolation gap by moving every Lumina controller, Compose task,
 builder and maintenance command to a dedicated rootless Docker user service. Deployment gates
@@ -174,7 +184,7 @@ npm run test:deploy
 npm run build
 ```
 
-The repository also includes the pinned `ms-playwright/chromium-1228` browser workflow. Run only the
+The repository also includes the pinned `ms-playwright/chromium-1243` browser workflow. Run only the
 phase relevant to a scoped change, or the staged matrix when preparing an authorized release.
 
 On a new Linux VPS, first run the explicit persistent initialization mode. It adds repeat-safe

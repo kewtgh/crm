@@ -6,11 +6,11 @@ const {spawnSync}=require("node:child_process");
 const pg=require("pg");
 const argon2=require("argon2");
 
-const executable=process.env.PLAYWRIGHT_CHROMIUM_1228_PATH||"<workspace>";
+const executable=process.env.PLAYWRIGHT_CHROMIUM_1243_PATH||"<workspace>";
 const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
 const {chromium}=require(playwrightPath);
 const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://localhost:3200").replace(/\/$/,"");
-const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1228");
+const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1243");
 fs.mkdirSync(output,{recursive:true});
 
 function commandValue(command,args){const result=spawnSync(command,args,{encoding:"utf8",timeout:10_000});return result.status===0?result.stdout.trim():"unavailable";}
@@ -50,7 +50,7 @@ async function qaQuery(text,values=[]){
 }
 const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
 const actionTimeoutMs=12_000;
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1228",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1243",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -158,7 +158,7 @@ async function inspect(page,label,route,viewport){
 async function createIdentity(role,label){
   if(!env.SYSTEM_DATABASE_URL)throw new Error("Local PostgreSQL QA variables are missing");
   const suffix=Date.now().toString(36);
-  const email=`chromium-1228-${label}-${suffix}@example.invalid`;
+  const email=`chromium-1243-${label}-${suffix}@example.invalid`;
   const password=`Qa!${crypto.randomBytes(18).toString("base64url")}A1`;
   const created={id:crypto.randomUUID()};
   const username=`qa.${label}.${suffix}`;
@@ -352,7 +352,7 @@ async function exerciseV210Workflows(page,scenario){
   process.stdout.write("Chromium v2.1 workflow interactions passed.\n");
 }
 async function main(){
-  if(!fs.existsSync(executable))throw new Error(`Required ms-playwright/chromium-1228 executable is missing: ${executable}`);
+  if(!fs.existsSync(executable))throw new Error(`Required ms-playwright/chromium-1243 executable is missing: ${executable}`);
   const browser=await chromium.launch({headless:true,executablePath:executable,args:["--disable-gpu"]});
   report.browserVersion=browser.version();
   const identities=[];
@@ -410,6 +410,35 @@ async function main(){
         await inspect(page,`${label}-1440`,route,{width:1440,height:900});
         if(tablet.has(route))await inspect(page,`${label}-1024`,route,{width:1024,height:768});
         if(mobile.has(route))await inspect(page,`${label}-375`,route,{width:375,height:812});
+      }
+      if(routes.includes("/tasks")){
+        await page.goto(`${base}/tasks`,{waitUntil:"networkidle"});
+        const mineFilter=page.getByRole("button",{name:"我的任务"});
+        await mineFilter.click();
+        if(await mineFilter.getAttribute("aria-pressed")!=="true")report.errors.push({kind:"task-filter",url:"/tasks",message:"My tasks filter did not activate"});
+      }
+      if(routes.includes("/imports")){
+        await page.goto(`${base}/imports`,{waitUntil:"networkidle"});
+        if(env.QA_LABEL==="audit-final"){
+          await page.locator('#import-source-file').setInputFiles({name:"valid-rows.csv",mimeType:"text/csv",buffer:Buffer.from("nameZh,nameEn\n测试,Test\n")});
+          await page.waitForFunction(()=>Boolean(document.querySelector(".mapping-grid")),null,{timeout:5_000});
+        }
+        await page.locator('#import-source-file').setInputFiles({name:"bad-rows.csv",mimeType:"text/csv",buffer:Buffer.from("nameZh,nameEn\n测试,Test,unexpected\n")});
+        const errorVisible=await page.waitForFunction(()=>document.querySelector(".import-create")?.textContent?.includes("第 2 行的数据列与表头不符"),null,{timeout:5_000}).then(()=>true).catch(()=>false);
+        if(!errorVisible){
+          const detail=await page.locator(".import-create").innerText().catch(()=>"unavailable");
+          await page.screenshot({path:path.join(output,"imports-malformed-upload.png"),fullPage:true});
+          report.errors.push({kind:"import-preflight",url:"/imports",message:`Malformed CSV did not show a row-specific error: ${detail.slice(0,500)}`});
+        }
+        if(env.QA_LABEL==="audit-final"&&await page.locator(".mapping-grid").count())throw new Error("Invalid file retained the previous import mapping");
+      }
+      if(env.QA_LABEL==="audit-final"){
+        await require("./lib/audit-2026-09-26-browser.cjs")({page,context,identity,base,workspaceId:env.CRM_WORKSPACE_ID,query:qaQuery});
+        report.interactions=["task-table-sync","team-view-save-and-reload","invalid-notification-selection","notification-last-page-recovery","valid-then-invalid-import"];
+      }
+      if(env.QA_LABEL==="audit-round2"){
+        await require("./lib/audit-2026-09-26-round2-browser.cjs")({page,identity,base,workspaceId:env.CRM_WORKSPACE_ID,query:qaQuery,output});
+        report.interactions=["notification-entry-points","notification-task-detail","notification-refresh","notification-cross-surface-sync","notification-submit-guard","historical-student-repair","import-pagination-failure"];
       }
       if(role==="SUPER_ADMIN"&&routes.includes("/admin/users")){
         await page.setViewportSize({width:1440,height:900});
@@ -717,6 +746,9 @@ async function main(){
     await inspect(supportPage,"support-leads-1440","/leads",{width:1440,height:900});
     await supportContext.close();
     }
+  }catch(error){
+    report.errors.push({kind:"execution",url:"",message:String(error instanceof Error?error.message:error).slice(0,1000)});
+    throw error;
   }finally{
     for(const identity of identities){
       try{
@@ -733,7 +765,7 @@ async function main(){
     report.durationMs=Date.now()-Date.parse(report.runAt);
     fs.writeFileSync(path.join(output,"report.json"),JSON.stringify(report,null,2));
   }
-  if(report.errors.length)throw new Error(`Chromium 1228 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);
-  process.stdout.write(`Chromium 1228 QA passed ${report.pages.length} page/viewport checks with ${report.browserVersion}.\n`);
+  if(report.errors.length)throw new Error(`Chromium 1243 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);
+  process.stdout.write(`Chromium 1243 QA passed ${report.pages.length} page/viewport checks with ${report.browserVersion}.\n`);
 }
 main().catch(error=>{console.error(error.stack||error.message);process.exitCode=1;});

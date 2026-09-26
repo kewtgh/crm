@@ -114,14 +114,14 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
   };
   const addAcademic = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!detail) return;
-    const form = new FormData(event.currentTarget); setPending(true); setError("");
+    const formElement = event.currentTarget; const form = new FormData(formElement); setPending(true); setError("");
     try {
       await apiFetch("/api/education", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         operation: "addAcademic", studentId: detail.id, schoolId: school || null,
         curriculum: form.get("curriculum"), grade: form.get("grade"), academicYear: form.get("academicYear"),
         validFrom: form.get("validFrom"), validTo: form.get("validTo") || null, status: form.get("status"),
       }) });
-      event.currentTarget.reset(); setSchool(""); await openDetail(detail); setToast(t("education.academicAdded"));
+      formElement.reset(); setSchool(""); await openDetail(detail); setToast(t("education.academicAdded"));
     } catch (caught) { setError(presentApiError(caught, t, "education.saveFailed").message); } finally { setPending(false); }
   };
   const saveGuardian = async (event:React.FormEvent<HTMLFormElement>) => {

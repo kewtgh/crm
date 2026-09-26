@@ -238,7 +238,8 @@ function SecuritySettings() {
   const changePassword = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPasswordError(""); setPasswordSuccess("");
-    const data = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const data = new FormData(formElement);
     const newPassword = String(data.get("newPassword") ?? "");
     if (!passwordValueSchema.safeParse(newPassword).success) {
       setPasswordError(t("settings.passwordRule"));
@@ -261,7 +262,7 @@ function SecuritySettings() {
         return;
       }
       setPasswordSuccess(t("settings.passwordSaved"));
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (cause) {
       const code=cause instanceof ApiClientError?cause.code:"PASSWORD_UPDATE_FAILED";
       const errorKeys:Record<string,string>={CURRENT_PASSWORD_INCORRECT:"settings.currentPasswordIncorrect",AUTH_RATE_LIMITED:"settings.passwordRateLimited",AUTH_UNAVAILABLE:"settings.passwordServiceUnavailable",DATABASE_UNAVAILABLE:"settings.passwordServiceUnavailable",UPSTREAM_TIMEOUT:"settings.passwordServiceUnavailable",SAME_PASSWORD:"settings.passwordSame",WEAK_PASSWORD:"settings.passwordRule",INVALID_PASSWORD:"settings.passwordRule",REAUTHENTICATION_NEEDED:"settings.passwordReauthentication"};

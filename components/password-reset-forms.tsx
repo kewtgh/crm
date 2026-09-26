@@ -91,7 +91,8 @@ export function NewPasswordForm() {
     event.preventDefault();
     if (submissionInFlight.current || success) return;
     setError(""); setSuccess("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const password = String(form.get("password") ?? "");
     const confirmPassword = String(form.get("confirmPassword") ?? "");
     if (!passwordValueSchema.safeParse(password).success) {
@@ -112,7 +113,7 @@ export function NewPasswordForm() {
       completed=true;
       setSuccess(t("auth.reset.updated"));
       setResetToken("");
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (caught) {
       setError(t(isTimeoutError(caught) ? "auth.error.timeout" : "auth.reset.unavailable"));
     } finally {

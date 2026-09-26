@@ -1,0 +1,43 @@
+import type { Messages } from "../types";
+
+export const zhAudit20260926:Messages={
+  "notifications.refresh":"刷新通知",
+  "notifications.loading":"正在加载通知…",
+  "imports.loadFailed":"导入数据加载失败，请重试。已加载的分页状态保持不变。",
+  "meta.messages":"沟通收件箱",
+  "meta.messages.description":"查看联系人沟通会话、投递状态与失败原因。",
+  "notifications.description":"查看未读提醒，打开相关业务记录，或将单条提醒标为已读。",
+  "imports.readingFile":"正在读取并校验文件…",
+  "imports.fileTooLarge":"文件超过 10 MB，请拆分后重试。",
+  "imports.columnCount":"第 {row} 行的数据列与表头不符。CSV 请检查分隔符和引号，XLSX 请为非空数据列补齐表头。",
+  "imports.invalidQuote":"第 {row} 行的引号位置无效，请按 CSV 格式成对引用字段。",
+  "tasks.queueScope":"以下指标与筛选仅基于当前可访问的前 {count} 条优先任务；完整任务请查看下方列表。",
+  "tasks.filterLabel":"优先任务筛选",
+  "tasks.filter.all":"全部",
+  "tasks.filter.mine":"我的任务",
+  "tasks.filter.overdue":"已逾期",
+  "tasks.filter.sla":"SLA 超时",
+  "tasks.noFilterResults":"当前筛选没有任务。",
+  "tasks.refreshFailed":"任务已更新，但工作队列刷新失败；请重新加载页面确认最新状态。",
+};
+
+export const enAudit20260926:Messages={
+  "notifications.refresh":"Refresh notifications",
+  "notifications.loading":"Loading notifications…",
+  "imports.loadFailed":"Import data could not load. Try again; the confirmed pagination state is unchanged.",
+  "meta.messages":"Communications inbox",
+  "meta.messages.description":"Review contact conversations, delivery states, and failure reasons.",
+  "notifications.description":"Review unread alerts, open related records, or mark an alert as read.",
+  "imports.readingFile":"Reading and validating the file…",
+  "imports.fileTooLarge":"This file exceeds 10 MB. Split it and try again.",
+  "imports.columnCount":"Row {row} does not match the header columns. Check CSV delimiters and quotes, or add XLSX headers for all populated columns.",
+  "imports.invalidQuote":"Row {row} contains an invalid quote. Quote CSV fields in matching pairs.",
+  "tasks.queueScope":"These counts and filters cover the first {count} accessible priority tasks. See the full task list below.",
+  "tasks.filterLabel":"Priority task filters",
+  "tasks.filter.all":"All",
+  "tasks.filter.mine":"Mine",
+  "tasks.filter.overdue":"Overdue",
+  "tasks.filter.sla":"SLA breached",
+  "tasks.noFilterResults":"No tasks match this filter.",
+  "tasks.refreshFailed":"The task changed, but the work queue could not refresh. Reload the page to confirm its latest state.",
+};
