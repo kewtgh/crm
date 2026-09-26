@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { importFieldsByResource } from "../lib/import-fields.ts";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -77,7 +78,20 @@ test("provides rich templates plus repair and rollback for every import resource
   ]);
   assert.match(template, /HOUSEHOLDS:\["nameZh"/);
   assert.match(template, /STUDENTS:\["nameZh"/);
-  assert.match(imports, /ORGANIZATIONS:\["nameZh"[\s\S]*organizationOverviewMarkdown/);
+  assert.match(imports, /importFieldsByResource as targetFieldsByResource/);
+  assert.match(imports, /from "@\/lib\/import-fields"/);
+  assert.match(imports, /targetFields=targetFieldsByResource\[resource\]/);
+  for (const [resource, requiredFields] of Object.entries({
+    CONTACTS: ["email", "phone"],
+    ORGANIZATIONS: ["organizationOverviewMarkdown", "structureOverviewMarkdown"],
+    HOUSEHOLDS: ["annualIncomeAmount", "familyBackgroundMarkdown"],
+    STUDENTS: ["studentNumber", "personalityMarkdown"],
+  })) {
+    const fields = importFieldsByResource[resource];
+    for (const field of ["nameZh", "nameEn", ...requiredFields]) {
+      assert.ok(fields.includes(field), `${resource} import fields must include ${field}`);
+    }
+  }
   assert.match(migration, /function public\.repair_import_row/);
   assert.match(migration, /function public\.rollback_import_batch/);
   assert.match(repository, /"HOUSEHOLDS"\|"STUDENTS"/);
