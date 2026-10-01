@@ -1,0 +1,102 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const {build}=require("esbuild");
+
+module.exports=async function runStructuredInputQa({browser,base,output,report,observe}){
+  const context=await browser.newContext({locale:"zh-CN",bypassCSP:true});
+  try{
+    const page=await context.newPage();observe(page);page.setDefaultTimeout(5_000);
+    const health=await page.goto(`${base}/api/health`,{waitUntil:"domcontentloaded"});
+    assert.ok(health?.ok(),"Start the validated production build before component QA");
+    assert.equal((await health.json()).version,report.evidence.appVersion);
+    const assets=path.resolve("dist/client/_next/static");
+    const styles=fs.readdirSync(assets).filter(file=>file.endsWith(".css"));
+    assert.ok(styles.length,"Production CSS must exist");
+    const bundle=await build({entryPoints:["tests/fixtures/structured-inputs-qa.tsx"],bundle:true,write:false,format:"iife",platform:"browser",jsx:"automatic",target:"chrome145",define:{"process.env.NODE_ENV":'"production"'},logLevel:"silent"});
+    await page.setContent('<!doctype html><html lang="zh-CN"><head><title>Structured editing QA</title></head><body><div id="root"></div></body></html>');
+    for(const file of styles)await page.addStyleTag({url:`${base}/_next/static/${encodeURIComponent(file)}`});
+    await page.addScriptTag({content:bundle.outputFiles[0].text});
+    for(const viewport of [{width:1440,height:900},{width:768,height:1024},{width:375,height:812}]){
+      process.stdout.write(`[QA forms] ${viewport.width}px centered editor\n`);
+      await page.setViewportSize(viewport);
+      await page.locator("#open-editor").click();
+      const dialog=page.getByRole("dialog");await dialog.waitFor();
+      const geometry=await dialog.evaluate(element=>{const r=element.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,centerX:r.x+r.width/2,centerY:r.y+r.height/2,focused:element.contains(document.activeElement)};});
+      assert.ok(Math.abs(geometry.centerX-viewport.width/2)<2,"editor must be horizontally centered");
+      assert.ok(Math.abs(geometry.centerY-viewport.height/2)<2,"editor must be vertically centered");
+      assert.ok(geometry.width<=viewport.width&&geometry.height<viewport.height);
+      assert.ok(geometry.scrollWidth<=geometry.clientWidth+1,"editor must not overflow horizontally");
+      if(viewport.width===1440)assert.ok(geometry.width>=900,"desktop editing area must be wider");
+      assert.ok(await page.locator('#editor-form input[name="nameZh"]').evaluate(element=>!element.validity.valid),"both empty names must be invalid");
+      await page.locator('input[name="nameEn"]').fill("English only");
+      assert.ok(await page.locator('input[name="nameZh"]').evaluate(element=>element.validity.valid));
+      assert.equal(await dialog.locator(".name-pair-hint").textContent(),"* 中文名和英文名至少填写一项；未填写的语言将使用已有名称。 (必填)");
+      const amount=dialog.locator('[data-money-input="amount"]');
+      assert.equal(await amount.inputValue(),"1,234.50");
+      await amount.focus();assert.equal(await amount.inputValue(),"1234.50");
+      await amount.fill("1,234.56");await page.locator('input[name="nameEn"]').focus();
+      assert.equal(await amount.inputValue(),"1,234.56");
+      assert.ok(await amount.evaluate(element=>getComputedStyle(element.closest("label").firstElementChild,"::after").content.includes("*")),"required money input must show a mark");
+      await amount.fill("1.234");await page.locator('input[name="nameEn"]').focus();
+      assert.ok(await amount.evaluate(element=>!element.validity.valid));
+      await amount.fill("1234.56");await page.locator('input[name="nameEn"]').focus();
+      assert.ok(await dialog.locator('[data-money-input="discount"]').evaluate(element=>element.validity.valid),"zero discount must be valid");
+      await dialog.locator('select[name="currency"]').selectOption("TWD");
+      assert.ok(await dialog.locator('select[name="currency"] option').count()>100);
+      const date=dialog.locator('input[name="date"]');
+      assert.equal(await date.getAttribute("type"),"date");
+      // Verify the explicit opener delegates to the native calendar API without
+      // capturing platform-owned picker UI (not inspectable via the DOM).
+      await date.evaluate(element=>{element.showPicker=()=>{element.dataset.pickerOpened="true";};});
+      await date.locator("..").getByRole("button").click();
+      assert.equal(await date.getAttribute("data-picker-opened"),"true");
+      await date.fill("2026-10-02");
+      assert.equal(await dialog.locator('input[name="datetime"]').getAttribute("type"),"datetime-local");
+      assert.equal(await dialog.locator('input[name="time"]').getAttribute("type"),"time");
+      assert.equal(await dialog.locator('select[name="year"]').inputValue(),"1890");
+      assert.equal(await dialog.locator('input[name="language"]').inputValue(),"legacy-language");
+      assert.equal(await dialog.locator('input[name="birthDate"]').inputValue(),"not-a-date","invalid source dates must not be silently erased");
+      await dialog.getByRole("button",{name:"清空日期",exact:true}).click();
+      assert.equal(await dialog.locator('input[name="birthDate"]').inputValue(),"");
+      await dialog.locator('label:has(input[name="birthDate"]) input[type="date"]').fill("2020-05-10");
+      const importedAmount=dialog.locator('[data-money-input="annualIncomeAmount"]');
+      assert.equal(await importedAmount.inputValue(),"1,000.25");
+      await importedAmount.focus();assert.equal(await importedAmount.inputValue(),"1000.25");
+      await importedAmount.fill("2,000.50");
+      const tag=dialog.locator(".tag-entry input");await tag.fill("AP, 新标签");await tag.press("Enter");
+      assert.equal(await dialog.locator('input[name="tags"]').inputValue(),"IB, AP, 新标签");
+      await dialog.getByRole("button",{name:"移除标签: IB",exact:true}).click();
+      await tag.fill("尚未点击添加");
+      assert.equal(await dialog.locator('input[name="tags"]').inputValue(),"AP, 新标签, 尚未点击添加");
+      const installment=dialog.locator(".installment-row");
+      await installment.locator('input[type="date"]').fill("2026-10-03");
+      await installment.locator("[data-money-input]").fill("100.25");
+      await dialog.getByRole("button",{name:"添加一期",exact:true}).click();
+      await installment.nth(1).locator('input[type="date"]').fill("2026-11-03");
+      await installment.nth(1).locator("[data-money-input]").fill("200.50");
+      const invalidFields=await dialog.locator("form").evaluate(form=>Array.from(form.elements).filter(element=>element.willValidate&&!element.validity.valid).map(element=>({name:element.name,type:element.type,value:element.value,message:element.validationMessage})));
+      assert.deepEqual(invalidFields,[],"all filled fields must pass browser validation before submit");
+      await dialog.locator("#submit-editor").click();
+      const submitted=JSON.parse(await page.locator("#submitted").textContent());
+      assert.equal(submitted.nameZh,"");assert.equal(submitted.nameEn,"English only");
+      assert.equal(submitted.amount,"1234.56");assert.equal(submitted.discount,"0");assert.equal(submitted.currency,"TWD");
+      assert.equal(submitted.birthDate,"2020-05-10");assert.equal(submitted.annualIncomeAmount,"2000.50");
+      assert.deepEqual(JSON.parse(submitted.installments),[{dueDate:"2026-10-03",amount:100.25},{dueDate:"2026-11-03",amount:200.5}]);
+      await dialog.getByRole("button",{name:"移除这期 · 2",exact:true}).click();
+      assert.equal(await installment.count(),1);
+      assert.ok(await dialog.getByRole("button",{name:"移除这期 · 1",exact:true}).isDisabled());
+      await dialog.locator("#confirm-editor").click();
+      const confirmation=page.getByRole("alertdialog");await confirmation.waitFor();
+      await page.keyboard.press("Escape");await confirmation.waitFor({state:"detached"});
+      assert.ok(await dialog.isVisible(),"Escape in confirmation must not close the editor");
+      await dialog.locator("#submit-editor").focus();await page.keyboard.press("Tab");
+      assert.ok(await dialog.evaluate(element=>element.contains(document.activeElement)),"keyboard focus must stay in dialog");
+      await page.screenshot({path:path.join(output,`forms-${viewport.width}.png`),fullPage:true});
+      report.pages.push({label:`forms-${viewport.width}`,route:"isolated-shared-editor-fixture",viewport,geometry,checks:["centered","no-overflow","combined-name-validation","required-markers","raw-money-submission","currency","calendar-opener","legacy-choices","tags","installments","nested-confirmation","focus-trap"]});
+      await page.keyboard.press("Escape");await dialog.waitFor({state:"detached"});
+      assert.ok(await page.locator("#open-editor").evaluate(element=>document.activeElement===element),"restore trigger focus");
+    }
+  }catch(error){report.errors.push({kind:"structured-inputs",url:"isolated-shared-editor-fixture",message:error.message});throw error;}finally{await context.close();}
+};

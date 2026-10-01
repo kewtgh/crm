@@ -1,10 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.10.1**
+Current release candidate: **v3.11.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.11.0 centers and widens all shared editors, formats monetary inputs without changing
+submitted numeric values, provides currency/calendar choices, tag editors and visual receivable
+installments, and accepts either a Chinese or English name. Forward migration 082 aligns legacy
+bundle/automation name constraints. Required fields are visibly marked, dynamic import repairs use
+the same controls, and CI checks release/lockfile alignment before dependency installation.
+See the [form audit and implementation plan](docs/AUDIT_FORM_EDITORS_2026-10-01.md).
 
 Version 3.10.1 fixes product-save timestamp validation without losing PostgreSQL microsecond
 precision, distinguishes committed writes from failed catalog refreshes, and adds administrator

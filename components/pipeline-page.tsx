@@ -1,4 +1,6 @@
 "use client";
+import { BilingualNameHint } from "@/components/structured-inputs";
+import { DateInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, CircleDollarSign, Plus, RefreshCcw, Sparkles, UserRound } from "lucide-react";
@@ -365,24 +367,25 @@ export function PipelinePage({
       onClose={() => setCreateOpen(false)}
     >
       <form onSubmit={create}>
-        <label className="field"><span>{t("leads.type")} *</span><select value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
-        <SearchableSelect label={`${t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} *`} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
+        <label className="field"><span>{t("leads.type")}</span><select required value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
+        <SearchableSelect label={t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} required options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
         <SearchableSelect label={t("products.title")} options={productOptions} value={product} onChange={setProduct}/>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("products.nameZh")} *</span><input name="titleZh" required maxLength={160}/></label>
-          <label className="field"><span>{t("products.nameEn")} *</span><input name="titleEn" required maxLength={180}/></label>
+          <label className="field"><span>{t("products.nameZh")}</span><input name="titleZh" maxLength={160}/></label>
+          <label className="field"><span>{t("products.nameEn")}</span><input name="titleEn" maxLength={180}/></label>
+          <BilingualNameHint/>
         </div>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("common.status")} *</span><select name="stage" defaultValue="DISCOVERY">{activeOpportunityStages.map((stage) => <option value={stage} key={stage}>{t(`sales.stage.${stage.toLowerCase()}`)}</option>)}</select></label>
-          <label className="field"><span>{t("pipeline.expectedClose")} *</span><input name="expectedCloseDate" type="date" required/></label>
+          <label className="field"><span>{t("common.status")}</span><select name="stage" defaultValue="DISCOVERY" required>{activeOpportunityStages.map((stage) => <option value={stage} key={stage}>{t(`sales.stage.${stage.toLowerCase()}`)}</option>)}</select></label>
+          <label className="field"><span>{t("pipeline.expectedClose")}</span><DateInput name="expectedCloseDate" type="date" required/></label>
         </div>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("pipeline.amount")} *</span><input name="amount" type="number" min="0" step="100" required/></label>
-          <label className="field"><span>{t("pipeline.currency")} *</span><input name="currency" defaultValue="CNY" pattern="[A-Za-z]{3}" required/></label>
+          <label className="field"><span>{t("pipeline.amount")}</span><MoneyInput name="amount" min="0" required/></label>
+          <label className="field"><span>{t("pipeline.currency")}</span><CurrencySelect name="currency" defaultValue="CNY" required/></label>
         </div>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("pipeline.nextActionZh")} *</span><textarea name="nextActionZh" rows={3} maxLength={300} required/></label>
-          <label className="field"><span>{t("pipeline.nextActionEn")} *</span><textarea name="nextActionEn" rows={3} maxLength={300} required/></label>
+          <label className="field"><span>{t("pipeline.nextActionZh")}</span><textarea name="nextActionZh" rows={3} maxLength={300} required/></label>
+          <label className="field"><span>{t("pipeline.nextActionEn")}</span><textarea name="nextActionEn" rows={3} maxLength={300} required/></label>
         </div>
         {drawerError && <InlineMessage type="error">{drawerError}</InlineMessage>}
         <div className="drawer-actions">
@@ -405,14 +408,14 @@ export function PipelinePage({
           <span><small>{t("pipeline.transition.target")}</small><StatusBadge tone={stageTone[transition.stage]}>{t(`sales.stage.${transition.stage.toLowerCase()}`)}</StatusBadge></span>
         </div>
         {transition.stage !== "WON" && transition.stage !== "LOST" && <>
-          <label className="field"><span>{t("pipeline.expectedClose")} *</span><input name="expectedCloseDate" type="date" defaultValue={transition.item.expectedCloseDate ?? ""} required/></label>
+          <label className="field"><span>{t("pipeline.expectedClose")}</span><DateInput name="expectedCloseDate" type="date" defaultValue={transition.item.expectedCloseDate ?? ""} required/></label>
           <div className="form-grid two-column">
-            <label className="field"><span>{t("pipeline.nextActionZh")} *</span><textarea name="nextActionZh" rows={4} defaultValue={transition.item.nextActionZh} maxLength={300} required/></label>
-            <label className="field"><span>{t("pipeline.nextActionEn")} *</span><textarea name="nextActionEn" rows={4} defaultValue={transition.item.nextActionEn} maxLength={300} required/></label>
+            <label className="field"><span>{t("pipeline.nextActionZh")}</span><textarea name="nextActionZh" rows={4} defaultValue={transition.item.nextActionZh} maxLength={300} required/></label>
+            <label className="field"><span>{t("pipeline.nextActionEn")}</span><textarea name="nextActionEn" rows={4} defaultValue={transition.item.nextActionEn} maxLength={300} required/></label>
           </div>
         </>}
-        {transition.stage === "WON" && <label className="field"><span>{t("pipeline.transition.evidence")} *</span><textarea name="evidence" rows={5} maxLength={1000} required placeholder={t("pipeline.transition.evidenceHelp")}/></label>}
-        {transition.stage === "LOST" && <label className="field"><span>{t("pipeline.transition.reason")} *</span><textarea name="reason" rows={5} maxLength={500} required placeholder={t("pipeline.transition.reasonHelp")}/></label>}
+        {transition.stage === "WON" && <label className="field"><span>{t("pipeline.transition.evidence")}</span><textarea name="evidence" rows={5} maxLength={1000} required placeholder={t("pipeline.transition.evidenceHelp")}/></label>}
+        {transition.stage === "LOST" && <label className="field"><span>{t("pipeline.transition.reason")}</span><textarea name="reason" rows={5} maxLength={500} required placeholder={t("pipeline.transition.reasonHelp")}/></label>}
         {drawerError && <InlineMessage type="error">{drawerError}</InlineMessage>}
         <div className="drawer-actions">
           <button className="secondary-button" type="button" disabled={submitting} onClick={() => setTransition(null)}>{t("common.cancel")}</button>

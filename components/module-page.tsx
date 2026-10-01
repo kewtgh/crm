@@ -1,4 +1,7 @@
 "use client";
+import { BilingualNameHint } from "@/components/structured-inputs";
+import { OptionInput, TagsInput, YearInput, DateInput } from "@/components/structured-inputs";
+import { CURRICULUM_OPTIONS, LANGUAGE_OPTIONS, SOURCE_OPTIONS } from "@/lib/structured-inputs";
 
 import { useCallback, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -256,44 +259,44 @@ export function ModulePage({
     >
       <form onSubmit={submit} onChange={invalidateDuplicateCheck}>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("products.nameZh")} *</span><input name="nameZh" required maxLength={120}/></label>
-          <label className="field"><span>{t("products.nameEn")} *</span><input name="nameEn" required maxLength={160}/></label>
-        </div>
+          <label className="field"><span>{t("products.nameZh")}</span><input name="nameZh" maxLength={120}/></label>
+          <label className="field"><span>{t("products.nameEn")}</span><input name="nameEn" maxLength={160}/></label>
+        <BilingualNameHint/></div>
         {resource === "schools" && <>
           <div className="form-grid two-column">
-            <label className="field"><span>{t("modules.city")} *</span><input name="city" required maxLength={80}/></label>
-            <label className="field"><span>{t("modules.curriculum")} *</span><input name="curriculum" required maxLength={120}/></label>
+            <label className="field"><span>{t("modules.city")}</span><input name="city" required maxLength={80}/></label>
+            <label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" required maxLength={120} options={CURRICULUM_OPTIONS}/></label>
           </div>
           <label className="field"><span>{t("modules.contact")}</span><input name="contact" maxLength={200}/></label>
-          <label className="field"><span>{t("education.courseCategories")}</span><input name="courseCategories" placeholder={t("education.courseCategoriesHelp")}/></label>
-          <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue="INDEPENDENT">{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={(query)=>searchRelated(query,"organization")}/></div>
+          <label className="field"><span>{t("education.courseCategories")}</span><TagsInput name="courseCategories" placeholder={t("education.courseCategoriesHelp")}/></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue="INDEPENDENT" required>{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={(query)=>searchRelated(query,"organization")}/></div>
           <label className="field"><span>{t("education.website")}</span><input name="website" type="url" placeholder="https://"/></label>
-          <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><input name="foundedYear" type="number" min="1000" max="9999"/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0"/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><YearInput name="foundedYear"/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0"/></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("education.studentCount")}</span><input name="studentCount" type="number" min="0"/></label><label className="field"><span>{t("education.facultyCount")}</span><input name="facultyCount" type="number" min="0"/></label></div>
           <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource === "people" && <>
-          <SearchableSelect label={`${t("modules.organization")} *`} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
+          <SearchableSelect label={t("modules.organization")} required options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
           <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>
-          <label className="field"><span>{t("modules.title")} *</span><input name="title" required maxLength={120}/></label>
+          <label className="field"><span>{t("modules.title")}</span><input name="title" required maxLength={120}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
-            <label className="field"><span>{t("modules.phone")}</span><input name="phone" maxLength={40}/></label>
+            <label className="field"><span>{t("modules.phone")}</span><input name="phone" type="tel" maxLength={40}/></label>
           </div>
-          <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT">{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW">{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
-          <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue="1">{[1,2,3,4].map(value=><option key={value} value={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
-          <div className="form-grid two-column"><label className="field"><span>{t("contact.preferredContactMethod")}</span><select name="preferredContactMethod" defaultValue="EMAIL">{["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"].map(value=><option value={value} key={value}>{t(`contact.method.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.preferredLanguage")}</span><input name="preferredLanguage" maxLength={80}/></label></div>
-          <div className="form-grid two-column"><label className="field"><span>{t("contact.acquisitionSource")}</span><input name="acquisitionSource" maxLength={160}/></label><label className="field"><span>{t("contact.decisionRole")}</span><select name="decisionRole" defaultValue="UNKNOWN">{["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"].map(value=><option value={value} key={value}>{t(`contact.decisionRole.${value.toLowerCase()}`)}</option>)}</select></label></div>
-          <div className="form-grid two-column"><label className="field"><span>{t("contact.tags")}</span><input name="tags" placeholder={t("contact.tagsHelp")}/></label><label className="field"><span>{t("contact.nextFollowUp")}</span><input name="nextFollowUpAt" type="datetime-local"/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT" required>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW" required>{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue="1" required>{[1,2,3,4].map(value=><option key={value} value={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.preferredContactMethod")}</span><select name="preferredContactMethod" defaultValue="EMAIL" required>{["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"].map(value=><option value={value} key={value}>{t(`contact.method.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.preferredLanguage")}</span><OptionInput name="preferredLanguage" maxLength={80} options={LANGUAGE_OPTIONS}/></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.acquisitionSource")}</span><OptionInput name="acquisitionSource" maxLength={160} options={SOURCE_OPTIONS}/></label><label className="field"><span>{t("contact.decisionRole")}</span><select name="decisionRole" defaultValue="UNKNOWN" required>{["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"].map(value=><option value={value} key={value}>{t(`contact.decisionRole.${value.toLowerCase()}`)}</option>)}</select></label></div>
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.tags")}</span><TagsInput name="tags" placeholder={t("contact.tagsHelp")}/></label><label className="field"><span>{t("contact.nextFollowUp")}</span><DateInput name="nextFollowUpAt" type="datetime-local"/></label></div>
           <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
-          <InlineMessage type="info">{t("modules.contactMethodRequired")}</InlineMessage>
+          <InlineMessage type="info"><span className="required-indicator">* </span>{t("modules.contactMethodRequired")} ({t("input.required")})</InlineMessage>
         </>}
         {resource === "tasks" && <>
-          <SearchableSelect label={`${t("modules.relatedRecord")} *`} options={relatedOptions} value={related} onChange={(value) => { setRelated(value); setRelatedLabel(relatedOptions.find((item) => item.value === value)?.label ?? ""); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "related")}/>
+          <SearchableSelect label={t("modules.relatedRecord")} required options={relatedOptions} value={related} onChange={(value) => { setRelated(value); setRelatedLabel(relatedOptions.find((item) => item.value === value)?.label ?? ""); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "related")}/>
           <SearchableSelect label={t("modules.owner")} options={ownerOptions} value={owner} onChange={(value) => { setOwner(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "owner")}/>
           <div className="form-grid two-column">
-            <label className="field"><span>{t("modules.dueAt")} *</span><input name="dueAt" type="datetime-local" required/></label>
-            <label className="field"><span>{t("modules.priority")} *</span><select name="priority" defaultValue="NORMAL"><option value="LOW">{t("modules.priority.low")}</option><option value="NORMAL">{t("modules.priority.normal")}</option><option value="HIGH">{t("modules.priority.high")}</option><option value="URGENT">{t("modules.priority.urgent")}</option></select></label>
+            <label className="field"><span>{t("modules.dueAt")}</span><DateInput name="dueAt" type="datetime-local" required/></label>
+            <label className="field"><span>{t("modules.priority")}</span><select name="priority" defaultValue="NORMAL" required><option value="LOW">{t("modules.priority.low")}</option><option value="NORMAL">{t("modules.priority.normal")}</option><option value="HIGH">{t("modules.priority.high")}</option><option value="URGENT">{t("modules.priority.urgent")}</option></select></label>
           </div>
         </>}
         <div className="duplicate-check">
@@ -314,8 +317,8 @@ export function ModulePage({
     {exportOpen&&resource&&<AccessibleDrawer pending={exportPending} title={t("export.requestTitle")} eyebrow={t("exports.eyebrow")} description={t("export.requestHelp")} onClose={()=>setExportOpen(false)}>
       <form onSubmit={requestExport}>
         <InlineMessage type="info">{t("export.requestHelp")}</InlineMessage>
-        <label className="field"><span>{t("export.format")}</span><select name="format" defaultValue="CSV"><option value="CSV">CSV</option><option value="XLSX">XLSX</option><option value="PDF">PDF</option></select><small>{t("export.formatHelp")}</small></label>
-        <label className="field"><span>{t("export.reason")} *</span><textarea name="reason" rows={4} minLength={3} maxLength={1000} placeholder={t("export.reasonPlaceholder")} required/></label>
+        <label className="field"><span>{t("export.format")}</span><select name="format" defaultValue="CSV" required><option value="CSV">CSV</option><option value="XLSX">XLSX</option><option value="PDF">PDF</option></select><small>{t("export.formatHelp")}</small></label>
+        <label className="field"><span>{t("export.reason")}</span><textarea name="reason" rows={4} minLength={3} maxLength={1000} placeholder={t("export.reasonPlaceholder")} required/></label>
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions"><button className="secondary-button" type="button" disabled={exportPending} onClick={()=>setExportOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={exportPending}><Download size={16}/>{exportPending?t("common.processing"):t("export.request")}</button></div>
       </form>

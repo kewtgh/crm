@@ -1,6 +1,13 @@
 import type { Messages } from "../types";
 
 export const zhV390:Messages={
+  "input.clearDate":"清空日期",
+  "imports.originalValue":"原始值：{value}。请选择正确日期或明确清空。",
+  "input.required":"必填",
+  "imports.mappingRequired":"中文名或英文名至少完成一项字段映射。",
+  "imports.nameMappingHelp":"名称映射为必填：中文名或英文名至少映射一项。",
+  "input.tagsInvalid":"最多 {count} 项，每项最多 {length} 个字符。",
+  "input.chooseDate":"选择日期","input.chooseTime":"选择时间","input.chooseAcademicYear":"选择学年","input.amountInvalid":"请输入有效金额，最多两位小数，且在允许范围内。","input.addTag":"添加标签","input.removeTag":"移除标签","input.nameRequired":"中文名或英文名至少填写一项。","input.nameHelp":"中文名和英文名至少填写一项；未填写的语言将使用已有名称。","finance.addInstallment":"添加一期","finance.removeInstallment":"移除这期","finance.installmentDate":"到期日期","finance.installmentAmount":"本期金额",
   "products.deleteTitle":"删除产品","products.deleteConfirm":"确认将“{name}”移入回收站？产品将从目录和新业务选择中移除，既有合同、付款和价格记录会保留。超级管理员可从回收站恢复。","products.deleted":"产品已移入回收站。","products.deleteFailed":"产品删除失败，请重试。","recycle.kind.product":"产品",
   "products.codeConflict":"产品代码已被使用（包括回收站中的产品），请使用其他代码或恢复原产品。","products.versionConflict":"产品已被其他操作修改，请刷新产品列表后重新编辑或删除。","products.notFound":"产品不存在或已被删除，请刷新列表。","products.archived":"产品已被删除，请刷新列表；需要继续使用时可从回收站恢复。","products.schemaOutdated":"产品服务暂不可用，请联系管理员检查更新是否已完成。","products.refreshFailed":"更改已保存，但产品列表刷新失败；请重新载入列表，无需重复提交。",
   "products.introduction":"产品介绍","products.introductionZh":"中文详细介绍","products.introductionEn":"英文详细介绍","products.introductionEmpty":"尚未填写产品介绍。","products.purchasers":"购买此产品的客户","products.noPurchasers":"尚无客户购买记录。",
@@ -15,6 +22,13 @@ export const zhV390:Messages={
 };
 
 export const enV390:Messages={
+  "input.clearDate":"Clear date",
+  "imports.originalValue":"Original value: {value}. Choose a valid date or explicitly clear it.",
+  "input.required":"Required",
+  "imports.mappingRequired":"Map at least a Chinese or English name column.",
+  "imports.nameMappingHelp":"Name mapping is required: map at least one Chinese or English name column.",
+  "input.tagsInvalid":"Use at most {count} items, with no more than {length} characters each.",
+  "input.chooseDate":"Choose date","input.chooseTime":"Choose time","input.chooseAcademicYear":"Choose academic year","input.amountInvalid":"Enter a valid amount with at most two decimal places within the allowed range.","input.addTag":"Add tag","input.removeTag":"Remove tag","input.nameRequired":"Enter at least a Chinese or English name.","input.nameHelp":"Enter at least one name. The supplied name is used when the other language is blank.","finance.addInstallment":"Add installment","finance.removeInstallment":"Remove installment","finance.installmentDate":"Due date","finance.installmentAmount":"Installment amount",
   "products.deleteTitle":"Delete product","products.deleteConfirm":"Move “{name}” to the recycle bin? It will be removed from the catalog and new sales selections. Existing contracts, payments and prices will be retained. A super administrator can restore it from the recycle bin.","products.deleted":"Product moved to the recycle bin.","products.deleteFailed":"The product could not be deleted. Try again.","recycle.kind.product":"Product",
   "products.codeConflict":"This product code is already used, including products in the recycle bin. Use another code or restore the original product.","products.versionConflict":"This product has changed. Reload the catalog before editing or deleting it again.","products.notFound":"This product does not exist or has been deleted. Reload the catalog.","products.archived":"This product has been deleted. Reload the catalog or restore it from the recycle bin.","products.schemaOutdated":"The product service is unavailable. Ask an administrator to check that the update completed.","products.refreshFailed":"Your changes were saved, but the catalog could not be refreshed. Reload it; do not submit the same change again.",
   "products.introduction":"Product introduction","products.introductionZh":"Detailed introduction (Chinese)","products.introductionEn":"Detailed introduction (English)","products.introductionEmpty":"No product introduction has been added.","products.purchasers":"Customers who purchased this product","products.noPurchasers":"No customer purchase records yet.",

@@ -1,6 +1,14 @@
-# Implementation status — v3.10.1 release candidate
+# Implementation status — v3.11.0 release candidate
 
 ## Scope
+
+v3.11.0 unifies centered editing dialogs, structured money/currency/date/tag controls and visual
+receivable installments. Either Chinese or English names are accepted across editing APIs, with
+display fallback and forward migration 082 for legacy database name constraints. CRM and education
+version tokens accept PostgreSQL time offsets. Required markers and dynamic import repairs follow
+the shared controls; CI now checks release metadata and lockfile alignment before installation.
+Scoped verification is recorded in
+[the form editor audit and plan](AUDIT_FORM_EDITORS_2026-10-01.md).
 
 v3.10.1 repairs product editing with PostgreSQL offset timestamps and exact version precision,
 separates successful writes from failed list refreshes, and supplies actionable mutation errors.

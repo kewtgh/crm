@@ -1,3 +1,4 @@
+import { bilingualSchema } from "@/lib/bilingual-names";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
@@ -7,7 +8,7 @@ import { loadUserSettings, updateAccount, updateLocale, updateNotifications, upd
 import { mutationIsTrusted } from "@/lib/request-security";
 import { SUPPORTED_TIMEZONES } from "@/lib/timezone";
 
-const profileSchema = z.object({ section: z.literal("profile"), displayNameZh: z.string().trim().min(1).max(80), displayNameEn: z.string().trim().min(1).max(80), honorific: z.string().trim().max(20), bio: z.string().trim().max(500) });
+const profileSchema = z.object({ section: z.literal("profile"), displayNameZh: z.string().trim().max(80).default(""), displayNameEn: z.string().trim().max(80).default(""), honorific: z.string().trim().max(20), bio: z.string().trim().max(500) });
 const localeSchema = z.object({ section: z.literal("locale"), locale: z.enum(["zh-CN", "en"]) });
 const accountSchema = z.object({ section: z.literal("account"), email: z.email(), locale: z.enum(["zh-CN", "en"]), timezone: z.enum(SUPPORTED_TIMEZONES), dateFormat: z.enum(["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy"]) });
 const channelSchema = z.object({ email: z.boolean(), inApp: z.boolean() });
@@ -34,7 +35,7 @@ async function get() {
 
 async function patch(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
-  const parsed = schema.safeParse(await request.json().catch(() => ({})));
+  const parsed = bilingualSchema(schema).safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     return NextResponse.json({

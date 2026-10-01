@@ -1,3 +1,4 @@
+import { bilingualSchema } from "@/lib/bilingual-names";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkCrmDuplicate, createCrmRecord, listCrmRows, type PersistentResource } from "@/lib/crm-repository";
@@ -8,8 +9,8 @@ import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
 const baseRecordSchema = z.object({
   operation: z.enum(["check", "create"]).default("create"),
-  nameZh: z.string().trim().min(1).max(120),
-  nameEn: z.string().trim().min(1).max(160),
+  nameZh: z.string().trim().max(120).default(""),
+  nameEn: z.string().trim().max(160).default(""),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().max(40).optional(),
   contact: z.string().trim().max(200).optional(),
@@ -68,7 +69,7 @@ async function post(request: Request, context: { params: Promise<{ resource: str
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
   const resource = resolveResource((await context.params).resource);
   if (!resource) return NextResponse.json({ code: "UNKNOWN_RESOURCE" }, { status: 404 });
-  const parsed = resourceSchemas[resource].safeParse(await request.json().catch(() => ({})));
+  const parsed = bilingualSchema(resourceSchemas[resource]).safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
   const user=await requireApiUser();
   try {

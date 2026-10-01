@@ -1,4 +1,6 @@
 "use client";
+import { BilingualNameHint } from "./structured-inputs";
+import { ImportRepairField } from "./import-repair-field";
 
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSpreadsheet, Play, RotateCcw, Save, SearchCheck, Upload } from "lucide-react";
@@ -188,7 +190,7 @@ export function ImportsPage({
 
   const createBatch = async () => {
     if(fileLoading||pending)return;
-    if (!rawRows.length || !mapping.nameZh || !mapping.nameEn) {
+    if (!rawRows.length || (!mapping.nameZh && !mapping.nameEn)) {
       setError(t("imports.mappingRequired"));
       return;
     }
@@ -396,7 +398,7 @@ export function ImportsPage({
 
     {duplicatesOnly && canMerge && <section className="surface duplicate-merge-panel">
       <div className="surface-heading"><div><p className="eyebrow">{t("duplicates.controlledMerge")}</p><h2>{t("duplicates.mergePreview")}</h2><p>{t("duplicates.mergeHelp")}</p></div><SearchCheck size={21}/></div>
-      <div className="form-grid three-column"><label className="field"><span>{t("imports.resource")}</span><select value={mergeResource} onChange={(event) => { setMergeResource(event.target.value as typeof mergeResource);setMergeTarget("");setMergeSource("");setMergeOptions([]);setMergePreview(null); }}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label><SearchableSelect label={t("imports.mergeTarget")} options={mergeOptions.filter(item=>item.value!==mergeSource)} value={mergeTarget} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeTarget(value);setMergePreview(null);}}/><SearchableSelect label={t("imports.mergeSource")} options={mergeOptions.filter(item=>item.value!==mergeTarget)} value={mergeSource} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeSource(value);setMergePreview(null);}}/></div>
+      <div className="form-grid three-column"><label className="field"><span>{t("imports.resource")}</span><select value={mergeResource} onChange={(event) => { setMergeResource(event.target.value as typeof mergeResource);setMergeTarget("");setMergeSource("");setMergeOptions([]);setMergePreview(null); }}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option></select></label><SearchableSelect label={t("imports.mergeTarget")} required options={mergeOptions.filter(item=>item.value!==mergeSource)} value={mergeTarget} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeTarget(value);setMergePreview(null);}}/><SearchableSelect label={t("imports.mergeSource")} required options={mergeOptions.filter(item=>item.value!==mergeTarget)} value={mergeSource} placeholder={t("imports.chooseRecord")} onSearch={searchMergeRecords} onChange={value=>{setMergeSource(value);setMergePreview(null);}}/></div>
       <button className="secondary-button" type="button" disabled={!mergeTarget || !mergeSource || mergeTarget === mergeSource} onClick={() => void previewMerge()}><SearchCheck size={16}/>{t("duplicates.preview")}</button>
       {mergePreview && <div className="merge-preview">
         <InlineMessage type={mergePreview.recommendedMaster === mergeTarget ? "success" : "warning"}>{t("duplicates.recommendedMaster", { id: mergePreview.recommendedMaster })}{mergePreview.recommendedMaster !== mergeTarget && <button className="inline-action" type="button" onClick={() => { const oldTarget = mergeTarget; const oldSource = mergeSource; setMergeTarget(oldSource); setMergeSource(oldTarget); void previewMerge(oldSource, oldTarget); }}>{t("duplicates.useRecommended")}</button>}</InlineMessage>
@@ -424,7 +426,8 @@ export function ImportsPage({
           <button className="secondary-button import-mapping-save" type="button" disabled={pending||!mappingName.trim()} onClick={()=>void saveMapping()}><Save size={16}/>{t("imports.saveMapping")}</button>
         </div>
         <div className="mapping-grid">
-          {targetFields.map((field) => <SearchableSelect key={field} label={`${t(`imports.field.${field}`)}${["nameZh", "nameEn"].includes(field) ? " *" : ""}`} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
+          <p className="name-pair-hint"><span className="required-indicator">* </span>{t("imports.nameMappingHelp")}</p>
+          {targetFields.map((field) => <SearchableSelect key={field} label={t(`imports.field.${field}`)} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
         <button className="primary-button" type="button" disabled={pending||fileLoading} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>
@@ -468,7 +471,7 @@ export function ImportsPage({
         {error && <InlineMessage type="error">{error}</InlineMessage>}
       </div>
     </section>
-    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span><input name={field} defaultValue={repairRow.normalized[field]??""} required={field==="nameZh"||field==="nameEn"}/></label>)}</div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
+    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span><ImportRepairField field={field} value={repairRow.normalized[field]??""}/></label>)}<BilingualNameHint/></div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
     {rollbackOpen&&current&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("common.actionCannotUndo")} onClose={()=>setRollbackOpen(false)}><InlineMessage type="warning">{t("imports.rollbackConfirm",{count:current.applied})}</InlineMessage><div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRollbackOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void rollback()}>{pending?t("common.processing"):t("imports.rollback")}</button></div></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;

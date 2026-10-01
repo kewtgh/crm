@@ -4,13 +4,14 @@ import { apiRoute, requireApiCapability } from "@/lib/api";
 import { importOperation,listImportBatches,listImportMappingProfiles,listImportRows,saveImportMappingProfile } from "@/lib/phase2-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { IMPORT_MAX_ROWS } from "@/lib/import-execution";
+import { normalizeBilingualNames } from "@/lib/bilingual-names";
 
 const importField=z.enum(["nameZh","nameEn","email","phone","city","title","curriculum","courseCategories","affiliationType","parentOrganizationId","website","foundedYear","studentCount","facultyCount","campusCount","organizationOverviewMarkdown","structureOverviewMarkdown","address","primaryParentOccupation","secondaryParentOccupation","annualIncomeAmount","incomeCurrency","preferredContactMethod","preferredLanguage","educationExpectationsMarkdown","familyBackgroundMarkdown","personId","householdId","studentNumber","birthDate","currentGrade","currentClass","academicYear","interests","preferredLearningStyle","personalityMarkdown","learningExpectationsMarkdown","strengthsMarkdown","supportNeedsMarkdown"]);
 const sourceHeader=z.string().trim().min(1).max(160);
 const mappingSchema=z.partialRecord(importField,sourceHeader);
 const importRow=z.object({
-  nameZh:z.string().trim().max(120),
-  nameEn:z.string().trim().max(160),
+  nameZh:z.string().trim().max(120).default(""),
+  nameEn:z.string().trim().max(160).default(""),
   email:z.string().trim().max(320).default(""),
   phone:z.string().trim().max(40).default(""),
   city:z.string().trim().max(80).default(""),
@@ -18,7 +19,7 @@ const importRow=z.object({
   curriculum:z.string().trim().max(120).default(""),courseCategories:z.string().trim().max(2000).default(""),affiliationType:z.string().trim().max(40).default(""),parentOrganizationId:z.string().trim().max(60).default(""),website:z.string().trim().max(500).default(""),foundedYear:z.string().trim().max(4).default(""),studentCount:z.string().trim().max(12).default(""),facultyCount:z.string().trim().max(12).default(""),campusCount:z.string().trim().max(12).default(""),organizationOverviewMarkdown:z.string().max(10000).default(""),structureOverviewMarkdown:z.string().max(10000).default(""),
   address:z.string().max(1000).default(""),primaryParentOccupation:z.string().trim().max(160).default(""),secondaryParentOccupation:z.string().trim().max(160).default(""),annualIncomeAmount:z.string().trim().max(30).default(""),incomeCurrency:z.string().trim().max(3).default(""),preferredContactMethod:z.string().trim().max(30).default(""),preferredLanguage:z.string().trim().max(80).default(""),educationExpectationsMarkdown:z.string().max(10000).default(""),familyBackgroundMarkdown:z.string().max(10000).default(""),
   personId:z.string().trim().max(60).default(""),householdId:z.string().trim().max(60).default(""),studentNumber:z.string().trim().max(60).default(""),birthDate:z.string().trim().max(10).default(""),currentGrade:z.string().trim().max(40).default(""),currentClass:z.string().trim().max(80).default(""),academicYear:z.string().trim().max(20).default(""),interests:z.string().trim().max(2000).default(""),preferredLearningStyle:z.string().trim().max(30).default(""),personalityMarkdown:z.string().max(10000).default(""),learningExpectationsMarkdown:z.string().max(10000).default(""),strengthsMarkdown:z.string().max(10000).default(""),supportNeedsMarkdown:z.string().max(10000).default(""),
-}).strict();
+}).strict().transform(row=>normalizeBilingualNames(row) as typeof row);
 const importResource=z.enum(["ORGANIZATIONS","CONTACTS","HOUSEHOLDS","STUDENTS"]);
 const create=z.object({operation:z.literal("create"),resource:importResource,filename:z.string().trim().min(1).max(180),content_hash:z.string().regex(/^[a-f0-9]{64}$/i),request_key:z.string().min(8).max(160),mapping:mappingSchema,rows:z.array(importRow).min(1).max(IMPORT_MAX_ROWS)});
 const decide=z.object({operation:z.literal("decide"),target_row:z.uuid(),chosen_action:z.enum(["CREATE","UPDATE","MERGE","SKIP"])});

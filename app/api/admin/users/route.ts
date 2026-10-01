@@ -1,3 +1,4 @@
+import { bilingualSchema } from "@/lib/bilingual-names";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createStaffUser, listStaffUsers } from "@/lib/admin-users-repository";
@@ -9,8 +10,8 @@ import { emitObservabilityEvent } from "@/lib/observability";
 
 const createSchema = z.object({
   username: z.string().trim().toLowerCase().min(3).max(32).regex(/^[a-z][a-z0-9._-]+$/),
-  displayNameZh: z.string().trim().min(1).max(80),
-  displayNameEn: z.string().trim().min(1).max(80),
+  displayNameZh: z.string().trim().max(80).default(""),
+  displayNameEn: z.string().trim().max(80).default(""),
   email: z.email(),
   role: z.enum(APP_ROLES.filter((role) => role !== "SUPER_ADMIN") as ["ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]),
   teamId: z.uuid().nullable().optional(),
@@ -42,7 +43,7 @@ async function get(request: Request) {
 
 async function post(request: Request) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
-  const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
+  const parsed = bilingualSchema(createSchema).safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ code: "INVALID_INPUT", field: String(parsed.error.issues[0]?.path[0] ?? "form") }, { status: 400 });
   const actor = await requireApiRole("SUPER_ADMIN", "ADMIN");
   await requireApiAal2();

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bilingualSchema } from "./bilingual-names";
 
 export const opportunityStages = [
   "DISCOVERY",
@@ -33,13 +34,13 @@ const nextActionFields = {
   nextActionEn: z.string().trim().min(1).max(300),
 };
 
-export const createOpportunitySchema = z.object({
+export const createOpportunitySchema = bilingualSchema(z.object({
   subjectType: z.enum(["SCHOOL", "HOUSEHOLD"]),
   organizationId: z.string().uuid().nullable().optional(),
   householdId: z.string().uuid().nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
-  titleZh: z.string().trim().min(1).max(160),
-  titleEn: z.string().trim().min(1).max(180),
+  titleZh: z.string().trim().max(160).default(""),
+  titleEn: z.string().trim().max(180).default(""),
   stage: z.enum(activeOpportunityStages),
   amount: z.number().nonnegative(),
   currency: z.string().regex(/^[A-Z]{3}$/),
@@ -52,7 +53,7 @@ export const createOpportunitySchema = z.object({
   if (value.subjectType === "HOUSEHOLD" && (!value.householdId || value.organizationId)) {
     context.addIssue({ code: "custom", message: "HOUSEHOLD_SUBJECT_REQUIRED", path: ["householdId"] });
   }
-});
+}));
 
 export const transitionOpportunitySchema = z.object({
   stage: z.enum(opportunityStages),

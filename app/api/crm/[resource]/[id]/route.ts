@@ -1,3 +1,4 @@
+import { bilingualSchema } from "@/lib/bilingual-names";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -11,8 +12,8 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 
 const resources=new Set<PersistentResource>(["schools","people","tasks"]);
 const basePatch=z.object({
-  nameZh:z.string().trim().min(1).max(120).optional(),
-  nameEn:z.string().trim().min(1).max(160).optional(),
+  nameZh:z.string().trim().max(120).optional(),
+  nameEn:z.string().trim().max(160).optional(),
   status:z.string().trim().max(40).optional(),
   archived:z.boolean().optional(),
 });
@@ -45,7 +46,7 @@ const schemas={
   }).strict(),
 } satisfies Record<PersistentResource,z.ZodType>;
 const requestSchema=z.object({
-  expectedUpdatedAt:z.string().datetime(),
+  expectedUpdatedAt:z.string().datetime({offset:true}),
   patch:z.record(z.string(),z.unknown()),
 });
 
@@ -83,7 +84,7 @@ async function patch(request:Request,context:{params:Promise<{resource:string;id
   const parsedId=z.string().uuid().safeParse(id);
   const parsed=requestSchema.safeParse(await request.json().catch(()=>({})));
   if(!parsedId.success||!parsed.success)return NextResponse.json({code:"INVALID_INPUT"},{status:400});
-  const validPatch=schemas[resource].safeParse(parsed.data.patch);
+  const validPatch=bilingualSchema(schemas[resource],true).safeParse(parsed.data.patch);
   if(!validPatch.success||!Object.keys(validPatch.data).length){
     return NextResponse.json({code:"INVALID_INPUT",field:String(validPatch.error?.issues[0]?.path[0]??"patch")},{status:400});
   }

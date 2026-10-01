@@ -1,4 +1,5 @@
 "use client";
+import { BilingualNameHint } from "@/components/structured-inputs";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, KeyRound, MailPlus, MoreHorizontal, Pencil, Plus, RotateCcw, ShieldCheck, UserRoundPlus, Users, X } from "lucide-react";
@@ -254,10 +255,10 @@ function CreateStaffDialog({ open, teams, canCreateAdmin, close, onCreated }: { 
     <form className="staff-invite-form" onSubmit={submit} onChange={clearEditedFieldError} noValidate>
       <div className="auth-form-heading"><p className="eyebrow">{t("admin.users.createEyebrow")}</p><h2 id="create-staff-title">{t("admin.users.createTitle")}</h2><p>{t("admin.users.createHelp")}</p></div>
       <div className="credential-flow"><span><KeyRound size={20}/></span><div><b>{t("admin.users.passwordGenerated")}</b><p>{t("admin.users.passwordGeneratedHelp")}</p></div></div>
-      <div className="form-grid two-column"><Field name="displayNameZh" label={t("settings.nameZh")} error={fieldError.displayNameZh}/><Field name="displayNameEn" label={t("settings.nameEn")} error={fieldError.displayNameEn}/></div>
+      <div className="form-grid two-column"><Field name="displayNameZh" label={t("settings.nameZh")} error={fieldError.displayNameZh}/><Field name="displayNameEn" label={t("settings.nameEn")} error={fieldError.displayNameEn}/><BilingualNameHint/></div>
       <Field name="username" label={t("admin.users.username")} help={t("admin.users.usernameHelp")} error={fieldError.username}/>
       <Field name="email" label={t("common.email")} type="email" error={fieldError.email}/>
-      <div className="form-grid two-column"><label className="field"><span>{t("settings.role")}</span><select name="role" value={selectedRole} onChange={event=>setSelectedRole(event.target.value as AppRole)}>{roles.map((role) => <option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select>{fieldError.role && <small className="field-error">{fieldError.role}</small>}</label><label className="field"><span>{t("admin.users.team")}</span><select name="teamId" required={selectedRole.startsWith("SALES_")} defaultValue=""><option value="">{t("admin.teams.unassigned")}</option>{teams.map(team=><option key={team.id} value={team.id}>{team.nameZh} / {team.nameEn}</option>)}</select>{fieldError.teamId&&<small className="field-error">{fieldError.teamId}</small>}</label></div>
+      <div className="form-grid two-column"><label className="field"><span>{t("settings.role")}</span><select name="role" value={selectedRole} onChange={event=>setSelectedRole(event.target.value as AppRole)} required>{roles.map((role) => <option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select>{fieldError.role && <small className="field-error">{fieldError.role}</small>}</label><label className="field"><span>{t("admin.users.team")}</span><select name="teamId" required={selectedRole.startsWith("SALES_")} defaultValue=""><option value="">{t("admin.teams.unassigned")}</option>{teams.map(team=><option key={team.id} value={team.id}>{team.nameZh} / {team.nameEn}</option>)}</select>{fieldError.teamId&&<small className="field-error">{fieldError.teamId}</small>}</label></div>
       {selectedRole.startsWith("SALES_")&&!teams.length&&<InlineMessage type="warning">{t("admin.teams.createFirst")}</InlineMessage>}
       {error && <InlineMessage type="error">{error}</InlineMessage>}
       <InlineMessage type="warning"><ShieldCheck size={16}/>{t("admin.users.createBoundary")}</InlineMessage>
@@ -280,7 +281,7 @@ function TeamDialog({open,team,leadCandidates,close,onSaved}:{open:boolean;team:
   return <dialog className="staff-dialog" ref={dialogRef} onClose={closeDialog} onCancel={event=>{if(pending)event.preventDefault();else closeDialog();}}>
     <form method="dialog" className="dialog-close"><button className="icon-button" disabled={pending} aria-label={t("common.close")}><X size={18}/></button></form>
     <form key={team?.id??"new"} className="staff-invite-form" onSubmit={submit}><div className="auth-form-heading"><p className="eyebrow">{t("admin.teams.eyebrow")}</p><h2>{t(team?"admin.teams.edit":"admin.teams.new")}</h2><p>{t("admin.teams.help")}</p></div>
-      <div className="form-grid two-column"><Field name="nameZh" label={t("settings.nameZh")} defaultValue={team?.nameZh}/><Field name="nameEn" label={t("settings.nameEn")} defaultValue={team?.nameEn}/></div>
+      <div className="form-grid two-column"><Field name="nameZh" label={t("settings.nameZh")} defaultValue={team?.nameZh}/><Field name="nameEn" label={t("settings.nameEn")} defaultValue={team?.nameEn}/><BilingualNameHint/></div>
       <label className="field"><span>{t("admin.teams.code")}</span><input name="code" pattern="[A-Za-z0-9-]+" required defaultValue={team?.code}/></label>
       <fieldset className="team-lead-options"><legend>{t("admin.teams.leads")}</legend><small>{t("admin.teams.multiLeadHelp")}</small>{leadCandidates.map(candidate=><label className="checkbox-row" key={candidate.memberId}><input name="leadUserIds" type="checkbox" value={candidate.userId} defaultChecked={team?.leadUserIds.includes(candidate.userId)}/><span>{candidate.name} · {t(roleMessageKey[candidate.role as AppRole])}</span></label>)}{!leadCandidates.length&&<p className="select-empty">{t("admin.teams.noEligibleLeads")}</p>}</fieldset>
       <label className="field"><span>{t("admin.teams.description")}</span><textarea name="descriptionMarkdown" rows={4} data-markdown="true" defaultValue={team?.descriptionMarkdown}/><small>{t("common.markdownSupported")}</small></label>
@@ -290,5 +291,5 @@ function TeamDialog({open,team,leadCandidates,close,onSaved}:{open:boolean;team:
 }
 
 function Field({ name, label, type = "text", help, error, defaultValue }: { name: string; label: string; type?: string; help?: string; error?: string; defaultValue?:string }) {
-  return <label className="field"><span>{label}</span><input name={name} type={type} required aria-invalid={Boolean(error)} defaultValue={defaultValue}/>{help && <small className="field-help">{help}</small>}{error && <small className="field-error">{error}</small>}</label>;
+  return <label className="field"><span>{label}</span><input name={name} type={type} required={!["nameZh","nameEn","displayNameZh","displayNameEn"].includes(name)} aria-invalid={Boolean(error)} defaultValue={defaultValue}/>{help && <small className="field-help">{help}</small>}{error && <small className="field-error">{error}</small>}</label>;
 }
