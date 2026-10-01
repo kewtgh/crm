@@ -25,7 +25,6 @@ import {
   Sparkles,
   Target,
   Users,
-  Workflow,
   X,
 } from "lucide-react";
 import type { AppUser } from "@/lib/user";
@@ -81,18 +80,17 @@ const navigation: NavigationGroup[] = [
       { labelKey: "nav.products", href: "/products" },
       { labelKey: "nav.finance", href: "/finance" },
     ]},
-    { labelKey: "nav.automation", href: "/automation", icon: Workflow },
     { labelKey: "nav.data", icon: DatabaseZap, children: [
       { labelKey: "nav.imports", href: "/imports" },
       { labelKey: "nav.duplicates", href: "/duplicates" },
       { labelKey: "nav.quality", href: "/data-quality" },
     ]},
-    { labelKey: "nav.ai", href: "/ai", icon: Sparkles },
     { labelKey: "nav.reports", icon: FileBarChart, children: [
       { labelKey: "nav.reportCenter", href: "/reports" },
       { labelKey: "nav.consumption", href: "/analytics/consumption" },
       { labelKey: "nav.exports", href: "/reports/exports" },
     ]},
+    { labelKey: "nav.assistance", href: "/ai", icon: Sparkles },
   ]},
   { titleKey: "nav.admin", items: [
     { labelKey: "nav.admin", icon: ShieldCheck, documentChildNavigation: true, children: [
@@ -111,6 +109,7 @@ const navigation: NavigationGroup[] = [
 ];
 
 function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
+  if(pathname==="/automation")pathname=groups.flatMap(group=>group.items).find(item=>item.labelKey==="nav.assistance")?.href??pathname;
   if(pathname==="/sales/allocation")pathname="/sales/performance";
   if(pathname==="/students"||pathname==="/progression")pathname="/households";
   if(pathname==="/guardian-portal")pathname="/messages";
@@ -218,6 +217,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     return navigation.map((group) => ({
       ...group,
       items: group.items
+        .map(item=>item.labelKey==="nav.assistance"?{...item,href:hasCapability(user.role,"ai.review")?"/ai":"/automation"}:item)
         .filter((item) => canVisit(item.href) && (item.labelKey !== "nav.admin" || hasCapability(user.role, "admin.access")))
         .map((item) => item.children ? { ...item, children: item.children.filter((child) => canVisit(child.href) && (child.labelKey !== "nav.allocation" || canAllocate)) } : item)
         .filter((item) => !item.children || item.children.length > 0),
