@@ -1,6 +1,17 @@
-# Implementation status — v3.8.30 release candidate
+# Implementation status — v3.10.1 release candidate
 
 ## Scope
+
+v3.10.1 repairs product editing with PostgreSQL offset timestamps and exact version precision,
+separates successful writes from failed list refreshes, and supplies actionable mutation errors.
+Administrators can move products into the recycle bin; super administrators can restore them.
+Forward migration 081 preserves historical references, blocks stale product mutations and new
+quotes using deleted products, and extends eligible recycle-bin cleanup. Product regressions,
+isolated PostgreSQL 18.4 execution, typecheck, targeted lint, and application build passed.
+Remote deployment and browser acceptance are pending. Details and verification evidence are in
+[the product repair record](PRODUCT_MUTATION_REPAIR_2026-10-01.md).
+
+Previous release implementation history follows.
 
 v3.8.30 persists the remember-login choice on the server and aligns database expiry, refresh, and
 Cookie lifetime with the 15-day administrator / 30-day staff absolute boundary. A compatibility

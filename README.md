@@ -1,10 +1,18 @@
 # Lumina CRM
 
-Current release candidate: **v3.10.0**
+Current release candidate: **v3.10.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.10.1 fixes product-save timestamp validation without losing PostgreSQL microsecond
+precision, distinguishes committed writes from failed catalog refreshes, and adds administrator
+product deletion with super-administrator recycle-bin recovery. A forward migration hides deleted
+products from the catalog and new sales while retaining historical references. Product unit and
+isolated PostgreSQL 18.4 regressions, typecheck, targeted lint, and the application build passed;
+remote deployment and browser acceptance remain pending. See the
+[product repair and deployment notes](docs/PRODUCT_MUTATION_REPAIR_2026-10-01.md).
 
 Version 3.10 adds a dedicated notification center with same-page synchronization, manual refresh,
 and task-detail links, plus priority-task filters and row-specific import diagnostics. It hardens
