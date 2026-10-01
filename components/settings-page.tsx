@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- private avatar and MFA QR images are served by authenticated endpoints. */
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BellRing, Camera, Check, ChevronRight, Copy, Download, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, RefreshCcw, Save, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { ConfirmDialog, InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
@@ -129,6 +129,7 @@ function NotificationSettings({ settings, setSettings, persist }: { settings: Us
 type Factor = { id: string; status: string; friendly_name?: string };
 function SecuritySettings() {
   const { t } = useI18n();
+  const router = useRouter();
   const user = useAppUser();
   const [mfaError, setMfaError] = useState("");
   const [mfaSuccess, setMfaSuccess] = useState("");
@@ -258,7 +259,8 @@ function SecuritySettings() {
       if(result.reauthenticate){
         const complete=result.sessionsRevoked&&result.trustedDevicesRevoked;
         navigationStarted=true;
-        window.location.assign(`/login?security=${complete?"PASSWORD_CHANGED":"PASSWORD_CHANGED_REVIEW_SESSIONS"}`);
+        router.replace(`/login?security=${complete?"PASSWORD_CHANGED":"PASSWORD_CHANGED_REVIEW_SESSIONS"}`);
+        router.refresh();
         return;
       }
       setPasswordSuccess(t("settings.passwordSaved"));

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
@@ -466,6 +466,7 @@ function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRe
 
 function ProfilePopover({ user, close,triggerRef }: { user: AppUser; close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {
   const { t } = useI18n();
+  const router = useRouter();
   const roleLabel = t(roleMessageKey[user.role]);
   const menuRef=useRef<HTMLDivElement>(null);
   const restoreFocus=useRef(true);
@@ -473,7 +474,7 @@ function ProfilePopover({ user, close,triggerRef }: { user: AppUser; close: () =
   const [signOutError,setSignOutError]=useState("");
   useEffect(()=>{const trigger=triggerRef.current;const frame=window.requestAnimationFrame(()=>menuRef.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus());return()=>{window.cancelAnimationFrame(frame);if(restoreFocus.current)trigger?.focus();};},[triggerRef]);
   const onKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{const items=Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role='menuitem']")??[]);if(event.key==="Escape"){event.preventDefault();close();return;}if(event.key==="Tab"){event.preventDefault();restoreFocus.current=false;const next=findAdjacentFocusable(triggerRef.current,menuRef.current,event.shiftKey);close();window.requestAnimationFrame(()=>next?.focus());return;}if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key)||!items.length)return;event.preventDefault();const index=items.indexOf(document.activeElement as HTMLElement);const next=event.key==="Home"?0:event.key==="End"?items.length-1:event.key==="ArrowDown"?(index+1+items.length)%items.length:(index-1+items.length)%items.length;items[next]?.focus();};
-  const signOut=async()=>{if(signingOut)return;setSigningOut(true);setSignOutError("");try{await apiFetch<void>("/api/auth/logout",{method:"POST"});restoreFocus.current=false;window.location.assign("/login");}catch{setSignOutError(t("nav.signOutFailed"));setSigningOut(false);}};
+  const signOut=async()=>{if(signingOut)return;setSigningOut(true);setSignOutError("");try{await apiFetch<void>("/api/auth/logout",{method:"POST"});restoreFocus.current=false;router.replace("/login");router.refresh();}catch{setSignOutError(t("nav.signOutFailed"));setSigningOut(false);}};
   return <div ref={menuRef} onKeyDown={onKeyDown} className="top-popover profile-popover" role="menu"><div className="profile-card" role="none"><span>{user.initials}</span><div><b>{user.displayNameZh} / {user.displayName}</b><small>@{user.username} · {user.email}</small><em>{roleLabel} · {t(user.emailVerified ? "nav.emailVerified" : "nav.emailUnverified")}</em></div></div>
     <Link role="menuitem" href="/settings/profile" onClick={close}><Settings size={17} />{t("nav.profileSettings")}</Link>
     <Link role="menuitem" href="/settings/security" onClick={close}><ShieldCheck size={17} />{t("nav.twoFactorSecurity")} <span className={user.mfaEnabled ? "mini-good" : "mini-warning"}>{t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</span></Link>
