@@ -4,7 +4,7 @@ import {apiRoute,requireApiAal2,requireApiRole} from "@/lib/api";
 import {mutationIsTrusted} from "@/lib/request-security";
 import {databaseJson} from "@/lib/db/gateway";
 
-const schema=z.object({kind:z.enum(["ORGANIZATION","CONTACT","TASK","STUDENT","HOUSEHOLD"]),id:z.uuid()});
+const schema=z.object({kind:z.enum(["ORGANIZATION","CONTACT","TASK","STUDENT","HOUSEHOLD","PRODUCT"]),id:z.uuid()});
 async function post(request:Request){
   if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});
   await requireApiRole("SUPER_ADMIN");
