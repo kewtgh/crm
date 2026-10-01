@@ -34,8 +34,18 @@ try{
   await client.query("insert into public.workspace_memberships(workspace_id,user_id,role,status) values($1,$2,'SUPER_ADMIN','ACTIVE')",[ws,user]);
   await client.query("select set_config('app.user_id',$1,false),set_config('app.workspace_id',$2,false),set_config('app.aal','aal2',false)",[user,ws]);
   await client.query("set role crm_app");
+  // Migration 082: API fallback may supply a single-character Chinese name or
+  // a 120-character English name to both legacy storage fields, without truncation.
+  const rule=(await client.query("insert into public.automation_rules(name_zh,name_en,trigger_key,action_type) values('一','一','MANUAL','TASK') returning id")).rows[0];
+  await assert.rejects(client.query("update public.automation_rules set name_zh='' where id=$1",[rule.id]),/automation_rules_name_zh_check/);
   const create=async(code)=>(await client.query("select * from public.create_product_with_price($1,'测试产品','Test product','PROJECT','一次','Once','','','ACTIVE','CNY',100)",[code])).rows[0];
   const product=await create("PRODUCT-REGRESSION");
+  const nameBundleItems=JSON.stringify([{productId:product.id,quantity:1,optional:false,discountCeiling:0}]);
+  const longName="E".repeat(120);
+  const nameBundle=(await client.query("select * from public.create_product_bundle('SINGLE-NAME-LONG',$1,$1,$2)",[longName,nameBundleItems])).rows[0];
+  assert.equal(nameBundle.name_zh,longName);assert.equal(nameBundle.name_en,longName);
+  await client.query("select public.create_product_bundle('SINGLE-NAME-SHORT','一','一',$1)",[nameBundleItems]);
+  await assert.rejects(client.query("select public.create_product_bundle('SINGLE-NAME-EMPTY','','',$1)",[nameBundleItems]),/product_bundle_invalid/);
   // Version tokens must come from the real catalog, not a JS Date (millisecond precision).
   const catalog=async()=>(await client.query("select public.product_catalog_snapshot() as items")).rows[0].items;
   const original=(await catalog()).find(item=>item.id===product.id);

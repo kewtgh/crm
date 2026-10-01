@@ -67,15 +67,16 @@ const phases = [
 ];
 
 const requestedPhase = process.env.QA_PHASE?.trim();
+const formPhase={name:"forms",timeout:55,env:{QA_SCOPE:"structured-inputs"}};
 const mergeOnly = process.env.QA_MERGE_ONLY === "1";
-const selectedPhases = mergeOnly ? [] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
+const selectedPhases = mergeOnly ? [] : requestedPhase === "forms" ? [formPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
 if (!mergeOnly && !selectedPhases.length) throw new Error(`Unknown QA_PHASE ${requestedPhase}`);
 for (const phase of selectedPhases) {
   const index = phases.indexOf(phase);
   const phaseOutput = path.join(rootOutput, "phases", phase.name);
   fs.mkdirSync(phaseOutput, { recursive: true });
   process.stdout.write(
-    `\n[QA stage ${index + 1}/${phases.length}] ${phase.name}: `
+    `\n[QA ${index<0?"targeted":`stage ${index + 1}/${phases.length}`}] ${phase.name}: `
     + `hard limit=${phase.timeout}s\n`,
   );
   await runBounded({
@@ -89,10 +90,12 @@ for (const phase of selectedPhases) {
   });
   const report = JSON.parse(fs.readFileSync(path.join(phaseOutput, "report.json"), "utf8"));
   process.stdout.write(
-    `[QA stage ${index + 1}/${phases.length}] passed: `
+    `[QA ${index<0?"targeted":`stage ${index + 1}/${phases.length}`}] passed: `
     + `${report.pages.length} page/viewports, identities ${report.identity.cleaned}/${report.identity.created}\n`,
   );
 }
+
+if(requestedPhase==="forms")process.exit(0); // Do not merge a component fixture into release acceptance.
 
 const completedReports = phases.flatMap((phase) => {
   const filename = path.join(rootOutput, "phases", phase.name, "report.json");

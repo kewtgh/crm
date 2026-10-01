@@ -124,5 +124,6 @@ test("makes task truncation and legacy timestamps explicit and timezone-aware", 
     assert.doesNotMatch(value, /\.toLocaleString\(/);
   }
   assert.doesNotMatch(finance, /2026-08-01:50000/);
-  assert.match(finance, /finance\.installmentsPlaceholder/);
+  assert.match(finance, /<InstallmentsEditor key=\{action\.id\}\/>/);
+  assert.doesNotMatch(finance, /finance\.installmentsPlaceholder|split\(";"\)/);
 });

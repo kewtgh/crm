@@ -291,9 +291,9 @@ export function CommunicationsInboxPage({
     </section>
     {open&&<AccessibleDrawer pending={pending} title={t("communications.new")} description={t("communications.purposeHelp")} onClose={()=>setOpen(false)}>
       <form onSubmit={create} onChange={()=>{if(!pending)threadRequest.current=null;}}>
-        <SearchableSelect label={t("privacyRequests.contact")} value={contact} options={contacts} onChange={value=>{setContact(value);threadRequest.current=null;}} onSearch={searchContacts}/>
+        <SearchableSelect label={t("privacyRequests.contact")} required value={contact} options={contacts} onChange={value=>{setContact(value);threadRequest.current=null;}} onSearch={searchContacts}/>
         <label className="field"><span>{t("communications.subject")}</span><input name="subject" required maxLength={200}/></label>
-        <label className="field"><span>{t("communications.purpose")}</span><select name="purpose" defaultValue="SERVICE">{communicationPurposes.map(value=><option key={value} value={value}>{t(`communications.purpose.${value.toLowerCase()}`)}</option>)}</select><small>{t("communications.purposeClassification")}</small></label>
+        <label className="field"><span>{t("communications.purpose")}</span><select name="purpose" defaultValue="SERVICE" required>{communicationPurposes.map(value=><option key={value} value={value}>{t(`communications.purpose.${value.toLowerCase()}`)}</option>)}</select><small>{t("communications.purposeClassification")}</small></label>
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending?t("common.processing"):t("common.create")}</button></div>
       </form>

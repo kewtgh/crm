@@ -358,7 +358,9 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="public"){
+    if(env.QA_SCOPE==="structured-inputs"){
+      await require("./qa-structured-inputs.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="public"){
       const publicContext=await browser.newContext({locale:"zh-CN"});
       const publicPage=await publicContext.newPage();observe(publicPage);
       publicPage.setDefaultTimeout(actionTimeoutMs);

@@ -84,7 +84,7 @@ export function Pagination({
 
 export type SelectOption = { value: string; label: string; detail?: string };
 
-export function SearchableSelect({ label, options, value, onChange, placeholder, onSearch, loading = false }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string; onSearch?: (query: string) => void; loading?: boolean }) {
+export function SearchableSelect({ label, options, value, onChange, placeholder, onSearch, loading = false, required = false }: { label: string; options: SelectOption[]; value?: string; onChange: (value: string) => void; placeholder?: string; onSearch?: (query: string) => void; loading?: boolean; required?: boolean }) {
   const { t } = useI18n();
   const resolvedPlaceholder = placeholder ?? t("common.select");
   const [open, setOpen] = useState(false);
@@ -148,7 +148,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
   };
   return (
     <div className="select-field" ref={ref} onKeyDown={handleKeyDown} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null)){setOpen(false);setSearch("");}}}>
-      <span className="select-label">{label}</span>
+      <span className="select-label">{label}{required&&<span className="required-indicator" aria-label={t("input.required")}> *</span>}</span>
       <button ref={triggerRef} type="button" aria-label={label} className="select-trigger" onClick={() => { if (!open) setActiveIndex(0); setOpen((current) => !current); }} aria-expanded={open} aria-haspopup="listbox" aria-controls={listboxId}>
         <span className={selected ? "" : "placeholder"}>{selected?.label ?? resolvedPlaceholder}</span><ChevronDown size={17} />
       </button>
@@ -156,7 +156,7 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
         <div className="select-popover">
           <label className="search-field compact">
             <Search size={17}/>
-            <input ref={searchRef} role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded="true" aria-controls={listboxId} aria-activedescendant={filtered[activeIndex]?`${listboxId}-${activeIndex}`:undefined} value={search} onChange={event=>{setSearch(event.target.value);setActiveIndex(0);}} placeholder={t("common.typeToSearch")}/>
+            <input ref={searchRef} role="combobox" aria-required={required||undefined} aria-label={label} aria-autocomplete="list" aria-expanded="true" aria-controls={listboxId} aria-activedescendant={filtered[activeIndex]?`${listboxId}-${activeIndex}`:undefined} value={search} onChange={event=>{setSearch(event.target.value);setActiveIndex(0);}} placeholder={t("common.typeToSearch")}/>
             {search&&<button type="button" onClick={()=>{setSearch("");setActiveIndex(0);}} aria-label={t("common.clearSearch")}><X size={15}/></button>}
           </label>
           <div className="select-options" id={listboxId} role="listbox" aria-label={label}>
@@ -277,11 +277,12 @@ export function AccessibleDrawer({
     document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
       const preferred = drawerRef.current?.querySelector<HTMLElement>(
-        "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
+        "input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
       );
       (preferred ?? closeRef.current)?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
+      if(drawerRef.current?.inert)return;
       if (event.key === "Escape" && !pendingRef.current) {
         event.preventDefault();
         onCloseRef.current();
@@ -289,8 +290,8 @@ export function AccessibleDrawer({
       }
       if (event.key !== "Tab" || !drawerRef.current) return;
       const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
-        "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-      )).filter((element) => !element.hasAttribute("hidden"));
+        "a[href], button:not([disabled]), input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      )).filter((element) => element.getClientRects().length&&!element.closest("[hidden],[inert]"));
       if (!focusable.length) {
         event.preventDefault();
         closeRef.current?.focus();
@@ -315,10 +316,10 @@ export function AccessibleDrawer({
     };
   }, []);
   return <>
-    <button className="drawer-overlay" type="button" aria-label={t("common.close")} disabled={pending} onClick={onClose}/>
+    <button className="drawer-overlay" type="button" tabIndex={-1} aria-hidden="true" aria-label={t("common.close")} disabled={pending} onClick={onClose}/>
     <aside
       ref={drawerRef}
-      className="record-drawer"
+      className="record-drawer editor-dialog"
       role="dialog"
       aria-modal="true"
       aria-busy={pending}
