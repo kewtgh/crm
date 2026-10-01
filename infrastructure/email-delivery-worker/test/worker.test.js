@@ -173,6 +173,23 @@ test("configured health path succeeds without leaking environment values", async
   assert.equal(provider.calls.length, 0);
 });
 
+test("authenticated HTTPS SMTP relay preserves recipient isolation and idempotency",async()=>{
+  const provider=providerDouble();const worker=createEmailDeliveryWorker({fetchImplementation:provider.fetchImplementation});
+  const secrets=environment({EMAIL_PROVIDER:"SMTP_RELAY",EMAIL_RELAY_URL:"https://mail-relay.example.test/send",EMAIL_RELAY_TOKEN:"a".repeat(48),RESEND_API_KEY:undefined});
+  const response=await worker.fetch(deliveryRequest(),secrets);
+  assert.equal(response.status,200);assert.equal(provider.calls[0].url,secrets.EMAIL_RELAY_URL);
+  assert.equal(provider.calls[0].init.headers.get("authorization"),`Bearer ${secrets.EMAIL_RELAY_TOKEN}`);
+  assert.deepEqual(JSON.parse(provider.calls[0].init.body).to,[RECIPIENT]);
+  assert.ok(provider.calls[0].init.headers.get("idempotency-key"));
+});
+test("relay refuses plaintext URLs and invalid credentials before sending",async()=>{
+  for(const invalid of [{EMAIL_RELAY_URL:"http://mail-relay.example.test/send",EMAIL_RELAY_TOKEN:"a".repeat(48)},{EMAIL_RELAY_URL:"https://mail-relay.example.test/send",EMAIL_RELAY_TOKEN:"bad\r\nkey"}]){
+    const provider=providerDouble(),worker=createEmailDeliveryWorker({fetchImplementation:provider.fetchImplementation});
+    const response=await worker.fetch(deliveryRequest(),environment({EMAIL_PROVIDER:"SMTP_RELAY",...invalid}));
+    assert.equal(response.status,503);assert.equal(provider.calls.length,0);
+  }
+});
+
 test("unconfigured paths return 404 for both GET and POST", async () => {
   const worker = createEmailDeliveryWorker({ fetchImplementation: providerDouble().fetchImplementation });
   assert.equal((await worker.fetch(

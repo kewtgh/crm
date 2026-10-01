@@ -17,6 +17,7 @@ export type CrmRecordDetail = {
   updatedAt: string;
   archived: boolean;
   city?: string;
+  shortName?:string;
   curriculum?: string;
   courseCategories?:string[];affiliationType?:string;parentOrganizationId?:string|null;
   organizationOverviewMarkdown?:string;structureOverviewMarkdown?:string;website?:string;
@@ -46,7 +47,7 @@ export type CrmRecordDetail = {
 };
 
 const resourceConfig = {
-  schools: { table: "organizations", search: ["name_zh", "name_en", "city", "curriculum"], sort: { primary: "name_zh", secondary: "city", status: "status", meta: "key_contact_coverage", extra: "last_contact_at", completeness: "completeness" } },
+  schools: { table: "organizations", search: ["name_zh", "name_en", "short_name", "city", "curriculum"], sort: { primary: "name_zh", secondary: "city", status: "status", meta: "key_contact_coverage", extra: "last_contact_at", completeness: "completeness" } },
   people: { table: "contacts", search: ["name_zh", "name_en", "email", "phone", "title", "notes_markdown"], sort: { primary: "name_zh", secondary: "title", status: "contact_status", meta: "email", extra: "last_interaction_at", completeness: "completeness" } },
   tasks: { table: "crm_tasks", search: ["title_zh", "title_en", "related_label"], sort: { primary: "title_zh", secondary: "related_label", status: "status", meta: "owner_id", extra: "due_at", completeness: "updated_at" } },
 } as const;
@@ -110,9 +111,9 @@ export async function checkCrmDuplicate(resource: PersistentResource, input: { e
 }
 
 export async function createCrmRecord(resource: PersistentResource, input: Record<string, unknown>,ownerId:string) {
-  if(resource==="people"&&input.organizationId){
-    const organizations=await databaseJson<Array<{id:string}>>(`/db/table/organizations?select=id&id=eq.${input.organizationId}&limit=1`);
-    if(!organizations.length)throw new Error("RELATED_ORGANIZATION_NOT_FOUND");
+  if(resource==="people"){
+    const created=await databaseJson<Record<string,unknown>>("/db/rpc/create_customer_contact",{method:"POST",body:JSON.stringify({profile:{...input,ownerId:input.ownerId||ownerId}})});
+    return toRow(resource,created);
   }
   if(resource==="tasks"&&input.relatedId){
     const table=input.relatedType==="CONTACT"?"contacts":"organizations";
@@ -136,12 +137,11 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
     });
     return toRow(resource,created);
   }
-  const body = resource === "schools" ? { name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
+  const body = { short_name:input.shortName??"",name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
       course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
       organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",
       founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
-    : resource === "people" ? { organization_id:input.organizationId||null,name_zh: input.nameZh, name_en: input.nameEn, email: input.email || null, phone: input.phone || null, title: input.title, contact_type:input.contactType??"CONTACT",contact_status:input.contactStatus??"NEW",communication_level:input.communicationLevel??1,notes_markdown:input.notesMarkdown??"",preferred_contact_method:input.preferredContactMethod??"EMAIL",preferred_language:input.preferredLanguage??"",acquisition_source:input.acquisitionSource??"",decision_role:input.decisionRole??"UNKNOWN",tags:input.tags??[],next_follow_up_at:input.nextFollowUpAt??null,status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner }
-      : { title_zh: input.nameZh, title_en: input.nameEn, related_type:input.relatedType,related_id:input.relatedId||null,related_label:input.contact ?? "", status: "TODO", priority: input.priority, due_at: input.dueAt,owner_id:requestedOwner };
+    ;
   const table = resourceConfig[resource].table;
   const created = await databaseJson<Record<string, unknown>[]>(`/db/table/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
   return toRow(resource, created[0]);
@@ -166,7 +166,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
   const common={
     id:String(record.id),resource,
     nameZh:String(resource==="tasks"?record.title_zh:record.name_zh),
-    nameEn:String(resource==="tasks"?record.title_en:record.name_en),
+    nameEn:String(resource==="tasks"?record.title_en:record.name_en),shortName:String(record.short_name??""),
     status:String(record.status),
     ownerId:record.owner_id?String(record.owner_id):null,
     ownerName:profile?`${profile.display_name_zh} / ${profile.display_name_en}`:"—",
@@ -180,12 +180,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
 }
 
 export async function updateCrmRecord(resource:PersistentResource,id:string,expectedUpdatedAt:string,patch:Record<string,unknown>){
-  if(resource==="schools"&&!patch.archived)return databaseJson<Record<string,unknown>>("/db/rpc/update_school_profile",{method:"POST",body:JSON.stringify({
-    target_school:id,expected_updated_at:expectedUpdatedAt,next_name_zh:patch.nameZh,next_name_en:patch.nameEn,next_city:patch.city,
-    next_curriculum:patch.curriculum,next_status:patch.status,next_course_categories:patch.courseCategories??[],next_affiliation_type:patch.affiliationType??"INDEPENDENT",
-    next_parent_organization:patch.parentOrganizationId||null,next_overview_markdown:patch.organizationOverviewMarkdown??"",next_structure_markdown:patch.structureOverviewMarkdown??"",
-    next_website:patch.website??"",next_founded_year:patch.foundedYear??null,next_student_count:patch.studentCount??null,next_faculty_count:patch.facultyCount??null,next_campus_count:patch.campusCount??null,
-  })});
+  if(resource==="schools"&&!patch.archived)return databaseJson<Record<string,unknown>>("/db/rpc/update_school_customer_profile",{method:"POST",body:JSON.stringify({target_school:id,expected_updated_at:expectedUpdatedAt,profile:patch})});
   if(resource==="people"&&!patch.archived)return databaseJson<Record<string,unknown>>("/db/rpc/update_contact_profile",{method:"POST",body:JSON.stringify({
     target_contact:id,expected_updated_at:expectedUpdatedAt,next_name_zh:patch.nameZh,next_name_en:patch.nameEn,
     next_email:patch.email??"",next_phone:patch.phone??"",next_title:patch.title??"",next_record_status:patch.status,

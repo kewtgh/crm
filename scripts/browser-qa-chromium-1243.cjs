@@ -360,6 +360,8 @@ async function main(){
   try{
     if(env.QA_SCOPE==="structured-inputs"){
       await require("./qa-structured-inputs.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="customer-operations"){
+      await require("./qa-customer-operations.cjs")({browser,base,output,report,observe});
     }else if(env.QA_SCOPE==="public"){
       const publicContext=await browser.newContext({locale:"zh-CN"});
       const publicPage=await publicContext.newPage();observe(publicPage);

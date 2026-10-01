@@ -14,6 +14,9 @@ export class DatabaseRequestError extends Error {
 }
 
 const postgresCodeMap: Record<string, string> = {
+  "42703": "DATABASE_MIGRATION_REQUIRED",
+  "42883": "DATABASE_MIGRATION_REQUIRED",
+  "42P01": "DATABASE_MIGRATION_REQUIRED",
   "23503": "RELATED_RECORD_CONFLICT",
   "23505": "RECORD_CONFLICT",
   "23514": "CONSTRAINT_VIOLATION",

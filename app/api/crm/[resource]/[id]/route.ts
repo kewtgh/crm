@@ -19,6 +19,7 @@ const basePatch=z.object({
 });
 const schemas={
   schools:basePatch.extend({
+    shortName:z.string().trim().max(80).optional(),
     city:z.string().trim().min(1).max(80).optional(),
     curriculum:z.string().trim().min(1).max(120).optional(),
     courseCategories:z.array(z.string().trim().min(1).max(100)).max(40).optional(),affiliationType:z.enum(["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"]).optional(),

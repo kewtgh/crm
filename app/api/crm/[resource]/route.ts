@@ -17,6 +17,7 @@ const baseRecordSchema = z.object({
 });
 const resourceSchemas={
   schools:baseRecordSchema.extend({
+    shortName:z.string().trim().max(80).default(""),
     city:z.string().trim().min(1).max(80),
     curriculum:z.string().trim().min(1).max(120),
     courseCategories:z.array(z.string().trim().min(1).max(100)).max(40).default([]),affiliationType:z.enum(["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"]).default("INDEPENDENT"),
@@ -24,8 +25,8 @@ const resourceSchemas={
     website:z.url().or(z.literal("")).default(""),foundedYear:z.number().int().min(1000).max(9999).nullable().optional(),studentCount:z.number().int().nonnegative().nullable().optional(),facultyCount:z.number().int().nonnegative().nullable().optional(),campusCount:z.number().int().nonnegative().nullable().optional(),
   }),
   people:baseRecordSchema.extend({
-    title:z.string().trim().min(1).max(120),
-    organizationId:z.string().uuid(),
+    title:z.string().trim().max(120).default(""),
+    organizationId:z.uuid().nullable().optional(),
     contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"]).default("CONTACT"),
     contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).default("NEW"),
     communicationLevel:z.number().int().min(1).max(4).default(1),

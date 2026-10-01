@@ -12,9 +12,11 @@ import { DataTable } from "@/components/data-table";
 import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
+import { presentApiError } from "@/lib/api-error-presenter";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
 import { TaskWorkspacePanel } from "@/components/task-workspace";
+import { useAppUser } from "./app-user-context";
 import type { TaskWorkspace } from "@/lib/task-workspace-repository";
 
 type Duplicate = { nameZh: string; nameEn: string; reason: string };
@@ -34,6 +36,8 @@ export function ModulePage({
   taskWorkspace?:TaskWorkspace;
 }) {
   const { locale, t } = useI18n();
+  const user=useAppUser();
+  const canAssignOwner=["SUPER_ADMIN","ADMIN","SALES_DIRECTOR"].includes(user.role);
   const searchParams=useSearchParams();
   const { localDateTimeToIso } = useUserPreferences();
   const prefix = `modules.${config.key}`;
@@ -89,6 +93,7 @@ export function ModulePage({
     };
     if (resource === "schools") return {
       ...common,
+      shortName:String(data.get("shortName")??"").trim(),
       city: String(data.get("city") ?? "").trim(),
       curriculum: String(data.get("curriculum") ?? "").trim(),
       courseCategories:String(data.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean),
@@ -100,7 +105,7 @@ export function ModulePage({
     if (resource === "people") return {
       ...common,
       title: String(data.get("title") ?? "").trim(),
-      organizationId: organization,
+      organizationId: organization||null,
       contactType:String(data.get("contactType")??"CONTACT"),
       contactStatus:String(data.get("contactStatus")??"NEW"),
       communicationLevel:Number(data.get("communicationLevel")??1),
@@ -129,11 +134,9 @@ export function ModulePage({
     return common;
   };
   const describeError = useCallback((caught: unknown, fallbackKey: string) => {
-    const requestId = caught instanceof ApiClientError ? caught.requestId : undefined;
-    return `${t(fallbackKey)}${requestId ? ` · ${t("common.requestId")}: ${requestId}` : ""}`;
+    return presentApiError(caught,t,fallbackKey).message;
   }, [t]);
   const validateSpecializedFields = (values: ReturnType<typeof payload>) => {
-    if (resource === "people" && !organization) return t("modules.organizationRequired");
     if (resource === "people" && !values.email && !values.phone) return t("modules.contactMethodRequired");
     if (resource === "tasks" && !related) return t("modules.relatedRequired");
     return "";
@@ -142,7 +145,8 @@ export function ModulePage({
     query: string,
     target: "organization" | "related" | "owner",
   ) => {
-    const result=await runRelatedSearch(signal=>apiFetch<{ items: RelatedResult[] }>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal}));
+    const types=target==="owner"?"USER":target==="organization"?"ORGANIZATION":"ORGANIZATION,CONTACT";
+    const result=await runRelatedSearch(signal=>apiFetch<{ items: RelatedResult[] }>(`/api/search/related?types=${types}&q=${encodeURIComponent(query)}`,{signal}));
     if(!result.current)return;
     if("error" in result){
       setError(describeError(result.error, "modules.relatedSearchFailed"));
@@ -263,6 +267,7 @@ export function ModulePage({
           <label className="field"><span>{t("products.nameEn")}</span><input name="nameEn" maxLength={160}/></label>
         <BilingualNameHint/></div>
         {resource === "schools" && <>
+          <label className="field"><span>{t("customerOps.shortName")}</span><input name="shortName" maxLength={80}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.city")}</span><input name="city" required maxLength={80}/></label>
             <label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" required maxLength={120} options={CURRICULUM_OPTIONS}/></label>
@@ -276,9 +281,9 @@ export function ModulePage({
           <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource === "people" && <>
-          <SearchableSelect label={t("modules.organization")} required options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
-          <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>
-          <label className="field"><span>{t("modules.title")}</span><input name="title" required maxLength={120}/></label>
+          <SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
+          {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>}
+          <label className="field"><span>{t("modules.title")}</span><input name="title" maxLength={120}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
             <label className="field"><span>{t("modules.phone")}</span><input name="phone" type="tel" maxLength={40}/></label>

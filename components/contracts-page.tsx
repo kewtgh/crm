@@ -37,13 +37,13 @@ const statusTone = (status: Contract["status"]) => status === "RISK" ? "red" : s
 const relationshipKeys = ["", "sales.relationship.contact", "sales.relationship.meal", "sales.relationship.family", "sales.relationship.advocacy"];
 const statusKeys: Record<Contract["status"],string> = { DRAFT:"contracts.status.draft", PENDING_APPROVAL:"contracts.status.pending", ACTIVE:"contracts.status.active", RENEWAL_PREP:"contracts.status.preparing", NEGOTIATING:"contracts.status.negotiating", EXPIRED:"contracts.status.expired", CANCELLED:"contracts.status.cancelled", RISK:"contracts.status.risk" };
 
-export function ContractsPage({ initialContracts = [], initialTotal = 0, initialSummary, persistent = false }: { initialContracts?: Contract[]; initialTotal?: number; initialSummary:ContractSummary; persistent?: boolean }) {
+export function ContractsPage({ initialContracts = [], initialTotal = 0, initialSummary, persistent = false,initialQuery="",initialSelectedId="" }: { initialContracts?: Contract[]; initialTotal?: number; initialSummary:ContractSummary; persistent?: boolean;initialQuery?:string;initialSelectedId?:string }) {
   const { locale, t } = useI18n();
   const user=useAppUser();
   const canManage=useCapability("contracts.manage");
   const canRequestExport=useCapability("exports.request");
   const { formatDate, localDateTimeInput, localDateTimeToIso, todayKey } = useUserPreferences();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize,setPageSize]=useState(10);
@@ -53,7 +53,7 @@ export function ContractsPage({ initialContracts = [], initialTotal = 0, initial
   const [summary,setSummary]=useState(initialSummary);
   const [toast, setToast] = useState("");
   const [flowError, setFlowError] = useState("");
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [approvalPending, setApprovalPending] = useState(false);
   const [createOpen,setCreateOpen]=useState(false);const [organization,setOrganization]=useState("");const [organizationOptions,setOrganizationOptions]=useState<Array<{value:string;label:string;detail:string}>>([]);const [organizationLoading,setOrganizationLoading]=useState(false);const [product,setProduct]=useState("");const [productOptions,setProductOptions]=useState<Array<{value:string;label:string}>>([]);const [formError,setFormError]=useState("");const [createPending,setCreatePending]=useState(false);const [renewalPending,setRenewalPending]=useState("");
   const [playbookOpen,setPlaybookOpen]=useState(false);const [playbookSaving,setPlaybookSaving]=useState(false);const [playbookLoading,setPlaybookLoading]=useState(false);const [playbookContext,setPlaybookContext]=useState<RenewalPlaybookContext|null>(null);

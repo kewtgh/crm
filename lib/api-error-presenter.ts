@@ -3,7 +3,16 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  EMAIL_PREVIEW_CHANGED:"customerOps.previewChanged",
+  DATABASE_MIGRATION_REQUIRED:"customerOps.migrationRequired",
   CAPABILITY_FORBIDDEN: "permission.denied",
+  DATABASE_PERMISSION_DENIED:"permission.denied",
+  CRM_CREATE_FORBIDDEN:"permission.denied",
+  CRM_UPDATE_FORBIDDEN:"permission.denied",
+  CONTACT_OWNER_NOT_ASSIGNABLE:"customerOps.ownerNotAssignable",
+  CONTACT_PROFILE_INVALID:"error.invalidInput",
+  RELATED_RECORD_NOT_FOUND:"error.relatedConflict",
+  FOLLOW_UP_IDEMPOTENCY_CONFLICT:"error.conflict",
   ROLE_FORBIDDEN: "permission.denied",
   MFA_REQUIRED: "permission.mfaRequired",
   INVALID_INPUT: "error.invalidInput",

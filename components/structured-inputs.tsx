@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { CalendarDays, Clock3, Plus, X } from "lucide-react";
+import { CalendarDays, Clock3, Plus, X,ChevronLeft,ChevronRight } from "lucide-react";
 import { useI18n } from "./i18n-provider";
 import { academicYearOptions, amountError, COMMON_CURRENCIES, formatAmount, normalizeAmount, parseTokens } from "@/lib/structured-inputs";
 
@@ -39,10 +39,36 @@ export function BilingualNameHint() {
 }
 
 export function DateInput({type="date",...props}:Omit<InputProps,"type">&{type?:"date"|"datetime-local"|"time"|"month"}) {
-  const {t}=useI18n();
+  const {t,locale}=useI18n();
   const input=useRef<HTMLInputElement>(null);
-  const open=()=>{try{input.current?.showPicker();}catch{input.current?.focus();}};
-  return <span className="date-picker-control"><input {...props} ref={input} type={type}/><button className="date-picker-trigger" type="button" disabled={props.disabled||props.readOnly} aria-label={t(type==="time"?"input.chooseTime":"input.chooseDate")} onClick={open}>{type==="time"?<Clock3 size={18}/>:<CalendarDays size={18}/>}</button></span>;
+  const wrap=useRef<HTMLSpanElement>(null),trigger=useRef<HTMLButtonElement>(null);
+  const [open,setOpen]=useState(false),[view,setView]=useState<"days"|"month"|"year">("days"),[cursor,setCursor]=useState(()=>new Date());
+  const id=useId();
+  useEffect(()=>{if(!open)return;const close=(event:MouseEvent)=>{if(!wrap.current?.contains(event.target as Node))setOpen(false);};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close);},[open]);
+  const show=()=>{
+    if(type==="time"){try{input.current?.showPicker();}catch{input.current?.focus();}return;}
+    const raw=input.current?.value.slice(0,10);setCursor(raw?new Date(`${raw.length===7?`${raw}-01`:raw}T12:00:00`):new Date());setView("days");setOpen(value=>!value);
+  };
+  const pick=(date:Date)=>{
+    const field=input.current;if(!field)return;
+    const value=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+    const next=type==="month"?value.slice(0,7):type==="datetime-local"?`${value}T${field.value.slice(11)||"09:00"}`:value;
+    // Native value setter + bubbling input/change retains React controlled inputs
+    // and native FormData/required/min/max validation.
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")?.set?.call(field,next);
+    field.dispatchEvent(new Event("input",{bubbles:true}));field.dispatchEvent(new Event("change",{bubbles:true}));
+    setOpen(false);trigger.current?.focus();
+  };
+  const year=cursor.getFullYear(),month=cursor.getMonth(),first=new Date(year,month,1).getDay(),days=new Date(year,month+1,0).getDate();
+  const available=(date:Date)=>{const value=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`.slice(0,type==="month"?7:10);return(!props.min||value>=String(props.min).slice(0,value.length))&&(!props.max||value<=String(props.max).slice(0,value.length));};
+  return <span ref={wrap} className="date-picker-control" onKeyDown={event=>{if(open&&event.key==="Escape"){event.preventDefault();event.stopPropagation();setOpen(false);trigger.current?.focus();}}} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setOpen(false);}}>
+    <input {...props} ref={input} type={type}/><button ref={trigger} className="date-picker-trigger" type="button" disabled={props.disabled||props.readOnly} aria-label={t(type==="time"?"input.chooseTime":"input.chooseDate")} aria-expanded={type!=="time"?open:undefined} aria-controls={type!=="time"?id:undefined} onClick={show}>{type==="time"?<Clock3 size={18}/>:<CalendarDays size={18}/>}</button>
+    {open&&<span id={id} className="date-calendar" role="group" aria-label={t("input.chooseDate")}><span className="date-calendar-heading"><button type="button" aria-label={t("customerOps.previousMonth")} onClick={()=>setCursor(new Date(year,month-1,1))}><ChevronLeft size={16}/></button><button type="button" onClick={()=>setView(view==="month"?"days":"month")}>{new Intl.DateTimeFormat(locale,{month:"long"}).format(cursor)}</button><button type="button" onClick={()=>setView(view==="year"?"days":"year")}>{year}</button><button type="button" aria-label={t("customerOps.nextMonth")} onClick={()=>setCursor(new Date(year,month+1,1))}><ChevronRight size={16}/></button></span>
+      {view==="month"&&<span className="date-month-grid">{Array.from({length:12},(_,i)=><button type="button" key={i} onClick={()=>{const date=new Date(year,i,1);setCursor(date);setView("days");if(type==="month")pick(date);}}>{new Intl.DateTimeFormat(locale,{month:"short"}).format(new Date(year,i,1))}</button>)}</span>}
+      {view==="year"&&<span className="date-year-grid">{Array.from({length:151},(_,i)=>1900+i).map(value=><button type="button" key={value} aria-pressed={value===year} onClick={()=>{setCursor(new Date(value,month,1));setView("days");}}>{value}</button>)}</span>}
+      {view==="days"&&<span className="date-day-grid">{Array.from({length:7},(_,i)=><small key={`week-${i}`}>{new Intl.DateTimeFormat(locale,{weekday:"short"}).format(new Date(2026,5,7+i))}</small>)}{Array.from({length:first},(_,i)=><span key={`blank-${i}`}/>)}{Array.from({length:days},(_,i)=>{const date=new Date(year,month,i+1);return <button type="button" key={i} disabled={!available(date)} aria-label={new Intl.DateTimeFormat(locale,{dateStyle:"full"}).format(date)} onClick={()=>pick(date)}>{i+1}</button>;})}</span>}
+    </span>}
+  </span>;
 }
 
 type MoneyProps=Omit<InputProps,"type"|"onChange"|"value"|"defaultValue">&{value?:string|number;defaultValue?:string|number;onValueChange?:(value:string)=>void;precision?:number};

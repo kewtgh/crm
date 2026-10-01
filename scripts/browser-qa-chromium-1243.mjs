@@ -68,8 +68,9 @@ const phases = [
 
 const requestedPhase = process.env.QA_PHASE?.trim();
 const formPhase={name:"forms",timeout:55,env:{QA_SCOPE:"structured-inputs"}};
+const customerPhase={name:"customer-operations",timeout:55,env:{QA_SCOPE:"customer-operations"}};
 const mergeOnly = process.env.QA_MERGE_ONLY === "1";
-const selectedPhases = mergeOnly ? [] : requestedPhase === "forms" ? [formPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
+const selectedPhases = mergeOnly ? [] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
 if (!mergeOnly && !selectedPhases.length) throw new Error(`Unknown QA_PHASE ${requestedPhase}`);
 for (const phase of selectedPhases) {
   const index = phases.indexOf(phase);

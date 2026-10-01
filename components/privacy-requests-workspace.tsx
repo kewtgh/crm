@@ -29,8 +29,7 @@ export function PrivacyRequestsWorkspace({ initial }: { initial: PageResult<Priv
     setData(await apiFetch<PageResult<PrivacyRequestRecord>>(`/api/privacy-requests?page=${page}&pageSize=${pageSize}`));
   };
   const searchContacts = useCallback(async (query: string) => {
-    if (query.trim().length < 2) return;
-    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?q=${encodeURIComponent(query)}`).catch(() => ({ items: [] }));
+    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?types=CONTACT&q=${encodeURIComponent(query)}`).catch(() => ({ items: [] }));
     setContactOptions(result.items.filter((item) => item.type === "CONTACT").map((item) => ({
       value: item.value.split(":")[1] ?? "",
       label: locale === "zh-CN" ? item.labelZh : item.labelEn,

@@ -70,13 +70,18 @@ export function validatedRuntimeConfiguration(env) {
     : "";
   const deliveryPath = typeof env.DELIVERY_PATH === "string" ? env.DELIVERY_PATH : "";
   const healthPath = typeof env.HEALTH_PATH === "string" ? env.HEALTH_PATH : "";
-  const apiKey = env.RESEND_API_KEY;
+  const provider = env.EMAIL_PROVIDER ?? "RESEND";
+  if (!["RESEND","SMTP_RELAY"].includes(provider)) return null;
+  const relay = provider === "SMTP_RELAY" ? parseHttpsUrl(env.EMAIL_RELAY_URL) : null;
+  const apiKey = provider === "RESEND" ? env.RESEND_API_KEY : env.EMAIL_RELAY_TOKEN;
+  const validKey = provider === "RESEND" ? validResendApiKey(apiKey)
+    : !!relay && typeof apiKey === "string" && /^[A-Za-z0-9._~-]{32,512}$/.test(apiKey);
   const webhookToken = typeof env.LUMINA_WEBHOOK_TOKEN === "string"
     ? env.LUMINA_WEBHOOK_TOKEN
     : "";
   const applicationUrl = parseHttpsUrl(env.CRM_APP_URL);
 
-  if (!validResendApiKey(apiKey)
+  if (!validKey
     || !webhookToken
     || !applicationUrl
     || !validMailbox(from)
@@ -90,6 +95,8 @@ export function validatedRuntimeConfiguration(env) {
   }
 
   return {
+    provider,
+    providerEndpoint: relay?.toString() ?? "https://api.resend.com/emails",
     apiKey,
     applicationUrl: applicationUrl.toString(),
     brandName,

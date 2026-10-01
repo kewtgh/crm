@@ -1,6 +1,16 @@
-# Implementation status — v3.11.1 release candidate
+# Implementation status — v3.12.0 release candidate
 
 ## Scope
+
+v3.12.0 adds organization, customer and household follow-up goals/entries with rule-based advice;
+existing relationship milestones remain authoritative. Customer/family panels, school aliases and
+explicit contract links use forward migration 083 and existing workspace authorization. Family,
+communication, performance, data-governance and report workspaces have capability-filtered tabs.
+Template/bulk mail supports preview integrity, isolated recipients, per-recipient errors and durable
+queue idempotency. The Worker offers optional authenticated HTTPS SMTP-relay adaptation; no
+external accounts, relay service, OAuth or bidirectional mailbox sync are automatically configured.
+Details: [customer operations audit and plan](AUDIT_CUSTOMER_OPERATIONS_2026-10-01.md) and
+[email provider boundaries](CUSTOMER_EMAIL_PROVIDERS.md).
 
 v3.11.1 repairs Docker verification input completeness by allowing only DEPLOYMENT.md and
 IMPLEMENTATION_STATUS.md through the documentation exclusion. The release-metadata test still
