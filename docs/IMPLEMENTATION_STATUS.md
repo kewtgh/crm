@@ -1,6 +1,11 @@
-# Implementation status — v3.11.0 release candidate
+# Implementation status — v3.11.1 release candidate
 
 ## Scope
+
+v3.11.1 repairs Docker verification input completeness by allowing only DEPLOYMENT.md and
+IMPLEMENTATION_STATUS.md through the documentation exclusion. The release-metadata test still
+reads real repository files and checks the current release. The CI workflow allowlist and Docker
+runtime copies remain unchanged; regression assertions enforce both documentation boundaries.
 
 v3.11.0 unifies centered editing dialogs, structured money/currency/date/tag controls and visual
 receivable installments. Either Chinese or English names are accepted across editing APIs, with

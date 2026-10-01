@@ -1108,7 +1108,7 @@ test("verification build context includes only required documentation and CI con
   assert.equal(dockerIgnore.includes("!docs/DEPLOYMENT.md"), true);
   assert.deepEqual(
     dockerIgnore.filter((line) => line.startsWith("!docs/")),
-    ["!docs/DEPLOYMENT.md"],
+    ["!docs/DEPLOYMENT.md", "!docs/IMPLEMENTATION_STATUS.md"],
   );
   assert.equal(dockerIgnore.includes(".github"), false);
   assert.deepEqual(
