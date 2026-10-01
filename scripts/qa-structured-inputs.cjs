@@ -47,12 +47,28 @@ module.exports=async function runStructuredInputQa({browser,base,output,report,o
       assert.ok(await dialog.locator('select[name="currency"] option').count()>100);
       const date=dialog.locator('input[name="date"]');
       assert.equal(await date.getAttribute("type"),"date");
-      // Verify the explicit opener delegates to the native calendar API without
-      // capturing platform-owned picker UI (not inspectable via the DOM).
-      await date.evaluate(element=>{element.showPicker=()=>{element.dataset.pickerOpened="true";};});
-      await date.locator("..").getByRole("button").click();
-      assert.equal(await date.getAttribute("data-picker-opened"),"true");
-      await date.fill("2026-10-02");
+      const control=date.locator("..");
+      await control.locator(".date-picker-trigger").click();
+      await control.locator(".date-calendar").waitFor();
+      await control.locator(".date-calendar-heading").getByRole("button",{name:"2026",exact:true}).click();
+      await control.locator(".date-year-grid").getByRole("button",{name:"2026",exact:true}).click();
+      assert.equal(await control.locator(".date-year-grid").count(),0,"year selection returns immediately to day view");
+      await control.locator(".date-calendar-heading").getByRole("button",{name:"十月",exact:true}).click();
+      await control.locator(".date-month-grid").getByRole("button",{name:"10月",exact:true}).click();
+      assert.equal(await control.locator(".date-month-grid").count(),0,"month selection returns immediately to day view");
+      await control.locator(".date-day-grid button").filter({hasText:/^2$/}).click();
+      assert.equal(await date.inputValue(),"2026-10-02");
+      assert.equal(await control.locator(".date-calendar").count(),0);
+      await control.locator(".date-picker-trigger").click();await page.keyboard.press("Escape");
+      assert.ok(await dialog.isVisible(),"calendar Escape must not close editor");
+      assert.equal(await control.locator(".date-calendar").count(),0);
+      const select=dialog.locator(".select-field");await select.getByRole("button",{name:"关联候选",exact:true}).click();
+      await select.getByRole("option",{name:"最近学校"}).waitFor();
+      assert.ok((await select.getByRole("option").textContent()).includes("最近学校"),"empty search shows suggestions");
+      await select.getByRole("combobox").fill("简");
+      await select.getByRole("option",{name:"别名命中的学校"}).waitFor();
+      await select.getByRole("option").click();
+      assert.ok((await select.locator(".select-trigger").textContent()).includes("别名命中的学校"),"server alias matches remain selectable");
       assert.equal(await dialog.locator('input[name="datetime"]').getAttribute("type"),"datetime-local");
       assert.equal(await dialog.locator('input[name="time"]').getAttribute("type"),"time");
       assert.equal(await dialog.locator('select[name="year"]').inputValue(),"1890");

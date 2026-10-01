@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import type { CrmRecordDetail, PersistentResource } from "@/lib/crm-repository";
 import { ApiClientError, apiFetch } from "@/lib/api-client";
 import { useI18n } from "@/components/i18n-provider";
+import { useAppUser } from "./app-user-context";
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { AccessibleDrawer, InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
 
@@ -31,6 +32,7 @@ export function CrmRecordEditor({
   onSaved?:(item:CrmRecordDetail)=>void;
 }){
   const {t}=useI18n();
+  const canAssignOwner=["SUPER_ADMIN","ADMIN","SALES_DIRECTOR"].includes(useAppUser().role);
   const {formatDate,localDateTimeInput,localDateTimeToIso}=useUserPreferences();
   const router=useRouter();
   const [detail,setDetail]=useState(initial??null);
@@ -63,7 +65,7 @@ export function CrmRecordEditor({
     ownerSearch.current?.abort();
     const controller=new AbortController();ownerSearch.current=controller;
     try{
-      const result=await apiFetch<{items:RelatedSearchItem[]}>(`/api/search/related?q=${encodeURIComponent(query)}`,{signal:controller.signal});
+      const result=await apiFetch<{items:RelatedSearchItem[]}>(`/api/search/related?types=USER&q=${encodeURIComponent(query)}`,{signal:controller.signal});
       setOwnerOptions(result.items.filter(item=>item.type==="USER").map(item=>({
         value:item.value.split(":")[1]??"",
         label:item.labelZh&&item.labelEn?`${item.labelZh} / ${item.labelEn}`:item.labelZh||item.labelEn,
@@ -83,6 +85,7 @@ export function CrmRecordEditor({
       status:String(form.get("status")??detail.status),
     };
     if(resource==="schools"){
+      patch.shortName=String(form.get("shortName")??"").trim();
       patch.city=String(form.get("city")??"").trim();
       patch.curriculum=String(form.get("curriculum")??"").trim();
       patch.courseCategories=String(form.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean);
@@ -152,6 +155,7 @@ export function CrmRecordEditor({
           <label className="field"><span>{t("products.nameEn")}</span><input name="nameEn" defaultValue={detail.nameEn} maxLength={160}/></label>
         <BilingualNameHint/></div>
         {resource==="schools"&&<>
+          <label className="field"><span>{t("customerOps.shortName")}</span><input name="shortName" defaultValue={detail.shortName} maxLength={80}/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("modules.city")}</span><input name="city" defaultValue={detail.city} required maxLength={80}/></label><label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" defaultValue={detail.curriculum} required maxLength={120} options={CURRICULUM_OPTIONS}/></label></div>
           <label className="field"><span>{t("education.courseCategories")}</span><TagsInput name="courseCategories" defaultValue={detail.courseCategories?.join(", ")}/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue={detail.affiliationType} required>{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={parentOptions} value={parentOrganization} onChange={setParentOrganization} onSearch={searchParents}/></div>
@@ -161,7 +165,7 @@ export function CrmRecordEditor({
           <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} defaultValue={detail.organizationOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} defaultValue={detail.structureOverviewMarkdown} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource==="people"&&<>
-          <SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} placeholder={detail.ownerName} onChange={setOwner} onSearch={searchOwners}/>
+          {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} placeholder={detail.ownerName} onChange={setOwner} onSearch={searchOwners}/>}
           <label className="field"><span>{t("modules.title")}</span><input name="title" defaultValue={detail.title} maxLength={120}/></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.email")}</span><input name="email" type="email" defaultValue={detail.email}/></label>

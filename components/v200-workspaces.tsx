@@ -1,4 +1,5 @@
 "use client";
+import { CustomerOperationsPanel } from "./customer-operations-panel";
 import { SOURCE_OPTIONS } from "@/lib/structured-inputs";
 import { BilingualNameHint } from "@/components/structured-inputs";
 import { DateInput, OptionInput, AcademicYearInput, TagsInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
@@ -57,8 +58,7 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
     } catch (caught) { setError(presentApiError(caught, t, "education.loadFailed").message); }
   };
   const searchPeople = useCallback(async (q: string) => {
-    if (q.trim().length < 2) return;
-    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?q=${encodeURIComponent(q)}`).catch(() => ({ items: [] }));
+    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?types=CONTACT&q=${encodeURIComponent(q)}`).catch(() => ({ items: [] }));
     setPeople(result.items.filter((item) => item.type === "CONTACT").map((item) => ({ value: item.value.split(":")[1] ?? "", label: locale === "zh-CN" ? item.labelZh : item.labelEn, detail: t("nav.people") })));
   }, [locale, t]);
   const searchHouseholds = useCallback(async (q: string) => {
@@ -66,8 +66,7 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
     setHouseholds(result.items.map((item) => ({ value: item.id, label: locale === "zh-CN" ? item.nameZh : item.nameEn, detail: t("nav.households") })));
   }, [locale, t]);
   const searchSchools = useCallback(async (q: string) => {
-    if (q.trim().length < 2) return;
-    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?q=${encodeURIComponent(q)}`).catch(() => ({ items: [] }));
+    const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?types=ORGANIZATION&q=${encodeURIComponent(q)}`).catch(() => ({ items: [] }));
     setSchools(result.items.filter((item) => item.type === "ORGANIZATION").map((item) => ({ value: item.value.split(":")[1] ?? "", label: locale === "zh-CN" ? item.labelZh : item.labelEn, detail: t("nav.schools") })));
   }, [locale, t]);
   const openDetail = async (item: StudentRecord) => {
@@ -232,7 +231,6 @@ export function HouseholdsWorkspace({ initial, initialDetail = null }: { initial
     } catch (caught) { setError(presentApiError(caught, t, "education.saveFailed").message); } finally { setPending(false); setConfirmation(null); }
   };
   const searchMembers=useCallback(async(q:string)=>{
-    if(q.trim().length<2)return;
     const result=await apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(q)}`).catch(()=>({items:[]}));
     setMemberOptions(result.items.filter(item=>item.type==="CONTACT").map(item=>({value:item.value.split(":")[1]??"",label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t("nav.people")})));
   },[locale,t]);
@@ -267,6 +265,7 @@ export function HouseholdsWorkspace({ initial, initialDetail = null }: { initial
       {error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={() => setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.saving") : t("common.create")}</button></div>
     </form></AccessibleDrawer>}
     {detail && <AccessibleDrawer pending={pending} title={`${detail.nameZh} / ${detail.nameEn}`} description={t("education.householdDetailHelp")} onClose={() => setDetail(null)}>
+      <CustomerOperationsPanel key={detail.id} subject="HOUSEHOLD" id={detail.id}/>
       <form onSubmit={saveHousehold}>
         <div className="form-grid two-column"><label className="field"><span>{t("education.nameZh")}</span><input name="nameZh" defaultValue={detail.nameZh}/></label><label className="field"><span>{t("education.nameEn")}</span><input name="nameEn" defaultValue={detail.nameEn}/></label><BilingualNameHint/></div>
         <label className="field"><span>{t("education.address")}</span><textarea name="address" rows={3} defaultValue={detail.address} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>

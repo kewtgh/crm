@@ -23,6 +23,7 @@ import { AccessibleDrawer, InlineMessage, Pagination, ProgressBar, StatusBadge, 
 import { useUserPreferences } from "@/components/user-preferences-context";
 import { CrmRecordEditor } from "@/components/crm-record-editor";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
+import { CustomerOperationsPanel } from "./customer-operations-panel";
 
 const eventIcons: Record<string, React.ElementType> = {
   ORGANIZATION: Building2, CONTACT: UserRound, OPPORTUNITY: Target, TASK: FileCheck2,
@@ -103,7 +104,8 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
       <span><b>{initial.city || "—"}</b><small>{t("customer360.city")}</small></span>
       <span><ProgressBar value={initial.completeness} label={`${initial.completeness}%`}/><small>{t("modules.completeness")}</small></span>
     </section>
-    <section className="surface timeline-surface">
+    <CustomerOperationsPanel subject="ORGANIZATION" id={initial.id}/>
+    <details><summary>{t("customer360.events")}</summary><section className="surface timeline-surface">
       <div className="table-toolbar">
         <label className="compact-filter"><span>{t("customer360.filter")}</span><select value={type} onChange={(event) => { const next = event.target.value; setType(next); void load(1, next); }}><option value="all">{t("common.all")}</option>{types.map((item) => <option key={item} value={item}>{t(`timeline.type.${item.toLowerCase()}`)}</option>)}</select></label>
         {loading && <span role="status"><RefreshCw className="spin" size={15}/>{t("common.loading")}</span>}
@@ -112,7 +114,7 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
       <div className="timeline-list">{data.timeline.items.map((item, index) => <TimelineItem item={item} locale={locale} t={t} key={`${item.type}-${item.entityId}-${index}`}/>)}</div>
       {!data.timeline.items.length && !loading && <div className="empty-state"><span>{t("customer360.empty")}</span></div>}
       <Pagination page={data.timeline.page} totalPages={pages} total={data.timeline.total} pageSize={data.timeline.pageSize} onPage={(page) => void load(page)} onPageSize={(value)=>{setPageSize(value);void load(1,type,value);}}/>
-    </section>
+    </section></details>
     {activityOpen && <AccessibleDrawer pending={activitySaving} title={t("customer360.recordActivity")} eyebrow={t("customer360.drawerEyebrow")} description={t("customer360.activityHelp")} onClose={() => setActivityOpen(false)}><form onSubmit={saveActivity}><div className="form-grid two-column"><label className="field"><span>{t("customer360.activityKind")}</span><select name="activityKind" required>{activityKinds.map((kind) => <option value={kind} key={kind}>{t(`activity.kind.${kind}`)}</option>)}</select></label><label className="field"><span>{t("customer360.occurredAt")}</span><DateInput name="occurredAt" type="datetime-local" max={localDateTimeInput()} defaultValue={localDateTimeInput()} required/></label></div><label className="field"><span>{t("customer360.summaryZh")}</span><textarea name="summaryZh" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.summaryEn")}</span><textarea name="summaryEn" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepZh")}</span><textarea name="nextStepZh" rows={2} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepEn")}</span><textarea name="nextStepEn" rows={2} minLength={2} maxLength={1000} required/></label>{error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={activitySaving} onClick={() => setActivityOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={activitySaving} type="submit">{activitySaving ? t("common.saving") : t("common.save")}</button></div></form></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;

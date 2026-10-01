@@ -90,14 +90,18 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<SelectOption | undefined>();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef=useRef<HTMLInputElement>(null);
   const optionRefs=useRef<Array<HTMLButtonElement|null>>([]);
   const listboxId = useId();
-  const selected = options.find((option) => option.value === value);
-  const filtered = useMemo(() => options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLowerCase().includes(search.toLowerCase())), [options, search]);
+  const selected = options.find((option) => option.value === value) ?? (selectedOption?.value===value?selectedOption:undefined);
+  const filtered = useMemo(() => onSearch ? options : options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLowerCase().includes(search.toLowerCase())), [options, search, onSearch]);
+  const searchCallback = useRef(onSearch);
+  useEffect(()=>{searchCallback.current=onSearch;},[onSearch]);
   const choose = (nextValue: string) => {
+    setSelectedOption(options.find(option=>option.value===nextValue));
     onChange(nextValue);
     setOpen(false);
     setSearch("");
@@ -119,13 +123,14 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
     optionRefs.current[activeIndex]?.scrollIntoView({block:"nearest"});
   },[activeIndex,filtered,open]);
   useEffect(() => {
-    if (!open || !onSearch) return;
-    const timer = window.setTimeout(() => onSearch(search), 250);
+    if (!open || !searchCallback.current) return;
+    const timer = window.setTimeout(() => searchCallback.current?.(search), search ? 120 : 0);
     return () => window.clearTimeout(timer);
-  }, [onSearch, open, search]);
+  }, [open, search]);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && open) {
       event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       triggerRef.current?.focus();
       return;

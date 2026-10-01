@@ -10,7 +10,6 @@ const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
 const MAX_JSON_DEPTH = 5;
 const MAX_JSON_NODES = 256;
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const PROVIDER_USER_AGENT = "lumina-mail-delivery/1.0";
 const SAFE_PROVIDER_ERROR_NAMES = new Set([
   "TypeError",
@@ -204,7 +203,7 @@ function providerRequest(
   if (configuration.replyTo) providerBody.reply_to = configuration.replyTo;
   const construct = (providerRequestStage, init) => {
     try {
-      return { request: new RequestImplementation(RESEND_ENDPOINT, init) };
+      return { request: new RequestImplementation(configuration.providerEndpoint, init) };
     } catch (error) {
       return {
         failure: {

@@ -12,7 +12,6 @@ import {
   ChevronRight,
   DatabaseZap,
   FileBarChart,
-  GraduationCap,
   HelpCircle,
   LayoutDashboard,
   ListChecks,
@@ -58,31 +57,32 @@ const navigation: NavigationGroup[] = [
       { labelKey: "nav.calendar", href: "/calendar" },
     { labelKey: "nav.tasks", href: "/tasks" },
     ]},
-    { labelKey: "nav.messages", href: "/messages", icon: MessageSquareText },
-    { labelKey: "nav.notifications", href: "/notifications", icon: Bell },
   ]},
   { titleKey: "nav.relationships", items: [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
     { labelKey: "nav.people", href: "/people", icon: Users },
-    { labelKey: "nav.students", href: "/students", icon: GraduationCap },
     { labelKey: "nav.households", href: "/households", icon: Users },
-    { labelKey: "nav.guardianPortal", href: "/guardian-portal", icon: ShieldCheck },
   ]},
   { titleKey: "nav.operations", items: [
+    { labelKey: "nav.customerService", icon: MessageSquareText, children: [
+      { labelKey:"nav.messages",href:"/messages" },
+      { labelKey:"nav.notifications",href:"/notifications" },
+      { labelKey:"nav.privacyRequests",href:"/privacy-requests" },
+    ]},
     { labelKey: "nav.sales", icon: Target, children: [
       { labelKey: "nav.leads", href: "/leads" },
       { labelKey: "nav.growth", href: "/growth" },
       { labelKey: "nav.opportunities", href: "/opportunities" },
       { labelKey: "nav.performance", href: "/sales/performance" },
-      { labelKey: "nav.allocation", href: "/sales/allocation" },
       { labelKey: "nav.approvals", href: "/approvals" },
+    ]},
+    { labelKey: "nav.business", icon: Building2, children: [
       { labelKey: "nav.contracts", href: "/contracts" },
       { labelKey: "nav.products", href: "/products" },
       { labelKey: "nav.finance", href: "/finance" },
     ]},
     { labelKey: "nav.automation", href: "/automation", icon: Workflow },
     { labelKey: "nav.data", icon: DatabaseZap, children: [
-      { labelKey: "nav.progression", href: "/progression" },
       { labelKey: "nav.imports", href: "/imports" },
       { labelKey: "nav.duplicates", href: "/duplicates" },
       { labelKey: "nav.quality", href: "/data-quality" },
@@ -96,7 +96,7 @@ const navigation: NavigationGroup[] = [
   ]},
   { titleKey: "nav.admin", items: [
     { labelKey: "nav.admin", icon: ShieldCheck, documentChildNavigation: true, children: [
-      { labelKey: "nav.dashboard", href: "/admin" },
+      { labelKey: "nav.adminOverview", href: "/admin" },
       { labelKey: "nav.approvals", href: "/admin/approvals" },
       { labelKey: "nav.operationsCenter", href: "/admin/operations" },
       { labelKey: "nav.workspaceSettings", href: "/admin/workspace" },
@@ -107,11 +107,13 @@ const navigation: NavigationGroup[] = [
   ]},
   { titleKey: "nav.account", items: [
     { labelKey: "nav.settings", href: "/settings/profile", icon: Settings },
-    { labelKey: "nav.privacyRequests", href: "/privacy-requests", icon: ShieldCheck },
   ]},
 ];
 
 function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
+  if(pathname==="/sales/allocation")pathname="/sales/performance";
+  if(pathname==="/students"||pathname==="/progression")pathname="/households";
+  if(pathname==="/guardian-portal")pathname="/messages";
   const hrefs = groups.flatMap((group) => group.items.flatMap((item) => [
     ...(item.href ? [item.href] : []),
     ...(item.children ?? []).map((child) => child.href),
@@ -136,6 +138,7 @@ const routeCapabilities: Partial<Record<string, Capability>> = {
   "/messages": "messages.view",
   "/notifications": "messages.view",
   "/guardian-portal": "portal.manage",
+  "/privacy-requests":"privacyRequests.manage",
   "/growth": "leads.view",
   "/automation": "automation.manage",
   "/finance": "finance.view",

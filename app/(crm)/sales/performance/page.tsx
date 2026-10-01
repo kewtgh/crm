@@ -1,4 +1,5 @@
 import { SalesPerformancePage } from "@/components/sales-performance-page";
+import { WorkspaceTabs,performanceTabs } from "@/components/workspace-tabs";
 import { DataLoadError } from "@/components/data-state";
 import { localizedPageMetadata } from "@/lib/page-metadata";
 import { loadSalesPerformance } from "@/lib/sales-repository";
@@ -8,5 +9,5 @@ export const generateMetadata = () => localizedPageMetadata("meta.salesPerforman
 export default async function Page() {
   let data;
   try{data=await loadSalesPerformance("quarter","all");}catch{return <DataLoadError detailKey="sales.loadFailed"/>;}
-  return <SalesPerformancePage initialData={data} />;
+  return <div className="page-stack"><WorkspaceTabs items={performanceTabs} active="/sales/performance"/><SalesPerformancePage initialData={data}/></div>;
 }

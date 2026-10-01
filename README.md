@@ -1,10 +1,16 @@
 # Lumina CRM
 
-Current release candidate: **v3.11.1**
+Current release candidate: **v3.12.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.12.0 adds customer-level follow-up goals, evidence-based relationship recommendations,
+school/institution aliases, unified family and communication tabs, personalized template/bulk mail
+with per-recipient consent and idempotency, and an authenticated HTTPS mail-relay adapter. Forward
+migration 083 fixes contact creation/owner assignment and adds explicit family/customer contract
+links. Mailbox OAuth and bidirectional sync still require a separate integration, not just credentials.
 
 Version 3.11.1 restores the real implementation-status document to Docker verification inputs
 through an exact allowlist, preserving strict release-metadata contracts and the minimal runtime
