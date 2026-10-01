@@ -67,6 +67,7 @@ test("Docker application stage runs the closure gate after minimal owned copies"
   );
   assert.doesNotMatch(applicationStage, /COPY(?:[^\n]*\\\r?\n)*[^\n]*\blib\s+\.\/lib/);
   assert.doesNotMatch(applicationStage, /COPY\s+\.\s+\./);
+  assert.doesNotMatch(applicationStage, /COPY(?:[^\n]*\\\r?\n)*[^\n]*\bdocs(?:\/|\s|$)/);
 });
 
 test("missing worker modules use a bounded safe classification", () => {

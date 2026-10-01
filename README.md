@@ -1,10 +1,14 @@
 # Lumina CRM
 
-Current release candidate: **v3.11.0**
+Current release candidate: **v3.11.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.11.1 restores the real implementation-status document to Docker verification inputs
+through an exact allowlist, preserving strict release-metadata contracts and the minimal runtime
+image. The CI workflow allowlist and production deployment behavior are unchanged.
 
 Version 3.11.0 centers and widens all shared editors, formats monetary inputs without changing
 submitted numeric values, provides currency/calendar choices, tag editors and visual receivable
