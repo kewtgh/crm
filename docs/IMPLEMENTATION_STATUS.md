@@ -1,6 +1,13 @@
-# Implementation status — v3.12.0 release candidate
+# Implementation status — v3.13.0 release candidate
 
 ## Scope
+
+v3.13.0 upgrades common UI styling to calm teal/slate, subject-specific customer details and
+keyboard-accessible tabs. Schools show institution contacts, not family sections. Product deletion
+is tucked inside More actions with confirmation; details show prices per currency. Suggestions and
+automation share the final Operations entry with permission-filtered tabs and execution guidance.
+No new schema or deployment changes. [UI audit and plan](UI_AUDIT_PLAN_2026-10-01.md).
+
 
 v3.12.0 adds organization, customer and household follow-up goals/entries with rule-based advice;
 existing relationship milestones remain authoritative. Customer/family panels, school aliases and

@@ -10,6 +10,7 @@ import "./v220.css";
 import "./v220-quality.css";
 import "./v220-operations.css";
 import "./v270.css";
+import "./ui-system.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();

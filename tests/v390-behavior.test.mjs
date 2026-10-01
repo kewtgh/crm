@@ -13,7 +13,7 @@ test("makes product editing discoverable and exposes Markdown details with purch
   assert.match(page,/className="product-row-actions"/);
   assert.match(page,/setEditProduct\(product\)/);
   assert.match(page,/setDetailProduct\(product\)/);
-  assert.match(page,/products\.purchasers/);
+  assert.match(await source("components/product-detail-panel.tsx"),/product\.purchasers\.map/);
   assert.match(page,/data-markdown="true"/);
 });
 
