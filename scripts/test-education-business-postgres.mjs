@@ -12,8 +12,8 @@ try{
   for(let attempt=0;attempt<20;attempt++){client=new pg.Client({connectionString,connectionTimeoutMillis:500,statement_timeout:5000});try{await client.connect();break;}catch(error){await client.end().catch(()=>{});if(attempt===19)throw error;await new Promise(resolve=>setTimeout(resolve,150));}}
   const env={...process.env,DATABASE_ADMIN_URL:connectionString,MIGRATION_DATABASE_URL:connectionString};for(const role of ["APP","SYSTEM","WORKER","MIGRATOR","BACKUP"])env[`CRM_${role}_DB_PASSWORD`]=randomBytes(32).toString("hex");
   run(process.execPath,["scripts/db-bootstrap.mjs"],env);run(process.execPath,["scripts/db-migrate.mjs"],env);
-  const ws="00000000-0000-4000-8000-000000000001",admin=randomUUID(),sales=randomUUID(),foreignWs=randomUUID();
-  for(const [id,role,name] of [[admin,"ADMIN","admin"],[sales,"SALES_SPECIALIST","sales"]]){
+  const ws="00000000-0000-4000-8000-000000000001",admin=randomUUID(),sales=randomUUID(),support=randomUUID(),foreignWs=randomUUID();
+  for(const [id,role,name] of [[admin,"ADMIN","admin"],[sales,"SALES_SPECIALIST","sales"],[support,"SALES_SUPPORT","support"]]){
     await client.query("insert into app_auth.accounts(id,email,username) values($1,$2,$3)",[id,`${name}@example.test`,name]);
     await client.query("insert into public.workspace_memberships(workspace_id,user_id,role,status) values($1,$2,$3,'ACTIVE')",[ws,id,role]);
   }
@@ -50,9 +50,29 @@ try{
   assert.equal((await client.query("select revision from public.education_outreach_events where id=$1",[eventId])).rows[0].revision,1);
   const pathwayId=randomUUID(),pathway={student_id:student,program_type:"FOUNDATION",target_organization_id:null,target_region:"UK",target_major:"Economics",intake_date:"2027-09-01",application_deadline:"2027-06-01",language_test:"IELTS",language_score:6.5,stage:"PREPARING",next_action:"Review application"};
   await save("pathways",pathwayId,pathway);await save("pathways",randomUUID(),{...pathway,program_type:"BRIDGE"});
+  const participationId=randomUUID(),participation={household_id:household,event_id:eventId,party_size:2,status:"REGISTERED",next_action:"Confirm attendees"};
+  await save("participations",participationId,participation);
+  assert.equal((await save("participations",participationId,participation)).revision,1);
+  await assert.rejects(save("participations",randomUUID(),participation),/unique constraint/);
+  await assert.rejects(save("participations",participationId,{...participation,party_size:31},1),/business_capacity_exceeded/);
+  await assert.rejects(save("events",eventId,{...event,capacity:1},1),/business_capacity_exceeded/);
+  await assert.rejects(save("events",eventId,{...event,status:"CANCELLED"},1),/business_active_participations/);
+  const applicationId=randomUUID(),application={student_id:student,title:"Prepare transcript",due_on:"2026-10-10",status:"TODO",next_action:"Request from school"};
+  await save("applications",applicationId,application);
+  await assert.rejects(save("applications",applicationId,{...application,title:""},1),/check constraint/);
   const concurrent=new pg.Client({connectionString,statement_timeout:5000});await concurrent.connect();
   try{
+    await client.query("reset role");
+    const secondFamily=(await client.query("insert into public.households(name_zh,name_en,created_by) values('第二家庭','Second family',$1) returning id",[admin])).rows[0].id;
+    const thirdFamily=(await client.query("insert into public.households(name_zh,name_en,created_by) values('第三家庭','Third family',$1) returning id",[admin])).rows[0].id;
+    await client.query("set role crm_app");
     await concurrent.query("select set_config('app.user_id',$1,false),set_config('app.workspace_id',$2,false),set_config('app.aal','aal2',false)",[admin,ws]);await concurrent.query("set role crm_app");
+    const bookings=await Promise.allSettled([
+      save("participations",randomUUID(),{...participation,household_id:secondFamily,party_size:28}),
+      concurrent.query("select public.save_education_business('participations',$1,null,$2::jsonb)",[randomUUID(),JSON.stringify({...participation,household_id:thirdFamily,party_size:28})]),
+    ]);
+    assert.equal(bookings.filter(result=>result.status==='fulfilled').length,1);
+    assert.equal(bookings.filter(result=>result.status==='rejected'&&/business_capacity_exceeded/.test(result.reason.message)).length,1);
     const outcomes=await Promise.allSettled([
       save("pathways",pathwayId,{...pathway,next_action:"First editor"},1),
       concurrent.query("select public.save_education_business('pathways',$1,1,$2::jsonb)",[pathwayId,JSON.stringify({...pathway,next_action:"Second editor"})]),
@@ -68,6 +88,8 @@ try{
   await context(sales);
   assert.equal((await client.query("select count(*)::int as n from public.education_outreach_events")).rows[0].n,0);
   await assert.rejects(save("events",eventId,event,1),/business_update_forbidden/);
+  assert.equal((await client.query("select count(*)::int as n from public.student_application_tasks")).rows[0].n,0);
+  await assert.rejects(save("applications",applicationId,application,1),/business_update_forbidden/);
   await context(admin);await client.query("reset role");
   await client.query("set role crm_worker");assert.equal((await client.query("select count(*)::int as n from public.student_pathways")).rows[0].n,2);
   await assert.rejects(client.query("update public.student_pathways set stage='CLOSED'"),/permission denied/);
@@ -78,8 +100,46 @@ try{
   await assert.rejects(client.query("update public.education_outreach_events set partner_organization_id=$1 where id=$2",[foreign,eventId]),/foreign key constraint/);
   await client.query("update public.contacts set do_not_contact_reason='PRIVACY_DELETION:test' where id=$1",[contact]);
   assert.equal((await client.query("select count(*)::int as n from public.student_pathways where student_id=$1",[student])).rows[0].n,0);
+  assert.equal((await client.query("select count(*)::int as n from public.student_application_tasks where student_id=$1",[student])).rows[0].n,0);
   await client.query("delete from public.households where id=$1",[household]);
   assert.equal((await client.query("select count(*)::int as n from public.education_family_referrals where id=$1",[referralId])).rows[0].n,0);
+  assert.equal((await client.query("select count(*)::int as n from public.education_event_participations where id=$1",[participationId])).rows[0].n,0);
+  const buyer=(await client.query("insert into public.households(name_zh,name_en,created_by) values('签约家庭','Buying family',$1) returning id",[admin])).rows[0].id;
+  const product=(await client.query("select id from public.products where workspace_id=$1 and active limit 1",[ws])).rows[0].id;
+  await client.query("set role crm_app");
+  const draft=(await client.query("select to_jsonb(public.create_buyer_contract('FAMILY-001',null,$1,$2,current_date,current_date+30,'CNY',1000,1::smallint)) as item",[buyer,product])).rows[0].item;
+  assert.equal(draft.household_id,buyer);assert.equal(draft.organization_id,null);
+  await assert.rejects(client.query("select public.create_buyer_contract('BAD-001',$1,$2,null,current_date,current_date+30,'CNY',1000,1::smallint)",[school,buyer]),/contract_invalid/);
+  await assert.rejects(client.query("select public.create_buyer_contract('BAD-002',$1,null,null,current_date,current_date+30,'CNY',1000,1::smallint)",[foreign]),/contract_buyer_not_found/);
+  const quote=(await client.query("select to_jsonb(public.create_buyer_quote('FAMILY-Q1',null,$1,null,$2,null,null,'CNY',1000,0,current_date+30,'','')) as item",[buyer,product])).rows[0].item;
+  assert.equal(quote.household_id,buyer);
+  await context(support);
+  await assert.rejects(client.query("select public.create_buyer_quote('SUPPORT-Q1',null,$1,null,$2,null,null,'CNY',1000,0,current_date+30,'','')",[buyer,product]),/quote_not_authorized/);
+  await context(admin);
+  await client.query("reset role");
+  await client.query("update public.quotes set status='ACCEPTED' where id=$1",[quote.id]);
+  await client.query("update public.contracts set status='ACTIVE' where id=$1",[draft.id]);
+  await client.query("set role crm_app");
+  const converted=(await client.query("select to_jsonb(public.convert_quote_to_contract($1,'FAMILY-QC',current_date,current_date+30)) as item",[quote.id])).rows[0].item;
+  assert.equal(converted.household_id,buyer);
+  const renewal=(await client.query("select to_jsonb(public.create_contract_renewal($1)) as item",[draft.id])).rows[0].item;
+  assert.equal(renewal.household_id,buyer);
+  const summary=(await client.query("select public.contract_summary() as item")).rows[0].item;
+  assert.equal(summary.renewalAlerts.some(row=>row.id===draft.id&&row.customer==='签约家庭'),true);
+  await context(sales);
+  const hidden=(await client.query("select public.contract_summary() as item")).rows[0].item;
+  assert.equal(hidden.renewalAlerts.some(row=>row.id===draft.id),false);
+  assert.equal(hidden.validCount,0);
+  await context(admin);await client.query("reset role");
+  await assert.rejects(client.query("delete from public.households where id=$1",[buyer]),/foreign key constraint/);
+  await client.query("insert into public.payments(workspace_id,contract_id,product_id,amount,currency,status,paid_at,verified_by) values($1,$2,$3,1000,'CNY','CONFIRMED',now(),$4)",[ws,draft.id,product,admin]);
+  await client.query("set role crm_app");
+  const catalog=(await client.query("select public.product_catalog_snapshot() as item")).rows[0].item;
+  assert.equal(catalog.find(row=>row.id===product).purchasers.some(row=>row.buyerType==='HOUSEHOLD'&&row.organizationId===buyer),true);
+  assert.equal(catalog.find(row=>row.id===product).metrics.CNY.customers,1);
+  const report=(await client.query("select public.consumption_report('month','CNY') as item")).rows[0].item;
+  assert.equal(report.topCustomers.some(row=>row.nameZh==='签约家庭'&&row.customerType==='family'),true);
+  console.log("Family purchasing: direct contract, quote conversion, renewal, reports, scoped summary and retained financial history passed.");
   console.log("Education business PostgreSQL: migration, typed constraints, idempotency, revisions, attribution, RLS, tenant FKs, privacy cleanup and lifecycle passed.");
 }finally{
   await client?.end().catch(()=>{});

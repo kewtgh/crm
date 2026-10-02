@@ -34,7 +34,7 @@ async function post(request:Request){
       if(error.code==="BUSINESS_VERSION_CONFLICT")throw new ApiError(error.code,409);
       if(error.code==="BUSINESS_UPDATE_FORBIDDEN")throw new ApiError(error.code,403);
       if(error.code==="BUSINESS_RECORD_NOT_FOUND"||error.code==="BUSINESS_RELATED_NOT_FOUND")throw new ApiError(error.code,404);
-      if(["BUSINESS_EVENT_SOURCE_MISMATCH","BUSINESS_PARENT_IMMUTABLE","BUSINESS_INPUT_INVALID","CONSTRAINT_VIOLATION"].includes(error.code))throw new ApiError(error.code,400);
+      if(["BUSINESS_CAPACITY_EXCEEDED","BUSINESS_EVENT_CANCELLED","BUSINESS_ACTIVE_PARTICIPATIONS","BUSINESS_EVENT_SOURCE_MISMATCH","BUSINESS_PARENT_IMMUTABLE","BUSINESS_INPUT_INVALID","CONSTRAINT_VIOLATION"].includes(error.code))throw new ApiError(error.code,400);
     }
     throw error;
   }

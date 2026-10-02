@@ -14,7 +14,7 @@ import { DetailTabs } from "./detail-tabs";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 type SaveAttempt={resource:BusinessResource;id:string;expectedRevision:number|null;data:Record<string,unknown>};
-const subjectKey:Record<BusinessResource,string>={organizations:"id",needs:"id",pathways:"student_id",events:"organization_id",referrals:"source_organization_id"};
+const subjectKey:Record<BusinessResource,string>={organizations:"id",needs:"id",pathways:"student_id",events:"organization_id",referrals:"source_organization_id",participations:"household_id",applications:"student_id"};
 function initialDraft(resource:BusinessResource,context?:BusinessContext):Record<string,unknown>{
   const result=Object.fromEntries(businessConfig[resource].fields.map(field=>[field.key,field.kind==="multi"?[]:field.kind==="number"||field.kind==="date"||field.kind==="relation"?null:field.initial??""]));
   if(resource==="organizations"||resource==="needs")result.id=null;
@@ -53,7 +53,7 @@ export function EducationBusinessWorkspace({context,initialResource}:{context?:B
   },[resource,context,t,runLoad,pageSize,setData,setError,setLoading]);
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>void load(1,controller.signal),0);return()=>{clearTimeout(timer);controller.abort();};},[load]);
   const saved=async()=>{setEditor(null);setNotice(t("business.saved"));const refreshed=await load(data?.page??1);if(!refreshed)setNotice(t("business.savedRefreshFailed"));};
-  const label=(row:BusinessRecord)=>resource==="events"?String(row.name):data?.labels[`${resource==="needs"?"HOUSEHOLD":resource==="pathways"?"STUDENT":"ORGANIZATION"}:${row[subjectKey[resource]]}`]??t("business.unavailable");
+  const label=(row:BusinessRecord)=>resource==="events"?String(row.name):resource==="applications"?String(row.title):data?.labels[`${resource==="needs"||resource==="participations"?"HOUSEHOLD":resource==="pathways"?"STUDENT":"ORGANIZATION"}:${row[subjectKey[resource]]}`]??t("business.unavailable");
   const showValue=(row:BusinessRecord,field:BusinessField)=>{
     const value=row[field.key];
     if(value===null||value===undefined||value===""||Array.isArray(value)&&!value.length)return t("business.unknown");
@@ -76,7 +76,7 @@ export function EducationBusinessWorkspace({context,initialResource}:{context?:B
       {loading&&<p role="status">{t("common.loading")}</p>}
       {data&&<><p>{t("business.total",{count:data.total})}</p><div className="business-record-grid">{data.items.map(row=><article className="detail-section business-record-card" key={row.id}>
         <div className="surface-heading"><h2>{label(row)}</h2>{canManage&&data.editableIds.includes(row.id)&&<button className="secondary-button" onClick={()=>setEditor({record:row,token:row.id})}>{t("crm.edit")}</button>}</div>
-        <dl className="customer-profile">{businessConfig[resource].fields.filter(field=>["roles","partnership_stage","services","budget_min","budget_max","budget_currency","stage","program_type","kind","starts_on","status","referred_on","household_id","next_action"].includes(field.key)).map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl>
+        <dl className="customer-profile">{businessConfig[resource].fields.filter(field=>["roles","partnership_stage","services","budget_min","budget_max","budget_currency","stage","program_type","kind","starts_on","status","referred_on","household_id","event_id","party_size","due_on","title","next_action"].includes(field.key)).map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl>
         {businessWarnings(resource,row,data.today).map(warning=><p className="business-warning" key={warning}>{t(`business.warning.${warning}`)}</p>)}
         <details><summary>{t("business.details")}</summary><dl className="customer-profile">{businessConfig[resource].fields.map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl><small>{t("business.updated")}: {formatDate(row.updated_at,{includeTime:true})}</small></details>
       </article>)}</div>{!data.items.length&&!loading&&<div className="empty-state">{t("business.empty")}</div>}<Pagination page={data.page} pageSize={data.pageSize} total={data.total} totalPages={Math.max(1,Math.ceil(data.total/data.pageSize))} onPage={page=>void load(page)} onPageSize={setPageSize}/></>}
@@ -103,7 +103,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
     }catch(caught){
       if(caught instanceof ApiClientError&&caught.status>=400&&caught.status<500){
         attempt.current=null;setUncertain(false);
-        setError(t(caught.code==="BUSINESS_VERSION_CONFLICT"?"business.conflict":caught.code==="BUSINESS_UPDATE_FORBIDDEN"?"business.forbidden":caught.code==="BUSINESS_EVENT_SOURCE_MISMATCH"?"business.eventMismatch":caught.code==="BUSINESS_PARENT_IMMUTABLE"?"business.parentImmutable":"business.invalid"));
+        setError(t(caught.code==="BUSINESS_VERSION_CONFLICT"?"business.conflict":caught.code==="BUSINESS_UPDATE_FORBIDDEN"?"business.forbidden":caught.code==="BUSINESS_EVENT_SOURCE_MISMATCH"?"business.eventMismatch":caught.code==="BUSINESS_CAPACITY_EXCEEDED"?"business.capacityExceeded":caught.code==="BUSINESS_EVENT_CANCELLED"||caught.code==="BUSINESS_ACTIVE_PARTICIPATIONS"?"business.cancelledEvent":caught.code==="RECORD_CONFLICT"?"business.duplicateParticipation":caught.code==="BUSINESS_PARENT_IMMUTABLE"?"business.parentImmutable":"business.invalid"));
       }else{setUncertain(true);setError(t("business.uncertain"));}
     }finally{busy.current=false;setPending(false);onPending(false);}
   };
@@ -111,7 +111,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
   const fields=subjectField?[subjectField,...config.fields]:config.fields;
   return <AccessibleDrawer title={t(`business.resource.${resource}`)} description={t(`business.help.${resource}`)} onClose={onClose} pending={pending||uncertain}>
     <form onSubmit={event=>void save(event)} className="page-stack"><fieldset className="follow-up-fields" disabled={pending||uncertain}><div className="form-grid two-column">{fields.map(field=>{
-      const value=draft[field.key];const locked=!!record&&["id",subjectKey[resource],...(resource==="referrals"?["household_id"]:[])].includes(field.key)||!!context&&((context.type===config.subject&&field.key===subjectKey[resource])||resource==="referrals"&&field.key===(context.type==="HOUSEHOLD"?"household_id":"source_organization_id"));
+      const value=draft[field.key];const locked=!!record&&["id",subjectKey[resource],...(resource==="referrals"?["household_id"]:resource==="participations"?["event_id"]:[])].includes(field.key)||!!context&&((context.type===config.subject&&field.key===subjectKey[resource])||resource==="referrals"&&field.key===(context.type==="HOUSEHOLD"?"household_id":"source_organization_id"));
       const fieldLabel=field.key==="id"?t(resource==="organizations"?"business.field.organization_id":"business.field.household_id"):t(`business.field.${field.key}`);
       if(field.kind==="relation")return <BusinessRelation key={field.key} field={field} label={fieldLabel} value={String(value??"")} initialLabel={labels[`${field.relation}:${value}`]} disabled={pending||uncertain||locked} onChange={value=>change(field.key,value||null)}/>;
       if(field.kind==="multi")return <fieldset className="business-choices" key={field.key}><legend>{fieldLabel}</legend>{field.options!.map(option=><label key={option}><input type="checkbox" checked={(value as string[]).includes(option)} onChange={event=>change(field.key,event.target.checked?[...(value as string[]),option]:(value as string[]).filter(item=>item!==option))}/>{t(`business.option.${option}`)}</label>)}</fieldset>;

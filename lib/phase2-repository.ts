@@ -21,9 +21,9 @@ export async function loadContactPrivacy(id:string):Promise<ContactPrivacy>{
 export async function saveContactConsent(input:{contactId:string;channel:string;purpose:string;status:string;source:string;evidence?:string;retentionUntil?:string|null;quietStart?:string|null;quietEnd?:string|null}){return databaseJson("/db/rpc/save_contact_consent",{method:"POST",body:JSON.stringify({target_contact:input.contactId,target_channel:input.channel,target_purpose:input.purpose,target_status:input.status,consent_source:input.source,evidence:input.evidence??"",retained_until:input.retentionUntil||null,quiet_start:input.quietStart||null,quiet_end:input.quietEnd||null})});}
 export async function setContactDoNotContact(id:string,enabled:boolean,reason:string){return databaseJson(`/db/table/contacts?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({do_not_contact:enabled,do_not_contact_reason:enabled?reason:"",updated_at:new Date().toISOString()})});}
 
-type QuoteRow={id:string;quote_number:string;organization_id:string;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
+type QuoteRow={id:string;quote_number:string;organization_id:string|null;household_id:string|null;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
 type QuoteVersionRow={quote_id:string;version:number;subtotal:number;discount_amount:number;total_amount:number;terms_zh:string;terms_en:string;bundle_id:string|null;bundle_version:number|null;base_currency:string|null;base_total_amount:number|null};
-export type QuoteRecord={id:string;number:string;organizationId:string;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
+export type QuoteRecord={id:string;number:string;organizationId:string|null;householdId?:string|null;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
 export type ReceivableRecord={id:string;contractId:string;contractNumber:string;installment:number;dueDate:string;amount:number;paidAmount:number;status:string;currency:string};
 export type RefundRecord={id:string;number:string;paymentId:string;amount:number;reason:string;status:string;receipt:string;createdAt:string};
 export type PaymentRecord={id:string;contractId:string;scheduleId:string|null;amount:number;refundedAmount:number;currency:string;status:string;reference:string;paidAt:string|null};
@@ -84,7 +84,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
   const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
   const page=(value:number|undefined)=>Math.max(1,value??1);
   const quotePage=page(options.quotePage??options.page);
-  const quoteParams=new URLSearchParams({select:"id,quote_number,organization_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
+  const quoteParams=new URLSearchParams({select:"id,quote_number,organization_id,household_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
   const query=(options.query??"").replace(/[*,()]/g," ").trim();
   if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
   const [
@@ -123,26 +123,29 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
   const refundRows=refundResult.items;
   const reconciliationRows=reconciliationResult.items;
   const quoteIds=quoteRows.map(item=>item.id);
-  const organizationIds=[...new Set(quoteRows.map(item=>item.organization_id))];
+  const organizationIds=[...new Set(quoteRows.map(item=>item.organization_id).filter(Boolean))];
   const relatedContractIds=[...new Set([
     ...contractRows.map(item=>item.id),
     ...receivableRows.map(item=>item.contract_id),
     ...paymentRows.map(item=>item.contract_id),
     ...reconciliationRows.map(item=>item.contract_id),
   ])];
-  const [versions,organizations,relatedContracts,scheduleRows]=await Promise.all([
+  const householdIds=[...new Set(quoteRows.map(item=>item.household_id).filter(Boolean))];
+  const [versions,organizations,relatedContracts,scheduleRows,households]=await Promise.all([
     quoteIds.length?databaseJson<QuoteVersionRow[]>(`/db/table/quote_versions?select=quote_id,version,subtotal,discount_amount,total_amount,terms_zh,terms_en,bundle_id,bundle_version,base_currency,base_total_amount&quote_id=in.(${quoteIds.join(",")})&order=version.desc`):Promise.resolve([]),
     organizationIds.length?databaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/db/table/organizations?select=id,name_zh,name_en&id=in.(${organizationIds.join(",")})`):Promise.resolve([]),
     relatedContractIds.length?databaseJson<ContractRow[]>(`/db/table/contracts?select=id,contract_number,currency,contract_value,status&id=in.(${relatedContractIds.join(",")})`):Promise.resolve([]),
     contractRows.length?databaseJson<Array<{contract_id:string}>>(`/db/table/receivable_schedules?select=contract_id&contract_id=in.(${contractRows.map(item=>item.id).join(",")})`):Promise.resolve([]),
+    householdIds.length?databaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/db/table/households?select=id,name_zh,name_en&id=in.(${householdIds.join(",")})`):Promise.resolve([]),
   ]);
+  const householdMap=new Map(households.map(item=>[item.id,item]));
   const versionMap=new Map<string,QuoteVersionRow>();
   versions.forEach(item=>{if(!versionMap.has(item.quote_id))versionMap.set(item.quote_id,item);});
   const orgMap=new Map(organizations.map(item=>[item.id,item]));
   const contractMap=new Map(relatedContracts.map(item=>[item.id,item]));
   const scheduled=new Set(scheduleRows.map(item=>item.contract_id));
   return{
-    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=orgMap.get(item.organization_id);return{id:item.id,number:item.quote_number,organizationId:item.organization_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
+    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=item.household_id?householdMap.get(item.household_id):orgMap.get(item.organization_id!);return{id:item.id,number:item.quote_number,organizationId:item.organization_id,householdId:item.household_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
     quoteTotal:quoteResult.total,
     contracts:contractRows.map(item=>({id:item.id,number:item.contract_number,currency:item.currency,value:Number(item.contract_value),status:item.status,hasSchedule:scheduled.has(item.id)})),
     contractTotal:contractResult.total,
@@ -161,7 +164,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     exchangeRates:rateRows.map(item=>({id:item.id,base:item.base_currency,quote:item.quote_currency,rate:Number(item.rate),source:item.source,effectiveAt:item.effective_at})),
   };
 }
-export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="createQuote"?"create_quote_v100":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="acceptQuote")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
+export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="createQuote"?"create_buyer_quote":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="createQuote"){body.target_organization??=null;body.target_household??=null;}if(operation==="acceptQuote")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
 
 export type ImportBatchRecord={id:string;resourceType:string;filename:string;status:string;total:number;valid:number;invalid:number;duplicates:number;applied:number;failed:number;createdAt:string};
 export type ImportRowRecord={id:string;batchId:string;rowNumber:number;normalized:Record<string,string>;status:string;errors:Array<{code:string}>;decision:string|null;duplicateId:string|null;score:number|null;reasons:string[];lastError:string|null};

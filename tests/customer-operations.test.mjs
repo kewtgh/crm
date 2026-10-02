@@ -107,7 +107,7 @@ test("new workflows preserve origin/capability checks, preview integrity and exi
 });
 test("migration guards contact assignment, writes, workspace isolation and relationship evidence remains authoritative",async()=>{
   const sql=await source("db/migrations/202610010083_customer_operations.sql");assert.match(sql,/assigned<>actor/);assert.match(sql,/SALES_DIRECTOR'\)/);assert.match(sql,/customer_subject_access\(p_subject_kind,subject,true\)/);assert.match(sql,/pg_advisory_xact_lock/);assert.match(sql,/existing.occurred_at<>/);assert.match(sql,/enable row level security/);assert.match(sql,/public.update_school_profile\(/);assert.match(sql,/short_name ilike pattern/);
-  const repo=await source("lib/customer-operations-repository.ts");assert.match(repo,/relationship_milestones/);assert.match(repo,/evidence_status=neq.REJECTED/);assert.match(repo,/customer_contract_links/);assert.doesNotMatch(repo,/contracts\?.*household_id/);
+  const repo=await source("lib/customer-operations-repository.ts");assert.match(repo,/relationship_milestones/);assert.match(repo,/evidence_status=neq.REJECTED/);assert.match(repo,/customer_contract_links/);assert.match(repo,/contracts\?.*household_id/);
   assert.match(repo,/!capabilities.contracts\?Promise.resolve\(\[\] as BusinessRecord\[\]\)/);assert.match(repo,/capabilities.opportunities&&/);
   const api=await source("app/api/customer-operations/route.ts");assert.match(api,/hasCapability\(user.role,"contracts.view"\)/);assert.match(api,/hasCapability\(user.role,"opportunities.view"\)/);
 });
