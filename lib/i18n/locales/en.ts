@@ -1,6 +1,7 @@
 import type { Messages } from "../types";
 import { enV3120 } from "./v3120";
 import { enV3130 } from "./v3130";
+import { enAudit20261002 } from "./audit-20261002";
 import { enSalesPlaybook } from "./sales-playbook";
 import { enWorkspacePages } from "./workspace-pages";
 import { enAnalysisPages } from "./analysis-pages";
@@ -449,4 +450,5 @@ export const en: Messages = {
   "pipeline.paymentStage":"Payment-stage value","pipeline.search":"Search opportunity titles","pipeline.loadFailed":"Opportunity data could not be loaded. Try again shortly.","pipeline.productsLoadFailed":"Products could not be loaded. Retry before creating the opportunity.","pipeline.organization":"Customer organization","pipeline.organizationRequired":"Select a customer organization.","pipeline.createFailed":"The opportunity could not be created. Check {field}.","pipeline.created":"Opportunity created.","pipeline.stageFailed":"The stage update failed. Your input is still available.","pipeline.stageUpdated":"Opportunity stage updated.","pipeline.changeStage":"Change the stage for “{title}”","pipeline.nextNeeded":"Next step required","pipeline.empty":"No opportunities in this scope","pipeline.createHelp":"Record bilingual titles, value, expected date, and next action for international collaboration.","pipeline.expectedClose":"Expected close date","pipeline.amount":"Expected value","pipeline.currency":"Currency code","pipeline.nextActionZh":"Next action (Chinese)","pipeline.nextActionEn":"Next action (English)","pipeline.form":"form values","pipeline.transition.title":"Advance opportunity stage","pipeline.transition.eyebrow":"Stage guide","pipeline.transition.description":"Complete the target stage requirements before updating so the team can keep moving.","pipeline.transition.opportunity":"Opportunity","pipeline.transition.target":"Target stage","pipeline.transition.evidence":"Won evidence","pipeline.transition.evidenceHelp":"Record verifiable contract, payment, or customer confirmation evidence.","pipeline.transition.reason":"Loss reason","pipeline.transition.reasonHelp":"Record the primary reason and reusable learning.","pipeline.transition.confirm":"Confirm stage change","pipeline.transition.nextRequired":"Enter the expected close date and both next-action translations.","pipeline.transition.evidenceRequired":"Won evidence is required before closing the opportunity as won.","pipeline.transition.reasonRequired":"A loss reason is required before closing the opportunity as lost.","common.requestId":"Request ID",
   ...enV3120,
   ...enV3130,
+  ...enAudit20261002,
 };

@@ -1,4 +1,6 @@
 /* v3.13: shared calm teal/slate design system. Keep semantic status colors distinct. */
+.follow-up-workspace[hidden] { display: none; }
+.follow-up-fields { min-width: 0; border: 0; padding: 0; margin: 0; display: grid; gap: 16px; }
 :root {
   --ink: #20333b;
   --muted: #586d76;

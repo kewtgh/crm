@@ -1,0 +1,10 @@
+import { z } from "zod";
+import { bilingualSchema } from "./bilingual-names";
+const trigger=z.enum(["LEAD_CREATED","LEAD_STATUS_CHANGED","OPPORTUNITY_STAGE_CHANGED","CONTRACT_RENEWAL_DUE","MANUAL"]);
+export const automationInputSchema=bilingualSchema(z.discriminatedUnion("operation",[
+  z.object({operation:z.literal("create"),nameZh:z.string().trim().max(160).default(""),nameEn:z.string().trim().max(160).default(""),triggerKey:trigger,conditionField:z.enum(["status","source","stage","currency"]).optional(),conditionValue:z.string().trim().max(160).optional(),actionType:z.enum(["TASK","NOTIFICATION"]),titleZh:z.string().trim().max(160).default(""),titleEn:z.string().trim().max(160).default(""),priority:z.enum(["LOW","NORMAL","HIGH","URGENT"]),dueHours:z.number().int().min(1).max(2160)}),
+  z.object({operation:z.literal("toggle"),id:z.uuid(),active:z.boolean()}),
+  z.object({operation:z.literal("run"),triggerKey:trigger,eventKey:z.string().trim().min(8).max(240),payload:z.record(z.string(),z.union([z.string(),z.number(),z.boolean(),z.null()])).default({})}),
+  z.object({operation:z.literal("preview"),id:z.uuid(),payload:z.record(z.string(),z.union([z.string(),z.number(),z.boolean(),z.null()])).default({})}),
+  z.object({operation:z.literal("retry"),id:z.uuid()}),
+])).refine(value=>value.operation!=="create"||(value.titleZh.length>=2&&value.titleEn.length>=2),{path:["titleZh"],message:"action_title_too_short"});

@@ -87,8 +87,12 @@ test("all literal date/time inputs use a picker; name pairs have shared combined
 
 test("editing APIs apply bilingual validation after field validation, including partial CRM edits",async()=>{
   for(const file of ["products","admin/teams","admin/users","catalog","education","crm/[resource]","automation","growth","leads","settings"]){
-    const text=await source(`app/api/${file}/route.ts`);
-    assert.match(text,/bilingualSchema\((?:schema|createSchema|resourceSchemas\[resource\])\)\.safeParse/,file);
+    const route=await source(`app/api/${file}/route.ts`);
+    const text=file==="automation"?await source("lib/automation-input.ts"):route;
+    if(file==="automation"){
+      assert.match(route,/automationInputSchema.safeParse/);
+      assert.match(text,/automationInputSchema=bilingualSchema\(z.discriminatedUnion/);
+    }else assert.match(text,/bilingualSchema\((?:schema|createSchema|resourceSchemas\[resource\])\)\.safeParse/,file);
     assert.doesNotMatch(text,/(?:nameZh|nameEn|displayNameZh|displayNameEn):\s*z\.string\(\)\.trim\(\)\.min\(/,file);
   }
   const partial=await source("app/api/crm/[resource]/[id]/route.ts");

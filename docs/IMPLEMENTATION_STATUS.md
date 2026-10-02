@@ -1,6 +1,13 @@
-# Implementation status — v3.13.0 release candidate
+# Implementation status — v3.13.1 release candidate
 
 ## Scope
+
+v3.13.1 fixes customer goal date filtering, explicit customer API response minimization, archived
+family-member handling and permission-aware follow-up editing. Follow-up drafts survive tab changes,
+saves are guarded, and goals show remaining contacts and deadlines. Bulk-email retries keep preview
+language and request identity. Automation confirms trigger-wide execution and accepts one action-title
+language. Record edits refresh their matching customer panel; opportunity focus links use existing RLS.
+No migration, provider integration or deployment behavior change. [Audit and plan](AUDIT_PLAN_2026-10-02.md).
 
 v3.13.0 upgrades common UI styling to calm teal/slate, subject-specific customer details and
 keyboard-accessible tabs. Schools show institution contacts, not family sections. Product deletion

@@ -123,6 +123,7 @@ export function CrmRecordEditor({
       });
       setDetail(result.item);setOwner(result.item.ownerId??"");setOpen(false);
       onSaved?.(result.item);
+      window.dispatchEvent(new CustomEvent("lumina:crm-record-saved",{detail:{resource,id}}));
       setToast(t("crm.saved"));router.refresh();
     }catch(caught){
       setError(t(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT"?"crm.conflict":"crm.saveFailed"));

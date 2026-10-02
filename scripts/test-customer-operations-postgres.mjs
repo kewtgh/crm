@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes,randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import pg from "pg";
+import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
 const container=`lumina-crm-customer-it-${randomBytes(5).toString("hex")}`,deadline=Date.now()+50_000,password=randomBytes(32).toString("hex");
 let client;
 function run(command,args,env=process.env){const result=spawnSync(command,args,{env,encoding:"utf8",timeout:Math.max(1,Math.min(15_000,deadline-Date.now())),windowsHide:true});if(result.error)throw result.error;if(result.status!==0)throw new Error(`${command} failed: ${result.stderr.trim()}`);return result.stdout.trim();}
@@ -32,10 +33,16 @@ try{
   assert.equal((await save("CONTACT",contact.id,"entry",entry)).rows[0].item.id,saved.id);
   assert.equal((await client.query("select count(*)::int as count from public.customer_follow_up_history where subject_id=$1",[contact.id])).rows[0].count,1);
   await client.query("reset role");
-  await client.query("insert into public.crm_activities(contact_id,activity_type,summary_zh,summary_en) values($1,'MEETING','旧活动','Legacy')",[contact.id]);
+  await client.query("insert into public.crm_activities(contact_id,activity_type,summary_zh,summary_en,occurred_at) values($1,'MEETING','旧活动','Legacy','2026-09-30T02:00:00Z')",[contact.id]);
   await client.query("set role crm_app");
   assert.equal((await client.query("select count(*)::int as count from public.customer_follow_up_history where subject_id=$1",[contact.id])).rows[0].count,2);
   await assert.rejects(save("CONTACT",contact.id,"entry",{...entry,summary:"其他"}),/follow_up_idempotency_conflict/);
+  const plan={start_date:"2026-10-01",due_date:"2026-10-31"};
+  await save("CONTACT",contact.id,"entry",{...entry,requestKey:randomUUID(),occurredAt:"2026-10-01T00:00:00Z"});
+  await save("CONTACT",contact.id,"entry",{...entry,requestKey:randomUUID(),occurredAt:"2026-10-01T01:00:00Z",kind:"NOTE"});
+  const filters=new URL(followUpCompletionPath("CONTACT",contact.id,plan),"http://local").searchParams;
+  assert.equal(filters.has("and"),false);const bounds=filters.getAll("occurred_at").map(value=>value.slice(value.indexOf(".")+1));
+  assert.equal((await client.query("select count(*)::int as count from public.customer_follow_up_history where subject_kind=\'CONTACT\' and subject_id=$1 and kind in (\'CALL\',\'EMAIL\',\'MEETING\',\'VISIT\',\'MEAL\') and occurred_at >= $2::timestamptz and occurred_at < $3::timestamptz",[contact.id,...bounds])).rows[0].count,1);
   const org=(await client.query("insert into public.organizations(name_zh,name_en,city,curriculum,short_name,owner_id) values('测试','Test','Taipei','IB','简称',$1) returning *",[admin])).rows[0];
   assert.equal((await client.query("select public.crm_resource_metrics('schools','简称','all') as result")).rows[0].result.total,1);
   const stamp=(await client.query("select updated_at::text as stamp from public.organizations where id=$1",[org.id])).rows[0].stamp;

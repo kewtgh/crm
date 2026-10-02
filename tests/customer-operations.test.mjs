@@ -4,7 +4,76 @@ import { readFile } from "node:fs/promises";
 import { followUpProgress } from "../lib/customer-operations.ts";
 import { CUSTOMER_EMAIL_TEMPLATES,renderCustomerEmail } from "../lib/customer-email-templates.ts";
 import { queueCustomerEmail } from "../lib/customer-email-repository.ts";
+import { loadCustomerOperations } from "../lib/customer-operations-repository.ts";
+import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
+import { customerEmailBatchPayload } from "../lib/customer-email-batch.ts";
+import { automationInputSchema } from "../lib/automation-input.ts";
 const source=file=>readFile(new URL(`../${file}`,import.meta.url),"utf8");
+test("goal completion uses repeated UTC bounds accepted by the local gateway",()=>{
+  const params=new URL(followUpCompletionPath("CONTACT","id",{start_date:"2026-10-01",due_date:"2026-10-31"}),"http://local").searchParams;
+  assert.equal(params.has("and"),false);
+  assert.deepEqual(params.getAll("occurred_at"),["gte.2026-10-01T00:00:00Z","lt.2026-11-01T00:00:00.000Z"]);
+  assert.match(params.get("kind"),/MEAL/);
+});
+test("real repository strips unrequested nested data, omits institution opportunities for contacts, and returns edit access",async()=>{
+  const calls=[],plan={id:"plan",title:"目标",target_level:2,target_count:3,start_date:"2026-10-01",due_date:"2026-10-31",updated_at:"now",workspace_id:"private"};
+  const adapter={json:async(path,init)=>{
+    calls.push(path);if(path.includes("customer_subject_access"))return !JSON.parse(init.body).edit;
+    if(path.includes("customer_follow_up_plans"))return [plan];
+    if(path.includes("customer_contract_links"))return [{contracts:{id:"contract",contract_number:"C-1",product_id:"product",owner_id:"owner",private_audit:"secret"}}];
+    if(path.includes("/contacts?"))return [{id:"contact",name_zh:"客户",name_en:null,organization_id:"org",owner_id:"owner",notes_markdown:"需求",passport_number:"secret",private_flags:"secret"}];
+    if(path.includes("user_profiles"))return [{user_id:"owner",display_name_zh:"负责人",display_name_en:null,password_hash:"secret"}];
+    if(path.includes("/products?"))return [{id:"product",name_zh:"服务",name_en:"Service",internal_cost:"secret"}];
+    return [];
+  },request:async path=>{
+    calls.push(path);const params=new URL(path,"http://local").searchParams;assert.equal(params.has("and"),false);
+    if(params.get("select")==="id"){assert.equal(params.getAll("occurred_at").length,2);return Response.json([],{headers:{"content-range":"0-0/123"}});}
+    return Response.json([{id:"entry",kind:"CALL",summary:"沟通",next_step:"会议",occurred_at:"2026-10-02T00:00:00Z",workspace_id:"private",request_key:"private"}],{headers:{"content-range":"0-0/1"}});
+  }};
+  const result=await loadCustomerOperations("CONTACT","contact",{contracts:true,opportunities:true},adapter);
+  assert.equal(result.completed,123);assert.equal(result.canManage,false);assert.equal(result.nameEn,"");assert.equal(result.ownerName,"负责人");assert.deepEqual(result.opportunities,[]);
+  assert.ok(!calls.some(path=>path.includes("/opportunities?")));
+  assert.equal(result.profile.passport_number,undefined);assert.equal(result.contracts[0].private_audit,undefined);assert.equal(result.products[0].internal_cost,undefined);assert.equal(result.plan.workspace_id,undefined);assert.equal(result.entries[0].request_key,undefined);
+});
+test("household archived parents and child contacts do not participate in relationship aggregation",async()=>{
+  const adapter={json:async(path)=>{
+    if(path.includes("customer_subject_access"))return true;
+    if(path.includes("/households?"))return [{name_zh:"家庭",name_en:"Family"}];
+    if(path.includes("household_members?"))return [{member_role:"PARENT",contacts:{id:"active",name_zh:"家长",communication_level:2,archived_at:null}},{member_role:"PARENT",contacts:{id:"archived",communication_level:4,archived_at:"2026-10-01"}}];
+    if(path.includes("/students?"))return [{id:"child",contacts:{name_zh:"孩子",archived_at:null}},{id:"archived-child",contacts:{name_zh:"归档孩子",archived_at:"2026-10-01"}}];
+    return [];
+  },request:async()=>Response.json([],{headers:{"content-range":"0-0/0"}})};
+  const result=await loadCustomerOperations("HOUSEHOLD","family",{contracts:false,opportunities:false},adapter);
+  assert.equal(result.level,2);assert.deepEqual(result.contacts.map(row=>row.id),["active"]);assert.deepEqual(result.students.map(row=>row.id),["child"]);assert.equal(result.students[0].contacts,undefined);
+});
+test("bulk retry keeps the original preview language/hash/key even after locale changes",()=>{
+  const preview={items:[],hash:"a".repeat(64),locale:"zh-CN"};
+  const result=customerEmailBatchPayload("queue",["customer"],"FOLLOW_UP","en","stable-key",preview);
+  assert.equal(result.locale,"zh-CN");assert.equal(result.requestKey,"stable-key");assert.equal(result.previewHash,preview.hash);
+  assert.throws(()=>customerEmailBatchPayload("queue",[],"FOLLOW_UP","en","key",null),/EMAIL_PREVIEW_REQUIRED/);
+});
+test("automation accepts one action-title language, rejects blanks and invalid originals, and preserves run guards",()=>{
+  const valid={operation:"create",nameZh:"测试规则",triggerKey:"MANUAL",actionType:"TASK",titleZh:"跟进客户",priority:"NORMAL",dueHours:24};
+  const parsed=automationInputSchema.parse(valid);assert.equal(parsed.titleEn,"跟进客户");assert.equal(parsed.nameEn,"测试规则");
+  for(const input of [{...valid,titleZh:""},{...valid,titleZh:"a"},{...valid,titleEn:42},{...valid,titleZh:"a".repeat(161)}])assert.equal(automationInputSchema.safeParse(input).success,false);
+  assert.equal(automationInputSchema.safeParse({operation:"run",triggerKey:"UNKNOWN",eventKey:"long-key"}).success,false);
+});
+test("follow-up insights count remaining contacts, exact UTC deadline and evidence-based achievement",()=>{
+  const plan={target_count:3,target_level:3,start_date:"2026-10-01",due_date:"2026-10-31"};
+  const progress=followUpProgress(plan,[],2,"2026-11-02",2);
+  assert.equal(progress.remaining,1);assert.equal(progress.daysRemaining,-2);assert.equal(progress.achieved,false);
+  assert.equal(followUpProgress(plan,[],3,"2026-11-02",4).achieved,true);
+});
+test("mutation interfaces lock in-flight drafts and explicitly confirm trigger-wide automation",async()=>{
+  const panel=await source("components/customer-operations-panel.tsx");assert.match(panel,/hidden=\{tab!=="followUp"\}/);assert.match(panel,/disabled=\{pending\}/);assert.match(panel,/if\(busy.current\)return/);assert.match(panel,/audit.savedRefreshFailed/);assert.match(panel,/runContractSearch/);
+  const email=await source("components/customer-email-panel.tsx");assert.match(email,/customerEmailBatchPayload/);assert.match(email,/if\(busy.current\)return;change\(\);setIds\(\[\]\)/);
+  const automation=await source("components/automation-workspace.tsx");assert.match(automation,/runRule&&<ConfirmDialog/);assert.match(automation,/audit.runEventConfirm/);assert.doesNotMatch(automation,/name="title(?:Zh|En)" required/);
+});
+test("customer opportunity deep links validate IDs, preserve RLS reads, and use the linked currency",async()=>{
+  const page=await source("app/(crm)/opportunities/page.tsx");assert.match(page,/z.uuid\(\).safeParse\(params.focus\)/);assert.match(page,/listOpportunities\(\{id:focus/);assert.match(page,/focused\?\.items\[0\]\?\.currency/);assert.match(page,/requireCapability\("opportunities.view"\)/);
+  const repo=await source("lib/sales-repository.ts");assert.match(repo,/params.set\("id",`eq.\$\{input.id\}`\)/);
+  const editor=await source("components/crm-record-editor.tsx");assert.match(editor,/lumina:crm-record-saved/);
+});
 test("follow-up targets count date-bounded entries, exact totals beyond list limits and overdue levels",()=>{
   const plan={target_count:3,target_level:3,start_date:"2026-10-01",due_date:"2026-10-31"};
   const entries=["2026-09-30T23:59:00Z","2026-10-01T00:00:00Z","2026-10-31T23:59:00Z","2026-11-01T00:00:00Z"].map(occurred_at=>({kind:"CALL",occurred_at}));
