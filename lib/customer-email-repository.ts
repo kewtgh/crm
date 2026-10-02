@@ -24,7 +24,7 @@ export async function previewCustomerEmail(ids:string[],template:CustomerEmailTe
   return{items,hash};
 }
 export async function listCustomerEmailTemplates(){
-  const rows=await databaseJson<Array<{id:string;name:string;revision:number;visibility:EmailTemplateVisibility;content:CustomEmailContent}>>("/db/table/customer_email_templates?archived_at=is.null&order=name&limit=200");
+  const rows=await databaseJson<Array<{id:string;name:string;revision:number;visibility:EmailTemplateVisibility;content:CustomEmailContent}>>("/db/table/customer_email_templates?category=eq.EMAIL&archived_at=is.null&order=name&limit=200");
   return rows.map(row=>({id:row.id,name:row.name,revision:row.revision,visibility:row.visibility,...row.content} satisfies SavedEmailTemplate));
 }
 export async function saveCustomerEmailTemplate(input:{id:string;expectedRevision:number|null;name:string;content:CustomEmailContent;visibility:EmailTemplateVisibility}){

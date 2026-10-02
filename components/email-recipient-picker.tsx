@@ -3,7 +3,8 @@ import { useEffect,useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
 import { useI18n } from "./i18n-provider";
-import { InlineMessage,SearchableSelect } from "./ui";
+import { InlineMessage } from "./ui";
+import { RecipientFilters } from "./recipient-filters";
 type Recipient={id:string;name_zh:string;name_en:string;email:string|null;city:string;contact_type:string;tags:string[];blocked:boolean};
 type Results={items:Recipient[];total:number;regions:string[];tags:string[];types:string[]};
 export function EmailRecipientPicker({ids,disabled,onChange}:{ids:string[];disabled:boolean;onChange:(ids:string[],labels:Record<string,string>)=>void}){
@@ -18,16 +19,15 @@ export function EmailRecipientPicker({ids,disabled,onChange}:{ids:string[];disab
   const name=(item:Recipient)=>locale==="en"?item.name_en||item.name_zh:item.name_zh||item.name_en;
   const update=(next:string[])=>onChange(next,Object.fromEntries(result.items.map(item=>[item.id,name(item)])));
   const valid=!loading&&!error;
-  const filterOptions=(values:string[])=>[{value:"",label:t("ux.all")},...values.map(value=>({value,label:value}))];
+  const changeFilter=(value:string,current:string,setValue:(value:string)=>void)=>{
+    if(value===current&&page===1)return;
+    setLoading(true);setValue(value);setPage(1);
+  };
   return <section className="page-stack" aria-label={t("ux.recipientFilters")}>
     <h3>{t("ux.recipientFilters")}</h3><p>{t("ux.regionHelp")}</p>
     <fieldset disabled={disabled}>
       <label className="field"><span>{t("common.search")}</span><input value={q} onChange={event=>{setLoading(true);setQ(event.target.value);setPage(1);}}/></label>
-      <div className="form-grid three-column">
-        <SearchableSelect label={t("ux.region")} value={region} options={filterOptions(result.regions)} onChange={value=>{if(value===region&&page===1)return;setLoading(true);setRegion(value);setPage(1);}}/>
-        <SearchableSelect label={t("ux.tag")} value={tag} options={filterOptions(result.tags)} onChange={value=>{if(value===tag&&page===1)return;setLoading(true);setTag(value);setPage(1);}}/>
-        <SearchableSelect label={t("ux.customerType")} value={type} options={filterOptions(result.types).map(item=>item.value?{...item,label:t(`contact.type.${item.value.toLowerCase()}`)}:item)} onChange={value=>{if(value===type&&page===1)return;setLoading(true);setType(value);setPage(1);}}/>
-      </div>
+      <RecipientFilters regions={result.regions} tags={result.tags} types={result.types} region={region} tag={tag} type={type} onRegion={value=>changeFilter(value,region,setRegion)} onTag={value=>changeFilter(value,tag,setTag)} onType={value=>changeFilter(value,type,setType)}/>
       <div className="email-filter-actions"><span role="status">{t("ux.matching",{count:result.total})}</span><button type="button" className="secondary-button" disabled={!valid||ids.length>=50||!result.items.some(item=>!item.blocked&&!ids.includes(item.id))} onClick={()=>update([...new Set([...ids,...result.items.filter(item=>!item.blocked).map(item=>item.id)])].slice(0,50))}>{t("ux.selectPage")}</button><button type="button" className="secondary-button" disabled={!valid} onClick={()=>update(ids.filter(id=>!result.items.some(item=>item.id===id)))}>{t("ux.clearPage")}</button></div>
       {loading&&<p role="status">{t("common.loading")}</p>}
       {error&&<><InlineMessage type="error">{error}</InlineMessage><button type="button" className="secondary-button" onClick={()=>setAttempt(value=>value+1)}>{t("common.retry")}</button></>}

@@ -1,0 +1,35 @@
+# v3.15.0 — 结构化筛选与家庭门户邀请模板
+
+范围：模板发信/群发三个筛选的控件与布局；家庭门户邀请模板、筛选、文案定制与权限。基线 v3.14.1，保留个人模板本人维护、公共模板管理员维护的约定。不推送、不部署、不自动发送邮件。
+
+## 原因与实施
+
+1. 发信筛选原使用可搜索组件，three-column 缺少 CSS 定义，造成逐项一行。改为共用原生 select，并列三列；375px 仍同排，极窄屏（≤360px）换行。关键词搜索独立保留。
+2. 筛选来源沿用可访问客户的现有结构化数据：所属机构城市、客户标签数组、客户类型。门户候选进一步限定家庭成员或学生监护人，去重同家庭/同客户，排除归档家庭/联系人/学生与禁联客户；不根据自由文本地址推断地区。
+3. 门户增加首次邀请、资料核对两套双语预设；可调整本次文案、语言、失效日期，也可定制多份可复用个人/管理员公共模板。变量为 name、family、owner、portal_url、expires；每个有内容的语言正文必须保留安全链接变量。
+4. 模板保存复用修订冲突、稳定 UUID 幂等创建和软归档。前向迁移 086 加 EMAIL/PORTAL 分类，原模板仍 EMAIL；分类不可跨 API 更新/归档。新增候选查询 SECURITY INVOKER 保持现有 RLS。
+5. 门户邀请记录支持家庭、状态、关键词过滤。创建/撤销角色与原数据库要求一致（管理员、销售总监/经理）；其他门户用户仍可定制个人模板，不扩张发链接权限。
+6. 安全链接仅保存在页面内存，用于替换文案和复制，不持久化到模板、localStorage 或日志；模板 API 拒绝真实门户 token URL。创建仍走原家庭邮箱和隐私检查，不改变令牌摘要存储；没有自动发信或批量创建授权。
+
+## 定向验证与交付
+
+- [x] 类型检查、定向合同测试和 lint。
+- [x] 55 秒隔离 PostgreSQL 定向验证：分类隔离、修订冲突、个人/公共权限、家庭关系候选及筛选、归档与权限隔离。
+- [x] 生产构建；55 秒 Chromium-1243 ux-refinements 阶段，桌面/375px 同排、无搜索型筛选、模板保存/复制、邀请文案替换与记录筛选。模板修改修订由数据库定向测试验证。
+- [x] 版本元数据更新 v3.15.0，记录验证并本地提交。
+
+默认生成可复制邀请文案，不接入发送队列；如后续需要邀请邮件发送，应先定义安全链接投递、授权和失败恢复策略，不把链接直接写入普通邮件模板。已有邀请创建没有跨网络重试幂等恢复；未知结果须先检查邀请记录，同家庭同邮箱重新创建会撤销旧链接。
+
+## 验证结果（2026-10-02）
+
+- `npm run typecheck:raw`：PASS。
+- `npm run lint:raw`：PASS。
+- `npm run test:customer-operations`：29/29 PASS，包括预设语言、链接占位符、禁止保存真实令牌 URL、筛选结构与长链接换行回归。
+- `npm run test:contracts:raw`：166/166 PASS（158 合同测试 + 8 captcha 测试），真实版本元数据和既有 CI/Docker 合同保留。
+- `npm run test:customer-operations:postgres`：PASS；隔离 PostgreSQL 完整应用前向迁移至 086，定向验证 EMAIL/PORTAL 隔离、修订更新/冲突/重试、管理员公共与本人个人模板权限、家庭成员/学生监护人候选、三项 AND 筛选、归档排除和 RLS 隔离。容器已清理，不修改开发/生产数据。
+- `npm run build`：PASS。首次构建后浏览器发现邀请正文长链接在 375px 下横向溢出；修复预览 `overflow-wrap:anywhere` 后重新构建，最终构建 PASS。没有重复未变化源码的构建。
+- `$env:QA_PHASE='ux-refinements'; npm run qa:chromium-1243`：PASS，1440×1000 / 375×812 两个视口，0 errors / 0 warnings，耗时 16.55 秒。测试基于真实组件与生产 CSS，API 受控模拟；没有创建真实邀请/身份或发送邮件。新增原生 select 的测试使用正确的可访问名称匹配和 option 存在状态，未放宽布局/业务断言。
+- 固定浏览器：Playwright 1.63.0，`ms-playwright/chromium-1243`，Chromium `153.0.8010.12`，可执行文件 `C:/Users/Horolf/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe`；生产 QA 基址 `http://localhost:3200`，health 版本 v3.15.0。
+- 证据：Git 忽略目录 `work/browser-qa-chromium-1243/phases/ux-refinements/report.json` 与 `portal-dialog-{1440,375}.png`、`portal-result-{1440,375}.png`、`email-{1440,375}.png`。已目视检查手机邀请编辑和结果截图。
+
+不执行全浏览器矩阵、全数据库回归、额外 Docker 镜像构建或真实邮件投递。本次没有改变生产部署行为、Docker context allowlist 或 CI 工作流。上线须应用迁移 086；本次仅本地提交，不推送、不部署。

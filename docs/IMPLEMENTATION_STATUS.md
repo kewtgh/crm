@@ -1,6 +1,14 @@
-# Implementation status — v3.14.1 release candidate
+# Implementation status — v3.15.0 release candidate
 
 ## Scope
+
+v3.15.0 replaces searchable recipient facets with a shared three-column structured selector.
+Portal invitations add two bilingual presets, personal/public custom template storage, recipient
+filtering from household membership and guardian relationships, record filters and copyable localized
+invitation messages. Migration 086 isolates EMAIL/PORTAL template categories while retaining prior
+ownership/public-administrator RLS and revision semantics. Original invitation creation/revocation
+permissions, verified household email and token-digest boundaries remain unchanged. No automatic
+sending or deployment. [Plan and verification](PORTAL_TEMPLATE_PLAN_2026-10-02.md).
 
 v3.14.1 adds latest-result guards and draft locks to communications, immutable batch attempts and
 safe retries after unknown queue responses. Preview eligibility reuses authoritative consent and
