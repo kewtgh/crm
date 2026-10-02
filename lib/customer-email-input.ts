@@ -5,4 +5,5 @@ export const customEmailSchema=z.object({
   subjectZh:subjectText,subjectEn:subjectText,
   bodyZh:templateText(10000),bodyEn:templateText(10000),purpose:z.enum(["SERVICE","MARKETING"]),
 }).strict().refine(input=>(!!input.subjectZh&&!!input.bodyZh)||(!!input.subjectEn&&!!input.bodyEn),"TEMPLATE_LANGUAGE_REQUIRED").refine(input=>!!input.subjectZh===!!input.bodyZh&&!!input.subjectEn===!!input.bodyEn,"TEMPLATE_LANGUAGE_PAIR_REQUIRED");
-export const savedEmailSchema=z.object({id:z.uuid().optional(),name:z.string().trim().min(1).max(80),content:customEmailSchema});
+export const savedEmailSchema=z.object({id:z.uuid(),expectedRevision:z.number().int().positive().nullable(),name:z.string().trim().min(1).max(80),content:customEmailSchema,visibility:z.enum(["PERSONAL","WORKSPACE"]).default("PERSONAL")}).strict();
+export const archiveEmailSchema=z.object({operation:z.literal("archive"),id:z.uuid(),expectedRevision:z.number().int().positive()}).strict();

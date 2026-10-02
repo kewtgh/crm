@@ -391,7 +391,7 @@ body { overflow-x:hidden; }
 .follow-up-entry { padding:12px 0; border-bottom:1px solid var(--line); white-space:pre-wrap; }
 .email-preview { white-space:pre-wrap; font:inherit; padding:16px; background:var(--surface-soft); border-radius:10px; }
 .name-pair-hint { grid-column:1/-1; color:var(--muted); font-size:12px; }
-.field:has(input[required]:not([type="hidden"]),select[required],textarea[required]) > span:first-child::after { content:" *"; color:var(--red); }
+.field:has(input[required]:not([type="hidden"]),select[required],textarea[required]):not(:has(> span:first-child .required-indicator)) > span:first-child::after { content:" *"; color:var(--red); }
 .required-indicator { color:var(--red); font-weight:700; }
 .staff-dialog { width:min(960px,calc(100vw - 32px)); }
 .date-picker-control input { flex:1; width:0; min-width:0; }

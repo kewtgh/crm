@@ -8,7 +8,7 @@ export const importExamples:Record<string,string>={
 };
 function csv(rows:string[][]){return "\uFEFF"+rows.map(row=>row.map(value=>`"${value.replaceAll('"','""')}"`).join(",")).join("\r\n")+"\r\n";}
 export function importFieldRequirement(resource:ImportResource,field:string,zh:boolean){
-  if(field==="nameZh"||field==="nameEn")return zh?"中文名或英文名至少一项；学生姓名来自关联客户":"At least one name; student names come from the linked contact";
+  if(field==="nameZh"||field==="nameEn")return resource==="STUDENTS"?(zh?"学生姓名来自关联客户":"Student names come from the linked contact"):(zh?"中文名或英文名至少一项":"At least one Chinese or English name");
   if(resource==="CONTACTS"&&(field==="email"||field==="phone"))return zh?"邮箱或电话至少一项":"At least one email or phone";
   if(resource==="STUDENTS"&&["personId","currentGrade","academicYear"].includes(field))return zh?"必填":"Required";
   return zh?"可选":"Optional";

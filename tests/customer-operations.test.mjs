@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { followUpProgress } from "../lib/customer-operations.ts";
 import { CUSTOMER_EMAIL_TEMPLATES,renderCustomerEmail } from "../lib/customer-email-templates.ts";
-import { customEmailSchema } from "../lib/customer-email-input.ts";
+import { customEmailSchema,savedEmailSchema,archiveEmailSchema } from "../lib/customer-email-input.ts";
 import { buildImportTemplate,importExamples,importFieldFormat } from "../lib/import-template.ts";
 import { importFieldsByResource } from "../lib/import-fields.ts";
 import { parseCsvDocument } from "../lib/csv.ts";
@@ -12,7 +12,7 @@ import sharp from "sharp";
 import { queueCustomerEmail,previewCustomerEmail } from "../lib/customer-email-repository.ts";
 import { loadCustomerOperations } from "../lib/customer-operations-repository.ts";
 import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
-import { customerEmailBatchPayload } from "../lib/customer-email-batch.ts";
+import { customerEmailBatchPayload,freezeCustomerEmailBatch } from "../lib/customer-email-batch.ts";
 import { automationInputSchema } from "../lib/automation-input.ts";
 const source=file=>readFile(new URL(`../${file}`,import.meta.url),"utf8");
 test("goal completion uses repeated UTC bounds accepted by the local gateway",()=>{
@@ -72,7 +72,7 @@ test("follow-up insights count remaining contacts, exact UTC deadline and eviden
 });
 test("mutation interfaces lock in-flight drafts and explicitly confirm trigger-wide automation",async()=>{
   const panel=await source("components/customer-operations-panel.tsx");assert.match(panel,/hidden=\{tab!=="followUp"\}/);assert.match(panel,/disabled=\{pending\}/);assert.match(panel,/if\(busy.current\)return/);assert.match(panel,/audit.savedRefreshFailed/);assert.match(panel,/runContractSearch/);
-  const email=await source("components/customer-email-panel.tsx");assert.match(email,/customerEmailBatchPayload/);assert.match(email,/if\(busy.current\)return;change\(\);setIds\(\[\]\)/);
+  const email=await source("components/customer-email-panel.tsx");assert.match(email,/customerEmailBatchPayload/);assert.match(email,/if\(busy.current\)return;change\(true\);setIds\(\[\]\)/);
   const automation=await source("components/automation-workspace.tsx");assert.match(automation,/runRule&&<ConfirmDialog/);assert.match(automation,/audit.runEventConfirm/);assert.doesNotMatch(automation,/name="title(?:Zh|En)" required/);
 });
 test("customer opportunity deep links validate IDs, preserve RLS reads, and use the linked currency",async()=>{
@@ -175,4 +175,65 @@ test("personalization overflow is blocked in the actual preview adapter before q
   assert.equal(preview.items[0].blocked,true);assert.equal(preview.items[0].blockedReason,"INVALID_TEMPLATE_CONTENT");
   let sent=false;const result=await queueCustomerEmail(preview.items,"key",{createThread:async()=>{sent=true;},queueMessage:async()=>{sent=true;}});
   assert.equal(sent,false);assert.equal(result.queued,0);
+});
+
+test("queue snapshot preserves IDs, key and personalized template after unknown outcomes",()=>{
+  const ids=["one","two"],custom={subjectZh:"您好",subjectEn:"",bodyZh:"{{name}}",bodyEn:"",purpose:"SERVICE"};
+  const preview={items:[],hash:"a".repeat(64),locale:"zh-CN",template:"CUSTOM",customTemplate:custom};
+  const frozen=freezeCustomerEmailBatch(ids,"CUSTOM","zh-CN","same-request",preview);
+  ids.push("three");custom.bodyZh="changed";preview.hash="changed";
+  assert.deepEqual(frozen.contactIds,["one","two"]);assert.equal(frozen.customTemplate.bodyZh,"{{name}}");
+  assert.equal(frozen.requestKey,"same-request");assert.equal(frozen.previewHash,"a".repeat(64));
+});
+
+test("preview uses authoritative eligibility for service and marketing without exposing consent evidence",async()=>{
+  for(const [template,purpose] of [["PROGRAM","MARKETING"],["FOLLOW_UP","SERVICE"]]){
+    const calls=[];const read=async(path,init)=>{
+      calls.push(path);
+      if(path.includes("eligibility")){assert.equal(JSON.parse(init.body).message_purpose,purpose);return[{id:"allowed",allowed:true},{id:"denied",allowed:false}];}
+      return ["allowed","denied"].map(id=>({id,name_zh:"客户",email:"person@example.test",owner_id:null,do_not_contact:false}));
+    };
+    const result=await previewCustomerEmail(["allowed","denied"],template,"zh-CN",undefined,read);
+    assert.equal(result.items[0].blocked,false);assert.equal(result.items[1].blocked,true);
+    assert.equal(result.items[1].blockedReason,"COMMUNICATION_CONSENT_REQUIRED");
+    assert.equal(calls.filter(path=>path.includes("eligibility")).length,1);
+    let writes=0;const queue=await queueCustomerEmail([result.items[1]],"same-request",{createThread:async()=>{writes++;},queueMessage:async()=>{writes++;}});
+    assert.equal(writes,0);assert.equal(queue.results[0].code,"COMMUNICATION_CONSENT_REQUIRED");
+  }
+});
+
+test("template writes require a stable UUID and explicit revision, and archive is versioned",()=>{
+  const content={subjectZh:"您好",subjectEn:"",bodyZh:"正文",bodyEn:"",purpose:"SERVICE"},id="00000000-0000-4000-8000-000000000001";
+  assert.equal(savedEmailSchema.safeParse({id,expectedRevision:null,name:"新建",content}).success,true);
+  assert.equal(savedEmailSchema.safeParse({id,expectedRevision:1,name:"更新",content}).success,true);
+  for(const expectedRevision of [undefined,0,-1,1.5,"1"])assert.equal(savedEmailSchema.safeParse({id,expectedRevision,name:"模板",content}).success,false);
+  assert.equal(savedEmailSchema.safeParse({expectedRevision:null,name:"模板",content}).success,false);
+  assert.equal(archiveEmailSchema.safeParse({operation:"archive",id,expectedRevision:1}).success,true);
+  assert.equal(archiveEmailSchema.safeParse({operation:"archive",id,expectedRevision:null}).success,false);
+});
+
+test("inbox guards current thread and inputs; invoker RPCs preserve ownership and narrow eligibility",async()=>{
+  const inbox=await source("components/communications-inbox-page.tsx"),hook=await source("hooks/use-remote-search.ts");
+  assert.match(inbox,/selectedIdRef.current!==id/);assert.match(inbox,/runThread\(signal=>apiFetch/);
+  assert.match(inbox,/disabled=\{pending\|\|threadLoading\}/);assert.match(inbox,/operationLock.current\|\|id===selectedId/);
+  assert.match(hook,/AbortSignal.any/);assert.match(hook,/!signal.aborted/);
+  const sql=await source("db/migrations/202610020085_email_workflow_integrity.sql");
+  assert.match(sql,/security invoker/g);assert.doesNotMatch(sql,/security definer/i);
+  assert.match(sql,/pg_advisory_xact_lock/);assert.match(sql,/owned_by=app_auth.current_user_id\(\)/);
+  assert.match(sql,/existing.revision<>expected_revision/);assert.match(sql,/new.revision:=old.revision\+1/);
+  assert.match(sql,/public.contact_channel_allowed\(c.id,'EMAIL',message_purpose\)/);assert.match(sql,/cardinality\(contact_ids\) between 1 and 50/);
+  assert.doesNotMatch(sql,/delete from|drop table/i);
+});
+
+test("import name guidance is resource-specific rather than mentioning students everywhere",()=>{
+  for(const resource of ["CONTACTS","ORGANIZATIONS","HOUSEHOLDS"]){
+    const guide=parseCsvDocument(buildImportTemplate(resource,"guide","zh-CN",key=>key));
+    for(const row of guide.rows.filter(row=>["nameZh","nameEn"].includes(row.field))){assert.match(row["必填要求"],/至少一项/);assert.doesNotMatch(row["必填要求"],/学生/);}
+  }
+});
+
+test("shared required styling excludes labels with an explicit required marker",async()=>{
+  const css=await source("app/globals.css");
+  assert.match(css,/:not\(:has\(> span:first-child \.required-indicator\)\)/);
+  assert.match(css,/\.field:has\(input\[required\]/);
 });

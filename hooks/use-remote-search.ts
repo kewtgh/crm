@@ -15,18 +15,21 @@ export function useRemoteSearch(){
 
   return useCallback(async<T>(
     operation:(signal:AbortSignal)=>Promise<T>,
+    parentSignal?:AbortSignal,
   ):Promise<LatestRequestResult<T>>=>{
     active.current?.controller.abort();
     const controller=new AbortController();
     const request={sequence:++sequence.current,controller};
     active.current=request;
+    const signal=parentSignal?AbortSignal.any([controller.signal,parentSignal]):controller.signal;
     try{
-      const value=await operation(controller.signal);
-      return active.current?.sequence===request.sequence&&!controller.signal.aborted
+      signal.throwIfAborted();
+      const value=await operation(signal);
+      return active.current?.sequence===request.sequence&&!signal.aborted
         ?{current:true,value}
         :{current:false};
     }catch(error){
-      return active.current?.sequence===request.sequence&&!controller.signal.aborted
+      return active.current?.sequence===request.sequence&&!signal.aborted
         ?{current:true,error}
         :{current:false};
     }
