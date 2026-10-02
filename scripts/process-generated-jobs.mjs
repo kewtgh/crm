@@ -180,6 +180,11 @@ async function privacyExport(job){
   ]);
   if(!privacyRequests[0]||!contacts[0])throw new Error("Privacy export subject was not found");
   const academicRecords=students.length?await requestAll(`/db/table/student_academic_records?select=id,student_id,curriculum,grade,academic_year,valid_from,valid_to,status,created_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=created_at`):[];
+  const [pathways,introducedReferrals,organizationContactRoles]=await Promise.all([
+    students.length?requestAll(`/db/table/student_pathways?select=id,student_id,program_type,target_organization_id,target_region,target_major,intake_date,application_deadline,language_test,language_score,stage,next_action,updated_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=updated_at`):[],
+    requestAll(`/db/table/education_family_referrals?select=id,source_organization_id,introduced_by_contact_id,referred_on,status,updated_at&introduced_by_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=updated_at`),
+    requestAll(`/db/table/organization_business_profiles?select=id,primary_contact_id,updated_at&primary_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=updated_at`),
+  ]);
   const rows=[["Resource","Record ID","Field","Value"]];
   appendPrivacyRecords(rows,"privacy_request",privacyRequests);
   appendPrivacyRecords(rows,"contact",contacts);
@@ -190,6 +195,9 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"guardian_relationship",guardianRelations);
   appendPrivacyRecords(rows,"student",students);
   appendPrivacyRecords(rows,"academic_record",academicRecords);
+  appendPrivacyRecords(rows,"student_pathway",pathways);
+  appendPrivacyRecords(rows,"introduced_referral",introducedReferrals);
+  appendPrivacyRecords(rows,"organization_contact_role",organizationContactRoles);
   return rows;
 }
 async function crmExport(job){

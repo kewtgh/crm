@@ -1,4 +1,5 @@
 import type { Messages } from "../types";
+import { zhEducationBusiness } from "./education-business";
 import { zhV3120 } from "./v3120";
 import { zhV3130 } from "./v3130";
 import { zhAudit20261002 } from "./audit-20261002";
@@ -453,4 +454,5 @@ export const zhCN: Messages = {
   ...zhV3130,
   ...zhAudit20261002,
   ...zhUX20261002,
+  ...zhEducationBusiness,
 };

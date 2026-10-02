@@ -17,7 +17,7 @@ import { customerDetailTabs } from "@/lib/customer-detail-tabs";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 export function CustomerOperationsPanel({subject,id,extra,history}:{subject:CustomerSubject;id:string;extra?:React.ReactNode;history?:React.ReactNode}) {
-  const {t,locale}=useI18n();const canSend=useCapability("messages.manage"),canViewContracts=useCapability("contracts.view"),canManageFamily=useCapability("education.manage");
+  const {t,locale}=useI18n();const canSend=useCapability("messages.manage"),canViewContracts=useCapability("contracts.view"),canManageFamily=useCapability("education.manage"),canViewEducation=useCapability("education.view");
   const {formatDate,localDateTimeInput,localDateTimeToIso}=useUserPreferences();
   const [data,setData]=useState<CustomerOperationsSnapshot|null>(null),[error,setError]=useState(""),[pending,setPending]=useState(false),[tab,setTab]=useState("overview");
   const [contract,setContract]=useState(""),[options,setOptions]=useState<Array<{value:string;label:string}>>([]);
@@ -51,6 +51,7 @@ export function CustomerOperationsPanel({subject,id,extra,history}:{subject:Cust
     <header className="detail-identity"><span className="detail-avatar" aria-hidden="true">{displayName.slice(0,1)}</span><div><p className="eyebrow">{t(subject==="ORGANIZATION"?"nav.schools":subject==="CONTACT"?"nav.people":"nav.households")}</p><h2>{displayName}</h2><p>{t(subject==="ORGANIZATION"?"detail.organizationHelp":subject==="HOUSEHOLD"?"detail.familyHelp":"detail.contactHelp")}</p></div></header>
     {error&&<InlineMessage type="error">{error}<button className="text-button" disabled={pending} onClick={()=>void load()}>{t("common.retry")}</button></InlineMessage>}
     {notice&&<InlineMessage type="info">{notice}</InlineMessage>}
+    {subject!=="CONTACT"&&canViewEducation&&<Link className="secondary-button" href={`/education-business?subject=${subject}&subjectId=${id}`}>{t(subject==="ORGANIZATION"?"business.organizationEntry":"business.householdEntry")} →</Link>}
     <DetailTabs items={tabs} active={tab} onChange={setTab} disabled={pending} label={t("customerOps.title")}>
     {tab==="overview"&&<div className="page-stack"><div className="detail-metrics">{subject==="ORGANIZATION"&&<span><b>{data.shortName||"—"}</b><small>{t("customerOps.shortName")}</small></span>}<span><b>{data.ownerName||"—"}</b><small>{t("crm.owner")}</small></span><span><b>{t(`contact.communication.level${data.level}`)}</b><small>{t("contact.communicationLevel")}</small></span><span><b>{data.entryTotal}</b><small>{t("customerOps.entries")}</small></span></div>
       <section className="detail-section"><h3>{t("detail.identity")}</h3><dl className="customer-profile">{profileKeys.map(key=><div key={key}><dt>{t(`customerOps.field.${key}`)}</dt><dd>{key==="next_follow_up_at"?formatDate(String(data.profile[key]),{includeTime:true}):String(data.profile[key])}</dd></div>)}</dl>{!profileKeys.length&&<p className="detail-empty">{t("detail.noProfile")}</p>}

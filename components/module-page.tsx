@@ -96,6 +96,7 @@ export function ModulePage({
       shortName:String(data.get("shortName")??"").trim(),
       city: String(data.get("city") ?? "").trim(),
       curriculum: String(data.get("curriculum") ?? "").trim(),
+      organizationType:String(data.get("organizationType")??"SCHOOL"),
       courseCategories:String(data.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean),
       affiliationType:String(data.get("affiliationType")??"INDEPENDENT"),parentOrganizationId:organization||null,
       organizationOverviewMarkdown:String(data.get("organizationOverviewMarkdown")??""),structureOverviewMarkdown:String(data.get("structureOverviewMarkdown")??""),
@@ -268,11 +269,12 @@ export function ModulePage({
         <BilingualNameHint/></div>
         {resource === "schools" && <>
           <label className="field"><span>{t("customerOps.shortName")}</span><input name="shortName" maxLength={80}/></label>
+          <label className="field"><span>{t("business.field.organization_type")}</span><select name="organizationType" required defaultValue="SCHOOL">{["SCHOOL","PARTNER","OTHER"].map(value=><option key={value} value={value}>{t(`business.option.${value}`)}</option>)}</select></label>
           <div className="form-grid two-column">
             <label className="field"><span>{t("modules.city")}</span><input name="city" required maxLength={80}/></label>
-            <label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" required maxLength={120} options={CURRICULUM_OPTIONS}/></label>
+            <label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" maxLength={120} options={CURRICULUM_OPTIONS}/></label>
           </div>
-          <label className="field"><span>{t("modules.contact")}</span><input name="contact" maxLength={200}/></label>
+          <p className="detail-empty">{t("business.createContactHelp")}</p>
           <label className="field"><span>{t("education.courseCategories")}</span><TagsInput name="courseCategories" placeholder={t("education.courseCategoriesHelp")}/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue="INDEPENDENT" required>{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={organizationOptions} value={organization} onChange={setOrganization} onSearch={(query)=>searchRelated(query,"organization")}/></div>
           <label className="field"><span>{t("education.website")}</span><input name="website" type="url" placeholder="https://"/></label>
