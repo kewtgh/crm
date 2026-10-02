@@ -70,14 +70,19 @@ test("stores rich structured education profiles and supports Markdown narratives
 });
 
 test("provides rich templates plus repair and rollback for every import resource", async () => {
-  const [migration, template, imports, repository] = await Promise.all([
+  const [migration, template, imports, repository, fieldsSource, builder] = await Promise.all([
     source("db/migrations/202608110075_structured_profiles_teams_and_terminal_approvals.sql"),
     source("app/api/imports/template/route.ts"),
     source("components/imports-page.tsx"),
     source("lib/phase2-repository.ts"),
+    source("lib/import-fields.ts"),
+    source("lib/import-template.ts"),
   ]);
-  assert.match(template, /HOUSEHOLDS:\["nameZh"/);
-  assert.match(template, /STUDENTS:\["nameZh"/);
+  assert.match(template, /importFieldsByResource.*from "@\/lib\/import-fields"/);
+  assert.match(template, /buildImportTemplate\(resource/);
+  assert.match(builder, /importFields\(resource\)/);
+  assert.match(fieldsSource, /HOUSEHOLDS:\["nameZh"/);
+  assert.match(fieldsSource, /STUDENTS:\["nameZh"/);
   assert.match(imports, /importFieldsByResource as targetFieldsByResource/);
   assert.match(imports, /from "@\/lib\/import-fields"/);
   assert.match(imports, /targetFields=targetFieldsByResource\[resource\]/);

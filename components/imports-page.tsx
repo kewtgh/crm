@@ -36,7 +36,7 @@ export function ImportsPage({
   initialTotal: number;
   duplicatesOnly?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t,locale } = useI18n();
   const { formatDate } = useUserPreferences();
   const canMerge = useCapability("duplicates.manage");
   const [batches, setBatches] = useState(initialItems);
@@ -413,7 +413,7 @@ export function ImportsPage({
 
     {!duplicatesOnly && <section className="surface import-create">
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
-      <div className="import-template-actions"><a className="secondary-button" href={`/api/imports/template?resource=${resource}`}><Download size={16}/>{t("imports.downloadTemplate")}</a><small>{t("imports.templateHelp")}</small></div>
+      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{t("ux.importHelp")}</InlineMessage>
       <div className="form-grid two-column">
         <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option></select></label>
         <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>

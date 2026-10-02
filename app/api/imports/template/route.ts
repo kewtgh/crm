@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
 import { apiRoute, requireApiCapability } from "@/lib/api";
-
-const headers={
-  CONTACTS:["nameZh","nameEn","email","phone","title"],
-  ORGANIZATIONS:["nameZh","nameEn","city","curriculum","courseCategories","affiliationType","parentOrganizationId","website","foundedYear","studentCount","facultyCount","campusCount","organizationOverviewMarkdown","structureOverviewMarkdown"],
-  HOUSEHOLDS:["nameZh","nameEn","address","primaryParentOccupation","secondaryParentOccupation","annualIncomeAmount","incomeCurrency","preferredContactMethod","preferredLanguage","educationExpectationsMarkdown","familyBackgroundMarkdown"],
-  STUDENTS:["nameZh","nameEn","personId","householdId","studentNumber","birthDate","currentGrade","currentClass","academicYear","interests","preferredLearningStyle","personalityMarkdown","learningExpectationsMarkdown","strengthsMarkdown","supportNeedsMarkdown"],
-} as const;
+import { importFieldsByResource } from "@/lib/import-fields";
+import { buildImportTemplate,type ImportResource } from "@/lib/import-template";
+import { zhCN } from "@/lib/i18n/locales/zh-CN";
+import { en } from "@/lib/i18n/locales/en";
 
 async function get(request:Request){
   await requireApiCapability("imports.view");
-  const resource=(new URL(request.url).searchParams.get("resource")??"CONTACTS").toUpperCase() as keyof typeof headers;
-  if(!(resource in headers))return NextResponse.json({code:"INVALID_IMPORT_RESOURCE"},{status:400});
-  const csv=`\uFEFF${headers[resource].join(",")}\r\n`;
+  const params=new URL(request.url).searchParams,resource=(params.get("resource")??"CONTACTS").toUpperCase(),kind=params.get("kind")??"blank",locale=params.get("locale")==="en"?"en":"zh-CN";
+  if(!Object.hasOwn(importFieldsByResource,resource)||!["blank","example","guide"].includes(kind))return NextResponse.json({code:"INVALID_IMPORT_RESOURCE"},{status:400});
+  const messages=locale==="en"?en:zhCN;
+  const csv=buildImportTemplate(resource as ImportResource,kind as "blank"|"example"|"guide",locale,key=>messages[key]??key);
   return new NextResponse(csv,{headers:{
     "content-type":"text/csv; charset=utf-8",
-    "content-disposition":`attachment; filename="crm-${resource.toLowerCase()}-import-template.csv"`,
+    "content-disposition":`attachment; filename="crm-${resource.toLowerCase()}-${kind}.csv"`,
     "cache-control":"private, no-store",
     "x-content-type-options":"nosniff",
   }});

@@ -1,6 +1,16 @@
-# Implementation status — v3.13.1 release candidate
+# Implementation status — v3.14.0 release candidate
 
 ## Scope
+
+v3.14.0 improves severity control sizing, worker status layout, select affordances and the schedule
+page's double-month calendar. Avatar uploads are decoded, resized and stored as privately served WebP
+thumbnails; the shell displays and updates the avatar without blocking navigation. Each of four import
+resources has a complete supported-field blank/example template and a bilingual field guide.
+Bulk email adds region/tag/type filters, bounded page selection, six bilingual presets, independent
+message language and multiple personal custom templates with an editing dialog. Migration 084 creates
+workspace/user-scoped template storage and an invoker-security recipient query. Existing origin checks,
+consent/suppression, preview integrity and durable queue semantics remain unchanged. No external send
+or automatic deployment. [UX plan and verification](UX_FIX_PLAN_2026-10-02.md).
 
 v3.13.1 fixes customer goal date filtering, explicit customer API response minimization, archived
 family-member handling and permission-aware follow-up editing. Follow-up drafts survive tab changes,

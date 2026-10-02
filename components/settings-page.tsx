@@ -49,7 +49,7 @@ function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUs
   const [avatarError, setAvatarError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-  const avatarSource = avatar || (settings.avatarPath ? "/api/settings/avatar" : "");
+  const avatarSource = avatar || (settings.avatarPath ? `/api/settings/avatar?v=${encodeURIComponent(settings.avatarPath)}` : "");
 
   useEffect(() => () => {
     if (avatar.startsWith("blob:")) URL.revokeObjectURL(avatar);
@@ -80,6 +80,7 @@ function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUs
         data.set("avatar", file);
         const result = await apiFetch<{ url?: string }>("/api/settings/avatar", { method: "POST", body: data });
         setAvatar(result.url ?? "/api/settings/avatar");
+        window.dispatchEvent(new CustomEvent("lumina:avatar-updated", { detail: { url: result.url ?? "/api/settings/avatar" } }));
         setFile(undefined);
       }
       await persist({ section: "profile", displayNameZh: settings.displayNameZh, displayNameEn: settings.displayNameEn, honorific: settings.honorific, bio: settings.bio }, "settings.profileSaved");
