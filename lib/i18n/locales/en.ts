@@ -2,6 +2,7 @@ import type { Messages } from "../types";
 import { enV3120 } from "./v3120";
 import { enV3130 } from "./v3130";
 import { enAudit20261002 } from "./audit-20261002";
+import { enUX20261002 } from "./ux-20261002";
 import { enSalesPlaybook } from "./sales-playbook";
 import { enWorkspacePages } from "./workspace-pages";
 import { enAnalysisPages } from "./analysis-pages";
@@ -451,4 +452,5 @@ export const en: Messages = {
   ...enV3120,
   ...enV3130,
   ...enAudit20261002,
+  ...enUX20261002,
 };

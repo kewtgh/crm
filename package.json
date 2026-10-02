@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.13.1",
+  "version": "3.14.0",
   "private": true,
   "packageManager": "npm@12.0.1",
   "engines": {
@@ -122,9 +122,10 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "read-excel-file": "^9.3.2",
+    "sharp": "0.35.4",
+    "vinext": "^0.1.8",
     "write-excel-file": "^4.1.1",
-    "zod": "^4.4.3",
-    "vinext": "^0.1.8"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",

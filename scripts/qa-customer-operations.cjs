@@ -1,3 +1,6 @@
+
+    await page.route("**/api/customer-email/templates",route=>route.fulfill({json:{items:[]}}));
+    await page.route("**/api/customer-email/recipients?**",route=>route.fulfill({json:{items:[],total:0,regions:[],tags:[],types:[]}}));
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),{build}=require("esbuild");
 module.exports=async({browser,base,output,report,observe})=>{

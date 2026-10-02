@@ -5,6 +5,7 @@ import { databaseJson } from "@/lib/db/gateway";
 import { loadUserSettings } from "@/lib/settings-repository";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { objectStore } from "@/lib/storage/object-store";
+import { compressAvatar, AVATAR_MAX_BYTES } from "@/lib/avatar-image";
 
 const allowed = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -43,20 +44,21 @@ async function post(request: Request) {
   const user = await requireApiUser();
   const form = await request.formData();
   const file = form.get("avatar");
-  if (!(file instanceof File) || !allowed.has(file.type) || file.size > 5 * 1024 * 1024) {
+  if (!(file instanceof File) || !allowed.has(file.type) || file.size > AVATAR_MAX_BYTES) {
     return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!hasImageSignature(file.type, bytes)) {
     return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
   }
-  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const avatarPath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+  const compressed = await compressAvatar(bytes).catch(() => null);
+  if (!compressed) return NextResponse.json({ code: "INVALID_AVATAR" }, { status: 400 });
+  const avatarPath = `${user.id}/${crypto.randomUUID()}.webp`;
   const previous = await loadUserSettings(user);
   try {
-    await objectStore().put(`avatars/${avatarPath}`, bytes, {
-      contentType: file.type,
-      checksum: createHash("sha256").update(bytes).digest("hex"),
+    await objectStore().put(`avatars/${avatarPath}`, compressed, {
+      contentType: "image/webp",
+      checksum: createHash("sha256").update(compressed).digest("hex"),
     });
     await databaseJson(`/db/table/user_preferences?user_id=eq.${user.id}`, {
       method: "PATCH",

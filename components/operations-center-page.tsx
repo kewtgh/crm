@@ -369,7 +369,7 @@ export function OperationsCenterPage({
         <div className="worker-list">{snapshot?.workers.map((worker) => <article key={worker.key}>
           <span className={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{worker.stale ? <TriangleAlert size={17}/> : <Check size={17}/>}</span>
           <div><b>{t(`operations.key.${worker.key}`)}</b><small>{formatDate(worker.lastSeenAt)} · {t("operations.failures", { count: worker.consecutiveFailures })}</small>{worker.lastError && <small className="error-text">{worker.lastError}</small>}</div>
-          <StatusBadge tone={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{t(worker.stale ? "operations.workerStale" : "operations.workerHealthy")}</StatusBadge>
+          <StatusBadge tone={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{t(worker.stale ? "operations.workerStale" : worker.consecutiveFailures ? "ux.workerFailed" : "operations.workerHealthy")}</StatusBadge>
         </article>)}
         {!snapshot?.workers.length && <div className="empty-state"><span>{t("operations.neverRun")}</span></div>}</div>
       </section>

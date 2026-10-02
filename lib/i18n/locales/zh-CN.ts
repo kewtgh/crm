@@ -2,6 +2,7 @@ import type { Messages } from "../types";
 import { zhV3120 } from "./v3120";
 import { zhV3130 } from "./v3130";
 import { zhAudit20261002 } from "./audit-20261002";
+import { zhUX20261002 } from "./ux-20261002";
 import { zhSalesPlaybook } from "./sales-playbook";
 import { zhWorkspacePages } from "./workspace-pages";
 import { zhAnalysisPages } from "./analysis-pages";
@@ -451,4 +452,5 @@ export const zhCN: Messages = {
   ...zhV3120,
   ...zhV3130,
   ...zhAudit20261002,
+  ...zhUX20261002,
 };

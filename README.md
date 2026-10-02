@@ -1,10 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.13.1**
+Current release candidate: **v3.14.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.14.0 adds recipient region/tag/type filtering and page-level bulk selection, six bilingual
+email presets, multiple saved custom templates and an independent sending-language choice. Avatars
+are normalized to bounded WebP thumbnails and displayed in the header. Rule controls, worker status
+and the schedule page's double-month calendar are clearer; four import resources have complete
+blank/example templates and field guides. Apply forward migration 084 for template storage and the
+RLS-preserving recipient selector. See [UX plan and verification](docs/UX_FIX_PLAN_2026-10-02.md).
 
 Version 3.13.1 repairs customer goal date filters, minimizes customer API responses, preserves
 follow-up drafts and adds remaining-contact/deadline metrics. Bulk-email retries retain the original

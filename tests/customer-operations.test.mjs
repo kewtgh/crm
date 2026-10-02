@@ -3,7 +3,13 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { followUpProgress } from "../lib/customer-operations.ts";
 import { CUSTOMER_EMAIL_TEMPLATES,renderCustomerEmail } from "../lib/customer-email-templates.ts";
-import { queueCustomerEmail } from "../lib/customer-email-repository.ts";
+import { customEmailSchema } from "../lib/customer-email-input.ts";
+import { buildImportTemplate,importExamples,importFieldFormat } from "../lib/import-template.ts";
+import { importFieldsByResource } from "../lib/import-fields.ts";
+import { parseCsvDocument } from "../lib/csv.ts";
+import { compressAvatar,AVATAR_MAX_BYTES } from "../lib/avatar-image.ts";
+import sharp from "sharp";
+import { queueCustomerEmail,previewCustomerEmail } from "../lib/customer-email-repository.ts";
 import { loadCustomerOperations } from "../lib/customer-operations-repository.ts";
 import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
 import { customerEmailBatchPayload } from "../lib/customer-email-batch.ts";
@@ -85,7 +91,7 @@ test("follow-up targets count date-bounded entries, exact totals beyond list lim
   assert.equal(followUpProgress(null,[],4,"2026-10-01").nextLevel,4);
 });
 test("all templates substitute actual customer/owner names without interpreting placeholders",()=>{
-  for(const template of CUSTOMER_EMAIL_TEMPLATES)for(const locale of ["zh-CN","en"]){const result=renderCustomerEmail(template,locale,"客户{{name}}","负责{{owner}}");assert.ok(result.body.includes("客户{{name}}"));assert.ok(result.body.includes("负责{{owner}}"));assert.ok(result.subject.length>=2);assert.equal(result.purpose,template==="PROGRAM"?"MARKETING":"SERVICE");}
+  for(const template of CUSTOMER_EMAIL_TEMPLATES)for(const locale of ["zh-CN","en"]){const result=renderCustomerEmail(template,locale,"客户{{name}}","负责{{owner}}");assert.ok(result.body.includes("客户{{name}}"));assert.ok(result.body.includes("负责{{owner}}"));assert.ok(result.subject.length>=2);assert.equal(result.purpose,template.startsWith("PROGRAM")?"MARKETING":"SERVICE");}
 });
 test("bulk email uses individual durable keys, bounded concurrency, suppression and partial error results",async()=>{
   const seen=new Map(),threads=[],deliveries=[];let active=0,max=0;
@@ -119,4 +125,54 @@ test("customer contract links target the existing contract workspace and restore
   const [panel,page,workspace]=await Promise.all([source("components/customer-operations-panel.tsx"),source("app/(crm)/contracts/page.tsx"),source("components/contracts-page.tsx")]);
   assert.match(panel,/contracts\?query=/);assert.doesNotMatch(panel,/href=\{`\/contracts\//);
   assert.match(page,/result\?\.items.some\(item=>item.id===params.focus\)/);assert.match(workspace,/useState\(initialQuery\)/);assert.match(workspace,/useState\(initialSelectedId\)/);
+});
+test("avatars are decoded, stripped and bounded WebP thumbnails rather than uploaded originals",async()=>{
+  const original=await sharp({create:{width:1800,height:900,channels:3,background:{r:120,g:90,b:50}}}).png().toBuffer();
+  const compressed=await compressAvatar(original),metadata=await sharp(compressed).metadata();
+  assert.equal(metadata.format,"webp");assert.equal(metadata.width,256);assert.equal(metadata.height,128);
+  assert.ok(compressed.length<=128*1024);assert.equal(metadata.exif,undefined);
+  await assert.rejects(compressAvatar(new Uint8Array([0xff,0xd8,0xff])),/./);
+  await assert.rejects(compressAvatar(new Uint8Array(AVATAR_MAX_BYTES+1)),/INVALID_AVATAR/);
+});
+
+test("each mail category has two bilingual presets and custom templates require complete language pairs",()=>{
+  for(const category of ["FOLLOW_UP","MEETING","PROGRAM"]){
+    assert.equal(CUSTOMER_EMAIL_TEMPLATES.filter(id=>id===category||id===`${category}_2`).length,2);
+    for(const locale of ["zh-CN","en"]){assert.notEqual(renderCustomerEmail(category,locale,"Name","Owner").body,renderCustomerEmail(`${category}_2`,locale,"Name","Owner").body);}
+  }
+  const custom={subjectZh:"您好 {{name}}",subjectEn:"",bodyZh:"负责对接人 {{owner}}",bodyEn:"",purpose:"MARKETING"};
+  assert.equal(customEmailSchema.safeParse(custom).success,true);
+  assert.equal(customEmailSchema.safeParse({...custom,subjectEn:"Only subject"}).success,false);
+  assert.equal(customEmailSchema.safeParse({...custom,subjectZh:"\r\nInjected"}).success,false);
+  assert.equal(customEmailSchema.safeParse({...custom,bodyZh:"{{secret}}"}).success,false);
+  const rendered=renderCustomerEmail("CUSTOM","en","Alex {{owner}}","Staff",custom);
+  assert.equal(rendered.subject,"您好 Alex {{owner}}");assert.equal(rendered.body,"负责对接人 Staff");assert.equal(rendered.purpose,"MARKETING");
+  const preview={items:[],hash:"hash",locale:"zh-CN",template:"CUSTOM",customTemplate:custom};
+  const retry=customerEmailBatchPayload("queue",["person"],"FOLLOW_UP","en","key",preview,{...custom,bodyZh:"changed"});
+  assert.equal(retry.template,"CUSTOM");assert.equal(retry.customTemplate.bodyZh,custom.bodyZh);
+});
+
+test("four import resources share complete field registries with quoted examples and per-field guides",()=>{
+  for(const [resource,fields] of Object.entries(importFieldsByResource)){
+    const example=parseCsvDocument(buildImportTemplate(resource,"example","zh-CN",key=>key));
+    assert.deepEqual(example.headers,[...fields]);assert.equal(example.rows.length,1);
+    for(const field of fields){assert.ok(Object.hasOwn(importExamples,field),field);assert.ok(importFieldFormat(field,true));}
+    const guide=parseCsvDocument(buildImportTemplate(resource,"guide","en",key=>key));
+    assert.equal(guide.rows.length,fields.length);assert.deepEqual(guide.rows.map(row=>row.field),[...fields]);
+    assert.equal(buildImportTemplate(resource,"blank","en",key=>key).split("\r\n").length,2);
+  }
+  const school=parseCsvDocument(buildImportTemplate("ORGANIZATIONS","example","en",key=>key));
+  assert.equal(school.rows[0].courseCategories,"语言,科学");
+  const student=parseCsvDocument(buildImportTemplate("STUDENTS","example","en",key=>key));
+  assert.equal(student.rows[0].personId,"REPLACE_WITH_EXISTING_CONTACT_UUID");
+});
+
+test("personalization overflow is blocked in the actual preview adapter before queueing",async()=>{
+  const read=async()=>[{id:"person",name_zh:"长".repeat(160),name_en:"Long".repeat(40),email:"customer@example.test",owner_id:null,do_not_contact:false}];
+  const custom={subjectZh:"{{name}}{{name}}",subjectEn:"",bodyZh:"{{name}}".repeat(70),bodyEn:"",purpose:"SERVICE"};
+  assert.equal(customEmailSchema.safeParse(custom).success,true);
+  const preview=await previewCustomerEmail(["person"],"CUSTOM","zh-CN",custom,read);
+  assert.equal(preview.items[0].blocked,true);assert.equal(preview.items[0].blockedReason,"INVALID_TEMPLATE_CONTENT");
+  let sent=false;const result=await queueCustomerEmail(preview.items,"key",{createThread:async()=>{sent=true;},queueMessage:async()=>{sent=true;}});
+  assert.equal(sent,false);assert.equal(result.queued,0);
 });
