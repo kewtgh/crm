@@ -358,7 +358,9 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="ux-refinements"){
+    if(env.QA_SCOPE==="education-business"){
+      await require("./qa-education-business.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="ux-refinements"){
       await require("./qa-ux-refinements.cjs")({browser,base,output,report,observe});
     }else if(env.QA_SCOPE==="structured-inputs"){
       await require("./qa-structured-inputs.cjs")({browser,base,output,report,observe});

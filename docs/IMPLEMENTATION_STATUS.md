@@ -1,6 +1,15 @@
-# Implementation status — v3.15.0 release candidate
+# Implementation status — v3.16.0 release candidate
 
 ## Scope
+
+v3.16.0 adds five structured education-business record types, a bilingual paged workspace,
+customer/student contextual entry points, explicit organization classification and evidence-based
+data-gap/deadline advice. Migration 087 preserves existing customer identities and adds composite
+workspace references, RLS, atomic revision/idempotency guards, attribution consistency and privacy
+export/deletion support. Unknown legacy values remain unfilled. No production migration, deployment,
+external messaging or inferred admissions changes. [Audit](FIRST_PRINCIPLES_AUDIT_2026-10-02.md)
+and [implementation/verification](FIRST_PRINCIPLES_PLAN_2026-10-02.md).
+
 
 v3.15.0 replaces searchable recipient facets with a shared three-column structured selector.
 Portal invitations add two bilingual presets, personal/public custom template storage, recipient

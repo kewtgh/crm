@@ -17,6 +17,7 @@ export type CrmRecordDetail = {
   updatedAt: string;
   archived: boolean;
   city?: string;
+  organizationType?:string;
   shortName?:string;
   curriculum?: string;
   courseCategories?:string[];affiliationType?:string;parentOrganizationId?:string|null;
@@ -73,6 +74,7 @@ function toRow(resource: PersistentResource, record: Record<string, unknown>,own
   if (resource === "schools") return {
     id: String(record.id),href:`/schools/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en), secondary: `${record.city} · ${record.curriculum}`,secondaryEn:`${record.city} · ${record.curriculum}`,
     owner, status, statusKey: statusKeys[status], statusTone: toneByStatus[status] ?? "gray", meta: `${record.key_contact_coverage}%`, extra: isoDate(record.last_contact_at), completeness: Number(record.completeness),
+    classificationKey:`business.option.${record.organization_type??"SCHOOL"}`,
   };
   if (resource === "people") {const contactStatus=String(record.contact_status??"NEW");const communicationLevel=Math.min(4,Math.max(1,Number(record.communication_level??1)));return {
     id: String(record.id),href:`/people/${record.id}`, primary: String(record.name_zh),primaryEn:String(record.name_en),bilingualName:true, secondary: String(record.title || record.contact_type),
@@ -137,7 +139,7 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
     });
     return toRow(resource,created);
   }
-  const body = { short_name:input.shortName??"",name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
+  const body = { organization_type:input.organizationType??"SCHOOL",short_name:input.shortName??"",name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
       course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
       organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",
       founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
@@ -172,6 +174,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
     ownerName:profile?`${profile.display_name_zh} / ${profile.display_name_en}`:"—",
     updatedAt:String(record.updated_at),
     archived:Boolean(record.archived_at),
+    ...(resource==="schools"?{organizationType:String(record.organization_type??"SCHOOL")}:{}),
     history:history.map(item=>({action:item.action,changedAt:item.changed_at,actorId:item.actor_id,actorName:item.actor_name})),
   };
   if(resource==="schools")return{...common,city:String(record.city??""),curriculum:String(record.curriculum??""),courseCategories:(record.course_categories as string[]|undefined)??[],affiliationType:String(record.affiliation_type??"INDEPENDENT"),parentOrganizationId:record.parent_organization_id?String(record.parent_organization_id):null,organizationOverviewMarkdown:String(record.organization_overview_markdown??""),structureOverviewMarkdown:String(record.structure_overview_markdown??""),website:String(record.website??""),foundedYear:record.founded_year===null?null:Number(record.founded_year),studentCount:record.student_count===null?null:Number(record.student_count),facultyCount:record.faculty_count===null?null:Number(record.faculty_count),campusCount:record.campus_count===null?null:Number(record.campus_count)};

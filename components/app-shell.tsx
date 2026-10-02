@@ -62,6 +62,7 @@ const navigation: NavigationGroup[] = [
     { labelKey: "nav.schools", href: "/schools", icon: Building2 },
     { labelKey: "nav.people", href: "/people", icon: Users },
     { labelKey: "nav.households", href: "/households", icon: Users },
+    { labelKey: "business.title", href: "/education-business", icon: Target },
   ]},
   { titleKey: "nav.operations", items: [
     { labelKey: "nav.customerService", icon: MessageSquareText, children: [
@@ -140,6 +141,7 @@ const routeCapabilities: Partial<Record<string, Capability>> = {
   "/guardian-portal": "portal.manage",
   "/privacy-requests":"privacyRequests.manage",
   "/growth": "leads.view",
+  "/education-business": "education.view",
   "/automation": "automation.manage",
   "/finance": "finance.view",
   "/imports": "imports.view",

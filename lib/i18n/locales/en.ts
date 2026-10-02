@@ -1,4 +1,5 @@
 import type { Messages } from "../types";
+import { enEducationBusiness } from "./education-business";
 import { enV3120 } from "./v3120";
 import { enV3130 } from "./v3130";
 import { enAudit20261002 } from "./audit-20261002";
@@ -453,4 +454,5 @@ export const en: Messages = {
   ...enV3130,
   ...enAudit20261002,
   ...enUX20261002,
+  ...enEducationBusiness,
 };

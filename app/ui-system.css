@@ -173,3 +173,14 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
 @media(max-width:360px) {
   .email-recipient-filters { grid-template-columns:1fr; }
 }
+/* Structured education business records share the existing detail/editor system. */
+.business-record-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; }
+.business-record-card { min-width:0; overflow-wrap:anywhere; }
+.business-record-card h2 { font-size:1.1rem; }
+.business-record-card details { margin-top:12px; }
+.business-record-card summary { cursor:pointer; padding:8px 0; }
+.business-warning { font-size:.875rem; color:var(--muted); border-left:3px solid #c08b36; padding-left:10px; }
+.business-choices { border:1px solid var(--border); border-radius:12px; padding:12px; min-width:0; }
+.business-choices label { display:flex; align-items:center; gap:8px; padding:5px 0; }
+.business-choices input { width:18px; height:18px; }
+.education-business-workspace .customer-profile dd { white-space:pre-wrap; }

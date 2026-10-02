@@ -8,6 +8,7 @@ export type DataRow = {
   bilingualName?: boolean;
   secondary: string;
   secondaryEn?: string;
+  classificationKey?:string;
   owner: string;
   status: string;
   statusKey?: string;

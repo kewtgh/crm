@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { CustomerOperationsPanel } from "./customer-operations-panel";
 import { SOURCE_OPTIONS } from "@/lib/structured-inputs";
 import { BilingualNameHint } from "@/components/structured-inputs";
@@ -165,6 +166,7 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
       {error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={() => setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.saving") : t("common.create")}</button></div>
     </form></AccessibleDrawer>}
     {detail && <AccessibleDrawer pending={pending} title={`${detail.nameZh} / ${detail.nameEn}`} description={t("education.detailHelp")} onClose={() => setDetail(null)}>
+      <Link className="secondary-button" href={`/education-business?subject=STUDENT&subjectId=${detail.id}`}>{t("business.studentEntry")} →</Link>
       <form onSubmit={saveStudent}>
         <div className="form-grid two-column"><label className="field"><span>{t("education.studentNumber")}</span><input name="studentNumber" defaultValue={detail.studentNumber}/></label><label className="field"><span>{t("education.birthDate")}</span><DateInput name="birthDate" type="date" defaultValue={detail.birthDate}/></label></div>
         <div className="form-grid two-column"><label className="field"><span>{t("education.grade")}</span><OptionInput name="grade" defaultValue={detail.grade} required options={GRADE_OPTIONS}/></label><label className="field"><span>{t("education.currentClass")}</span><input name="currentClass" defaultValue={detail.currentClass}/></label></div>
