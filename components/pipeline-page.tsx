@@ -3,6 +3,7 @@ import { BilingualNameHint } from "@/components/structured-inputs";
 import { DateInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { CalendarDays, CircleDollarSign, Plus, RefreshCcw, Sparkles, UserRound } from "lucide-react";
 import { EmptyState } from "@/components/data-state";
 import { useI18n } from "@/components/i18n-provider";
@@ -49,6 +50,7 @@ export function PipelinePage({
   initialCurrency,
   initialCurrencies,
   persistent = true,
+  initialFocus,
 }: {
   initialItems: OpportunityRecord[];
   initialTotal: number;
@@ -56,6 +58,7 @@ export function PipelinePage({
   initialCurrency: string;
   initialCurrencies: string[];
   persistent?: boolean;
+  initialFocus?:string;
 }) {
   const { locale, t } = useI18n();
   const canManage=useCapability("opportunities.manage");
@@ -297,6 +300,7 @@ export function PipelinePage({
       </div>
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}
+    {initialFocus&&<InlineMessage type="info">{t("audit.opportunityFocus")} <Link href="/opportunities">{t("audit.allOpportunities")}</Link></InlineMessage>}
     <section className="pipeline-summary">
       <span><CircleDollarSign size={19}/><div><small>{t("pipeline.total")}</small><b>{money(totalAmount)}</b></div></span>
       <span><Sparkles size={19}/><div><small>{t("pipeline.weighted")}</small><b>{money(weighted)}</b></div></span>
