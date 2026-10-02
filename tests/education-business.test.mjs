@@ -9,6 +9,18 @@ import { enEducationBusiness,zhEducationBusiness } from "../lib/i18n/locales/edu
 const id="00000000-0000-4000-8000-000000000001",other="00000000-0000-4000-8000-000000000002";
 const validNeeds={id,services:["FOUNDATION","STUDY_TOUR"],target_regions:["UK"],budget_min:null,budget_max:null,budget_currency:"GBP",target_intake:null,decision_stage:"DISCOVERY",next_action:"确认入学目标"};
 const input=(resource,data)=>({resource,id,expectedRevision:null,data});
+
+test("participation and checklist capture independent delivery facts",()=>{
+  const registration={household_id:id,event_id:other,party_size:2,status:"REGISTERED",next_action:""};
+  assert.equal(businessSaveSchema.safeParse(input("participations",registration)).success,true);
+  for(const party_size of [null,0,-1,1.5,1001])assert.equal(businessSaveSchema.safeParse(input("participations",{...registration,party_size})).success,false);
+  const task={student_id:id,title:"Transcript",due_on:"2026-10-01",status:"TODO",next_action:""};
+  assert.deepEqual(businessWarnings("applications",task,"2026-10-03"),["taskOverdue","nextActionMissing"]);
+  assert.equal(businessSaveSchema.safeParse(input("applications",{...task,status:"DONE"})).success,false);
+  assert.equal(businessSaveSchema.safeParse(input("applications",{...task,status:"DONE",next_action:"Reviewed original transcript"})).success,true);
+  assert.deepEqual(businessWarnings("applications",{...task,status:"DONE"},"2026-10-03"),[]);
+  assert.deepEqual(businessContextFilters("participations",{type:"HOUSEHOLD",id}),{household_id:`eq.${id}`});
+});
 test("family budget distinguishes unknown and zero; malformed ranges, duplicate roles and extra keys are rejected",()=>{
   assert.equal(businessSaveSchema.parse(input("needs",validNeeds)).data.budget_min,null);
   assert.equal(businessSaveSchema.parse(input("needs",{...validNeeds,budget_min:0,budget_max:0})).data.budget_max,0);
@@ -27,8 +39,8 @@ test("outreach distinguishes planned and actual counts and rejects reversed date
   for(const change of [{ends_on:"2026-10-01"},{capacity:1,attendee_count:2},{capacity:2.5},{partner_organization_id:id}])assert.equal(businessSaveSchema.safeParse(input("events",{...event,...change})).success,false);
 });
 test("context filters never widen unsupported customer combinations",()=>{
-  assert.deepEqual(businessResourcesFor({type:"STUDENT",id}),["pathways"]);
-  assert.deepEqual(businessResourcesFor({type:"HOUSEHOLD",id}),["needs","referrals"]);
+  assert.deepEqual(businessResourcesFor({type:"STUDENT",id}),["pathways","applications"]);
+  assert.deepEqual(businessResourcesFor({type:"HOUSEHOLD",id}),["needs","referrals","participations"]);
   assert.equal(businessContextFilters("events",{type:"ORGANIZATION",id}).or,`(organization_id.eq.${id},partner_organization_id.eq.${id})`);
   assert.throws(()=>businessContextFilters("pathways",{type:"HOUSEHOLD",id}),/BUSINESS_CONTEXT_INVALID/);
 });

@@ -1,6 +1,13 @@
-# Implementation status — v3.16.0 release candidate
+# Implementation status — v3.17.0 release candidate
 
-## Scope
+## v3.17.0 scope
+
+Family buyers now flow through quotes, contracts, renewal and financial reports.
+Migrations 088–089 add typed purchasing constraints, invoker-scoped contract summaries,
+family activity participation with serialized capacity checks, and student application checklists.
+See FIRST_PRINCIPLES_AUDIT_2026-10-03.md and FIRST_PRINCIPLES_PLAN_2026-10-03.md for evidence and rollout boundaries.
+
+## Previous v3.16.0 scope
 
 v3.16.0 adds five structured education-business record types, a bilingual paged workspace,
 customer/student contextual entry points, explicit organization classification and evidence-based

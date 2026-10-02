@@ -72,8 +72,9 @@ const customerPhase={name:"customer-operations",timeout:55,env:{QA_SCOPE:"custom
 const uiPhase={name:"ui-system",timeout:55,env:{QA_SCOPE:"ui-system"}};
 const uxPhase={name:"ux-refinements",timeout:55,env:{QA_SCOPE:"ux-refinements"}};
 const educationPhase={name:"education-business",timeout:55,env:{QA_SCOPE:"education-business"}};
+const purchasingPhase={name:"family-purchasing",timeout:55,env:{QA_SCOPE:"family-purchasing"}};
 const mergeOnly = process.env.QA_MERGE_ONLY === "1";
-const selectedPhases = mergeOnly ? [] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
+const selectedPhases = mergeOnly ? [] : requestedPhase === "family-purchasing" ? [purchasingPhase] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
 if (!mergeOnly && !selectedPhases.length) throw new Error(`Unknown QA_PHASE ${requestedPhase}`);
 for (const phase of selectedPhases) {
   const index = phases.indexOf(phase);
