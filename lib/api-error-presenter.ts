@@ -3,6 +3,10 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  EMAIL_TEMPLATE_VERSION_CONFLICT:"ux.templateConflict",
+  EMAIL_TEMPLATE_IDEMPOTENCY_CONFLICT:"ux.templateCreateConflict",
+  EMAIL_TEMPLATE_NOT_FOUND:"ux.templateNotFound",
+  EMAIL_TEMPLATE_PUBLIC_FORBIDDEN:"permission.denied",
   EMAIL_PREVIEW_CHANGED:"customerOps.previewChanged",
   DATABASE_MIGRATION_REQUIRED:"customerOps.migrationRequired",
   CAPABILITY_FORBIDDEN: "permission.denied",

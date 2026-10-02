@@ -1,6 +1,13 @@
-# Implementation status — v3.14.0 release candidate
+# Implementation status — v3.14.1 release candidate
 
 ## Scope
+
+v3.14.1 adds latest-result guards and draft locks to communications, immutable batch attempts and
+safe retries after unknown queue responses. Preview eligibility reuses authoritative consent and
+privacy rules. Forward migration 085 adds template revisions, idempotent saves and soft archive;
+personal templates stay owner-private, and only ADMIN/SUPER_ADMIN maintain workspace public templates.
+Other send-capable members can use public templates or copy them personally. Existing templates remain
+personal. No automated deployment or external sending. [Audit and plan](AUDIT_PLAN_2026-10-02_ROUND2.md).
 
 v3.14.0 improves severity control sizing, worker status layout, select affordances and the schedule
 page's double-month calendar. Avatar uploads are decoded, resized and stored as privately served WebP

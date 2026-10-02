@@ -1,7 +1,8 @@
 export const CUSTOMER_EMAIL_TEMPLATES = ["FOLLOW_UP","FOLLOW_UP_2","MEETING","MEETING_2","PROGRAM","PROGRAM_2"] as const;
 export type CustomerEmailTemplate=typeof CUSTOMER_EMAIL_TEMPLATES[number]|"CUSTOM";
 export type CustomEmailContent={subjectZh:string;subjectEn:string;bodyZh:string;bodyEn:string;purpose:"SERVICE"|"MARKETING"};
-export type SavedEmailTemplate=CustomEmailContent&{id:string;name:string};
+export type EmailTemplateVisibility="PERSONAL"|"WORKSPACE";
+export type SavedEmailTemplate=CustomEmailContent&{id:string;name:string;revision:number;visibility:EmailTemplateVisibility};
 export function replaceEmailVariables(text:string,name:string,owner:string){return text.replace(/\{\{\s*(name|owner)\s*\}\}/g,(_,key:string)=>key==="name"?name:owner);}
 export function renderCustomerEmail(template:CustomerEmailTemplate,locale:"zh-CN"|"en",name:string,owner:string,custom?:CustomEmailContent){
   const zh=locale==="zh-CN";
