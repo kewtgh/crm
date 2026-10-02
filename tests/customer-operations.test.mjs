@@ -14,6 +14,7 @@ import { loadCustomerOperations } from "../lib/customer-operations-repository.ts
 import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
 import { customerEmailBatchPayload,freezeCustomerEmailBatch } from "../lib/customer-email-batch.ts";
 import { automationInputSchema } from "../lib/automation-input.ts";
+import { PORTAL_INVITATION_PRESETS,portalTemplateContentSchema,renderPortalInvitation } from "../lib/portal-invitation-templates.ts";
 const source=file=>readFile(new URL(`../${file}`,import.meta.url),"utf8");
 test("goal completion uses repeated UTC bounds accepted by the local gateway",()=>{
   const params=new URL(followUpCompletionPath("CONTACT","id",{start_date:"2026-10-01",due_date:"2026-10-31"}),"http://local").searchParams;
@@ -236,4 +237,39 @@ test("shared required styling excludes labels with an explicit required marker",
   const css=await source("app/globals.css");
   assert.match(css,/:not\(:has\(> span:first-child \.required-indicator\)\)/);
   assert.match(css,/\.field:has\(input\[required\]/);
+});
+
+test("email recipient filters are fixed structured selects backed by accessible customer facets",async()=>{
+  const picker=await source("components/email-recipient-picker.tsx"),filters=await source("components/recipient-filters.tsx"),css=await source("app/ui-system.css");
+  assert.doesNotMatch(picker,/SearchableSelect|three-column/);
+  assert.equal((filters.match(/<select value=\{(?:region|tag|type)\}/g)??[]).length,3);
+  assert.doesNotMatch(filters,/<input|SearchableSelect/);
+  for(const facet of ["regions","tags","types"])assert.match(picker,new RegExp(`${facet}=\\{result\\.${facet}\\}`));
+  assert.match(picker,/if\(value===current&&page===1\)return/);assert.match(picker,/setPage\(1\)/);
+  assert.match(css,/\.email-recipient-filters \{ grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.portal-invitation-result \.email-preview \{ overflow-wrap:anywhere; \}/);
+  const sql=await source("db/migrations/202610020084_customer_email_templates.sql");
+  assert.match(sql,/select distinct city from accessible/);assert.match(sql,/select distinct unnest\(tags\)/);assert.match(sql,/select distinct contact_type from accessible/);
+  assert.match(sql,/c.archived_at is null and c.workspace_id=public.current_workspace_id\(\)/);
+});
+
+test("portal presets and custom invitations keep safe placeholders, language pairs and bounded validity",()=>{
+  for(const content of Object.values(PORTAL_INVITATION_PRESETS)){
+    assert.equal(portalTemplateContentSchema.safeParse(content).success,true);
+    for(const locale of ["zh-CN","en"]){const rendered=renderPortalInvitation(content,locale,{name:"家长{{portal_url}}",family:"家庭",owner:"顾问",portal_url:"https://example.test/portal/invite/safe",expires:"2026-10-03"});assert.ok(rendered.body.includes("家长{{portal_url}}"));assert.ok(rendered.body.includes("https://example.test/portal/invite/safe"));assert.ok(rendered.body.includes("2026-10-03"));}
+  }
+  const base=PORTAL_INVITATION_PRESETS.WELCOME;
+  for(const content of [{...base,validityDays:0},{...base,validityDays:31},{...base,bodyZh:"无链接"},{...base,bodyEn:"{{unknown}} {{portal_url}}"},{...base,subjectZh:"换\n行"},{...base,bodyZh:"{{portal_url}} https://example.test/portal/invite/"+"a".repeat(43)}])assert.equal(portalTemplateContentSchema.safeParse(content).success,false);
+  const oneLanguage={...base,subjectEn:"",bodyEn:""};assert.equal(portalTemplateContentSchema.safeParse(oneLanguage).success,true);
+  assert.equal(renderPortalInvitation(oneLanguage,"en",{name:"Name",family:"Family",owner:"Owner",portal_url:"LINK",expires:"DATE"}).subject,base.subjectZh);
+});
+
+test("portal templates and recipients preserve origin, capability, category isolation and existing token boundary",async()=>{
+  const [api,recipients,repo,email,dialog,workspace,sql]=await Promise.all([source("app/api/portal/templates/route.ts"),source("app/api/portal/recipients/route.ts"),source("lib/portal-template-repository.ts"),source("lib/customer-email-repository.ts"),source("components/portal-invitation-dialog.tsx"),source("components/portal-workspace.tsx"),source("db/migrations/202610020086_portal_invitation_templates.sql")]);
+  assert.match(api,/mutationIsTrusted/);assert.match(api,/requireApiCapability\("portal.manage"\)/);assert.match(api,/EMAIL_TEMPLATE_PUBLIC_FORBIDDEN/);
+  assert.match(recipients,/requireApiCapability\("portal.manage"\)/);assert.match(repo,/category=eq.PORTAL/);assert.match(email,/category=eq.EMAIL/);
+  assert.match(sql,/existing.category<>template_category/);assert.match(sql,/security invoker/g);assert.doesNotMatch(sql,/security definer/i);
+  assert.match(sql,/public.household_members/);assert.match(sql,/public.student_guardian_relationships/);assert.match(sql,/h.archived_at is null/);assert.match(sql,/c.archived_at is null/);
+  assert.match(dialog,/DateInput/);assert.match(dialog,/!canCreate/);assert.match(workspace,/renderPortalInvitation/);
+  assert.doesNotMatch(workspace,/queueCommunicationMessage|localStorage|sessionStorage/);
 });

@@ -163,3 +163,13 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
 .email-recipient-list label > span { min-width:0; display:grid; gap:3px; overflow-wrap:anywhere; }
 .email-recipient-list small { color:var(--muted); }
 .email-filter-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.email-recipient-filters { grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:start; }
+.email-recipient-filters .field { min-width:0; }
+.portal-invitation-result .email-preview { overflow-wrap:anywhere; }
+@media(max-width:480px) {
+  .email-recipient-filters { gap:8px; }
+  .email-recipient-filters select { padding-left:8px; padding-right:24px; background-position:right 5px center; font-size:13px; }
+}
+@media(max-width:360px) {
+  .email-recipient-filters { grid-template-columns:1fr; }
+}
