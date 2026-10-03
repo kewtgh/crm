@@ -61,7 +61,7 @@ function Initialize-WritableVolume([string]$Name, [string]$Purpose) {
     --cap-drop ALL --cap-add CHOWN `
     --security-opt no-new-privileges:true `
     --mount "type=volume,src=$Name,dst=/data" `
-    --entrypoint chown postgres:18.4-bookworm 10001:10001 /data
+    --entrypoint chown postgres:18.6-trixie 10001:10001 /data
   if ($LASTEXITCODE -ne 0) { throw "Failed to initialize $Purpose volume ownership" }
 }
 

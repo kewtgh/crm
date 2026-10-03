@@ -9,7 +9,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     await page.route("**/api/customer-operations**",route=>{const subject=new URL(route.request().url()).searchParams.get("subject");return route.fulfill({json:{...snapshot,subject,nameZh:subject==="HOUSEHOLD"?"测试家庭":subject==="CONTACT"?"测试客户":snapshot.nameZh,contacts:subject==="CONTACT"?[]:snapshot.contacts,students:subject==="HOUSEHOLD"?[{id:"child",name_zh:"家庭孩子"}]:[]}});});
     const bundle=await build({entryPoints:["tests/fixtures/ui-system-qa.tsx"],bundle:true,write:false,format:"iife",platform:"browser",jsx:"automatic",target:"chrome145",alias:{"next/navigation":path.resolve("tests/fixtures/qa-navigation.ts"),"next/link":path.resolve("tests/fixtures/qa-link.tsx")},define:{"process.env.NODE_ENV":'"production"'},logLevel:"silent"});
     await page.setContent('<html lang="zh-CN"><head><title>UI system QA</title></head><body><div id="root"></div></body></html>');
-    for(const file of fs.readdirSync("dist/client/_next/static").filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file}`});
+    for(const file of fs.readdirSync("dist/client/_next/static",{recursive:true}).filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file.replaceAll("\\","/")}`});
     await page.addScriptTag({content:bundle.outputFiles[0].text});
     for(const viewport of [{width:1440,height:1000},{width:768,height:1024},{width:375,height:812}]){
       await page.setViewportSize(viewport); await page.getByRole("button",{name:"ORGANIZATION",exact:true}).click();

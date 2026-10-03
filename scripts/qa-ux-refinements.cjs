@@ -53,7 +53,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     });
     const bundle=await build({entryPoints:["tests/fixtures/ux-refinements-qa.tsx"],bundle:true,write:false,format:"iife",platform:"browser",jsx:"automatic",target:"chrome145",alias:{"next/navigation":path.resolve("tests/fixtures/qa-navigation.ts"),"next/link":path.resolve("tests/fixtures/qa-link.tsx")},define:{"process.env.NODE_ENV":'"production"'},logLevel:"silent"});
     await page.setContent('<html lang="zh-CN"><head><title>Scoped UX QA</title></head><body><div id="root"></div></body></html>');
-    for(const file of fs.readdirSync("dist/client/_next/static").filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file}`});
+    for(const file of fs.readdirSync("dist/client/_next/static",{recursive:true}).filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file.replaceAll("\\","/")}`});
     await page.addScriptTag({content:bundle.outputFiles[0].text});
     // Exercise latest-result guards even when the transport cannot cancel an old read.
     await page.evaluate(()=>{const original=window.fetch;window.fetch=(input,init)=>typeof input==="string"&&input.startsWith("/api/communications?")?original(input,{...init,signal:undefined}):original(input,init);});

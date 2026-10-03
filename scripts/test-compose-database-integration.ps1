@@ -83,13 +83,13 @@ try {
     --env CRM_WORKER_DB_PASSWORD=$workerPassword `
     --env CRM_MIGRATOR_DB_PASSWORD=$migratorPassword `
     --env CRM_BACKUP_DB_PASSWORD=$backupPassword `
-    node:24.18.0-bookworm-slim node scripts/db-bootstrap.mjs
+    node:26.10.0-trixie-slim node scripts/db-bootstrap.mjs
   if ($LASTEXITCODE -ne 0) { throw "Database bootstrap failed" }
 
   docker run --rm --network $backendNetwork `
     --volume "${repositoryRoot}:/workspace:ro" --workdir /workspace `
     --env MIGRATION_DATABASE_URL="postgresql://crm_migrator:$migratorPassword@postgres:5432/lumina_crm" `
-    node:24.18.0-bookworm-slim node scripts/db-migrate.mjs
+    node:26.10.0-trixie-slim node scripts/db-migrate.mjs
   if ($LASTEXITCODE -ne 0) { throw "Database migration failed" }
 
   $migrationCount = (docker exec --env PGPASSWORD=$superuserPassword $containerId `

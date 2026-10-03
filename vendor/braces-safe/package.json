@@ -1,0 +1,12 @@
+{
+  "name": "braces",
+  "version": "3.0.4-lumina.1",
+  "private": true,
+  "description": "Local MIT-licensed braces 3.0.3 fork with bounded parsing and AST traversal for CVE-2026-93687.",
+  "type": "commonjs",
+  "main": "index.js",
+  "files": ["index.js", "lib", "LICENSE", "README.md"],
+  "dependencies": { "fill-range": "^7.1.1" },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}

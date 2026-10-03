@@ -1,10 +1,16 @@
 # Lumina CRM
 
-Current release candidate: **v3.18.0**
+Current release candidate: **v3.18.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.18.1 refreshes application, Worker and planning-reference dependencies, Node/npm,
+container images, BuildKit and GitHub Actions to current stable releases. The bounded local braces
+fork addresses CVE-2026-93687; Prisma's vulnerable indirect dependencies use patched stable versions.
+TypeScript 7 uses Microsoft's parallel TS 6 API compatibility package for lint tooling, and
+ESLint 10 uses the official compatibility utilities. See [deployment versions](docs/DEPLOYMENT.md).
 
 Version 3.18.0 adds a dedicated Bulk email tab in Customer communications with paginated historical
 records, subject/content/customer/email search, combined purpose and delivery-status filters, and
@@ -187,8 +193,8 @@ monthly restore verification creates and destroys only a uniquely named temporar
 
 Requirements:
 
-- Node.js 24.x (`24.18.0` is pinned in `.nvmrc`);
-- npm 12.x (`12.0.1` is pinned in `package.json`);
+- Node.js 26.x (`26.10.0` is pinned in `.nvmrc`);
+- npm 12.x (`12.2.0` is pinned in `package.json`);
 - Docker Desktop.
 
 ```bash

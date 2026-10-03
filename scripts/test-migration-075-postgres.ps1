@@ -49,7 +49,7 @@ try {
     --publish 127.0.0.1::5432 `
     --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=768m `
     --env POSTGRES_DB=lumina_crm --env POSTGRES_USER=postgres `
-    --env POSTGRES_PASSWORD=$postgresPassword postgres:18.4-bookworm | Out-Null
+    --env POSTGRES_PASSWORD=$postgresPassword postgres:18.6-trixie | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "Isolated PostgreSQL startup failed" }
 
   $healthy = $false

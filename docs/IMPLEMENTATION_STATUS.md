@@ -1,6 +1,38 @@
-# Implementation status — v3.18.0 release candidate
+# Implementation status — v3.18.1 release candidate
 
-## v3.18.0 scope
+## v3.18.1 scope
+
+All three npm manifests and lockfiles, Node/npm pins, PostgreSQL/Node base images, GitHub Actions,
+the Dockerfile frontend and the new BuildKit builder image are refreshed to stable releases as of
+2026-10-03. Host-managed Docker/Caddy/cloudflared versions are documented in DEPLOYMENT.md; no
+host packages or deployed services are changed by this repository update. Prisma remains at stable
+7.10.0, with deepmerge-ts 8.0.2 and mysql2 3.24.5 overrides for its vulnerable indirect dependencies.
+
+The local MIT-licensed braces fork bounds parsing and AST recursion to prevent CVE-2026-93687 stack
+exhaustion, retaining normal glob/range behavior. Local file dependencies are packed with their child
+dependencies and copied into both Docker dependency stages before installation. The now-unused
+image-size shim is removed. CI's moderate audit gate remains enabled without advisory suppression.
+
+TypeScript 7.0.2 supplies `tsc`; Microsoft's `@typescript/typescript6` 6.0.2 compatibility package
+supplies the API required by typescript-eslint. The official ESLint compatibility wrapper restores
+RuleContext APIs for the React/import/a11y plugins included by the current Next config.
+
+Verification on portable Node 26.10.0 / npm 12.2.0: clean `npm ci`, TypeScript 7 typecheck,
+ESLint 10 lint, one production build, 87 dependency/deployment/runtime tests, 185 Worker tests,
+and 38 affected feature/rendering tests passed. All three npm audit reports contain zero
+vulnerabilities; CI now audits all three lockfiles with its existing moderate threshold.
+The fixed BuildKit image also passes focused deployment checks and missing/old/unpinned images
+are rejected. No deployment or host-package installation was performed.
+
+Production asset validation passed for 26 CSS/JS resources and five PNG assets. The QA fixture
+scripts now discover CSS in nested static directories used by vinext 1.0. Chromium 1243 passed
+desktop/mobile quality-rule and bulk-history checks on production CSS with mocked history data,
+without sending emails or creating database identities. Evidence is Git-ignored under
+`work/browser-qa-chromium-1243/dependency-upgrade/phases/ux-refinements/`; it records v3.18.1
+and the pre-commit dirty worktree. The temporary QA server was stopped. Full database/browser
+matrices and Docker image builds were not run; they remain optional deployment checks.
+
+## Previous v3.18.0 scope
 
 Customer communications adds a dedicated Bulk email tab, using existing durable per-recipient
 message identities to show historical records and actual delivery states. Keyword search covers
