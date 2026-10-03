@@ -70,6 +70,60 @@ module.exports=async({browser,base,output,report,observe})=>{
       assert.equal(new Set(controls.map(control=>control.color)).size,3);
       assert.equal(new Set(controls.map(control=>control.background)).size,3);
     };
+    if(process.env.QA_UX_VIEW==="email-compose"){
+      for(const locale of ["zh-CN","en"]){
+        if(locale==="en") { await page.getByRole("button",{name:"QA locale",exact:true}).click();await page.waitForFunction(()=>document.documentElement.lang==="en"); }
+        for(const viewport of [{width:1440,height:1000},{width:375,height:812}]){
+          await page.setViewportSize(viewport);await page.getByRole("button",{name:"QA quality",exact:true}).click();await page.getByRole("button",{name:"QA email",exact:true}).click();
+          const mail=page.locator(".customer-email-panel");await mail.locator(".email-recipient-list input").first().waitFor();
+          const sections=await mail.locator(".email-compose-section").evaluateAll(elements=>elements.map(element=>({x:element.getBoundingClientRect().x,y:element.getBoundingClientRect().y,color:getComputedStyle(element).backgroundColor})));
+          assert.equal(sections.length,3);assert.equal(new Set(sections.map(section=>section.color)).size,3);
+          if(viewport.width>960)assert.ok(sections[1].x>sections[0].x&&Math.abs(sections[1].y-sections[0].y)<2);else assert.ok(sections[1].y>sections[0].y);
+          await mail.locator(".email-compose-template select").first().selectOption("PROGRAM");
+          await mail.locator(".email-compose-template select").nth(1).selectOption("en");
+          await mail.locator(".email-template-sample summary").click();await mail.locator(".email-template-sample").getByText("Program information",{exact:true}).waitFor();
+          await mail.locator(".email-recipient-filters select").first().selectOption("台北");
+          await page.waitForFunction(()=>document.querySelectorAll(".email-recipient-list input").length===1);
+          await mail.locator(".email-recipient-picker .email-filter-actions button").first().click();assert.equal(await mail.locator(".email-selected-recipients .tag-values > span").count(),1);
+          await overflow();await page.screenshot({path:path.join(output,`email-compose-${locale}-${viewport.width}.png`),fullPage:true});
+          await mail.getByRole("button",{name:/新建自定义模板|Create custom template/}).click();const editor=page.getByRole("dialog");
+          assert.equal(await editor.locator(".email-template-language").count(),2);assert.equal(new Set(await editor.locator(".email-template-language").evaluateAll(elements=>elements.map(element=>getComputedStyle(element).backgroundColor))).size,2);
+          await editor.getByLabel(/模板名称|Template name/).fill(`Layout ${locale} ${viewport.width}`);
+          await overflow();await page.screenshot({path:path.join(output,`email-editor-${locale}-${viewport.width}.png`),fullPage:true});
+          await editor.getByRole("button",{name:/^取消$|^Cancel$/}).click();await editor.waitFor({state:"hidden"});
+          await mail.getByRole("button",{name:/生成个性化预览|Generate personalized previews/}).click();await mail.locator(".email-personalized-previews details").first().waitFor();
+          assert.equal(requests.at(-1).locale,"en");assert.equal(requests.at(-1).template,"PROGRAM");
+          await mail.getByRole("button",{name:/确认并入队|Confirm & queue/}).click();await mail.getByRole("button",{name:/重试本批次|Retry this batch/}).waitFor();
+          assert.ok(await mail.locator(".email-compose-template select").first().isDisabled());assert.ok(await mail.locator(".email-recipient-filters select").first().isDisabled());
+          const frozen=requests.at(-1);await mail.getByRole("button",{name:/重试本批次|Retry this batch/}).click();await mail.locator(".email-batch-results").waitFor();assert.deepEqual(requests.at(-1),frozen);
+          await mail.getByRole("button",{name:/开始新批次|Start a new batch/}).click();assert.equal(await mail.locator(".email-selected-recipients .tag-values > span").count(),0);await overflow();
+          report.pages.push({label:`email-compose-${locale}-${viewport.width}`,route:"isolated-ux-fixture",viewport,checks:["three-distinct-colored-sections","responsive-layout","template-content-and-language","recipient-filter-and-selection","bilingual-editor-cards","personalized-preview","draft-lock","same-batch-retry","new-batch-reset","no-overflow"],boundary:"Actual components and production CSS; APIs mocked. No emails sent."});
+        }
+      }
+      return;
+    }
+    if(process.env.QA_UX_VIEW==="worker-badges"){
+      await page.getByRole("button",{name:"QA workers",exact:true}).click();
+      for(const locale of ["zh-CN","en"]){
+        if(locale==="en") { await page.getByRole("button",{name:"QA locale",exact:true}).click();await page.waitForFunction(()=>document.documentElement.lang==="en"); }
+        for(const viewport of [{width:1440,height:1000},{width:375,height:812},{width:320,height:812}]){
+          await page.setViewportSize(viewport);
+          if(viewport.width<600)await page.locator(".operations-mobile-tabs button").nth(1).click();
+          await page.locator(".worker-list article").first().waitFor();
+          const badges=await page.locator(".worker-list article > .status-badge,.operations-queue-grid article > .status-badge").evaluateAll(elements=>elements.map(badge=>{
+            const rect=badge.getBoundingClientRect(),card=badge.parentElement.getBoundingClientRect(),text=badge.parentElement.querySelector("div").getBoundingClientRect(),style=getComputedStyle(badge);
+            const range=document.createRange();range.selectNodeContents(badge);const content=range.getBoundingClientRect();
+            return {worker:badge.parentElement.parentElement.classList.contains("worker-list"),right:rect.left>=text.right-1&&rect.right<=card.right+1,aligned:Math.abs(rect.y+rect.height/2-text.y-text.height/2)<2,contained:content.left>=rect.left+4&&content.right<=rect.right-4&&content.top>=rect.top&&content.bottom<=rect.bottom,width:rect.width,height:rect.height,radius:parseFloat(style.borderRadius),color:style.backgroundColor};
+          }));
+          assert.equal(badges.length,4);assert.ok(badges.every(badge=>badge.contained&&badge.height>=28&&badge.radius>=badge.height/2),JSON.stringify(badges));
+          assert.ok(badges.filter(badge=>badge.worker).every(badge=>badge.right&&badge.aligned),JSON.stringify(badges));
+          assert.equal(new Set(badges.map(badge=>badge.color)).size,2);await overflow();
+          await page.screenshot({path:path.join(output,`worker-badges-${locale}-${viewport.width}.png`),fullPage:true});
+          report.pages.push({label:`worker-badges-${locale}-${viewport.width}`,route:"isolated-ux-fixture",viewport,checks:["worker-status-right-aligned","worker-status-vertically-centered","queue-and-worker-pill-text-contained","rounded-background","no-overflow"],boundary:"Actual components and production CSS; queue/worker metrics are fixtures."});
+        }
+      }
+      return;
+    }
     if(process.env.QA_UX_VIEW==="quality-history"){
       const records=Array.from({length:23},(_,i)=>({id:`bulk-${i}`,threadId:`thread-${i}`,contactZh:`客户 ${i}`,contactEn:`Customer ${i}`,email:`customer${i}@example.test`,subject:i===0?"课程资料":"服务跟进",purpose:i===0?"MARKETING":"SERVICE",deliveryStatus:i===0?"SENT":"FAILED",createdAt:"2026-10-03T01:00:00Z",deliveredAt:i===0?"2026-10-03T01:01:00Z":null}));
       await page.route("**/api/customer-email/history?**",route=>{
@@ -116,7 +170,8 @@ module.exports=async({browser,base,output,report,observe})=>{
       assert.ok(await mail.locator("label.field > span:first-child").evaluateAll(labels=>labels.filter(label=>label.querySelector(".required-indicator")).every(label=>["none","normal","\"\""].includes(getComputedStyle(label,"::after").content))),"one visible required marker, not two");
       const filters=mail.locator(".email-recipient-filters");assert.equal(await filters.locator("select").count(),3);assert.equal(await filters.locator("input").count(),0);
       const filterBoxes=await filters.locator("select").evaluateAll(elements=>elements.map(e=>({y:e.getBoundingClientRect().y,width:e.getBoundingClientRect().width})));
-      assert.ok(filterBoxes.every(box=>Math.abs(box.y-filterBoxes[0].y)<1&&box.width>=80),"three structured filters share one readable row");
+      assert.ok(filterBoxes.every(box=>box.width>=80),"structured filters remain readable");
+      if(viewport.width>600)assert.ok(filterBoxes.every(box=>Math.abs(box.y-filterBoxes[0].y)<1),"desktop filters share one row");else assert.ok(filterBoxes[1].y>filterBoxes[0].y,"mobile filters stack with their labels");
       await filters.getByRole("combobox",{name:/^地区/}).selectOption("台北");await mail.getByText("匹配 1 位客户",{exact:true}).waitFor();
       await filters.getByRole("combobox",{name:/^地区/}).selectOption("台北");await mail.getByText("收件客户 1",{exact:true}).waitFor();
       await filters.getByRole("combobox",{name:/^客户标签/}).selectOption("重点");
@@ -137,7 +192,7 @@ module.exports=async({browser,base,output,report,observe})=>{
       await personalDialog.getByLabel("模板名称",{exact:false}).fill(`个人复制 ${viewport.width}`);await personalDialog.getByRole("button",{name:"保存为个人模板",exact:true}).click();await personalDialog.getByText("模板未保存，请重试。",{exact:true}).waitFor();await personalDialog.getByRole("button",{name:"保存为个人模板",exact:true}).click();await personalDialog.waitFor({state:"hidden"});
       assert.equal(templateRequests.at(-1).visibility,"PERSONAL");assert.equal(templateRequests.at(-1).expectedRevision,null);assert.notEqual(templateRequests.at(-1).id,publicTemplate.id);
       await page.getByRole("button",{name:"QA admin",exact:true}).click();await mail.locator("select").first().selectOption(`saved:${publicTemplate.id}`);
-      await mail.getByRole("button",{name:"生成个性化预览",exact:true}).click();await mail.locator("details").first().waitFor();assert.equal(requests.at(-1).template,"CUSTOM");assert.ok(requests.at(-1).customTemplate.bodyZh.includes("{{name}}"));
+      await mail.getByRole("button",{name:"生成个性化预览",exact:true}).click();await mail.locator(".email-personalized-previews details").first().waitFor();assert.equal(requests.at(-1).template,"CUSTOM");assert.ok(requests.at(-1).customTemplate.bodyZh.includes("{{name}}"));
       await mail.getByRole("button",{name:/确认并入队/}).click();await mail.getByText(/尚未确认本批次的入队结果/).waitFor();
       assert.equal(await mail.locator("select").first().isDisabled(),true);assert.equal(await mail.getByRole("button",{name:"开始新批次",exact:true}).count(),0);
       const originalPayload=requests.at(-1);await mail.getByRole("button",{name:/重试本批次/}).click();await mail.getByRole("button",{name:"开始新批次",exact:true}).waitFor();assert.deepEqual(requests.at(-1),originalPayload);

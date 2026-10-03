@@ -1,5 +1,18 @@
 import type { Messages } from "../types";
 const entries:Record<string,[string,string]>={
+  "emailCompose.templateTitle":["选择模板与语言","Template and language"],
+  "emailCompose.templateHelp":["先选择邮件模板与发送语言，再按需要新建或编辑模板。","Choose a template and message language, then create or edit a template if needed."],
+  "emailCompose.recipientsTitle":["选择收件客户","Choose recipients"],
+  "emailCompose.recipientsHelp":["可单独搜索客户，也可按地区、标签和类型批量选择，最多 50 位。","Search for individual customers or select by region, tag and type, up to 50 recipients."],
+  "emailCompose.reviewTitle":["预览与确认发送","Preview and confirm"],
+  "emailCompose.reviewHelp":["选好模板与收件人后，生成每位客户的邮件预览，再确认加入发送队列。","Generate an email preview for each selected customer, then confirm delivery to the queue."],
+  "emailCompose.sample":["查看模板内容","View template content"],
+  "emailCompose.sampleHelp":["这里展示模板原文；生成预览后会替换每位客户的姓名和负责人。","This is the template text. Personalized previews fill in each customer's name and owner."],
+  "emailCompose.selected":["已选收件人（{count} / 50）","Selected recipients ({count} / 50)"],
+  "emailCompose.noneSelected":["尚未选择收件人，请搜索添加或在下方筛选。","No recipients selected. Search above or use the filters below."],
+  "emailCompose.deliveryResults":["本批次发送结果","Batch results"],
+  "emailCompose.templateSettings":["模板设置","Template settings"],
+  "emailCompose.filterHelp":["查看筛选与选择说明","Filter and selection guidance"],
   "emailHistory.title":["群发邮件","Bulk email"],
   "emailHistory.help":["按收件人查看历史群发记录，查询主题、正文、姓名或邮箱，并按发送用途和投递状态分类检索。","Review bulk email by recipient. Search subjects, content, names or email addresses and filter by purpose and delivery status."],
   "emailHistory.search":["搜索主题、正文、客户或邮箱","Search subject, content, customer or email"],
