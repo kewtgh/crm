@@ -358,7 +358,15 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="family-purchasing"){
+    if(env.QA_SCOPE==="operational-readiness"){
+      await require("./qa-operational-readiness.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="commercial-links"){
+      await require("./qa-commercial-links.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="enrollments"){
+      await require("./qa-enrollments.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="product-cohorts"){
+      await require("./qa-product-cohorts.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="family-purchasing"){
       await require("./qa-family-purchasing.cjs")({browser,base,output,report,observe});
     }else if(env.QA_SCOPE==="education-business"){
       await require("./qa-education-business.cjs")({browser,base,output,report,observe});

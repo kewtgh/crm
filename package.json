@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.18.2",
+  "version": "3.19.0",
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
@@ -26,6 +26,10 @@
     "test:deploy-control-plane:raw": "node --test --test-isolation=none tests/deployment-bootstrap-cleanup.test.mjs",
     "test:application-image:smoke": "docker build --progress=plain --target application --tag lumina-crm:application-runtime-smoke --load .",
     "test:products": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/product-mutations.test.mjs tests/v390-behavior.test.mjs",
+    "test:cohorts": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/product-cohorts.test.mjs",
+    "test:enrollments": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/enrollments.test.mjs",
+    "test:enrollments:postgres": "node scripts/run-bounded.mjs --label enrollment-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-enrollments-postgres.mjs",
+    "test:cohorts:postgres": "node scripts/run-bounded.mjs --label cohort-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-product-cohorts-postgres.mjs",
     "test:structured-inputs": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/structured-inputs.test.mjs tests/admin-users.test.mjs tests/product-mutations.test.mjs",
     "release:check": "node scripts/check-release-metadata.mjs",
     "test:products:postgres": "node scripts/run-bounded.mjs --label product-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-product-mutations-postgres.mjs",
@@ -106,7 +110,11 @@
     "test:customer-email-history:postgres": "node --env-file-if-exists=.env.local scripts/run-bounded.mjs --label bulk-history-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-customer-email-history-postgres.mjs",
     "test:customer-operations:postgres": "node scripts/run-bounded.mjs --label customer-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-customer-operations-postgres.mjs",
     "test:education-business": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/education-business.test.mjs",
-    "test:education-business:postgres": "node scripts/run-bounded.mjs --label education-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-education-business-postgres.mjs"
+    "test:education-business:postgres": "node scripts/run-bounded.mjs --label education-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-education-business-postgres.mjs",
+    "test:commercial-links": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/commercial-links.test.mjs",
+    "test:commercial-links:postgres": "node scripts/run-bounded.mjs --label commercial-links-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-commercial-links-postgres.mjs",
+    "test:operational-readiness": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/operational-readiness.test.mjs",
+    "test:operational-readiness:postgres": "node scripts/run-bounded.mjs --label operational-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-operational-readiness-postgres.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",

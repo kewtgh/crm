@@ -37,7 +37,7 @@ test("required indicators follow control constraints and sparse privacy correcti
   assert.match(css,/\.field:has\(input\[required\].*select\[required\],textarea\[required\]\).*::after/);
   assert.match(ui,/required&&<span className="required-indicator"/);
   assert.match(inputs,/\{t\("input.required"\)\}/);
-  assert.match(imports,/!mapping\.nameZh && !mapping\.nameEn/);
+  assert.match(imports,/!importMappingReady\(resource,mapping\)/);
   assert.match(imports,/imports\.nameMappingHelp/);
   assert.match(imports,/<ImportRepairField field=\{field\}/);
   assert.doesNotMatch(imports,/required=\{field==="nameZh"\|\|field==="nameEn"\}/);

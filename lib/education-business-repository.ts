@@ -24,7 +24,7 @@ export async function listEducationBusiness(resource:BusinessResource,options:{p
     for(const field of config.fields)if(field.kind==="relation")add(field.relation!,row[field.key]);
   }
   const labels:Record<string,string>={};
-  const lookupTables:Record<string,string>={ORGANIZATION:"organizations",HOUSEHOLD:"households",CONTACT:"contacts",EVENT:"education_outreach_events"};
+  const lookupTables:Record<string,string>={ORGANIZATION:"organizations",HOUSEHOLD:"households",CONTACT:"contacts",EVENT:"education_outreach_events",PRODUCT:"products",COHORT:"product_cohorts",CAMPAIGN:"growth_campaigns"};
   await Promise.all([...references].map(async([type,ids])=>{
     if(type==="STUDENT"){
       const rows=await adapter.json<Array<{id:string;contacts:{name_zh:string;name_en:string}|null}>>(`/db/table/students?select=id,contacts:contacts!students_person_id_fkey(name_zh,name_en)&id=in.(${[...ids].join(",")})`);

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { CustomerOperationsPanel } from "./customer-operations-panel";
+import { StudentEnrollmentsSection } from "./student-enrollments-section";
 import { SOURCE_OPTIONS } from "@/lib/structured-inputs";
 import { BilingualNameHint } from "@/components/structured-inputs";
 import { DateInput, OptionInput, AcademicYearInput, TagsInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
@@ -167,6 +168,7 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
     </form></AccessibleDrawer>}
     {detail && <AccessibleDrawer pending={pending} title={`${detail.nameZh} / ${detail.nameEn}`} description={t("education.detailHelp")} onClose={() => setDetail(null)}>
       <Link className="secondary-button" href={`/education-business?subject=STUDENT&subjectId=${detail.id}`}>{t("business.studentEntry")} →</Link>
+      <StudentEnrollmentsSection key={detail.id} studentId={detail.id}/>
       <form onSubmit={saveStudent}>
         <div className="form-grid two-column"><label className="field"><span>{t("education.studentNumber")}</span><input name="studentNumber" defaultValue={detail.studentNumber}/></label><label className="field"><span>{t("education.birthDate")}</span><DateInput name="birthDate" type="date" defaultValue={detail.birthDate}/></label></div>
         <div className="form-grid two-column"><label className="field"><span>{t("education.grade")}</span><OptionInput name="grade" defaultValue={detail.grade} required options={GRADE_OPTIONS}/></label><label className="field"><span>{t("education.currentClass")}</span><input name="currentClass" defaultValue={detail.currentClass}/></label></div>

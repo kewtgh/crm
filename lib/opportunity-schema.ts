@@ -39,6 +39,7 @@ export const createOpportunitySchema = bilingualSchema(z.object({
   organizationId: z.string().uuid().nullable().optional(),
   householdId: z.string().uuid().nullable().optional(),
   productId: z.string().uuid().nullable().optional(),
+  cohortId:z.uuid().nullable().optional(),
   titleZh: z.string().trim().max(160).default(""),
   titleEn: z.string().trim().max(180).default(""),
   stage: z.enum(activeOpportunityStages),
@@ -47,6 +48,7 @@ export const createOpportunitySchema = bilingualSchema(z.object({
   probability: z.number().int().min(0).max(100),
   ...nextActionFields,
 }).superRefine((value, context) => {
+  if(value.cohortId&&!value.productId)context.addIssue({code:"custom",message:"COMMERCIAL_COHORT_MISMATCH",path:["cohortId"]});
   if (value.subjectType === "SCHOOL" && (!value.organizationId || value.householdId)) {
     context.addIssue({ code: "custom", message: "SCHOOL_SUBJECT_REQUIRED", path: ["organizationId"] });
   }
@@ -56,6 +58,8 @@ export const createOpportunitySchema = bilingualSchema(z.object({
 }));
 
 export const transitionOpportunitySchema = z.object({
+  commercialContext:z.object({productId:z.uuid().nullable(),cohortId:z.uuid().nullable()}).strict().refine(value=>!value.cohortId||!!value.productId).optional(),
+  expectedRevision:z.number().int().positive().optional(),requestKey:z.string().min(8).max(160).optional(),
   stage: z.enum(opportunityStages),
   probability: z.number().int().min(0).max(100),
   expectedCloseDate: z.string().date().nullable().optional(),
@@ -64,6 +68,7 @@ export const transitionOpportunitySchema = z.object({
   reason: z.string().trim().max(500).optional(),
   evidence: z.string().trim().max(1000).optional(),
 }).superRefine((value, context) => {
+  if(value.commercialContext&&(!value.expectedRevision||!value.requestKey))context.addIssue({code:"custom",message:"COMMERCIAL_INPUT_INVALID",path:["expectedRevision"]});
   if (
     value.stage !== "WON"
     && value.stage !== "LOST"
@@ -75,14 +80,14 @@ export const transitionOpportunitySchema = z.object({
       path: ["nextActionZh"],
     });
   }
-  if (value.stage === "WON" && !value.evidence) {
+  if (value.stage === "WON" && !value.evidence && !value.commercialContext) {
     context.addIssue({
       code: "custom",
       message: "WON_EVIDENCE_REQUIRED",
       path: ["evidence"],
     });
   }
-  if (value.stage === "LOST" && !value.reason) {
+  if (value.stage === "LOST" && !value.reason && !value.commercialContext) {
     context.addIssue({
       code: "custom",
       message: "LOST_REASON_REQUIRED",

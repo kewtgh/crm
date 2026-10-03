@@ -1,0 +1,11 @@
+import {databaseJson,DatabaseRequestError} from "./db/gateway";
+import type {ContractEnrollmentMutation} from "./contract-enrollment-input";
+export type ContractEnrollmentLink={id:string;contract_id:string;enrollment_id:string;revision:number;status:"ACTIVE"|"UNLINKED";unlink_reason:string;linked_at:string;unlinked_at:string|null;contract_number:string;contract_status:string;contract_value:number|string;currency:string;enrollment_status:string;student_name_zh:string;student_name_en:string;product_name_zh:string;product_name_en:string;cohort_name_zh:string;cohort_name_en:string;buyer_organization_zh:string|null;buyer_organization_en:string|null;buyer_household_zh:string|null;buyer_household_en:string|null;can_edit:boolean};
+export function listContractEnrollmentLinks(filter:{contractId?:string;enrollmentId?:string;page?:number},json=databaseJson){
+  const params=new URLSearchParams({order:"linked_at.desc,id.asc",limit:"20",offset:String(((filter.page??1)-1)*20)});
+  if(filter.contractId)params.set("contract_id",`eq.${filter.contractId}`);if(filter.enrollmentId)params.set("enrollment_id",`eq.${filter.enrollmentId}`);
+  return json<ContractEnrollmentLink[]>(`/db/table/contract_enrollment_records?${params}`);
+}
+export async function mutateContractEnrollment(contractId:string,input:ContractEnrollmentMutation,json=databaseJson){
+  try{return await json<ContractEnrollmentLink>(`/db/rpc/${input.operation==="link"?"link_contract_enrollment":"unlink_contract_enrollment"}`,{method:"POST",body:JSON.stringify(input.operation==="link"?{record_id:input.id,target_contract:contractId,target_enrollment:input.enrollmentId,p_request_key:input.requestKey}:{record_id:input.id,expected_revision:input.expectedRevision,reason:input.reason,p_request_key:input.requestKey})});}catch(error){if(error instanceof DatabaseRequestError){if(input.operation==="link"&&error.code==="RECORD_CONFLICT")throw new DatabaseRequestError(409,"COMMERCIAL_LINK_DUPLICATE",error.message);if(["COMMERCIAL_VERSION_CONFLICT","COMMERCIAL_REQUEST_CONFLICT"].includes(error.code))throw new DatabaseRequestError(409,error.code,error.message);if(error.code==="COMMERCIAL_LINK_FORBIDDEN")throw new DatabaseRequestError(403,error.code,error.message);}throw error;}
+}

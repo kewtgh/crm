@@ -1,5 +1,6 @@
 import type { Messages } from "../types";
 const messages:Record<string,[string,string]>={
+  "business.field.campaign_id":["Campaign 招生活动","Campaign"],"business.field.product_id":["产品","Product"],"business.field.cohort_id":["产品批次","Cohort"],
   "buyer.label":["购买方（组织 / 家庭）","Buyer (organization / household)"],
   "buyer.household":["家庭","Household"],"buyer.organization":["学校 / 机构","School / organization"],
   "buyer.required":["请选择购买服务的组织或家庭。","Select the organization or household purchasing the service."],

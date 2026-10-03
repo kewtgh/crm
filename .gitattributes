@@ -1,0 +1,5 @@
+# Preserve the frozen v3.19 migration bytes across Windows/Linux checkouts.
+db/migrations/202610030091_product_cohorts.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+db/migrations/202610030092_student_enrollments.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+db/migrations/202610030093_commercial_cohort_links.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+db/migrations/202610040094_operational_readiness.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

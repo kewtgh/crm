@@ -21,9 +21,9 @@ export async function loadContactPrivacy(id:string):Promise<ContactPrivacy>{
 export async function saveContactConsent(input:{contactId:string;channel:string;purpose:string;status:string;source:string;evidence?:string;retentionUntil?:string|null;quietStart?:string|null;quietEnd?:string|null}){return databaseJson("/db/rpc/save_contact_consent",{method:"POST",body:JSON.stringify({target_contact:input.contactId,target_channel:input.channel,target_purpose:input.purpose,target_status:input.status,consent_source:input.source,evidence:input.evidence??"",retained_until:input.retentionUntil||null,quiet_start:input.quietStart||null,quiet_end:input.quietEnd||null})});}
 export async function setContactDoNotContact(id:string,enabled:boolean,reason:string){return databaseJson(`/db/table/contacts?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({do_not_contact:enabled,do_not_contact_reason:enabled?reason:"",updated_at:new Date().toISOString()})});}
 
-type QuoteRow={id:string;quote_number:string;organization_id:string|null;household_id:string|null;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
+type QuoteRow={id:string;product_id:string|null;cohort_id:string|null;revision:number;quote_number:string;organization_id:string|null;household_id:string|null;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
 type QuoteVersionRow={quote_id:string;version:number;subtotal:number;discount_amount:number;total_amount:number;terms_zh:string;terms_en:string;bundle_id:string|null;bundle_version:number|null;base_currency:string|null;base_total_amount:number|null};
-export type QuoteRecord={id:string;number:string;organizationId:string|null;householdId?:string|null;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
+export type QuoteRecord={id:string;productId?:string|null;cohortId?:string|null;revision?:number;cohortZh?:string;cohortEn?:string;number:string;organizationId:string|null;householdId?:string|null;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
 export type ReceivableRecord={id:string;contractId:string;contractNumber:string;installment:number;dueDate:string;amount:number;paidAmount:number;status:string;currency:string};
 export type RefundRecord={id:string;number:string;paymentId:string;amount:number;reason:string;status:string;receipt:string;createdAt:string};
 export type PaymentRecord={id:string;contractId:string;scheduleId:string|null;amount:number;refundedAmount:number;currency:string;status:string;reference:string;paidAt:string|null};
@@ -80,13 +80,25 @@ async function countFinanceRows(path:string){
   return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);
 }
 
-export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages={}):Promise<FinanceOverview>{
+export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string}={}):Promise<FinanceOverview>{
   const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
   const page=(value:number|undefined)=>Math.max(1,value??1);
   const quotePage=page(options.quotePage??options.page);
-  const quoteParams=new URLSearchParams({select:"id,quote_number,organization_id,household_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
+  const quoteParams=new URLSearchParams({select:"id,product_id,cohort_id,revision,quote_number,organization_id,household_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
   const query=(options.query??"").replace(/[*,()]/g," ").trim();
   if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
+  const context=Object.fromEntries((["studentId","productId","cohortId","enrollmentId"] as const).flatMap(key=>options[key]?[[key,options[key]]]:[]));
+  const financePath=(path:string)=>{
+    if(!Object.keys(context).length)return path;
+    const url=new URL(path,"http://database.local");
+    const table=url.pathname.split("/").pop()!;
+    url.pathname="/db/table/"+({contracts:"finance_filtered_contracts",receivable_schedules:"finance_filtered_receivables",payments:"finance_filtered_payments",refunds:"finance_filtered_refunds",reconciliation_items:"finance_filtered_reconciliations"}[table]??table);
+    url.searchParams.set("enrollment_contexts","cs."+JSON.stringify([context]));
+    return url.pathname+"?"+url.searchParams;
+  };
+  if(options.studentId||options.enrollmentId)quoteParams.set("id","eq.00000000-0000-0000-0000-000000000000");
+  if(options.productId)quoteParams.set("product_id","eq."+options.productId);
+  if(options.cohortId)quoteParams.set("cohort_id","eq."+options.cohortId);
   const [
     quoteResult,
     contractResult,
@@ -103,20 +115,23 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     rateRows,
   ]=await Promise.all([
     fetchFinancePage<QuoteRow>(`/db/table/quotes?${quoteParams}`,quotePage,pageSize),
-    fetchFinancePage<ContractRow>("/db/table/contracts?select=id,contract_number,currency,contract_value,status&order=updated_at.desc",page(options.contractPage),pageSize),
-    fetchFinancePage<ReceivableRow>("/db/table/receivable_schedules?select=id,contract_id,installment_number,due_date,amount,paid_amount,status&order=due_date.asc",page(options.receivablePage),pageSize),
-    fetchFinancePage<PaymentRow>("/db/table/payments?select=id,contract_id,receivable_schedule_id,amount,refunded_amount,currency,status,reference,paid_at&status=in.(CONFIRMED,REFUNDED)&order=paid_at.desc",page(options.paymentPage),pageSize),
-    fetchFinancePage<RefundRow>("/db/table/refunds?select=id,refund_number,payment_id,amount,reason,status,receipt_reference,created_at&order=created_at.desc",page(options.refundPage),pageSize),
-    fetchFinancePage<ReconciliationRow>("/db/table/reconciliation_items?select=id,contract_id,payment_id,expected_amount,actual_amount,difference,status,reason,updated_at&order=updated_at.desc",page(options.reconciliationPage),pageSize),
-    countFinanceRows("/db/table/receivable_schedules?select=id&status=neq.PAID"),
-    countFinanceRows("/db/table/receivable_schedules?select=id&status=eq.OVERDUE"),
-    countFinanceRows("/db/table/refunds?select=id&status=eq.PENDING_APPROVAL"),
-    countFinanceRows("/db/table/reconciliation_items?select=id&status=not.in.(MATCHED,RESOLVED)"),
+    fetchFinancePage<ContractRow>(financePath("/db/table/contracts?select=id,contract_number,currency,contract_value,status&order=updated_at.desc"),page(options.contractPage),pageSize),
+    fetchFinancePage<ReceivableRow>(financePath("/db/table/receivable_schedules?select=id,contract_id,installment_number,due_date,amount,paid_amount,status&order=due_date.asc"),page(options.receivablePage),pageSize),
+    fetchFinancePage<PaymentRow>(financePath("/db/table/payments?select=id,contract_id,receivable_schedule_id,amount,refunded_amount,currency,status,reference,paid_at&status=in.(CONFIRMED,REFUNDED)&order=paid_at.desc"),page(options.paymentPage),pageSize),
+    fetchFinancePage<RefundRow>(financePath("/db/table/refunds?select=id,refund_number,payment_id,amount,reason,status,receipt_reference,created_at&order=created_at.desc"),page(options.refundPage),pageSize),
+    fetchFinancePage<ReconciliationRow>(financePath("/db/table/reconciliation_items?select=id,contract_id,payment_id,expected_amount,actual_amount,difference,status,reason,updated_at&order=updated_at.desc"),page(options.reconciliationPage),pageSize),
+    countFinanceRows(financePath("/db/table/receivable_schedules?select=id&status=neq.PAID")),
+    countFinanceRows(financePath("/db/table/receivable_schedules?select=id&status=eq.OVERDUE")),
+    countFinanceRows(financePath("/db/table/refunds?select=id&status=eq.PENDING_APPROVAL")),
+    countFinanceRows(financePath("/db/table/reconciliation_items?select=id&status=not.in.(MATCHED,RESOLVED)")),
     databaseJson<Array<{id:string;code:string;name_zh:string;name_en:string}>>("/db/table/products?select=id,code,name_zh,name_en&active=eq.true&order=code"),
     databaseJson<Array<{id:string;code:string;name_zh:string;name_en:string;version:number}>>("/db/table/product_bundles?select=id,code,name_zh,name_en,version&active=eq.true&effective_to=is.null&order=code"),
     databaseJson<Array<{id:string;base_currency:string;quote_currency:string;rate:number;source:string;effective_at:string}>>("/db/table/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at&order=effective_at.desc&limit=100"),
   ]);
   const quoteRows=quoteResult.items;
+  const cohortIds=[...new Set(quoteRows.map(row=>row.cohort_id).filter(Boolean))];
+  const cohortRows=cohortIds.length?await databaseJson<Array<{id:string;name_zh:string;name_en:string}>>('/db/table/product_cohorts?select=id,name_zh,name_en&id=in.('+cohortIds.join(',')+')'):[];
+  const cohortMap=new Map(cohortRows.map(item=>[item.id,item]));
   const contractRows=contractResult.items;
   const receivableRows=receivableResult.items;
   const paymentRows=paymentResult.items;
@@ -145,7 +160,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
   const contractMap=new Map(relatedContracts.map(item=>[item.id,item]));
   const scheduled=new Set(scheduleRows.map(item=>item.contract_id));
   return{
-    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=item.household_id?householdMap.get(item.household_id):orgMap.get(item.organization_id!);return{id:item.id,number:item.quote_number,organizationId:item.organization_id,householdId:item.household_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
+    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=item.household_id?householdMap.get(item.household_id):orgMap.get(item.organization_id!);return{id:item.id,productId:item.product_id,cohortId:item.cohort_id,revision:item.revision,cohortZh:cohortMap.get(item.cohort_id??"")?.name_zh,cohortEn:cohortMap.get(item.cohort_id??"")?.name_en,number:item.quote_number,organizationId:item.organization_id,householdId:item.household_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
     quoteTotal:quoteResult.total,
     contracts:contractRows.map(item=>({id:item.id,number:item.contract_number,currency:item.currency,value:Number(item.contract_value),status:item.status,hasSchedule:scheduled.has(item.id)})),
     contractTotal:contractResult.total,
@@ -164,11 +179,11 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     exchangeRates:rateRows.map(item=>({id:item.id,base:item.base_currency,quote:item.quote_currency,rate:Number(item.rate),source:item.source,effectiveAt:item.effective_at})),
   };
 }
-export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="createQuote"?"create_buyer_quote":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="createQuote"){body.target_organization??=null;body.target_household??=null;}if(operation==="acceptQuote")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
+export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="updateQuoteCohort"?"update_quote_cohort":operation==="createQuote"?"create_buyer_quote":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="createQuote"){body.target_organization??=null;body.target_household??=null;}if(operation==="acceptQuote"||operation==="updateQuoteCohort")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
 
 export type ImportBatchRecord={id:string;resourceType:string;filename:string;status:string;total:number;valid:number;invalid:number;duplicates:number;applied:number;failed:number;createdAt:string};
-export type ImportRowRecord={id:string;batchId:string;rowNumber:number;normalized:Record<string,string>;status:string;errors:Array<{code:string}>;decision:string|null;duplicateId:string|null;score:number|null;reasons:string[];lastError:string|null};
-export type ImportMappingProfile={id:string;resource:"CONTACTS"|"ORGANIZATIONS"|"HOUSEHOLDS"|"STUDENTS";name:string;mapping:Record<string,string>;updatedAt:string};
+export type ImportRowRecord={id:string;batchId:string;rowNumber:number;normalized:Record<string,string>;status:string;errors:Array<{code:string;field?:string;reason?:string}>;decision:string|null;duplicateId:string|null;score:number|null;reasons:string[];lastError:string|null};
+export type ImportMappingProfile={id:string;resource:"CONTACTS"|"ORGANIZATIONS"|"HOUSEHOLDS"|"STUDENTS"|"COHORTS"|"ENROLLMENTS";name:string;mapping:Record<string,string>;updatedAt:string};
 export async function listImportBatches(page=1,pageSize=10){const start=(Math.max(1,page)-1)*pageSize;const response=await databaseRequest(`/db/table/import_batches?select=*&order=created_at.desc`,{headers:{Prefer:"count=exact",Range:`${start}-${start+pageSize-1}`}});const rows=await response.json() as Array<Record<string,unknown>>;const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??rows.length);return{items:rows.map(mapImportBatch),total};}
 function mapImportBatch(item:Record<string,unknown>):ImportBatchRecord{return{id:String(item.id),resourceType:String(item.resource_type),filename:String(item.original_filename),status:String(item.status),total:Number(item.total_rows),valid:Number(item.valid_rows),invalid:Number(item.invalid_rows),duplicates:Number(item.duplicate_rows),applied:Number(item.applied_rows),failed:Number(item.failed_rows),createdAt:String(item.created_at)};}
 export async function listImportRows(batchId:string,page=1,pageSize=50){const size=Math.min(100,Math.max(1,pageSize)),start=(Math.max(1,page)-1)*size;const response=await databaseRequest(`/db/table/import_rows?select=*&batch_id=eq.${batchId}&order=row_number.asc`,{headers:{Prefer:"count=exact",Range:`${start}-${start+size-1}`}});const rows=await response.json() as Array<Record<string,unknown>>;return{items:rows.map(item=>({id:String(item.id),batchId:String(item.batch_id),rowNumber:Number(item.row_number),normalized:item.normalized_data as Record<string,string>,status:String(item.status),errors:item.errors as Array<{code:string}>,decision:item.decision?String(item.decision):null,duplicateId:item.duplicate_entity_id?String(item.duplicate_entity_id):null,score:item.duplicate_score===null?null:Number(item.duplicate_score),reasons:item.duplicate_reasons as string[],lastError:item.last_error?String(item.last_error):null} satisfies ImportRowRecord)),total:Number((response.headers.get("content-range")??"*/0").split("/")[1]??rows.length),page:Math.max(1,page),pageSize:size};}

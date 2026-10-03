@@ -1,4 +1,8 @@
+import {zhCommercialLinks} from "./commercial-links";
+import {zhOperationalReadiness} from "./operational-readiness";
 import type { Messages } from "../types";
+import { zhCohorts } from "./cohorts";
+import { zhEnrollments } from "./enrollments";
 import { zhEducationBusiness } from "./education-business";
 import { zhV3120 } from "./v3120";
 import { zhV3130 } from "./v3130";
@@ -22,6 +26,10 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...zhOperationalReadiness,
+  ...zhCohorts,
+  ...zhEnrollments,
+  ...zhCommercialLinks,
   "pipeline.currencyScope":"币种范围",
   ...zhSalesPlaybook,
   ...zhWorkspacePages,

@@ -1,10 +1,16 @@
 # Lumina CRM
 
-Current release candidate: **v3.18.2**
+Current release candidate: **v3.19.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.19.0 connects Product → Cohort → Enrollment with attribution and lifecycle history,
+commercial links, derived Finance, deterministic imports, quality findings, Task/Notification
+automation and operational snapshots. Shared contract amounts are not duplicated or automatically
+allocated; currencies remain separate. No duplicate Finance system was created. See
+[v3.19 release notes](docs/RELEASE_V3.19.0.md) and [release closure](docs/V319_RELEASE_CLOSURE.md).
 
 Version 3.18.2 aligns Worker heartbeat status pills to the right of their text and preserves
 content-sized rounded backgrounds in both Worker and queue cards. Template/bulk email uses

@@ -4,6 +4,8 @@ import { DateInput, MoneyInput, CurrencySelect } from "@/components/structured-i
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {ProductCohortSelector} from "./product-cohort-selector";
+import {CommercialContextEditor} from "./commercial-context-editor";
 import { CalendarDays, CircleDollarSign, Plus, RefreshCcw, Sparkles, UserRound } from "lucide-react";
 import { EmptyState } from "@/components/data-state";
 import { useI18n } from "@/components/i18n-provider";
@@ -83,6 +85,7 @@ export function PipelinePage({
   const [organizationOptions, setOrganizationOptions] = useState<Array<{ value: string; label: string; detail: string }>>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [product, setProduct] = useState("");
+  const [cohort,setCohort]=useState("");const [commercialRecord,setCommercialRecord]=useState<OpportunityRecord|null>(null);
   const [productOptions, setProductOptions] = useState<Array<{ value: string; label: string }>>([]);
   const runOrganizationSearch=useRemoteSearch();
   const runPageLoad=useRemoteSearch();
@@ -202,6 +205,7 @@ export function PipelinePage({
       organizationId: subjectType === "SCHOOL" ? organization : null,
       householdId: subjectType === "HOUSEHOLD" ? organization : null,
       productId: product || null,
+      cohortId:cohort||null,
       titleZh: String(form.get("titleZh") ?? ""),
       titleEn: String(form.get("titleEn") ?? ""),
       stage,
@@ -227,7 +231,7 @@ export function PipelinePage({
       setCreateOpen(false);
       setOrganization("");
       setSubjectType("SCHOOL");
-      setProduct("");
+      setProduct("");setCohort("");
       setPage(1);
       await load(1, query);
       setToast(t("pipeline.created"));
@@ -342,6 +346,8 @@ export function PipelinePage({
                   </select>
                 </span>
                 <b>{locale === "zh-CN" ? card.titleZh : card.titleEn}</b>
+                {card.productId && <small>{locale === "en" ? card.productEn : card.productZh}{card.cohortId ? ` · ${locale === "en" ? card.cohortEn : card.cohortZh}` : ""}</small>}
+                {canManage && <button type="button" className="text-button" onClick={() => setCommercialRecord(card)}>{t("commercial.editContext")}</button>}
                 <small>{t(card.subjectType === "SCHOOL" ? "leads.type.school" : "leads.type.household")} · {locale === "zh-CN" ? card.subjectZh : card.subjectEn}</small>
                 <div className="opportunity-meta">
                   <b>{money(card.amount, card.currency)}</b>
@@ -374,6 +380,7 @@ export function PipelinePage({
         <label className="field"><span>{t("leads.type")}</span><select required value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
         <SearchableSelect label={t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} required options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
         <SearchableSelect label={t("products.title")} options={productOptions} value={product} onChange={setProduct}/>
+        <ProductCohortSelector usage="OPPORTUNITY" productId={product} value={cohort} onChange={setCohort}/>
         <div className="form-grid two-column">
           <label className="field"><span>{t("products.nameZh")}</span><input name="titleZh" maxLength={160}/></label>
           <label className="field"><span>{t("products.nameEn")}</span><input name="titleEn" maxLength={180}/></label>
@@ -427,6 +434,7 @@ export function PipelinePage({
         </div>
       </form>
     </AccessibleDrawer>}
+    {commercialRecord&&<CommercialContextEditor opportunity={commercialRecord} onClose={()=>setCommercialRecord(null)} onSaved={async()=>{setCommercialRecord(null);await load(page,query);setToast(t("commercial.saved"));}}/>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
 }

@@ -1,6 +1,26 @@
-# Implementation status — v3.18.2 release candidate
+# Implementation status — v3.19.0 release candidate
 
-## v3.18.2 scope
+## v3.19.0 scope
+
+Phases 1–4 implement Product → Cohort → Enrollment, PRIMARY/ASSIST attribution, canonical
+operational status history, Opportunity/Event/Quote cohort context and historical Contract links.
+Operational support extends the existing Finance, Import, Data Quality and Automation domains.
+Financial values are derived, grouped by currency; shared contracts remain unallocated and are
+excluded from attributed Enrollment totals. No duplicate Finance system was created.
+
+Release closure reconciled all four phase manifests and froze forward-only migrations 091–094.
+Actual portable Node 26.10.0 / npm 12.2.0 passed clean npm ci without dependency changes,
+72 targeted tests, five disposable PostgreSQL groups, typecheck, scoped lint, production build
+and four affected Chromium 1243 phases (1440/375, Chinese/English). Browser tests use actual
+components/production CSS with business API fixtures; database security/atomicity is tested
+separately. Evidence remains ignored under work/v319-release and the affected-browser directory.
+See [release notes](RELEASE_V3.19.0.md), [closure](V319_RELEASE_CLOSURE.md) and
+[architecture](COHORT_ENROLLMENT_ARCHITECTURE.md). No production access, push or deploy.
+
+Applications, Milestones, Visa/I-20 workflow, Workflow Templates, Commission, Student Success,
+Product P&L, Management Intelligence and AI are deferred. They are not v3.19 features.
+
+## Previous v3.18.2 scope
 
 Worker heartbeat badges occupy the right column, centered against the adjacent text block.
 Queue and Worker icon selectors exclude status badges, whose rounded backgrounds grow with

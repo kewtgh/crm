@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import {ProductCohortSelector} from "./product-cohort-selector";
+import {EnrollmentRelation} from "./enrollment-relation";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { apiFetch,ApiClientError } from "@/lib/api-client";
+import {presentApiError} from "@/lib/api-error-presenter";
 import { businessConfig,businessResourcesFor,businessSaveSchema,businessWarnings,type BusinessContext,type BusinessField,type BusinessRecord,type BusinessResource } from "@/lib/education-business";
 import type { BusinessPage } from "@/lib/education-business-repository";
 import { useCapability } from "./app-user-context";
@@ -62,7 +65,7 @@ export function EducationBusinessWorkspace({context,initialResource}:{context?:B
     if(field.kind==="date")return formatDate(String(value),{dateOnly:true});
     if(field.kind==="relation"){
       const name=data?.labels[`${field.relation}:${value}`];
-      return name?(field.relation==="EVENT"?<span>{name}</span>:<Link href={referenceHref(field.relation!,String(value))}>{name}</Link>):t("business.unavailable");
+      return name?(["EVENT","PRODUCT","COHORT","CAMPAIGN"].includes(field.relation!)?<span>{name}</span>:<Link href={referenceHref(field.relation!,String(value))}>{name}</Link>):t("business.unavailable");
     }
     return String(value);
   };
@@ -76,7 +79,7 @@ export function EducationBusinessWorkspace({context,initialResource}:{context?:B
       {loading&&<p role="status">{t("common.loading")}</p>}
       {data&&<><p>{t("business.total",{count:data.total})}</p><div className="business-record-grid">{data.items.map(row=><article className="detail-section business-record-card" key={row.id}>
         <div className="surface-heading"><h2>{label(row)}</h2>{canManage&&data.editableIds.includes(row.id)&&<button className="secondary-button" onClick={()=>setEditor({record:row,token:row.id})}>{t("crm.edit")}</button>}</div>
-        <dl className="customer-profile">{businessConfig[resource].fields.filter(field=>["roles","partnership_stage","services","budget_min","budget_max","budget_currency","stage","program_type","kind","starts_on","status","referred_on","household_id","event_id","party_size","due_on","title","next_action"].includes(field.key)).map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl>
+        <dl className="customer-profile">{businessConfig[resource].fields.filter(field=>["campaign_id","product_id","cohort_id","roles","partnership_stage","services","budget_min","budget_max","budget_currency","stage","program_type","kind","starts_on","status","referred_on","household_id","event_id","party_size","due_on","title","next_action"].includes(field.key)).map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl>
         {businessWarnings(resource,row,data.today).map(warning=><p className="business-warning" key={warning}>{t(`business.warning.${warning}`)}</p>)}
         <details><summary>{t("business.details")}</summary><dl className="customer-profile">{businessConfig[resource].fields.map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl><small>{t("business.updated")}: {formatDate(row.updated_at,{includeTime:true})}</small></details>
       </article>)}</div>{!data.items.length&&!loading&&<div className="empty-state">{t("business.empty")}</div>}<Pagination page={data.page} pageSize={data.pageSize} total={data.total} totalPages={Math.max(1,Math.ceil(data.total/data.pageSize))} onPage={page=>void load(page)} onPageSize={setPageSize}/></>}
@@ -103,7 +106,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
     }catch(caught){
       if(caught instanceof ApiClientError&&caught.status>=400&&caught.status<500){
         attempt.current=null;setUncertain(false);
-        setError(t(caught.code==="BUSINESS_VERSION_CONFLICT"?"business.conflict":caught.code==="BUSINESS_UPDATE_FORBIDDEN"?"business.forbidden":caught.code==="BUSINESS_EVENT_SOURCE_MISMATCH"?"business.eventMismatch":caught.code==="BUSINESS_CAPACITY_EXCEEDED"?"business.capacityExceeded":caught.code==="BUSINESS_EVENT_CANCELLED"||caught.code==="BUSINESS_ACTIVE_PARTICIPATIONS"?"business.cancelledEvent":caught.code==="RECORD_CONFLICT"?"business.duplicateParticipation":caught.code==="BUSINESS_PARENT_IMMUTABLE"?"business.parentImmutable":"business.invalid"));
+        setError(caught.code.startsWith("COMMERCIAL_")?presentApiError(caught,t,"commercial.saveFailed").message:t(caught.code==="BUSINESS_VERSION_CONFLICT"?"business.conflict":caught.code==="BUSINESS_UPDATE_FORBIDDEN"?"business.forbidden":caught.code==="BUSINESS_EVENT_SOURCE_MISMATCH"?"business.eventMismatch":caught.code==="BUSINESS_CAPACITY_EXCEEDED"?"business.capacityExceeded":caught.code==="BUSINESS_EVENT_CANCELLED"||caught.code==="BUSINESS_ACTIVE_PARTICIPATIONS"?"business.cancelledEvent":caught.code==="RECORD_CONFLICT"?"business.duplicateParticipation":caught.code==="BUSINESS_PARENT_IMMUTABLE"?"business.parentImmutable":"business.invalid"));
       }else{setUncertain(true);setError(t("business.uncertain"));}
     }finally{busy.current=false;setPending(false);onPending(false);}
   };
@@ -113,6 +116,8 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
     <form onSubmit={event=>void save(event)} className="page-stack"><fieldset className="follow-up-fields" disabled={pending||uncertain}><div className="form-grid two-column">{fields.map(field=>{
       const value=draft[field.key];const locked=!!record&&["id",subjectKey[resource],...(resource==="referrals"?["household_id"]:resource==="participations"?["event_id"]:[])].includes(field.key)||!!context&&((context.type===config.subject&&field.key===subjectKey[resource])||resource==="referrals"&&field.key===(context.type==="HOUSEHOLD"?"household_id":"source_organization_id"));
       const fieldLabel=field.key==="id"?t(resource==="organizations"?"business.field.organization_id":"business.field.household_id"):t(`business.field.${field.key}`);
+      if(field.key==="cohort_id")return <ProductCohortSelector key={field.key} usage="EVENT" productId={String(draft.product_id??"")} value={String(value??"")} disabled={pending||uncertain} onChange={value=>change(field.key,value||null)}/>;
+      if(field.key==="campaign_id")return <EnrollmentRelation key={field.key} type="CAMPAIGN" label={fieldLabel} value={String(value??"")} initialLabel={labels['CAMPAIGN:'+value]} disabled={pending||uncertain} onChange={value=>change(field.key,value||null)}/>;
       if(field.kind==="relation")return <BusinessRelation key={field.key} field={field} label={fieldLabel} value={String(value??"")} initialLabel={labels[`${field.relation}:${value}`]} disabled={pending||uncertain||locked} onChange={value=>change(field.key,value||null)}/>;
       if(field.kind==="multi")return <fieldset className="business-choices" key={field.key}><legend>{fieldLabel}</legend>{field.options!.map(option=><label key={option}><input type="checkbox" checked={(value as string[]).includes(option)} onChange={event=>change(field.key,event.target.checked?[...(value as string[]),option]:(value as string[]).filter(item=>item!==option))}/>{t(`business.option.${option}`)}</label>)}</fieldset>;
       return <label className="field" key={field.key}><span>{fieldLabel}</span>{field.kind==="enum"?<select name={field.key} required={field.required} value={String(value??"")} onChange={event=>change(field.key,event.target.value)} aria-invalid={invalidField===field.key}>{!field.options!.includes("")&&<option value="">{t("business.select")}</option>}{field.options!.map(option=><option key={option} value={option}>{option?t(`business.option.${option}`):t("business.unknown")}</option>)}</select>:field.kind==="date"?<DateInput name={field.key} required={field.required} value={String(value??"")} onChange={event=>change(field.key,event.target.value||null)} aria-invalid={invalidField===field.key}/>:field.kind==="number"?<input name={field.key} type="number" step={field.integer?"1":"any"} min={field.min} max={field.max} value={String(value??"")} onChange={event=>change(field.key,event.target.value===""?null:Number(event.target.value))} aria-invalid={invalidField===field.key}/>:<textarea name={field.key} rows={field.key==="next_action"?3:1} required={field.required} maxLength={field.max} value={String(value??"")} onChange={event=>change(field.key,event.target.value)} aria-invalid={invalidField===field.key}/>}</label>;

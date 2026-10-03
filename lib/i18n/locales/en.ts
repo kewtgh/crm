@@ -1,4 +1,8 @@
+import {enCommercialLinks} from "./commercial-links";
+import {enOperationalReadiness} from "./operational-readiness";
 import type { Messages } from "../types";
+import { enCohorts } from "./cohorts";
+import { enEnrollments } from "./enrollments";
 import { enEducationBusiness } from "./education-business";
 import { enV3120 } from "./v3120";
 import { enV3130 } from "./v3130";
@@ -22,6 +26,10 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...enOperationalReadiness,
+  ...enCohorts,
+  ...enEnrollments,
+  ...enCommercialLinks,
   "pipeline.currencyScope":"Currency scope",
   ...enSalesPlaybook,
   ...enWorkspacePages,

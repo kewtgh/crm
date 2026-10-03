@@ -6,7 +6,7 @@ export type BusinessContext = { type: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT"; 
 export type BusinessRecord = { id: string; revision: number; updated_at: string } & Record<string, unknown>;
 export type BusinessField = {
   key: string; kind: "text" | "date" | "number" | "enum" | "multi" | "relation";
-  required?: boolean; options?: string[]; relation?: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT" | "CONTACT" | "EVENT";
+  required?: boolean; options?: string[]; relation?: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT" | "CONTACT" | "EVENT" | "PRODUCT" | "COHORT" | "CAMPAIGN";
   max?: number; min?: number; integer?: boolean; initial?: string;
 };
 const text = (key: string, required = false, max = 160): BusinessField => ({key,kind:"text",required,max});
@@ -36,6 +36,7 @@ export const businessConfig: Record<BusinessResource, {table:string; fields:Busi
     choices("stage",["EXPLORING","ASSESSING","PREPARING","APPLIED","OFFERED","ENROLLED","CLOSED"]),text("next_action",false,1000),
   ]},
   events: {table:"education_outreach_events",subject:"ORGANIZATION",fields:[
+    relation("campaign_id","CAMPAIGN"),relation("product_id","PRODUCT"),relation("cohort_id","COHORT"),
     text("name",true,200),relation("organization_id","ORGANIZATION",true),relation("partner_organization_id","ORGANIZATION"),
     choices("kind",["SEMINAR","CAMPUS_VISIT","STUDY_TOUR"]),date("starts_on",true),date("ends_on",true),text("location"),
     number("capacity",100000,true),number("attendee_count",100000,true),choices("status",["DRAFT","CONFIRMED","COMPLETED","CANCELLED"]),text("next_action",false,1000),
@@ -63,7 +64,7 @@ export function businessFieldsSchema(resource: BusinessResource) {
       if(field.key==="budget_min"||field.key==="budget_max")schema=schema.multipleOf(0.01);
       shape[field.key]=field.required?schema:schema.nullable();
     }else if(field.kind==="date")shape[field.key]=field.required?z.iso.date():z.iso.date().nullable();
-    else if(field.kind==="relation")shape[field.key]=field.required?z.uuid():z.uuid().nullable();
+    else if(field.kind==="relation")shape[field.key]=field.required?z.uuid():["campaign_id","product_id","cohort_id"].includes(field.key)?z.uuid().nullable().default(null):z.uuid().nullable();
     else shape[field.key]=z.string().trim().min(field.required?1:0).max(field.max!);
   }
   if(resource==="organizations"||resource==="needs")shape.id=z.uuid();
@@ -72,6 +73,7 @@ export function businessFieldsSchema(resource: BusinessResource) {
     if(resource==="applications"&&["DONE","WAIVED"].includes(String(value.status))&&!String(value.next_action).trim())issue("next_action");
     if(resource==="needs"&&value.budget_min!==null&&value.budget_max!==null&&Number(value.budget_min)>Number(value.budget_max))issue("budget_max");
     if(resource==="events"){
+      if(value.cohort_id&&!value.product_id)issue("cohort_id");
       if(String(value.ends_on)<String(value.starts_on))issue("ends_on");
       if(value.capacity!==null&&value.attendee_count!==null&&Number(value.attendee_count)>Number(value.capacity))issue("attendee_count");
       if(value.partner_organization_id===value.organization_id)issue("partner_organization_id");

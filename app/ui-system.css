@@ -265,3 +265,27 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
 .business-choices label { display:flex; align-items:center; gap:8px; padding:5px 0; }
 .business-choices input { width:18px; height:18px; }
 .education-business-workspace .customer-profile dd { white-space:pre-wrap; }
+/* Product cohort records reuse the detail surface and form system. */
+.cohort-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.cohort-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1rem; margin: .75rem 0 0; }
+.cohort-dates dt { font-size: .75rem; color: var(--muted); }
+.cohort-dates dd { margin: .2rem 0 0; font-size: .875rem; }
+.detail-record-list .cohort-record { flex-wrap: wrap; gap: .75rem; }
+.cohort-record > div { min-width: 0; overflow-wrap: anywhere; }
+.cohort-record > div:last-child { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.enrollment-filters { padding: 0 16px 16px; }
+.enrollment-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.enrollment-summary dt { color: var(--muted); font-size: 12px; }
+.enrollment-summary dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.enrollment-source-list { padding-left: 20px; overflow-wrap: anywhere; }
+.enrollment-records article { flex-wrap: wrap; gap: 12px; }
+.enrollment-records article > div { min-width: 0; overflow-wrap: anywhere; }
+@media(max-width:600px) { .enrollment-summary { grid-template-columns: 1fr; } }
+/* Domain import repair stays beside row content instead of occupying the row-number column. */
+.import-domain-row > button { grid-column: 2 / -1; justify-self: start; width: auto; }
+@media (max-width: 600px) { .import-domain-row > button { grid-column: 1; } }
+@media (max-width: 680px) {
+  .import-rows .import-dry-run { grid-template-columns: 36px minmax(0, 1fr); }
+  .import-rows .import-dry-run > div { min-width: 0; overflow-wrap: anywhere; }
+  .import-rows .import-dry-run .status-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

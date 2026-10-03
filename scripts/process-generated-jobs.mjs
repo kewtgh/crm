@@ -1,6 +1,8 @@
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
 import { boundedWorkerInteger } from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
+import {contractEnrollmentPrivacyRecords} from "./lib/contract-enrollment-privacy-export.mjs";
+import { enrollmentPrivacyRecords } from "./lib/enrollment-privacy-export.mjs";
 import { workerObjectStore } from "./lib/worker-object-store.mjs";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -195,6 +197,11 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"household_membership",memberships);
   appendPrivacyRecords(rows,"guardian_relationship",guardianRelations);
   appendPrivacyRecords(rows,"student",students);
+  const enrollmentRecords=await enrollmentPrivacyRecords(requestAll,job.workspace_id,students.map(item=>item.id));
+  appendPrivacyRecords(rows,"student_enrollment",enrollmentRecords.enrollments);
+  appendPrivacyRecords(rows,"contract_enrollment_link",await contractEnrollmentPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id)));
+  appendPrivacyRecords(rows,"student_enrollment_status_history",enrollmentRecords.history);
+  appendPrivacyRecords(rows,"enrollment_attribution",enrollmentRecords.attributions);
   appendPrivacyRecords(rows,"academic_record",academicRecords);
   appendPrivacyRecords(rows,"student_pathway",pathways);
   appendPrivacyRecords(rows,"application_task",applicationTasks);

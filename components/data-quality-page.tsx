@@ -129,11 +129,13 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
   </div>;
 }
 
-function qualityRuleKey(ruleKey:string){const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
+function qualityRuleKey(ruleKey:string){if(ruleKey.startsWith("COHORT_")||ruleKey.startsWith("ENROLLMENT_"))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
 
 function qualityHref(item:QualityIssue){
   if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;
   if(item.entityType==="CONTACT")return `/people/${item.entityId}`;
+  if(item.entityType==="ENROLLMENT")return `/enrollments?focus=${item.entityId}`;
+  if(item.entityType==="COHORT")return `/products?cohort=${item.entityId}`;
   if(item.entityType==="STUDENT")return `/students?focus=${item.entityId}`;
   if(item.entityType==="LEAD")return `/leads?focus=${item.entityId}`;
   if(item.entityType==="TASK")return "/tasks";

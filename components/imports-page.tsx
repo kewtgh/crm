@@ -13,7 +13,7 @@ import { useUserPreferences } from "@/components/user-preferences-context";
 import { CsvParseError, parseCsvDocument } from "@/lib/csv";
 import { parseXlsxDocument } from "@/lib/xlsx";
 import { useRemoteSearch } from "@/hooks/use-remote-search";
-import { importFields, importFieldsByResource as targetFieldsByResource } from "@/lib/import-fields";
+import { importFields, importMappingReady, importFieldsByResource as targetFieldsByResource } from "@/lib/import-fields";
 import {
   IMPORT_EXECUTION_BATCH_SIZE,
   importExecutionPassLimit,
@@ -190,8 +190,8 @@ export function ImportsPage({
 
   const createBatch = async () => {
     if(fileLoading||pending)return;
-    if (!rawRows.length || (!mapping.nameZh && !mapping.nameEn)) {
-      setError(t("imports.mappingRequired"));
+    if (!rawRows.length || !importMappingReady(resource,mapping)) {
+      setError(t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.mappingRequired"));
       return;
     }
     setPending(true);
@@ -413,9 +413,9 @@ export function ImportsPage({
 
     {!duplicatesOnly && <section className="surface import-create">
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
-      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{t("ux.importHelp")}</InlineMessage>
+      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
       <div className="form-grid two-column">
-        <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option></select></label>
+        <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option><option value="COHORTS">{t("cohorts.title")}</option><option value="ENROLLMENTS">{t("enrollments.title")}</option></select></label>
         <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
       </div>
       {fileLoading&&<InlineMessage type="info">{t("imports.readingFile")}</InlineMessage>}
@@ -426,7 +426,7 @@ export function ImportsPage({
           <button className="secondary-button import-mapping-save" type="button" disabled={pending||!mappingName.trim()} onClick={()=>void saveMapping()}><Save size={16}/>{t("imports.saveMapping")}</button>
         </div>
         <div className="mapping-grid">
-          <p className="name-pair-hint"><span className="required-indicator">* </span>{t("imports.nameMappingHelp")}</p>
+          <p className="name-pair-hint"><span className="required-indicator">* </span>{t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.nameMappingHelp")}</p>
           {targetFields.map((field) => <SearchableSelect key={field} label={t(`imports.field.${field}`)} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
@@ -450,13 +450,13 @@ export function ImportsPage({
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.rowsEyebrow")}</p><h2>{current ? current.filename : t("imports.selectBatch")}</h2></div>{current && <StatusBadge tone="blue">{t(`imports.status.${current.status.toLowerCase()}`)}</StatusBadge>}</div>
         {current && dryRun && <div className={`import-dry-run ${dryRun.canExecute ? "ready" : "blocked"}`}><SearchCheck size={20}/><div><b>{t("imports.dryRun")}</b><small>{t("imports.dryRunHelp", { create: dryRun.create, update: dryRun.update, merge: dryRun.merge, skip: dryRun.skip, invalid: dryRun.invalid, unresolved: dryRun.unresolved })}</small></div><StatusBadge tone={dryRun.canExecute ? "green" : "amber"}>{t(dryRun.canExecute ? "imports.dryRunReady" : "imports.dryRunBlocked")}</StatusBadge></div>}
         {current && pending && executionProgress && <InlineMessage type="info">{t("imports.executionProgress",{processed:executionProgress.processed,total:executionProgress.total})}</InlineMessage>}
-        {rows.map((row) => <article className="import-row" key={row.id}>
+        {rows.map((row) => <article className={`import-row${current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?" import-domain-row":""}`} key={row.id}>
           <span>#{row.rowNumber}</span>
           <div>
-            <b>{row.normalized.nameZh} / {row.normalized.nameEn}</b>
-            <small>{row.normalized.email || row.normalized.phone || row.normalized.city || "—"}</small>
-            {row.errors.map((item) => <small className="error-text" key={item.code}>{t(`imports.error.${item.code.toLowerCase()}`)}</small>)}
-            {row.lastError && <small className="error-text">{row.lastError}</small>}
+            <b>{current?.resourceType==="ENROLLMENTS"?`${row.normalized.studentNumber||"—"} · ${row.normalized.cohortCode||"—"}`:current?.resourceType==="COHORTS"?`${row.normalized.productCode||"—"} · ${row.normalized.cohortCode||"—"}`:`${row.normalized.nameZh||""} / ${row.normalized.nameEn||""}`}</b>
+            <small>{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?row.normalized.ownerEmail||"—":row.normalized.email || row.normalized.phone || row.normalized.city || "—"}</small>
+            {row.errors.map((item) => <small className="error-text" key={item.code}>{t(`imports.error.${item.code.toLowerCase()}`)}{item.field && ` · ${t(`imports.field.${item.field}`)}`}{item.reason && ` · ${(t(`imports.reason.${item.reason}`)===`imports.reason.${item.reason}`?t("imports.reason.generic"):t(`imports.reason.${item.reason}`))}`}</small>)}
+            {row.lastError && <small className="error-text">{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?t("imports.reason.generic"):row.lastError}</small>}
           </div>
           <StatusBadge tone={row.status === "APPLIED" ? "green" : row.status === "INVALID" || row.status === "FAILED" ? "red" : row.status === "DUPLICATE" ? "amber" : "blue"}>{t(`imports.rowStatus.${row.status.toLowerCase()}`)}</StatusBadge>
           {(row.status === "INVALID" || row.status === "FAILED") && <button className="secondary-button" type="button" disabled={!current||!importFields(current.resourceType).length} onClick={()=>{setRepairFields(importFields(current?.resourceType??""));setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
