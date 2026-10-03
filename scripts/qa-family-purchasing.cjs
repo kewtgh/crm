@@ -14,7 +14,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     await page.route("**/api/finance**",route=>{if(route.request().method()==="POST")writes.push(route.request().postDataJSON());return route.fulfill({json:finance});});
     const bundle=await build({entryPoints:["tests/fixtures/family-purchasing-qa.tsx"],bundle:true,write:false,format:"iife",platform:"browser",jsx:"automatic",target:"chrome145",alias:{"next/link":path.resolve("tests/fixtures/qa-link.tsx"),"next/navigation":path.resolve("tests/fixtures/qa-navigation.ts")},define:{"process.env.NODE_ENV":'"production"'},logLevel:"silent"});
     await page.setContent('<html lang="zh-CN"><head><title>Family purchasing QA</title></head><body><div id="root"></div></body></html>');
-    for(const file of fs.readdirSync("dist/client/_next/static").filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file}`});
+    for(const file of fs.readdirSync("dist/client/_next/static",{recursive:true}).filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file.replaceAll("\\","/")}`});
     await page.addScriptTag({content:bundle.outputFiles[0].text});
     await page.getByRole("button",{name:"新建合同草稿",exact:true}).click();
     const dialog=page.getByRole("dialog");await dialog.getByRole("button",{name:"客户",exact:true}).click();await dialog.getByRole("option",{name:/签约家庭/}).click();

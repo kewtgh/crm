@@ -16,7 +16,7 @@ function run(command,args,env=process.env){
   return result.stdout.trim();
 }
 try{
-  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--label","com.lumina.crm.test=product-mutations","--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_products_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD","postgres:18.4-bookworm"],{...process.env,POSTGRES_PASSWORD:password});
+  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--label","com.lumina.crm.test=product-mutations","--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_products_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD","postgres:18.6-trixie"],{...process.env,POSTGRES_PASSWORD:password});
   const port=run("docker",["inspect","--format","{{(index (index .NetworkSettings.Ports \"5432/tcp\") 0).HostPort}}",container]);
   assert.match(port,/^\d+$/);
   const connectionString=`postgresql://postgres:${password}@127.0.0.1:${port}/lumina_products_test`;
@@ -107,7 +107,7 @@ try{
   assert.equal((await client.query("select public.purge_expired_crm_recycle_bin() as removed")).rows[0].removed,1);
   assert.equal((await client.query("select count(*)::int as count from public.products where id=$1",[product.id])).rows[0].count,1);
   assert.equal((await client.query("select count(*)::int as count from public.products where id=$1",[unused.id])).rows[0].count,0);
-  console.log("PASS PostgreSQL 18.4: update/version conflicts, admin/AAL2/workspace guards, referenced delete, retry, hidden catalog, stale writes, deleted-product and bundle quotes, restore, and unused-product cleanup");
+  console.log("PASS PostgreSQL 18.6: update/version conflicts, admin/AAL2/workspace guards, referenced delete, retry, hidden catalog, stale writes, deleted-product and bundle quotes, restore, and unused-product cleanup");
 }finally{
   await client?.end().catch(()=>{});
   assert.match(container,/^lumina-crm-products-it-[a-f0-9]{10}$/);

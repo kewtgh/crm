@@ -5,6 +5,8 @@ export const DOCKER_BUILD_PROXY_KEYS = [
   "https_proxy",
 ];
 
+export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.33.1";
+
 export function parseDockerBuildProxy(value) {
   const proxy = String(value ?? "").trim();
   if (!proxy) return "";
@@ -63,9 +65,13 @@ export function validateBuildxInspectContract(output, { builderName, dockerProxy
   if (consumed.trim() !== value || options.get("network") !== "host") {
     throw new Error("LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH");
   }
+  if (options.get("image") !== LUMINA_BUILDKIT_IMAGE) {
+    throw new Error("LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH");
+  }
   const proxy = parseDockerBuildProxy(dockerProxy);
   const expectedKeys = new Set([
     "network",
+    "image",
     ...(proxy ? DOCKER_BUILD_PROXY_KEYS.map((key) => `env.${key}`) : []),
   ]);
   if (options.size !== expectedKeys.size

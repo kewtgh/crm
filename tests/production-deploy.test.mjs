@@ -1303,13 +1303,17 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
   const proxy = "http://proxy.example.invalid:8080";
   const direct = builderCreateArguments("");
   assert.equal(assertAllowedDockerArguments(direct), true);
-  assert.deepEqual(direct.slice(8), ["--driver-opt", "network=host"]);
+  assert.deepEqual(direct.slice(8), [
+    "--driver-opt", "network=host",
+    "--driver-opt", "image=moby/buildkit:v0.33.1",
+  ]);
   assert.equal(LUMINA_BUILDKIT_NETWORK_MODE, "host");
 
   const proxied = builderCreateArguments(proxy);
   assert.equal(assertAllowedDockerArguments(proxied), true);
   assert.deepEqual(proxied.slice(8), [
     "--driver-opt", "network=host",
+    "--driver-opt", "image=moby/buildkit:v0.33.1",
     ...DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
       "--driver-opt", `env.${key}=${proxy}`,
     ]),
@@ -1357,7 +1361,7 @@ test("BuildKit inspect requires host networking and exact direct or proxied driv
   const direct = [
     "Name:          lumina-crm-buildkit",
     "Driver:        docker-container",
-    "Driver Options: network=\"host\"",
+    "Driver Options: network=\"host\" image=\"moby/buildkit:v0.33.1\"",
   ].join("\n");
   const proxied = direct.replace('network="host"', [
     'network="host"',
@@ -1373,6 +1377,17 @@ test("BuildKit inspect requires host networking and exact direct or proxied driv
     builderName: "lumina-crm-buildkit",
     dockerProxy: proxy,
   }), true);
+  for (const output of [
+    direct.replace(' image="moby/buildkit:v0.33.1"', ''),
+    direct.replace('image="moby/buildkit:v0.33.1"', 'image="moby/buildkit:latest"'),
+    direct.replace('image="moby/buildkit:v0.33.1"', 'image="moby/buildkit:v0.32.0"'),
+  ]) {
+    assert.throws(() => validateBuilderInspect(output, ""), /LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH/);
+    assert.throws(() => validateBuildxInspectContract(output, {
+      builderName: "lumina-crm-buildkit",
+      dockerProxy: "",
+    }), /LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH/);
+  }
   for (const output of [
     direct.replace('network="host"', 'network="bridge"'),
     direct.replace('network="host"', 'network="default"'),
@@ -1747,7 +1762,7 @@ test("Compose, credentials, immutable images, and forward-only rollback remain b
     source("deploy/cloudflare-tunnel/config.yml.example"),
   ]);
   assert.match(compose, /^name: \$\{LUMINA_COMPOSE_PROJECT:-lumina-crm\}$/m);
-  assert.match(compose, /image: postgres:18\.4-bookworm/);
+  assert.match(compose, /image: postgres:18\.6-trixie/);
   assert.match(compose, /internal: true/);
   assert.doesNotMatch(
     compose.match(/postgres:[\s\S]+?\n  web:/)?.[0] ?? "",

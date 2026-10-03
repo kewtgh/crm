@@ -32,7 +32,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     });
     const bundle=await build({entryPoints:["tests/fixtures/education-business-qa.tsx"],bundle:true,write:false,format:"iife",platform:"browser",jsx:"automatic",target:"chrome145",alias:{"next/link":path.resolve("tests/fixtures/qa-link.tsx"),"next/navigation":path.resolve("tests/fixtures/qa-navigation.ts")},define:{"process.env.NODE_ENV":'"production"'},logLevel:"silent"});
     await page.setContent('<html lang="zh-CN"><head><title>Education business QA</title></head><body><div id="root"></div></body></html>');
-    for(const file of fs.readdirSync("dist/client/_next/static").filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file}`});
+    for(const file of fs.readdirSync("dist/client/_next/static",{recursive:true}).filter(file=>file.endsWith(".css")))await page.addStyleTag({url:`${base}/_next/static/${file.replaceAll("\\","/")}`});
     await page.addScriptTag({content:bundle.outputFiles[0].text});
     await page.getByText("共 0 条记录",{exact:true}).waitFor();
     const dialog=()=>page.getByRole("dialog");

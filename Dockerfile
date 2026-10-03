@@ -1,16 +1,17 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.27.1
 
-ARG NODE_IMAGE=node:24.18.0-bookworm-slim
-ARG POSTGRES_IMAGE=postgres:18.4-bookworm
+ARG NODE_IMAGE=node:26.10.0-trixie-slim
+ARG POSTGRES_IMAGE=postgres:18.6-trixie
 
 FROM ${NODE_IMAGE} AS node-toolchain
-RUN npm install --global npm@12.0.1
+RUN npm install --global npm@12.2.0
 
 FROM node-toolchain AS dependencies
 WORKDIR /app
 ENV CI=true \
     NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json .npmrc ./
+COPY vendor/ ./vendor/
 RUN --mount=type=cache,id=lumina-crm-npm,target=/root/.npm \
     npm ci
 
@@ -30,6 +31,7 @@ WORKDIR /app
 ENV CI=true \
     NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json .npmrc ./
+COPY vendor/ ./vendor/
 RUN --mount=type=cache,id=lumina-crm-npm-production,target=/root/.npm \
     npm ci --omit=dev \
     && npm cache clean --force

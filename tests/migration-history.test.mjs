@@ -74,7 +74,7 @@ test("migration 075 has a pinned PostgreSQL execution regression", async () => {
     readFile(repositoryPath("scripts/test-migration-075-postgres.ps1"), "utf8"),
     readFile(repositoryPath("package.json"), "utf8"),
   ]);
-  assert.match(script, /postgres:18\.4-bookworm/);
+  assert.match(script, /postgres:18\.6-trixie/);
   assert.match(script, /Foundation-through-074 migration failed/);
   assert.match(script, /Migration 075 failed against PostgreSQL/);
   assert.match(script, /created_by is null/);

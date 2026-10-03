@@ -72,10 +72,38 @@ container, network, or volume.
 ## Host provisioning
 
 Provision Ubuntu with Docker Engine, the rootless extras, Compose, Buildx, `uidmap`, Caddy,
-`cloudflared`, Git, and Node 24 only for the deployment controller. Do not install/run PostgreSQL
+`cloudflared`, Git, and Node 26.10.0 for the deployment controller. Do not install/run PostgreSQL
 or CRM Web/Worker with host systemd. Rootless mode requires cgroup v2 + systemd so Compose
 memory/CPU/PID limits are actually enforced, plus at least 65,536 subordinate UIDs and GIDs for
 `lumina-crm`.
+
+Dependency baseline refreshed on 2026-10-03:
+
+| Component | Stable version | Source |
+| --- | --- | --- |
+| Node.js / npm | 26.10.0 / 12.2.0 | `.nvmrc`, package manifests, CI and Dockerfile |
+| PostgreSQL | 18.6, Debian trixie | Both Compose files and Dockerfile |
+| Docker Engine | 29.8.2 | [Official releases](https://github.com/moby/moby/releases) |
+| Docker Compose | 5.6.0 | [Official releases](https://github.com/docker/compose/releases) |
+| Docker Buildx | 0.37.2 | [Official releases](https://github.com/docker/buildx/releases) |
+| BuildKit | 0.33.1 | Fixed builder image in storage maintenance |
+| Dockerfile frontend | 1.27.1 | Dockerfile syntax directive |
+| Caddy | 2.11.6 | [Official releases](https://github.com/caddyserver/caddy/releases) |
+| cloudflared | 2026.9.3 | [Official releases](https://github.com/cloudflare/cloudflared/releases) |
+
+Upgrade host-managed packages through the host provisioning process before deployment; editing
+this repository does not install them on an existing host. Newly created Lumina builders use
+`moby/buildkit:v0.33.1`; an existing builder retains its current container until its operator
+upgrades it. Both prepare and deployment reject a builder with a missing or different image pin;
+upgrade an existing builder through the reviewed host provisioning process before deployment.
+PostgreSQL remains on major version 18, so the existing 18 data directory layout
+is unchanged. Prisma in the planning reference stays on stable 7.10.0 rather than the registry's
+8.0 release candidate. Browser QA retains the repository-required Chromium revision 1243.
+
+Type checking uses the stable TypeScript 7 compiler. ESLint uses the official
+[`@typescript/typescript6` API compatibility package](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0)
+and [`@eslint/compat` rule wrappers](https://eslint.org/blog/2024/05/eslint-compatibility-utilities/)
+until the Next-config plugins support the current compiler/rule APIs directly.
 
 ```text
 /opt/lumina-crm/source                    checked-out kewtgh/crm main
@@ -176,7 +204,7 @@ existing request ID. Do not delete or edit these files to bypass a deployment ga
 Ensure the pinned PostgreSQL 18.4 image is present, then create the three explicit external volumes:
 
 ```sh
-sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" docker pull postgres:18.4-bookworm
+sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" docker pull postgres:18.6-trixie
 sudo -u lumina-crm env DOCKER_HOST="$DOCKER_HOST" \
   /opt/lumina-crm/source/deploy/scripts/provision-volumes.sh
 ```
