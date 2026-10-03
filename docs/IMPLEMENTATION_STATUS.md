@@ -1,6 +1,26 @@
-# Implementation status — v3.18.1 release candidate
+# Implementation status — v3.18.2 release candidate
 
-## v3.18.1 scope
+## v3.18.2 scope
+
+Worker heartbeat badges occupy the right column, centered against the adjacent text block.
+Queue and Worker icon selectors exclude status badges, whose rounded backgrounds grow with
+their text and retain horizontal padding. Template/bulk email is organized into numbered blue,
+teal and amber sections for template/language, recipient selection, and preview/confirmation.
+Recipient search, filters, selected-customer chips and pagination are grouped; template content
+has a collapsible preview and the editor separates settings and Chinese/English content.
+The draft lock and immutable batch/retry behavior remain in place.
+
+Typecheck, scoped lint, 35 communication/UI regression tests and the final production build passed.
+Chromium 1243 passed six Worker/queue checks (Chinese/English at 1440, 375 and 320 px) and four
+email-layout checks (Chinese/English at 1440 and 375 px). The latter covers section colors, template
+content/language, recipient filtering, bilingual editor cards, personalized previews, locked drafts,
+immutable retries and new-batch reset. Screenshots were visually reviewed. Queue/worker metrics
+and email API responses are fixtures; no emails were sent or database identities created.
+Evidence remains Git-ignored under `work/browser-qa-chromium-1243/ui-v3182-workers/` and
+`work/browser-qa-chromium-1243/ui-v3182-email/`, with v3.18.2 and the pre-commit worktree recorded.
+The temporary QA server was stopped; no full browser matrix or database suite was run.
+
+## Previous v3.18.1 scope
 
 All three npm manifests and lockfiles, Node/npm pins, PostgreSQL/Node base images, GitHub Actions,
 the Dockerfile frontend and the new BuildKit builder image are refreshed to stable releases as of

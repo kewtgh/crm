@@ -23,8 +23,8 @@ export function EmailRecipientPicker({ids,disabled,onChange}:{ids:string[];disab
     if(value===current&&page===1)return;
     setLoading(true);setValue(value);setPage(1);
   };
-  return <section className="page-stack" aria-label={t("ux.recipientFilters")}>
-    <h3>{t("ux.recipientFilters")}</h3><p>{t("ux.regionHelp")}</p>
+  return <section className="page-stack email-recipient-picker" aria-label={t("ux.recipientFilters")}>
+    <h3>{t("ux.recipientFilters")}</h3><details className="email-recipient-help"><summary>{t("emailCompose.filterHelp")}</summary><p>{t("ux.regionHelp")}</p></details>
     <fieldset disabled={disabled}>
       <label className="field"><span>{t("common.search")}</span><input value={q} onChange={event=>{setLoading(true);setQ(event.target.value);setPage(1);}}/></label>
       <RecipientFilters regions={result.regions} tags={result.tags} types={result.types} region={region} tag={tag} type={type} onRegion={value=>changeFilter(value,region,setRegion)} onTag={value=>changeFilter(value,tag,setTag)} onType={value=>changeFilter(value,type,setType)}/>
@@ -32,7 +32,7 @@ export function EmailRecipientPicker({ids,disabled,onChange}:{ids:string[];disab
       {loading&&<p role="status">{t("common.loading")}</p>}
       {error&&<><InlineMessage type="error">{error}</InlineMessage><button type="button" className="secondary-button" onClick={()=>setAttempt(value=>value+1)}>{t("common.retry")}</button></>}
       <div className="email-recipient-list">{valid&&result.items.map(item=><label key={item.id}><input type="checkbox" checked={ids.includes(item.id)} disabled={item.blocked||!ids.includes(item.id)&&ids.length>=50} onChange={event=>update(event.target.checked?[...ids,item.id]:ids.filter(id=>id!==item.id))}/><span><b>{name(item)}</b><small>{item.email||"—"} · {item.city||"—"} · {t(`contact.type.${item.contact_type.toLowerCase()}`)}</small>{item.blocked&&<small>{t("customerOps.blocked")}</small>}</span></label>)}{valid&&!result.items.length&&<p>{t("common.noOptions")}</p>}</div>
-      <div className="email-filter-actions"><button type="button" className="secondary-button" disabled={loading||page<=1} onClick={()=>{setLoading(true);setPage(value=>value-1);}}>{t("common.previousPage")}</button><span>{page} / {Math.max(1,Math.ceil(result.total/20))}</span><button type="button" className="secondary-button" disabled={loading||page*20>=result.total} onClick={()=>{setLoading(true);setPage(value=>value+1);}}>{t("common.nextPage")}</button></div>
+      <div className="email-filter-actions email-recipient-pagination"><button type="button" className="secondary-button" disabled={loading||page<=1} onClick={()=>{setLoading(true);setPage(value=>value-1);}}>{t("common.previousPage")}</button><span>{page} / {Math.max(1,Math.ceil(result.total/20))}</span><button type="button" className="secondary-button" disabled={loading||page*20>=result.total} onClick={()=>{setLoading(true);setPage(value=>value+1);}}>{t("common.nextPage")}</button></div>
     </fieldset>
   </section>;
 }
