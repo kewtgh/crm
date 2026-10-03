@@ -1,5 +1,17 @@
 import type { Messages } from "../types";
 const entries:Record<string,[string,string]>={
+  "emailHistory.title":["群发邮件","Bulk email"],
+  "emailHistory.help":["按收件人查看历史群发记录，查询主题、正文、姓名或邮箱，并按发送用途和投递状态分类检索。","Review bulk email by recipient. Search subjects, content, names or email addresses and filter by purpose and delivery status."],
+  "emailHistory.search":["搜索主题、正文、客户或邮箱","Search subject, content, customer or email"],
+  "emailHistory.purpose":["发送用途","Purpose"],"emailHistory.status":["投递状态","Delivery status"],
+  "emailHistory.allPurposes":["全部用途","All purposes"],"emailHistory.allStatuses":["全部状态","All statuses"],
+  "emailHistory.clear":["清除筛选","Clear filters"],"emailHistory.refresh":["刷新记录","Refresh records"],
+  "emailHistory.count":["共 {count} 条群发记录","{count} bulk email records"],
+  "emailHistory.submittedAt":["提交于","Submitted"],"emailHistory.sentAt":["发送于","Sent"],
+  "emailHistory.openThread":["查看会话","View conversation"],
+  "emailHistory.empty":["尚无群发邮件记录。","No bulk email records yet."],
+  "emailHistory.noResults":["没有符合条件的群发记录，请调整关键词或清除筛选。","No matching bulk email records. Change the keyword or clear the filters."],
+  "emailHistory.failed":["群发邮件记录加载失败，请重试。","Bulk email records could not be loaded. Try again."],
   "portalTemplates.template":["邀请模板","Invitation template"],"portalTemplates.preset.WELCOME":["首次门户邀请","First portal invitation"],"portalTemplates.preset.UPDATE":["资料核对邀请","Information review invitation"],
   "portalTemplates.openTemplates":["邀请模板与筛选","Invitation templates and filters"],
   "portalTemplates.saveTemplate":["定制并保存邀请模板","Customize and save invitation template"],"portalTemplates.edit":["定制门户邀请模板","Customize portal invitation template"],

@@ -61,10 +61,45 @@ module.exports=async({browser,base,output,report,observe})=>{
       const detail=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,items:[...document.querySelectorAll("body *")].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,12).map(e=>({tag:e.tagName,class:e.className,right:e.getBoundingClientRect().right}))}));
       assert.ok(detail.scroll<=detail.width+1,`no document overflow: ${JSON.stringify(detail)}`);
     };
+    const qualityControls=async()=>{
+      const controls=await page.locator(".quality-rule-grid article").evaluateAll(cards=>cards.map(card=>{
+        const select=card.querySelector("select"),checkbox=card.querySelector('input[type="checkbox"]'),rect=select.getBoundingClientRect(),checkRect=checkbox.getBoundingClientRect(),style=getComputedStyle(select);
+        return{width:rect.width,height:rect.height,sameRow:Math.abs(rect.y+rect.height/2-checkRect.y-checkRect.height/2)<2,color:style.color,background:style.backgroundColor};
+      }));
+      assert.ok(controls.every(control=>control.width>=76&&control.width<=112&&control.height>=44&&control.sameRow),JSON.stringify(controls));
+      assert.equal(new Set(controls.map(control=>control.color)).size,3);
+      assert.equal(new Set(controls.map(control=>control.background)).size,3);
+    };
+    if(process.env.QA_UX_VIEW==="quality-history"){
+      const records=Array.from({length:23},(_,i)=>({id:`bulk-${i}`,threadId:`thread-${i}`,contactZh:`客户 ${i}`,contactEn:`Customer ${i}`,email:`customer${i}@example.test`,subject:i===0?"课程资料":"服务跟进",purpose:i===0?"MARKETING":"SERVICE",deliveryStatus:i===0?"SENT":"FAILED",createdAt:"2026-10-03T01:00:00Z",deliveredAt:i===0?"2026-10-03T01:01:00Z":null}));
+      await page.route("**/api/customer-email/history?**",route=>{
+        const params=new URL(route.request().url()).searchParams,q=params.get("q"),purpose=params.get("purpose"),status=params.get("status"),pageSize=Number(params.get("pageSize")),pageNumber=Number(params.get("page"));
+        const matching=records.filter(item=>(!q||`${item.subject} ${item.contactZh} ${item.email}`.includes(q))&&(!purpose||item.purpose===purpose)&&(!status||item.deliveryStatus===status));
+        return route.fulfill({json:{items:matching.slice((pageNumber-1)*pageSize,pageNumber*pageSize),total:matching.length,page:pageNumber,pageSize}});
+      });
+      for(const viewport of [{width:1440,height:1000},{width:375,height:812}]){
+        await page.setViewportSize(viewport);await page.getByRole("button",{name:"QA quality",exact:true}).click();
+        await page.locator(".quality-rule-grid select").first().waitFor();await qualityControls();await overflow();
+        await page.screenshot({path:path.join(output,`quality-${viewport.width}.png`),fullPage:true});
+        await page.getByRole("button",{name:"QA history",exact:true}).click();
+        const history=page.locator(".email-history-page");
+        await history.getByText("共 23 条群发记录",{exact:true}).waitFor();assert.equal(await history.locator(".email-history-record").count(),20);
+        await history.getByRole("button",{name:"2",exact:true}).click();await history.locator(".email-history-record").filter({hasText:"客户 22"}).waitFor();assert.equal(await history.locator(".email-history-record").count(),3);
+        await history.getByLabel("发送用途",{exact:true}).selectOption("MARKETING");await history.getByText("共 1 条群发记录",{exact:true}).waitFor();
+        await history.getByLabel("投递状态",{exact:true}).selectOption("FAILED");await history.getByText("没有符合条件的群发记录，请调整关键词或清除筛选。",{exact:true}).waitFor();
+        await history.getByRole("button",{name:"清除筛选",exact:true}).click();await history.getByText("共 23 条群发记录",{exact:true}).waitFor();
+        await history.locator(".search-field input").fill("customer0@example.test");await history.getByText("共 1 条群发记录",{exact:true}).waitFor();
+        assert.equal(await history.getByRole("link",{name:"查看会话"}).getAttribute("href"),"/messages?thread=thread-0");
+        await history.getByLabel("投递状态",{exact:true}).selectOption("SENT");await history.locator(".status-badge").filter({hasText:"已发送"}).waitFor();await overflow();
+        await page.screenshot({path:path.join(output,`bulk-email-${viewport.width}.png`),fullPage:true});
+        report.pages.push({label:`quality-and-bulk-email-${viewport.width}`,route:"isolated-ux-fixture",viewport,checks:["compact-severity","severity-colors","enabled-and-severity-same-row","bulk-history-pagination","purpose-and-delivery-filters","filter-reset-to-first-page","keyword-search","conversation-link","no-overflow"],boundary:"Actual components and production CSS; history API mocked. No emails sent."});
+      }
+      return;
+    }
     for(const viewport of [{width:1440,height:1000},{width:375,height:812}]){
       await page.setViewportSize(viewport);await page.getByRole("button",{name:"QA quality",exact:true}).click();
       await page.locator(".quality-rule-grid select").first().waitFor();
-      assert.ok((await page.locator(".quality-rule-grid select").evaluateAll(elements=>elements.map(e=>e.getBoundingClientRect().width))).every(width=>width>=140));await overflow();
+      await qualityControls();await overflow();
       await page.screenshot({path:path.join(output,`quality-${viewport.width}.png`),fullPage:true});
       await page.getByRole("button",{name:"QA workers",exact:true}).click();if(viewport.width===375)await page.locator(".operations-mobile-tabs").getByRole("button",{name:"队列",exact:true}).click();await page.locator(".worker-list article").first().waitFor();
       assert.ok((await page.locator(".worker-list").textContent()).includes("运行异常"));

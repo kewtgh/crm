@@ -1,6 +1,29 @@
-# Implementation status — v3.17.0 release candidate
+# Implementation status — v3.18.0 release candidate
 
-## v3.17.0 scope
+## v3.18.0 scope
+
+Customer communications adds a dedicated Bulk email tab, using existing durable per-recipient
+message identities to show historical records and actual delivery states. Keyword search covers
+subject, body, customer names and email; purpose and delivery-status filters combine with server-side
+pagination. Each record links to its original conversation. Forward migration 090 adds a read-only
+security-invoker query with workspace/member checks and existing table RLS; deployment must apply it.
+Quality-rule cards use compact severity controls with blue/amber/red styling and an enabled/severity
+row on desktop and mobile. Disabled rules use a muted card background.
+
+Feature verification before the version bump: typecheck, scoped lint, 32 targeted Node tests,
+production build and rollback-only PostgreSQL query checks passed. The database checks cover historical
+bulk identity, literal keyword/body/email search, combined filters, pagination and explicit workspace/
+authentication boundaries using the local migration role; they do not execute as crm_app. Chromium 1243
+passed desktop/mobile component checks against production CSS, with the history API mocked and no
+emails sent. Evidence remains Git-ignored under
+`work/browser-qa-chromium-1243/quality-and-bulk-email/phases/ux-refinements/` and records the pre-bump
+application version 3.17.0. No full browser matrix, database suite or production migration was run.
+
+Focused regression commands: `npm run test:customer-email-history` and
+`npm run test:customer-email-history:postgres` (local database, temporary transaction rolled back).
+The temporary QA server and local database container were restored to their stopped states.
+
+## Previous v3.17.0 scope
 
 Family buyers now flow through quotes, contracts, renewal and financial reports.
 Migrations 088–089 add typed purchasing constraints, invoker-scoped contract summaries,
