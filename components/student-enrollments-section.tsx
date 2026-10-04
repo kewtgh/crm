@@ -24,7 +24,7 @@ export function StudentEnrollmentsSection({studentId}: {studentId: string}) {
     {error && <InlineMessage type="error">{error}<button type="button" className="secondary-button" onClick={() => void load()}>{t("common.retry")}</button></InlineMessage>}
     {loading && <p role="status">{t("common.loading")}</p>}
     {!loading && !error && !data.items.length && <p className="detail-empty">{t("enrollments.empty")}</p>}
-    <div className="detail-record-list enrollment-records">{!error && data.items.map(row => <article key={row.id}><div><Link href={`/enrollments?focus=${row.id}`}><b>{label(row.product_name_zh,row.product_name_en)} · {label(row.cohort_name_zh,row.cohort_name_en)}</b></Link><small>{t("enrollments.owner")}: {label(row.owner_name_zh,row.owner_name_en)} · {formatDate(row.updated_at,{includeTime:true})}</small></div><EnrollmentStatus status={row.status}/></article>)}</div>
+    <div className="detail-record-list enrollment-records">{!error && data.items.map(row => <article key={row.id}><div><Link href={`/enrollments?focus=${row.id}`}><b>{label(row.product_name_zh,row.product_name_en)} · {label(row.cohort_name_zh,row.cohort_name_en)}</b></Link><small>{t("enrollments.owner")}: {label(row.owner_name_zh,row.owner_name_en)} · {formatDate(row.updated_at,{includeTime:true})}</small><Link className="text-button" href={`/student-success?enrollmentId=${row.id}`}>{t("success.title")}</Link></div><EnrollmentStatus status={row.status}/></article>)}</div>
     <Pagination page={data.page} totalPages={Math.max(1,Math.ceil(data.total/data.pageSize))} total={data.total} pageSize={data.pageSize} onPage={setPage} onPageSize={value => {setPageSize(value);setPage(1);}}/>
   </section>;
 }

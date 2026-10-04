@@ -133,6 +133,8 @@ function qualityRuleKey(ruleKey:string){if(["COHORT_","ENROLLMENT_","APPLICATION
 
 function qualityHref(item:QualityIssue){
   if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;
+  if(item.entityType==="STUDENT_SUCCESS_CASE")return `/student-success?focus=${item.entityId}`;
+  if(["STUDENT_SUCCESS_RISK","STUDENT_SUCCESS_INTERVENTION"].includes(item.entityType)&&typeof item.details.caseId==="string")return `/student-success?focus=${item.details.caseId}`;
   if(item.entityType==="CONTACT")return `/people/${item.entityId}`;
   if(item.entityType==="ENROLLMENT")return `/enrollments?focus=${item.entityId}`;
   if(item.entityType==="ADMISSION_MILESTONE"&&typeof item.details.enrollmentId==="string")return `/enrollments?focus=${item.details.enrollmentId}`;

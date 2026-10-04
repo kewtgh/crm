@@ -1,3 +1,6 @@
+import {enSuccessOutcomes} from "./student-success-outcomes";
+import {enSuccessOperations} from "./student-success-operations";
+import {enSuccess} from "./student-success";
 import {enChannelAnalytics} from "./channel-analytics";
 import {enCommissions} from "./commissions";
 import {enLeadPool} from "./lead-pool";
@@ -33,6 +36,7 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...enSuccessOutcomes,...enSuccess,...enSuccessOperations,
   ...enChannelAnalytics,
   ...enCommissions,
   ...enLeadPool,

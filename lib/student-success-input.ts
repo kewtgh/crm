@@ -1,0 +1,15 @@
+import {z} from "zod";
+export const successStatuses=["PLANNING","ACTIVE","PAUSED","COMPLETED","CLOSED"] as const;
+export const successHealth=["UNKNOWN","ON_TRACK","ATTENTION","AT_RISK"] as const;
+export const successEnrollmentStatuses=["REGISTERING","ACTIVE","COMPLETED"] as const;
+export const successGoalTypes=["ACADEMIC","LANGUAGE","ENGAGEMENT","ATTENDANCE","PROJECT","TRANSITION","CAREER","PERSONAL_DEVELOPMENT","OTHER"] as const;
+export const successGoalStatuses=["PLANNED","ACTIVE","ACHIEVED","NOT_ACHIEVED","CANCELLED"] as const;
+export const successCaseDataSchema=z.object({enrollment_id:z.uuid(),status:z.enum(successStatuses),health_status:z.enum(successHealth),owner_id:z.uuid().nullable(),next_review_on:z.iso.date().nullable(),success_summary:z.string().trim().max(2000).nullable(),plan_summary:z.string().trim().max(4000).nullable()}).strict();
+export const successGoalDataSchema=z.object({case_id:z.uuid(),goal_type:z.enum(successGoalTypes),title:z.string().trim().min(1).max(200),description:z.string().trim().max(2000).nullable(),status:z.enum(successGoalStatuses),target_on:z.iso.date().nullable(),achieved_at:z.iso.datetime({offset:true}).nullable(),owner_id:z.uuid().nullable()}).strict().refine(data=>data.status!=="ACHIEVED"||data.achieved_at!==null,{path:["achieved_at"],message:"SUCCESS_ACHIEVED_AT_REQUIRED"});
+const identity={id:z.uuid(),expectedRevision:z.number().int().positive().max(2147483647).nullable(),requestKey:z.string().min(8).max(160)};
+export const successCaseSaveSchema=z.object({...identity,statusReason:z.string().trim().max(1000).default(""),data:successCaseDataSchema}).strict();
+export const successGoalSaveSchema=z.object({...identity,data:successGoalDataSchema}).strict();
+export const successTaskLinkSchema=z.object({...identity,caseId:z.uuid(),taskId:z.uuid(),goalId:z.uuid().nullable(),interventionId:z.uuid().nullable().default(null),unlink:z.boolean()}).strict().refine(value=>value.unlink?value.expectedRevision!==null:value.expectedRevision===null);
+export const successFiltersSchema=z.object({page:z.coerce.number().int().min(1).max(100000).default(1),pageSize:z.coerce.number().int().min(1).max(50).default(20),studentId:z.uuid().optional(),enrollmentId:z.uuid().optional(),productId:z.uuid().optional(),cohortId:z.uuid().optional(),ownerId:z.uuid().optional(),status:z.enum(successStatuses).optional(),health:z.enum(successHealth).optional(),reviewFrom:z.iso.date().optional(),reviewTo:z.iso.date().optional()}).refine(data=>!data.reviewFrom||!data.reviewTo||data.reviewFrom<=data.reviewTo);
+export type SuccessCaseData=z.infer<typeof successCaseDataSchema>;
+export type SuccessGoalData=z.infer<typeof successGoalDataSchema>;

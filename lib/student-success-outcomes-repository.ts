@@ -1,0 +1,8 @@
+import {databaseJson} from "./db/gateway";
+import type {z} from "zod";
+import type {successOutcomeDataSchema,successOutcomeSaveSchema,successOutcomeVoidSchema} from "./student-success-outcomes-input";
+export type SuccessOutcome=z.infer<typeof successOutcomeDataSchema>&{id:string;workspace_id:string;revision:number;record_status:"RECORDED"|"VOIDED";void_reason:string|null;voided_at:string|null;goal_title:string|null;owner_name_zh:string|null;owner_name_en:string|null};
+export function listSuccessOutcomes(caseId:string,page=1,showVoided=false,adapter=databaseJson){return adapter<SuccessOutcome[]>(`/db/table/student_success_outcome_records?${new URLSearchParams({case_id:`eq.${caseId}`,order:"occurred_on.desc,id.asc",limit:"50",offset:String((page-1)*50),...(!showVoided?{record_status:"eq.RECORDED"}:{})})}`);}
+export async function getSuccessOutcome(caseId:string,id:string,adapter=databaseJson){const items=await adapter<SuccessOutcome[]>(`/db/table/student_success_outcome_records?${new URLSearchParams({case_id:`eq.${caseId}`,id:`eq.${id}`,limit:"1"})}`);return items[0]??null;}
+export function saveSuccessOutcome(input:z.infer<typeof successOutcomeSaveSchema>,adapter=databaseJson){return adapter<SuccessOutcome>("/db/rpc/save_student_success_outcome",{method:"POST",body:JSON.stringify({record_id:input.id,expected_revision:input.expectedRevision,data:input.data,p_request_key:input.requestKey})});}
+export function voidSuccessOutcome(input:z.infer<typeof successOutcomeVoidSchema>,adapter=databaseJson){return adapter<SuccessOutcome>("/db/rpc/void_student_success_outcome",{method:"POST",body:JSON.stringify({record_id:input.id,expected_revision:input.expectedRevision,reason:input.reason,p_request_key:input.requestKey})});}

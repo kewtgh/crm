@@ -17,3 +17,8 @@ db/migrations/202610040098_channel_account_intelligence.sql -text
 /db/migrations/202610040100_channel_agreements_commission.sql -text
 /db/migrations/202610050101_channel_analytics.sql -text
 /db/migrations/202610050102_channel_analytics_empty_settlements.sql -text
+
+# Student Success foundation migration raw bytes stay stable across platforms.
+db/migrations/202610050103_student_success_foundation.sql -text
+db/migrations/202610050104_student_success_operations.sql -text
+db/migrations/202610050105_student_success_outcomes_analytics.sql -text

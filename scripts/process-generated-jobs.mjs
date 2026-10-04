@@ -1,4 +1,5 @@
 import {commissionPrivacyRecords} from "./lib/commission-privacy-export.mjs";
+import {studentSuccessPrivacyRecords} from "./lib/student-success-privacy-export.mjs";
 import {leadPoolPrivacyRecords} from "./lib/lead-pool-privacy-export.mjs";
 import {contactIntelligencePrivacyRecords} from "./lib/contact-intelligence-privacy-export.mjs";
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
@@ -215,6 +216,19 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"contract_enrollment_link",await contractEnrollmentPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id)));
   appendPrivacyRecords(rows,"student_enrollment_status_history",enrollmentRecords.history);
   appendPrivacyRecords(rows,"enrollment_attribution",enrollmentRecords.attributions);
+  const success=await studentSuccessPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id));
+  appendPrivacyRecords(rows,"student_success_case",success.cases);
+  appendPrivacyRecords(rows,"student_success_case_status_history",success.history);
+  appendPrivacyRecords(rows,"student_success_goal",success.goals);
+  appendPrivacyRecords(rows,"student_success_task_link",success.links);
+  appendPrivacyRecords(rows,"student_success_checkin",success.checkins);
+  appendPrivacyRecords(rows,"student_success_health_assessment",success.assessments);
+  appendPrivacyRecords(rows,"student_success_risk_signal",success.risks);
+  appendPrivacyRecords(rows,"student_success_risk_status_history",success.riskHistory);
+  appendPrivacyRecords(rows,"student_success_intervention",success.interventions);
+  appendPrivacyRecords(rows,"student_success_intervention_status_history",success.interventionHistory);
+  appendPrivacyRecords(rows,"student_success_outcomes",success.outcomes);
+  appendPrivacyRecords(rows,"success_crm_task",success.tasks);
   const applications=await applicationPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id));
   appendPrivacyRecords(rows,"student_application",applications.applications);
   appendPrivacyRecords(rows,"student_application_status_history",applications.history);

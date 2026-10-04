@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.21.0",
+  "version": "3.22.0",
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
@@ -13,6 +13,9 @@
     "esbuild@0.28.2": true
   },
   "scripts": {
+    "test:student-success:release:postgres": "node scripts/run-bounded.mjs --label success-release-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-student-success-release-postgres.mjs",
+    "test:student-success": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/student-success.test.mjs",
+    "test:student-success:postgres": "node scripts/run-bounded.mjs --label success-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-student-success-postgres.mjs",
     "test:lead-pool:postgres": "node scripts/test-lead-pool-postgres.mjs",
     "dev": "vinext dev --port 3200",
     "build": "node scripts/run-bounded.mjs --label build --timeout-seconds 240 --idle-seconds 90 -- npm run build:raw",
@@ -126,7 +129,11 @@
     "test:admission-milestones": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/admission-milestones.test.mjs",
     "test:admission-milestones:postgres": "node scripts/run-bounded.mjs --label milestone-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-admission-milestones-postgres.mjs",
     "test:channel-intelligence": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/channel-intelligence.test.mjs",
-    "test:channel-intelligence:postgres": "node scripts/run-bounded.mjs --label channel-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-channel-intelligence-postgres.mjs"
+    "test:channel-intelligence:postgres": "node scripts/run-bounded.mjs --label channel-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-channel-intelligence-postgres.mjs",
+    "test:student-success:operations": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/student-success-operations.test.mjs",
+    "test:student-success:operations:postgres": "node scripts/run-bounded.mjs --label success-operations-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-student-success-operations-postgres.mjs",
+    "test:student-success:outcomes": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/student-success-outcomes.test.mjs",
+    "test:student-success:outcomes:postgres": "node scripts/run-bounded.mjs --label success-outcomes-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-student-success-outcomes-postgres.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",

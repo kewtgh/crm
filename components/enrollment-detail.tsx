@@ -1,5 +1,6 @@
 "use client";
 import {WorkflowsSection} from "./workflows-section";
+import {EnrollmentSuccessSection} from "./student-success-workspace";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
@@ -52,7 +53,7 @@ export function EnrollmentDetail({record, onClose, onEdit, onRefresh}: {record: 
         {(["enrolled_at", "completed_at", "withdrawn_at"] as const).map(key => <div key={key}><dt>{t(`enrollments.${key}`)}</dt><dd>{record[key] ? formatDate(record[key], {includeTime:true}) : "—"}</dd></div>)}
         <div><dt>{t("enrollments.withdrawalReason")}</dt><dd>{record.withdrawal_reason || "—"}</dd></div>
         <div><dt>{t("enrollments.updatedAt")}</dt><dd>{formatDate(record.updated_at, {includeTime:true})}</dd></div>
-      </dl><EnrollmentApplicationsSection enrollmentId={record.id} canEdit={record.can_edit}/><ContractEnrollmentSection enrollmentId={record.id}/><EnrollmentFinanceCard enrollmentId={record.id}/>{record.can_edit && <button className="primary-button" type="button" onClick={onEdit}>{t("enrollments.edit")}</button>}</section>}
+      </dl><EnrollmentSuccessSection record={record}/><EnrollmentApplicationsSection enrollmentId={record.id} canEdit={record.can_edit}/><ContractEnrollmentSection enrollmentId={record.id}/><EnrollmentFinanceCard enrollmentId={record.id}/>{record.can_edit && <button className="primary-button" type="button" onClick={onEdit}>{t("enrollments.edit")}</button>}</section>}
       {tab === "admissions" && <><AdmissionsTimeline enrollmentId={record.id} refreshToken={timelineRefresh}/><AdmissionMilestonesSection enrollmentId={record.id} studentId={record.student_id} ownerId={record.owner_id} canEdit={record.can_edit} onLock={setLocked} onChanged={()=>setTimelineRefresh(value=>value+1)}/></>}
       {tab === "workflow" && <WorkflowsSection enrollmentId={record.id} studentId={record.student_id} cohortId={record.cohort_id} ownerId={record.owner_id} canEdit={record.can_edit} onLock={setLocked}/>}
       {(tab === "attribution" || tab === "history") && <>

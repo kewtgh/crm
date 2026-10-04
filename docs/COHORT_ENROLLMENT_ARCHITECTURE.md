@@ -155,3 +155,8 @@ v3.20 Phase 1 now supplies Enrollment 1:N formal Applications and application-li
 preparation tasks. See [Admissions architecture](ADMISSIONS_ARCHITECTURE.md) for
 the canonical Application, separate Decision/history and legacy journey boundaries.
 v3.20 Phase 2 adds Enrollment-level Admission Milestones with optional Application context and a source-preserving Admissions Timeline. Application and Finance facts are not duplicated as milestones. v3.20 Phase 3 adds explicitly started, versioned Admissions Workflows that generate real Tasks/Milestones and evaluate canonical Checkpoints; workflows do not duplicate domain facts. See the Admissions architecture for version, access and sequential execution rules.
+## Student Success reference
+
+Student Success is Enrollment scoped and remains independent of Admissions, academic
+records and Finance. See [Student Success architecture](STUDENT_SUCCESS_ARCHITECTURE.md)
+for Cases, Goals, existing CRM Task links and privacy boundaries.

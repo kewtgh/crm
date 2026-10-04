@@ -1,3 +1,6 @@
+import {zhSuccessOutcomes} from "./student-success-outcomes";
+import {zhSuccessOperations} from "./student-success-operations";
+import {zhSuccess} from "./student-success";
 import {zhCNChannelAnalytics} from "./channel-analytics";
 import {zhCommissions} from "./commissions";
 import {zhLeadPool} from "./lead-pool";
@@ -33,6 +36,7 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...zhSuccessOutcomes,...zhSuccess,...zhSuccessOperations,
   ...zhCNChannelAnalytics,
   ...zhCommissions,
   ...zhLeadPool,...zhCNChannelCommercial,

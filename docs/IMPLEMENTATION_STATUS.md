@@ -1,4 +1,21 @@
-# Implementation status — v3.21.0 release candidate
+# Implementation status — v3.22.0 release candidate
+
+## v3.22 Student Success
+
+**V322_RELEASE_READY — COMMIT READY**. All bounded release gates pass.
+
+Enrollment-scoped Cases, Goals and real CRM Task relationships support independent delivery
+operations. Actual Check-ins, append-only human Health Assessments, confirmed Risk Signals,
+independent Interventions and explicit Outcomes retain separate canonical meanings. Read-only
+Analytics uses visible Cases, current snapshots and business-date period activity with
+Product/Cohort comparison and the explicit Goal attainment denominator. No automatic Health,
+Risk or Outcome inference, whole-student Success Rate or numeric scoring is introduced.
+
+Bounded Phase 4 release validation and candidate reconciliation are recorded in
+[release closure](V322_RELEASE_CLOSURE.md). See [release notes](RELEASE_V3.22.0.md) and
+[Student Success architecture](STUDENT_SUCCESS_ARCHITECTURE.md). Current release metadata
+is 3.22.0; historical phase-development versions below remain unchanged. The candidate is
+unstaged and uncommitted; no push, deploy or Production access.
 
 ## v3.21 Channel Commercial Management
 
@@ -15,6 +32,38 @@ validated Phase 1–4 candidate; no push, deploy or Production access. Final gat
 [Channel architecture](CHANNEL_COMMERCIAL_ARCHITECTURE.md).
 
 Historical phase development evidence follows.
+
+## v3.22 Phase 1 — Student Success development
+
+Explicit Enrollment-scoped Success Cases, human-confirmed delivery status, outcome Goals,
+existing CRM Task links and Case status history extend delivery operations. Academic
+Records, Progression, Admissions, Finance and Channel Commission remain canonical and
+independent. See [Student Success architecture](STUDENT_SUCCESS_ARCHITECTURE.md) and
+[Phase 1 verification](V322_PHASE1_VERIFICATION.md). Current product version remains
+3.21.0. Phase 1 remains the foundation for ongoing support.
+
+## v3.22 Phase 2 — Student Success operations development
+
+Occurred Check-ins, explicit append-only Health Assessments, manually confirmed Risk Signals
+and independent Interventions extend Cases. Risk and Intervention lifecycle histories and
+same-Case real CRM Task relationships preserve canonical facts. Health, Risk and support
+states never synchronize implicitly. Permission-filtered projections, privacy cleanup and
+five contextual quality rules extend the existing boundaries. See
+[Phase 2 verification](V322_PHASE2_VERIFICATION.md) and
+[Student Success architecture](STUDENT_SUCCESS_ARCHITECTURE.md). Version remains 3.21.0;
+Outcomes, Success Analytics, automated workflows and AI remain deferred.
+
+## v3.22 Phase 3 — Outcomes and Student Success Analytics development
+
+Explicit retrospective Outcomes extend Enrollment-scoped Cases, optionally linked to a
+same-Case Goal. Revision, retry, authorized voiding, privacy cleanup and minimal audit
+preserve personal facts without duplicating academic or admissions records. Read-only
+Analytics separates current snapshot and actual business-date activity, retains UNKNOWN
+Health, and defines Goal attainment as Achieved / (Achieved + Not achieved). Hidden Cases
+never contribute counts. No automatic Outcome, whole-student Success Rate or numeric score.
+See [Phase 3 verification](V322_PHASE3_VERIFICATION.md) and
+[Student Success architecture](STUDENT_SUCCESS_ARCHITECTURE.md). Version remains 3.21.0;
+v3.22 release promotion remains a separate Phase 4 task.
 
 ## v3.21 Phase 3 development checkpoint
 
