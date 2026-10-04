@@ -1,10 +1,19 @@
 # Lumina CRM
 
-Current release candidate: **v3.19.0**
+Current release candidate: **v3.20.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.20.0 adds formal Enrollment 1:N Applications, independent status/decision,
+Application-linked preparation Tasks, Admission Milestones and versioned sequential
+Admissions Workflows. Tasks, Milestones and finite domain checkpoints remain canonical;
+the timeline labels their sources. Existing Automation, Privacy and Data Quality support
+these operations. No duplicate Finance system or Production workflow seed was created.
+See [v3.20 release notes](docs/RELEASE_V3.20.0.md),
+[release closure](docs/V320_RELEASE_CLOSURE.md) and
+[Admissions architecture](docs/ADMISSIONS_ARCHITECTURE.md).
 
 Version 3.19.0 connects Product → Cohort → Enrollment with attribution and lifecycle history,
 commercial links, derived Finance, deterministic imports, quality findings, Task/Notification

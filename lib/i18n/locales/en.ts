@@ -1,3 +1,6 @@
+import {enWorkflows} from "./workflows";
+import {enMilestones} from "./admission-milestones";
+import {enApplications} from "./applications";
 import {enCommercialLinks} from "./commercial-links";
 import {enOperationalReadiness} from "./operational-readiness";
 import type { Messages } from "../types";
@@ -26,6 +29,8 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...enWorkflows,
+  ...enMilestones,
   ...enOperationalReadiness,
   ...enCohorts,
   ...enEnrollments,
@@ -463,4 +468,5 @@ export const en: Messages = {
   ...enAudit20261002,
   ...enUX20261002,
   ...enEducationBusiness,
+  ...enApplications,
 };

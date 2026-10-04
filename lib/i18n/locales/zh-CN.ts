@@ -1,3 +1,6 @@
+import {zhWorkflows} from "./workflows";
+import {zhMilestones} from "./admission-milestones";
+import {zhApplications} from "./applications";
 import {zhCommercialLinks} from "./commercial-links";
 import {zhOperationalReadiness} from "./operational-readiness";
 import type { Messages } from "../types";
@@ -26,6 +29,8 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...zhWorkflows,
+  ...zhMilestones,
   ...zhOperationalReadiness,
   ...zhCohorts,
   ...zhEnrollments,
@@ -463,4 +468,5 @@ export const zhCN: Messages = {
   ...zhAudit20261002,
   ...zhUX20261002,
   ...zhEducationBusiness,
+  ...zhApplications,
 };

@@ -1,4 +1,5 @@
 "use client";
+import {ApplicationSelector} from "./application-selector";
 
 import Link from "next/link";
 import {ProductCohortSelector} from "./product-cohort-selector";
@@ -32,6 +33,7 @@ function referenceHref(type:string,id:string){
   if(type==="CONTACT")return `/people/${id}`;
   if(type==="ORGANIZATION")return `/schools/${id}`;
   if(type==="HOUSEHOLD")return `/households?focus=${id}`;
+  if(type==="APPLICATION")return `/applications?focus=${id}`;
   if(type==="STUDENT")return `/students?focus=${id}`;
   return `/education-business?subject=ORGANIZATION&subjectId=${id}`;
 }
@@ -93,7 +95,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
   const [draft,setDraft]=useState<Record<string,unknown>>(()=>record?Object.fromEntries([...config.fields.map(field=>field.key),...(resource==="organizations"||resource==="needs"?["id"]:[])].map(key=>[key,record[key]])):initialDraft(resource,context));
   const [pending,setPending]=useState(false),[uncertain,setUncertain]=useState(false),[error,setError]=useState(""),[invalidField,setInvalidField]=useState("");
   const attempt=useRef<SaveAttempt|null>(null),busy=useRef(false);
-  const change=(key:string,value:unknown)=>{setDraft(previous=>({...previous,[key]:value}));setInvalidField("");setError("");};
+  const change=(key:string,value:unknown)=>{setDraft(previous=>({...previous,[key]:value,...(key==="student_id"?{application_id:null}:{})}));setInvalidField("");setError("");};
   const save=async(event?:React.FormEvent)=>{
     event?.preventDefault();if(busy.current)return;
     const payload=attempt.current??{resource,id:record?.id??(resource==="organizations"||resource==="needs"?String(draft.id??""):token),expectedRevision:record?.revision??null,data:draft};
@@ -116,6 +118,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
     <form onSubmit={event=>void save(event)} className="page-stack"><fieldset className="follow-up-fields" disabled={pending||uncertain}><div className="form-grid two-column">{fields.map(field=>{
       const value=draft[field.key];const locked=!!record&&["id",subjectKey[resource],...(resource==="referrals"?["household_id"]:resource==="participations"?["event_id"]:[])].includes(field.key)||!!context&&((context.type===config.subject&&field.key===subjectKey[resource])||resource==="referrals"&&field.key===(context.type==="HOUSEHOLD"?"household_id":"source_organization_id"));
       const fieldLabel=field.key==="id"?t(resource==="organizations"?"business.field.organization_id":"business.field.household_id"):t(`business.field.${field.key}`);
+      if(field.key==="application_id")return <ApplicationSelector key={`${field.key}:${draft.student_id}`} studentId={String(draft.student_id??"")} value={String(value??"")} initialLabel={labels["APPLICATION:"+value]} disabled={pending||uncertain} onChange={value=>change(field.key,value||null)}/>;
       if(field.key==="cohort_id")return <ProductCohortSelector key={field.key} usage="EVENT" productId={String(draft.product_id??"")} value={String(value??"")} disabled={pending||uncertain} onChange={value=>change(field.key,value||null)}/>;
       if(field.key==="campaign_id")return <EnrollmentRelation key={field.key} type="CAMPAIGN" label={fieldLabel} value={String(value??"")} initialLabel={labels['CAMPAIGN:'+value]} disabled={pending||uncertain} onChange={value=>change(field.key,value||null)}/>;
       if(field.kind==="relation")return <BusinessRelation key={field.key} field={field} label={fieldLabel} value={String(value??"")} initialLabel={labels[`${field.relation}:${value}`]} disabled={pending||uncertain||locked} onChange={value=>change(field.key,value||null)}/>;

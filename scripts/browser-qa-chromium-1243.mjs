@@ -71,6 +71,10 @@ const operationalPhase={name:"operational-readiness",timeout:55,env:{QA_SCOPE:"o
 const commercialPhase={name:"commercial-links",timeout:55,env:{QA_SCOPE:"commercial-links"}};
 const enrollmentPhase={name:"enrollments",timeout:55,env:{QA_SCOPE:"enrollments"}};
 const cohortPhase={name:"product-cohorts",timeout:55,env:{QA_SCOPE:"product-cohorts"}};
+const workflowTemplatesPhase={name:"admissions-workflow-templates",timeout:55,env:{QA_SCOPE:"admissions-workflow-templates"}};
+const workflowInstancesPhase={name:"admissions-workflow-instances",timeout:55,env:{QA_SCOPE:"admissions-workflow-instances"}};
+const milestonePhase={name:"admission-milestones",timeout:55,env:{QA_SCOPE:"admission-milestones"}};
+const applicationPhase={name:"applications",timeout:55,env:{QA_SCOPE:"applications"}};
 const formPhase={name:"forms",timeout:55,env:{QA_SCOPE:"structured-inputs"}};
 const customerPhase={name:"customer-operations",timeout:55,env:{QA_SCOPE:"customer-operations"}};
 const uiPhase={name:"ui-system",timeout:55,env:{QA_SCOPE:"ui-system"}};
@@ -78,7 +82,7 @@ const uxPhase={name:"ux-refinements",timeout:55,env:{QA_SCOPE:"ux-refinements"}}
 const educationPhase={name:"education-business",timeout:55,env:{QA_SCOPE:"education-business"}};
 const purchasingPhase={name:"family-purchasing",timeout:55,env:{QA_SCOPE:"family-purchasing"}};
 const mergeOnly = process.env.QA_MERGE_ONLY === "1";
-const selectedPhases = mergeOnly ? [] : requestedPhase === "operational-readiness" ? [operationalPhase] : requestedPhase === "commercial-links" ? [commercialPhase] : requestedPhase === "enrollments" ? [enrollmentPhase] : requestedPhase === "product-cohorts" ? [cohortPhase] : requestedPhase === "family-purchasing" ? [purchasingPhase] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
+const selectedPhases = mergeOnly ? [] : requestedPhase === "admissions-workflow-templates" ? [workflowTemplatesPhase] : requestedPhase === "admissions-workflow-instances" ? [workflowInstancesPhase] : requestedPhase === "admission-milestones" ? [milestonePhase] : requestedPhase === "applications" ? [applicationPhase] : requestedPhase === "operational-readiness" ? [operationalPhase] : requestedPhase === "commercial-links" ? [commercialPhase] : requestedPhase === "enrollments" ? [enrollmentPhase] : requestedPhase === "product-cohorts" ? [cohortPhase] : requestedPhase === "family-purchasing" ? [purchasingPhase] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
 if (!mergeOnly && !selectedPhases.length) throw new Error(`Unknown QA_PHASE ${requestedPhase}`);
 for (const phase of selectedPhases) {
   const index = phases.indexOf(phase);
@@ -104,7 +108,7 @@ for (const phase of selectedPhases) {
   );
 }
 
-if(["forms","enrollments"].includes(requestedPhase))process.exit(0); // Do not merge component fixtures into release acceptance.
+if(["forms","enrollments","applications","admission-milestones"].includes(requestedPhase))process.exit(0); // Do not merge component fixtures into release acceptance.
 
 const completedReports = phases.flatMap((phase) => {
   const filename = path.join(rootOutput, "phases", phase.name, "report.json");

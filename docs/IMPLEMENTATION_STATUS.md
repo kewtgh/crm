@@ -1,6 +1,33 @@
-# Implementation status — v3.19.0 release candidate
+# Implementation status — v3.20.0 release candidate
 
-## v3.19.0 scope
+## v3.20.0 scope
+
+Formal Enrollment 1:N Applications keep lifecycle status independent of decisions;
+Application-linked Tasks preserve legacy generic checklist behavior. Enrollment-level
+Milestones optionally bind a consistent Application and preserve operational history.
+Versioned, human-configured sequential Workflows explicitly select Template + Version
+and context. Real Tasks/Milestones remain canonical; finite checkpoints evaluate domain
+facts. The timeline identifies APPLICATION, MILESTONE and WORKFLOW sources.
+
+Existing Automation, Data Quality and Privacy domains support Admissions. Workspace,
+owner/team, Enrollment and optional Application access remain enforced. Used template
+versions are immutable; missing Application context fails atomically. No duplicate
+Finance system, automatic Enrollment workflow start or Production workflow seed exists.
+Legacy admission_journeys remains unchanged compatibility data without automatic sync.
+
+See [v3.20 release notes](RELEASE_V3.20.0.md),
+[release closure](V320_RELEASE_CLOSURE.md) and [Admissions architecture](ADMISSIONS_ARCHITECTURE.md).
+Release verification passed on Node 26.10.0 / npm 12.2.0: clean npm ci, frozen
+migrations 091–097, 66 domain tests plus 2 metadata tests, eight bounded local PostgreSQL
+groups, typecheck, 67-file scoped lint, one production build and 22 affected Chromium
+1243 groups (zh-CN/en, 1440/375). Browser components use mocked business APIs;
+PostgreSQL separately verifies real RLS and transactions. Source is COMMIT READY.
+Local evidence remains Git-ignored under work/v320-release and the affected-browser path.
+No production access, push or deploy. Documents, Commission, Student Success, P&L,
+Management Intelligence, AI, complex BPMN, Cohort default workflows and Finance checkpoints
+remain deferred. Formal business template configuration requires business confirmation.
+
+## Previous v3.19.0 scope
 
 Phases 1–4 implement Product → Cohort → Enrollment, PRIMARY/ASSIST attribution, canonical
 operational status history, Opportunity/Event/Quote cohort context and historical Contract links.

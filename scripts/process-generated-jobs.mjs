@@ -3,6 +3,9 @@ import { boundedWorkerInteger } from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
 import {contractEnrollmentPrivacyRecords} from "./lib/contract-enrollment-privacy-export.mjs";
 import { enrollmentPrivacyRecords } from "./lib/enrollment-privacy-export.mjs";
+import { applicationPrivacyRecords } from "./lib/application-privacy-export.mjs";
+import {workflowPrivacyRecords} from "./lib/workflow-privacy-export.mjs";
+import { milestonePrivacyRecords } from "./lib/milestone-privacy-export.mjs";
 import { workerObjectStore } from "./lib/worker-object-store.mjs";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -186,7 +189,7 @@ async function privacyExport(job){
     students.length?requestAll(`/db/table/student_pathways?select=id,student_id,program_type,target_organization_id,target_region,target_major,intake_date,application_deadline,language_test,language_score,stage,next_action,updated_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=updated_at`):[],
     requestAll(`/db/table/education_family_referrals?select=id,source_organization_id,introduced_by_contact_id,referred_on,status,updated_at&introduced_by_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=updated_at`),
     requestAll(`/db/table/organization_business_profiles?select=id,primary_contact_id,updated_at&primary_contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=updated_at`),
-    students.length?requestAll(`/db/table/student_application_tasks?select=id,student_id,title,due_on,status,next_action,updated_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=updated_at`):[],
+    students.length?requestAll(`/db/table/student_application_tasks?select=id,student_id,application_id,title,due_on,status,next_action,updated_at&student_id=in.(${students.map(item=>item.id).join(",")})&workspace_id=eq.${job.workspace_id}&order=updated_at`):[],
   ]);
   const rows=[["Resource","Record ID","Field","Value"]];
   appendPrivacyRecords(rows,"privacy_request",privacyRequests);
@@ -202,6 +205,16 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"contract_enrollment_link",await contractEnrollmentPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id)));
   appendPrivacyRecords(rows,"student_enrollment_status_history",enrollmentRecords.history);
   appendPrivacyRecords(rows,"enrollment_attribution",enrollmentRecords.attributions);
+  const applications=await applicationPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id));
+  appendPrivacyRecords(rows,"student_application",applications.applications);
+  appendPrivacyRecords(rows,"student_application_status_history",applications.history);
+  const milestones=await milestonePrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id));
+  appendPrivacyRecords(rows,"admission_milestone",milestones.milestones);
+  appendPrivacyRecords(rows,"admission_milestone_status_history",milestones.history);
+  const workflows=await workflowPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id));
+  appendPrivacyRecords(rows,"workflow_instance",workflows.instances);
+  appendPrivacyRecords(rows,"workflow_step_instance",workflows.steps);
+  appendPrivacyRecords(rows,"workflow_template_reference",workflows.templates);
   appendPrivacyRecords(rows,"academic_record",academicRecords);
   appendPrivacyRecords(rows,"student_pathway",pathways);
   appendPrivacyRecords(rows,"application_task",applicationTasks);

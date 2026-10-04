@@ -71,6 +71,7 @@ const messages:Record<string,[string,string]>={
   "modules.schools.description":["管理招生入口、合作机构、目标大学及关键联系人。","Manage school channels, partner organizations, destination universities and key contacts."],
 };
 const fields:Record<string,[string,string]>={
+  application_id:["正式申请","Formal application"],
   organization_type:["组织分类","Organization classification"],roles:["业务角色（可多选）","Business roles"],partnership_stage:["合作阶段","Partnership stage"],primary_contact_id:["主要对接人","Primary contact"],focus_regions:["合作地区","Focus regions"],agreement_expires_on:["合作到期日","Partnership expiry"],next_action:["下一步行动","Next action"],
   services:["意向项目","Intended services"],target_regions:["意向地区","Target regions"],budget_min:["预算下限","Minimum budget"],budget_max:["预算上限","Maximum budget"],budget_currency:["预算币种","Budget currency"],target_intake:["意向入学日期","Intended intake"],decision_stage:["家庭决策阶段","Family decision stage"],
   student_id:["学生","Student"],program_type:["路径类型","Pathway type"],target_organization_id:["目标大学","Destination university"],target_region:["目标地区","Destination region"],target_major:["目标专业 / 方向","Major / study direction"],intake_date:["计划入学日期","Planned intake"],application_deadline:["申请截止日","Application deadline"],language_test:["语言考试","Language test"],language_score:["实际语言成绩","Actual language score"],stage:["升学准备阶段","Pathway stage"],

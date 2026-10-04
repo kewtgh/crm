@@ -29,6 +29,9 @@ export async function listEducationBusiness(resource:BusinessResource,options:{p
     if(type==="STUDENT"){
       const rows=await adapter.json<Array<{id:string;contacts:{name_zh:string;name_en:string}|null}>>(`/db/table/students?select=id,contacts:contacts!students_person_id_fkey(name_zh,name_en)&id=in.(${[...ids].join(",")})`);
       for(const row of rows)if(row.contacts)labels[`${type}:${row.id}`]=[row.contacts.name_zh,row.contacts.name_en].filter(Boolean).join(" / ");
+    }else if(type==="APPLICATION"){
+      const rows=await adapter.json<Array<{id:string;target_name_zh:string|null;target_name_en:string|null;external_application_id:string|null}>>(`/db/table/student_application_records?select=id,target_name_zh,target_name_en,external_application_id&id=in.(${[...ids].join(",")})`);
+      for(const row of rows)labels[`${type}:${row.id}`]=[row.target_name_zh,row.target_name_en,row.external_application_id].filter(Boolean).join(" / ")||row.id;
     }else{
       const rows=await adapter.json<Array<{id:string;name?:string;name_zh?:string;name_en?:string}>>(`/db/table/${lookupTables[type]}?select=${type==="EVENT"?"id,name":"id,name_zh,name_en"}&id=in.(${[...ids].join(",")})`);
       for(const row of rows)labels[`${type}:${row.id}`]=row.name??[row.name_zh,row.name_en].filter(Boolean).join(" / ");

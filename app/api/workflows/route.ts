@@ -1,0 +1,12 @@
+import {NextResponse} from "next/server";
+import {z} from "zod";
+import {ApiError,apiRoute,requireApiCapability} from "@/lib/api";
+import {mutationIsTrusted} from "@/lib/request-security";
+import {workflowStartSchema,workflowActionSchema} from "@/lib/workflow-input";
+import {listWorkflows,getWorkflow,instantiateWorkflow,operateWorkflow} from "@/lib/workflow-instance-repository";
+import {getEnrollment} from "@/lib/enrollment-repository";
+import {getApplication} from "@/lib/application-repository";
+import {workflowApiError} from "@/lib/workflow-api-error";
+async function get(request:Request){await requireApiCapability("education.view");const params=new URL(request.url).searchParams;try{if(params.has("id")){const id=z.uuid().safeParse(params.get("id"));if(!id.success)throw new ApiError("WORKFLOW_INPUT_INVALID",400);const item=await getWorkflow(id.data);if(!item)throw new ApiError("WORKFLOW_NOT_FOUND",404);return NextResponse.json({item});}const parsed=z.object({enrollmentId:z.uuid(),applicationId:z.uuid().optional(),page:z.coerce.number().int().min(1).max(100000).default(1)}).safeParse(Object.fromEntries(params));if(!parsed.success)throw new ApiError("WORKFLOW_INPUT_INVALID",400);if(!await getEnrollment(parsed.data.enrollmentId))throw new ApiError("WORKFLOW_FORBIDDEN",403);if(parsed.data.applicationId){const app=await getApplication(parsed.data.applicationId);if(!app||app.enrollment_id!==parsed.data.enrollmentId)throw new ApiError("WORKFLOW_APPLICATION_MISMATCH",403);}return NextResponse.json(await listWorkflows(parsed.data));}catch(error){return workflowApiError(error);}}
+async function save(request:Request){if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);await requireApiCapability("education.manage");const body=await request.json().catch(()=>({}));try{if(body.operation){const parsed=workflowActionSchema.safeParse(body);if(!parsed.success)throw new ApiError("WORKFLOW_INPUT_INVALID",400);return NextResponse.json({item:await operateWorkflow(parsed.data)});}const parsed=workflowStartSchema.safeParse(body);if(!parsed.success||request.method==="PATCH")throw new ApiError("WORKFLOW_INPUT_INVALID",400);return NextResponse.json({item:await instantiateWorkflow(parsed.data)});}catch(error){return workflowApiError(error);}}
+export const GET=apiRoute(get,"WORKFLOW_LOAD_FAILED");export const POST=apiRoute(save,"WORKFLOW_SAVE_FAILED");export const PATCH=apiRoute(save,"WORKFLOW_SAVE_FAILED");

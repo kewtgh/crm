@@ -113,7 +113,7 @@ const navigation: NavigationGroup[] = [
 function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
   if(pathname==="/automation")pathname=groups.flatMap(group=>group.items).find(item=>item.labelKey==="nav.assistance")?.href??pathname;
   if(pathname==="/sales/allocation")pathname="/sales/performance";
-  if(pathname==="/students"||pathname==="/progression"||pathname==="/enrollments")pathname="/households";
+  if(pathname==="/students"||pathname==="/progression"||pathname==="/enrollments"||pathname==="/applications"||pathname==="/workflow-templates")pathname="/households";
   if(pathname==="/guardian-portal")pathname="/messages";
   const hrefs = groups.flatMap((group) => group.items.flatMap((item) => [
     ...(item.href ? [item.href] : []),
@@ -130,6 +130,8 @@ function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
 const routeCapabilities: Partial<Record<string, Capability>> = {
   "/students": "education.view",
   "/enrollments": "education.view",
+  "/applications": "education.view",
+  "/workflow-templates": "education.view",
   "/households": "education.view",
   "/progression": "progression.manage",
   "/leads": "leads.view",

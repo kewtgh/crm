@@ -3,3 +3,10 @@ db/migrations/202610030091_product_cohorts.sql -text whitespace=blank-at-eol,bla
 db/migrations/202610030092_student_enrollments.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 db/migrations/202610030093_commercial_cohort_links.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 db/migrations/202610040094_operational_readiness.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Preserve the forward v3.20 Application migration after Phase 1 verification.
+db/migrations/202610040095_student_applications.sql -text
+# Preserve the forward v3.20 Milestone migration after Phase 2 verification.
+db/migrations/202610040096_admission_milestones.sql -text
+
+# Preserve the forward v3.20 Workflow migration after Phase 3 verification.
+db/migrations/202610040097_admissions_workflows.sql -text

@@ -11,6 +11,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     assert.equal((await context.request.get(`${base}/api/enrollments`)).status(),401);
     assert.equal((await context.request.post(`${base}/api/enrollments`,{headers:{origin:base},data:{}})).status(),401);
     assert.equal((await context.request.patch(`${base}/api/enrollments`,{headers:{origin:base},data:{}})).status(),401);
+    await page.route("**/api/applications**",route=>route.fulfill({json:{items:[],total:0,page:1,pageSize:5}}));
     await page.route("**/api/search/related**",route=>{const type=new URL(route.request().url()).searchParams.get("types");return route.fulfill({json:{items:ids[type]?[{value:`${type}:${ids[type]}`,type,labelZh:names[type][0],labelEn:names[type][1]}]:[]}});});
     await page.route("**/api/education**",route=>route.fulfill({json:{item:{id:ids.STUDENT,personId:ids.CONTACT,nameZh:"张三",nameEn:"Zhang San",householdId:ids.HOUSEHOLD,householdZh:"张家",householdEn:"Zhang Family",studentNumber:"S001",grade:"Grade 11",academicYear:"2026",status:"ACTIVE",updatedAt:"2026-10-03T00:00:00Z",birthDate:"",currentClass:"",personalityMarkdown:"",learningExpectationsMarkdown:"",strengthsMarkdown:"",supportNeedsMarkdown:"",interests:[],preferredLearningStyle:"",academicRecords:[],guardians:[]}}}));
     await page.route("**/api/enrollments**",async route=>{

@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.19.0",
+  "version": "3.20.0",
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
@@ -114,7 +114,14 @@
     "test:commercial-links": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/commercial-links.test.mjs",
     "test:commercial-links:postgres": "node scripts/run-bounded.mjs --label commercial-links-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-commercial-links-postgres.mjs",
     "test:operational-readiness": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/operational-readiness.test.mjs",
-    "test:operational-readiness:postgres": "node scripts/run-bounded.mjs --label operational-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-operational-readiness-postgres.mjs"
+    "test:operational-readiness:postgres": "node scripts/run-bounded.mjs --label operational-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-operational-readiness-postgres.mjs",
+    "test:applications": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/applications.test.mjs",
+    "test:applications:postgres": "node scripts/run-bounded.mjs --label application-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-applications-postgres.mjs",
+    "test:admissions-workflows": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/admissions-workflows.test.mjs",
+    "test:admissions-workflows:postgres": "node scripts/run-bounded.mjs --label workflow-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-admissions-workflows-postgres.mjs",
+    "test:admissions-release:postgres": "node scripts/run-bounded.mjs --label admissions-release-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-admissions-release-postgres.mjs",
+    "test:admission-milestones": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/admission-milestones.test.mjs",
+    "test:admission-milestones:postgres": "node scripts/run-bounded.mjs --label milestone-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-admission-milestones-postgres.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",

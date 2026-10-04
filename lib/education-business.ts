@@ -6,7 +6,7 @@ export type BusinessContext = { type: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT"; 
 export type BusinessRecord = { id: string; revision: number; updated_at: string } & Record<string, unknown>;
 export type BusinessField = {
   key: string; kind: "text" | "date" | "number" | "enum" | "multi" | "relation";
-  required?: boolean; options?: string[]; relation?: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT" | "CONTACT" | "EVENT" | "PRODUCT" | "COHORT" | "CAMPAIGN";
+  required?: boolean; options?: string[]; relation?: "ORGANIZATION" | "HOUSEHOLD" | "STUDENT" | "CONTACT" | "EVENT" | "PRODUCT" | "COHORT" | "CAMPAIGN" | "APPLICATION";
   max?: number; min?: number; integer?: boolean; initial?: string;
 };
 const text = (key: string, required = false, max = 160): BusinessField => ({key,kind:"text",required,max});
@@ -46,7 +46,7 @@ export const businessConfig: Record<BusinessResource, {table:string; fields:Busi
     choices("status",["INTERESTED","REGISTERED","ATTENDED","CANCELLED"]),text("next_action",false,1000),
   ]},
   applications: {table:"student_application_tasks",subject:"STUDENT",fields:[
-    relation("student_id","STUDENT",true),text("title",true,200),date("due_on"),choices("status",["TODO","IN_PROGRESS","DONE","WAIVED"]),text("next_action",false,1000),
+    relation("student_id","STUDENT",true),relation("application_id","APPLICATION"),text("title",true,200),date("due_on"),choices("status",["TODO","IN_PROGRESS","DONE","WAIVED"]),text("next_action",false,1000),
   ]},
   referrals: {table:"education_family_referrals",fields:[
     relation("source_organization_id","ORGANIZATION",true),relation("household_id","HOUSEHOLD",true),relation("event_id","EVENT"),
@@ -64,7 +64,7 @@ export function businessFieldsSchema(resource: BusinessResource) {
       if(field.key==="budget_min"||field.key==="budget_max")schema=schema.multipleOf(0.01);
       shape[field.key]=field.required?schema:schema.nullable();
     }else if(field.kind==="date")shape[field.key]=field.required?z.iso.date():z.iso.date().nullable();
-    else if(field.kind==="relation")shape[field.key]=field.required?z.uuid():["campaign_id","product_id","cohort_id"].includes(field.key)?z.uuid().nullable().default(null):z.uuid().nullable();
+    else if(field.kind==="relation")shape[field.key]=field.required?z.uuid():field.key==="application_id"?z.uuid().nullable().optional():["campaign_id","product_id","cohort_id"].includes(field.key)?z.uuid().nullable().default(null):z.uuid().nullable();
     else shape[field.key]=z.string().trim().min(field.required?1:0).max(field.max!);
   }
   if(resource==="organizations"||resource==="needs")shape.id=z.uuid();

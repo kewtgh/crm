@@ -14,7 +14,8 @@ try {
     }) }),
   });
   const deadlineEvents = await workerJson("/db/rpc/process_cohort_deadline_events", {method:"POST",body:JSON.stringify({batch_size:100})});
-  await heartbeat.success({ processed: Number(result ?? 0), cohortDeadlineEvents:Number(deadlineEvents??0) });
+  const milestoneDueEvents=await workerJson("/db/rpc/process_milestone_due_events",{method:"POST",body:JSON.stringify({batch_size:100})});
+  await heartbeat.success({ milestoneDueEvents:Number(milestoneDueEvents??0),processed: Number(result ?? 0), cohortDeadlineEvents:Number(deadlineEvents??0) });
   process.stdout.write(`Processed ${Number(result ?? 0)} due reminders.\n`);
 } catch (error) {
   await heartbeat.failure(error).catch(() => undefined);

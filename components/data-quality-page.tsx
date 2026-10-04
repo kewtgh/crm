@@ -129,12 +129,15 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
   </div>;
 }
 
-function qualityRuleKey(ruleKey:string){if(ruleKey.startsWith("COHORT_")||ruleKey.startsWith("ENROLLMENT_"))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
+function qualityRuleKey(ruleKey:string){if(ruleKey.startsWith("COHORT_")||ruleKey.startsWith("ENROLLMENT_")||ruleKey.startsWith("APPLICATION_")||ruleKey.startsWith("MILESTONE_")||ruleKey.startsWith("VISA_RESULT_")||ruleKey.startsWith("WORKFLOW_"))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
 
 function qualityHref(item:QualityIssue){
   if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;
   if(item.entityType==="CONTACT")return `/people/${item.entityId}`;
   if(item.entityType==="ENROLLMENT")return `/enrollments?focus=${item.entityId}`;
+  if(item.entityType==="ADMISSION_MILESTONE"&&typeof item.details.enrollmentId==="string")return `/enrollments?focus=${item.details.enrollmentId}`;
+  if(item.entityType==="WORKFLOW"&&typeof item.details.enrollmentId==="string")return `/enrollments?focus=${item.details.enrollmentId}`;
+  if(item.entityType==="APPLICATION")return `/applications?focus=${item.entityId}`;
   if(item.entityType==="COHORT")return `/products?cohort=${item.entityId}`;
   if(item.entityType==="STUDENT")return `/students?focus=${item.entityId}`;
   if(item.entityType==="LEAD")return `/leads?focus=${item.entityId}`;

@@ -3,10 +3,12 @@ import { randomBytes,randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import pg from "pg";
 const container=`lumina-crm-education-it-${randomBytes(5).toString("hex")}`,deadline=Date.now()+50_000,password=randomBytes(32).toString("hex");
+const image=process.env.EDUCATION_TEST_POSTGRES_IMAGE||"postgres:18.6-trixie";
+assert.match(image,/^postgres:18\.\d+-(trixie|bookworm)$/);
 let client;
 function run(command,args,env=process.env){const result=spawnSync(command,args,{env,encoding:"utf8",timeout:Math.max(1,Math.min(15_000,deadline-Date.now())),windowsHide:true});if(result.error)throw result.error;if(result.status!==0)throw new Error(`${command} failed: ${result.stderr.trim()}`);return result.stdout.trim();}
 try{
-  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_education_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD","postgres:18.6-trixie"],{...process.env,POSTGRES_PASSWORD:password});
+  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_education_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD",image],{...process.env,POSTGRES_PASSWORD:password});
   const port=run("docker",["inspect","--format","{{(index (index .NetworkSettings.Ports \"5432/tcp\") 0).HostPort}}",container]);assert.match(port,/^\d+$/);
   const connectionString=`postgresql://postgres:${password}@127.0.0.1:${port}/lumina_education_test`;
   for(let attempt=0;attempt<20;attempt++){client=new pg.Client({connectionString,connectionTimeoutMillis:500,statement_timeout:5000});try{await client.connect();break;}catch(error){await client.end().catch(()=>{});if(attempt===19)throw error;await new Promise(resolve=>setTimeout(resolve,150));}}

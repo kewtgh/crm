@@ -358,7 +358,13 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="operational-readiness"){
+    if(env.QA_SCOPE==="admissions-workflow-templates"||env.QA_SCOPE==="admissions-workflow-instances"){
+      await require("./qa-admissions-workflows.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="admission-milestones"){
+      await require("./qa-admission-milestones.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="applications"){
+      await require("./qa-applications.cjs")({browser,base,output,report,observe});
+    }else if(env.QA_SCOPE==="operational-readiness"){
       await require("./qa-operational-readiness.cjs")({browser,base,output,report,observe});
     }else if(env.QA_SCOPE==="commercial-links"){
       await require("./qa-commercial-links.cjs")({browser,base,output,report,observe});

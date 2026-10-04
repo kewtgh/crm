@@ -1,4 +1,5 @@
 "use client";
+import {WorkflowsSection} from "./workflows-section";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
@@ -10,16 +11,19 @@ import { AccessibleDrawer, InlineMessage, StatusBadge } from "./ui";
 import {ContractEnrollmentSection} from "./contract-enrollment-section";
 import Link from "next/link";
 import {EnrollmentFinanceCard} from "./enrollment-finance-card";
+import {EnrollmentApplicationsSection} from "./enrollment-applications-section";
+import {AdmissionMilestonesSection,AdmissionsTimeline} from "./admission-milestones-section";
 import { DetailTabs } from "./detail-tabs";
 import { EnrollmentRelation, type EnrollmentRelationType } from "./enrollment-relation";
 
 export function EnrollmentDetail({record, onClose, onEdit, onRefresh}: {record: EnrollmentRecord; onClose: () => void; onEdit: () => void; onRefresh: () => Promise<void>}) {
   const {t, locale} = useI18n(), {formatDate} = useUserPreferences();
+  const [timelineRefresh,setTimelineRefresh]=useState(0);
   const [tab, setTab] = useState("overview"), [page, setPage] = useState(1), [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [history, setHistory] = useState<EnrollmentHistory[]>([]), [sources, setSources] = useState<EnrollmentAttribution[]>([]);
   const [adding, setAdding] = useState<"PRIMARY" | "ASSIST" | null>(null), [locked, setLocked] = useState(false), [notice, setNotice] = useState("");
   const load = useCallback(async (signal?: AbortSignal) => {
-    if (tab === "overview") return;
+    if (tab === "overview" || tab === "admissions" || tab === "workflow") return;
     setLoading(true); setError("");
     try {
       if (tab === "history") {const result = await apiFetch<{items: EnrollmentHistory[]}>(`/api/enrollments?resource=history&id=${record.id}&page=${page}`, {signal}); if (!signal?.aborted) setHistory(result.items);}
@@ -34,7 +38,7 @@ export function EnrollmentDetail({record, onClose, onEdit, onRefresh}: {record: 
   };
   const label = (zh: string | null | undefined, en: string | null | undefined) => (locale === "en" ? en : zh) || zh || en || "—";
   return <AccessibleDrawer pending={locked} title={label(record.student_name_zh, record.student_name_en)} description={label(record.cohort_name_zh, record.cohort_name_en)} onClose={onClose}>
-    <DetailTabs label={t("enrollments.title")} active={tab} disabled={locked} onChange={value => {setTab(value); setPage(1); setAdding(null);}} items={[{key:"overview",label:"enrollments.overview"},{key:"attribution",label:"enrollments.attribution"},{key:"history",label:"enrollments.history"}]}>
+    <DetailTabs label={t("enrollments.title")} active={tab} disabled={locked} onChange={value => {setTab(value); setPage(1); setAdding(null);}} items={[{key:"overview",label:"enrollments.overview"},{key:"attribution",label:"enrollments.attribution"},{key:"admissions",label:"milestones.timeline"},{key:"workflow",label:"workflow.workflow"},{key:"history",label:"enrollments.history"}]}>
       {notice && <InlineMessage type="success">{notice}</InlineMessage>}
       {tab === "overview" && <section className="detail-section"><dl className="enrollment-summary">
         <div><dt>{t("enrollments.student")}</dt><dd>{label(record.student_name_zh, record.student_name_en)}</dd></div>
@@ -48,8 +52,10 @@ export function EnrollmentDetail({record, onClose, onEdit, onRefresh}: {record: 
         {(["enrolled_at", "completed_at", "withdrawn_at"] as const).map(key => <div key={key}><dt>{t(`enrollments.${key}`)}</dt><dd>{record[key] ? formatDate(record[key], {includeTime:true}) : "—"}</dd></div>)}
         <div><dt>{t("enrollments.withdrawalReason")}</dt><dd>{record.withdrawal_reason || "—"}</dd></div>
         <div><dt>{t("enrollments.updatedAt")}</dt><dd>{formatDate(record.updated_at, {includeTime:true})}</dd></div>
-      </dl><ContractEnrollmentSection enrollmentId={record.id}/><EnrollmentFinanceCard enrollmentId={record.id}/>{record.can_edit && <button className="primary-button" type="button" onClick={onEdit}>{t("enrollments.edit")}</button>}</section>}
-      {tab !== "overview" && <>
+      </dl><EnrollmentApplicationsSection enrollmentId={record.id} canEdit={record.can_edit}/><ContractEnrollmentSection enrollmentId={record.id}/><EnrollmentFinanceCard enrollmentId={record.id}/>{record.can_edit && <button className="primary-button" type="button" onClick={onEdit}>{t("enrollments.edit")}</button>}</section>}
+      {tab === "admissions" && <><AdmissionsTimeline enrollmentId={record.id} refreshToken={timelineRefresh}/><AdmissionMilestonesSection enrollmentId={record.id} studentId={record.student_id} ownerId={record.owner_id} canEdit={record.can_edit} onLock={setLocked} onChanged={()=>setTimelineRefresh(value=>value+1)}/></>}
+      {tab === "workflow" && <WorkflowsSection enrollmentId={record.id} studentId={record.student_id} cohortId={record.cohort_id} ownerId={record.owner_id} canEdit={record.can_edit} onLock={setLocked}/>}
+      {(tab === "attribution" || tab === "history") && <>
         {error && <InlineMessage type="error">{error}<button className="secondary-button" type="button" onClick={() => void load().catch(() => {})}>{t("common.retry")}</button></InlineMessage>}
         {loading && <p role="status">{t("common.loading")}</p>}
         {tab === "attribution" && <section className="detail-section">

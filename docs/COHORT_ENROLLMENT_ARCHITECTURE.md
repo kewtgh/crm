@@ -27,8 +27,9 @@ cancel and recreate a cohort assigned to the wrong product. `CANCELLED` replaces
 normal deletion, and product references restrict physical product removal.
 
 Enrollment (Student × Cohort) is implemented by forward-only migration 092.
-Cohort exposes `(workspace_id,id)` for those references. No Application,
-milestone, commission or Student Success entities are introduced here.
+Cohort exposes `(workspace_id,id)` for those references. v3.19 introduced no
+Application, milestone, commission or Student Success entities; formal
+Applications are now defined separately by v3.20 migration 095.
 `admission_journeys` remains compatible and is not removed.
 `student_application_tasks` retains its existing student preparation-checklist meaning.
 Historical names or free text never automatically infer cohorts or enrollments.
@@ -149,3 +150,8 @@ with one event per cohort/deadline/day-distance. No default reminder thresholds 
 Future direction: Product → Cohort → Enrollment → Application → Milestones,
 connected to existing Contract/Finance and Student Success. Event/Referral attribution
 will reference Enrollment separately; neither object becomes Enrollment itself.
+
+v3.20 Phase 1 now supplies Enrollment 1:N formal Applications and application-linked
+preparation tasks. See [Admissions architecture](ADMISSIONS_ARCHITECTURE.md) for
+the canonical Application, separate Decision/history and legacy journey boundaries.
+v3.20 Phase 2 adds Enrollment-level Admission Milestones with optional Application context and a source-preserving Admissions Timeline. Application and Finance facts are not duplicated as milestones. v3.20 Phase 3 adds explicitly started, versioned Admissions Workflows that generate real Tasks/Milestones and evaluate canonical Checkpoints; workflows do not duplicate domain facts. See the Admissions architecture for version, access and sequential execution rules.
