@@ -289,3 +289,5 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
   .import-rows .import-dry-run > div { min-width: 0; overflow-wrap: anywhere; }
   .import-rows .import-dry-run .status-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 }
+.commission-workspace .detail-section, .commission-workspace .detail-record-list { min-width:0; overflow-wrap:anywhere; }
+.channel-analytics,.channel-analytics .surface,.channel-account-grid,.channel-account-grid .detail-section{min-width:0;overflow-wrap:anywhere}.channel-account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.channel-analytics .page-actions{flex-wrap:wrap}

@@ -1,5 +1,6 @@
 "use client";
 
+import {OrganizationCommercialPanel} from "./organization-commercial-panel";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
@@ -44,7 +45,7 @@ export function CustomerOperationsPanel({subject,id,extra,history}:{subject:Cust
   const name=(item:{name_zh?:string;name_en?:string;title_zh?:string;title_en?:string;contract_number?:string;id:string})=>item.contract_number||(locale==="en"?item.name_en||item.title_en:item.name_zh||item.title_zh)||item.name_zh||item.name_en||item.id;
   if(!data||data.id!==id||data.subject!==subject)return <section className="surface">{error?<><InlineMessage type="error">{error}</InlineMessage><button className="secondary-button" onClick={()=>void load()}>{t("common.retry")}</button></>:<p role="status">{t("common.loading")}</p>}</section>;
   const progress=followUpProgress(data.plan,data.entries,data.level,new Date().toISOString().slice(0,10),data.completed);
-  const tabs=customerDetailTabs(subject,!!extra,!!history);
+  const tabs=customerDetailTabs(subject,!!extra,!!history,canViewEducation&&(subject==="ORGANIZATION"||subject==="CONTACT"&&!!data.profile.organization_id));
   const displayName=(locale==="en"?data.nameEn:data.nameZh)||data.nameZh||data.nameEn;
   const profileKeys=["city","curriculum","website","email","phone","title","preferred_language","next_follow_up_at"].filter(key=>data.profile[key]);
   return <section className="surface customer-operations-panel">
@@ -73,6 +74,7 @@ export function CustomerOperationsPanel({subject,id,extra,history}:{subject:Cust
       {subject!=="ORGANIZATION"&&canManage&&canViewContracts&&<form onSubmit={event=>void save(event,"contract")}><fieldset className="follow-up-fields" disabled={pending}><SearchableSelect label={t("customerOps.linkContract")} required value={contract} options={options} onChange={setContract} onSearch={searchContracts}/><button className="secondary-button" disabled={pending||!contract}>{t("common.save")}</button></fieldset></form>}
       </section><div className="detail-section-grid"><section className="detail-section"><h3>{t("nav.products")}</h3>{data.products.map(item=><p key={item.id}><Link href="/products">{name(item)}</Link></p>)}{!data.products.length&&<p className="detail-empty">{t("detail.noBusiness")}</p>}</section><section className="detail-section"><h3>{t("nav.opportunities")}</h3>{data.opportunities.map(item=><p key={item.id}><Link href={`/opportunities?focus=${item.id}`}>{name(item)}</Link> · {t(`sales.stage.${item.stage?.toLowerCase()}`)}</p>)}{!data.opportunities.length&&<p className="detail-empty">{t(subject==="CONTACT"?"audit.contactBusinessScope":"detail.noBusiness")}</p>}</section></div>{data.limited&&<InlineMessage type="warning">{t("customerOps.limited")}</InlineMessage>}
     </div>}
+    {tab==="commercial"&&<OrganizationCommercialPanel organizationId={subject==="ORGANIZATION"?id:String(data.profile.organization_id)} contactId={subject==="CONTACT"?id:undefined}/>}
     {tab==="people"&&<div className="page-stack"><section className="detail-section"><h3>{t(subject==="ORGANIZATION"?"detail.organizationContacts":"detail.familyMembers")}</h3><div className="detail-record-list">{data.contacts.map(item=><article key={item.id}><div><Link href={`/people/${item.id}`}>{name(item)}</Link><small>{subject==="HOUSEHOLD"&&item.member_role?`${t(`education.memberRole.${item.member_role.toLowerCase()}`)} · `:""}{t("crm.owner")}: {item.owner_name||"—"}</small>{item.next_follow_up_at&&<small>{t("customerOps.field.next_follow_up_at")}: {formatDate(item.next_follow_up_at,{includeTime:true})}</small>}</div><span>{t(`contact.communication.level${item.communication_level??1}`)}</span></article>)}</div></section>{subject==="HOUSEHOLD"&&<section className="detail-section"><h3>{t("nav.students")}</h3><div className="detail-record-list">{data.students.map(item=><article key={item.id}><Link href={`/households?tab=students&focus=${item.id}`}>{name(item)}</Link></article>)}</div></section>}{!data.contacts.length&&(subject!=="HOUSEHOLD"||!data.students.length)&&<p className="detail-empty">{t(subject==="ORGANIZATION"?"detail.noContacts":"detail.noMembers")}</p>}{data.limited&&<InlineMessage type="warning">{t("customerOps.limited")}</InlineMessage>}</div>}
     {tab==="privacy"&&extra}
     {tab==="history"&&history}

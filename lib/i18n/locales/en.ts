@@ -1,3 +1,7 @@
+import {enChannelAnalytics} from "./channel-analytics";
+import {enCommissions} from "./commissions";
+import {enLeadPool} from "./lead-pool";
+import {enChannelCommercial} from "./channel-commercial";
 import {enWorkflows} from "./workflows";
 import {enMilestones} from "./admission-milestones";
 import {enApplications} from "./applications";
@@ -29,6 +33,10 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...enChannelAnalytics,
+  ...enCommissions,
+  ...enLeadPool,
+  ...enChannelCommercial,
   ...enWorkflows,
   ...enMilestones,
   ...enOperationalReadiness,

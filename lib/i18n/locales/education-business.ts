@@ -1,4 +1,6 @@
+import {enLeadPool,zhLeadPool} from "./lead-pool";
 import type { Messages } from "../types";
+import {enChannelCommercial,zhCNChannelCommercial} from "./channel-commercial";
 const messages:Record<string,[string,string]>={
   "business.field.campaign_id":["Campaign 招生活动","Campaign"],"business.field.product_id":["产品","Product"],"business.field.cohort_id":["产品批次","Cohort"],
   "buyer.label":["购买方（组织 / 家庭）","Buyer (organization / household)"],
@@ -92,5 +94,5 @@ const options:Record<string,[string,string]>={
 };
 for(const currency of ["CNY","USD","GBP","AUD","CAD","EUR","NZD","HKD","SGD","TWD"])options[currency]=[currency,currency];
 const all={...messages,...Object.fromEntries(Object.entries(fields).map(([key,value])=>[`business.field.${key}`,value])),...Object.fromEntries(Object.entries(options).map(([key,value])=>[`business.option.${key}`,value]))};
-export const zhEducationBusiness:Messages=Object.fromEntries(Object.entries(all).map(([key,value])=>[key,value[0]]));
-export const enEducationBusiness:Messages=Object.fromEntries(Object.entries(all).map(([key,value])=>[key,value[1]]));
+export const zhEducationBusiness:Messages={...zhLeadPool,...zhCNChannelCommercial,...Object.fromEntries(Object.entries(all).map(([key,value])=>[key,value[0]]))};
+export const enEducationBusiness:Messages={...enLeadPool,...enChannelCommercial,...Object.fromEntries(Object.entries(all).map(([key,value])=>[key,value[1]]))};

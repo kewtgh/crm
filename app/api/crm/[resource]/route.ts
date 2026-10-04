@@ -6,6 +6,7 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
+const commercialFilters=z.object({commercialTier:z.enum(["S","A","B","C","D","UNKNOWN"]).optional(),keyContact:z.enum(["KEY","MISSING"]).optional(),ownerId:z.uuid().optional(),potentialMin:z.coerce.number().int().min(10).max(100).optional()});
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
 const baseRecordSchema = z.object({
   operation: z.enum(["check", "create"]).default("create"),
@@ -23,7 +24,7 @@ const resourceSchemas={
     curriculum:z.string().trim().max(120).default(""),
     courseCategories:z.array(z.string().trim().min(1).max(100)).max(40).default([]),affiliationType:z.enum(["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"]).default("INDEPENDENT"),
     parentOrganizationId:z.uuid().nullable().optional(),organizationOverviewMarkdown:z.string().max(10000).default(""),structureOverviewMarkdown:z.string().max(10000).default(""),
-    website:z.url().or(z.literal("")).default(""),foundedYear:z.number().int().min(1000).max(9999).nullable().optional(),studentCount:z.number().int().nonnegative().nullable().optional(),facultyCount:z.number().int().nonnegative().nullable().optional(),campusCount:z.number().int().nonnegative().nullable().optional(),
+    address:z.string().trim().max(1000).optional(),website:z.url().or(z.literal("")).default(""),foundedYear:z.number().int().min(1000).max(9999).nullable().optional(),studentCount:z.number().int().nonnegative().nullable().optional(),facultyCount:z.number().int().nonnegative().nullable().optional(),campusCount:z.number().int().nonnegative().nullable().optional(),
   }),
   people:baseRecordSchema.extend({
     title:z.string().trim().max(120).default(""),
@@ -62,7 +63,8 @@ async function get(request: Request, context: { params: Promise<{ resource: stri
   try {
     const {page,pageSize}=parsePagination(url.searchParams,20);
     if (url.searchParams.get("format") === "csv") return NextResponse.json({code:"EXPORT_APPROVAL_REQUIRED"},{status:403});
-    const result = await listCrmRows(resource, { query: url.searchParams.get("q") ?? "", page, pageSize, status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "asc" });
+    const filter=commercialFilters.safeParse(Object.fromEntries(url.searchParams));if(!filter.success)return NextResponse.json({code:"INVALID_INPUT"},{status:400});
+    const result = await listCrmRows(resource, { ...filter.data,query: url.searchParams.get("q") ?? "", page, pageSize, status: url.searchParams.get("status") ?? "all", sort: url.searchParams.get("sort") ?? "primary", direction: url.searchParams.get("direction") ?? "asc" });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) { return failure(error); }
 }

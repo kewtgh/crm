@@ -44,3 +44,19 @@ export async function listEducationBusiness(resource:BusinessResource,options:{p
 export function saveEducationBusiness(input:{resource:BusinessResource;id:string;expectedRevision:number|null;data:Record<string,unknown>},adapter=database){
   return adapter.json<BusinessRecord>("/db/rpc/save_education_business",{method:"POST",body:JSON.stringify({resource:input.resource,record_id:input.id,expected_revision:input.expectedRevision,data:input.data})});
 }
+
+export type CommercialContact={id:string;name_zh:string;name_en:string;title:string;decision_role:string;next_follow_up_at:string|null;wechat_id:string|null;updated_at:string;can_edit:boolean};
+export type OrganizationCommercialSnapshot={organization:Record<string,unknown>;profile:BusinessRecord|null;contacts:CommercialContact[];intelligence:import("./channel-commercial-input").ContactIntelligence[];relationships:import("./channel-commercial-input").ContactRelationship[];outcomes:import("./channel-commercial-input").AdmissionOutcome[];opportunities:Record<string,unknown>[];canManage:boolean;limited:boolean};
+export async function getOrganizationCommercial(id:string,adapter=database):Promise<OrganizationCommercialSnapshot|null>{
+ const organization=(await adapter.json<Record<string,unknown>[]>("/db/table/organizations?"+new URLSearchParams({id:"eq."+id,archived_at:"is.null",limit:"1"})))[0];if(!organization)return null;
+ const [profiles,contacts,intelligence,relationships,outcomes,opportunities,canManage]=await Promise.all([
+ adapter.json<BusinessRecord[]>("/db/table/organization_business_profiles?id=eq."+id+"&limit=1"),
+ adapter.json<CommercialContact[]>("/db/table/organization_commercial_contact_records?organization_id=eq."+id+"&order=name_zh.asc,id.asc&limit=101"),
+ adapter.json<OrganizationCommercialSnapshot["intelligence"]>("/db/table/organization_contact_intelligence_records?organization_id=eq."+id+"&order=updated_at.desc,id.asc&limit=101"),
+ adapter.json<OrganizationCommercialSnapshot["relationships"]>("/db/table/organization_contact_relationship_records?organization_id=eq."+id+"&order=status.asc,id.asc&limit=101"),
+ adapter.json<OrganizationCommercialSnapshot["outcomes"]>("/db/table/organization_admission_outcome_records?organization_id=eq."+id+"&order=academic_year.desc,destination_region.asc&limit=101"),
+ adapter.json<Record<string,unknown>[]>("/db/table/opportunity_commercial_records?organization_id=eq."+id+"&order=updated_at.desc,id.asc&limit=101"),
+ adapter.json<boolean>("/db/rpc/channel_intelligence_access",{method:"POST",body:JSON.stringify({resource:"outcomes",record:{organization_id:id,workspace_id:organization.workspace_id},edit:true})})]);
+ return{organization,profile:profiles[0]??null,contacts:contacts.slice(0,100),intelligence:intelligence.slice(0,100),relationships:relationships.slice(0,100),outcomes:outcomes.slice(0,100),opportunities:opportunities.slice(0,100),canManage,limited:[contacts,intelligence,relationships,outcomes,opportunities].some(rows=>rows.length>100)};
+}
+export function saveOrganizationAdmissionOutcome(input:import("./channel-commercial-input").ChannelSave<import("zod").z.infer<typeof import("./channel-commercial-input").outcomeDataSchema>>,adapter=database){return adapter.json<import("./channel-commercial-input").AdmissionOutcome>("/db/rpc/save_organization_admission_outcome",{method:"POST",body:JSON.stringify({record_id:input.id,expected_revision:input.expectedRevision,data:input.data,p_request_key:input.requestKey})});}

@@ -129,7 +129,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
   </div>;
 }
 
-function qualityRuleKey(ruleKey:string){if(ruleKey.startsWith("COHORT_")||ruleKey.startsWith("ENROLLMENT_")||ruleKey.startsWith("APPLICATION_")||ruleKey.startsWith("MILESTONE_")||ruleKey.startsWith("VISA_RESULT_")||ruleKey.startsWith("WORKFLOW_"))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
+function qualityRuleKey(ruleKey:string){if(["COHORT_","ENROLLMENT_","APPLICATION_","MILESTONE_","VISA_RESULT_","WORKFLOW_","STRATEGIC_ACCOUNT_","HIGH_TIER_ACCOUNT_","KEY_CONTACT_","CHANNEL_ACCOUNT_","CLAIMED_LEAD_","QUALIFYING_SCHOOL_","QUALIFIED_SCHOOL_","RECRUITMENT_ACTIVATED_","SOLUTION_PROPOSED_"].some(prefix=>ruleKey.startsWith(prefix)))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
 
 function qualityHref(item:QualityIssue){
   if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;

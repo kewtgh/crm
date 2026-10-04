@@ -1,3 +1,4 @@
+import {commercialFields,commercialProfileSchema} from "./channel-commercial-input";
 import { z } from "zod";
 
 export const businessResources = ["organizations", "needs", "pathways", "events", "referrals", "participations", "applications"] as const;
@@ -21,8 +22,9 @@ export const organizationRoles = ["SCHOOL_ENTRY", "REFERRAL_PARTNER", "TOUR_PART
 export const businessConfig: Record<BusinessResource, {table:string; fields:BusinessField[]; subject?:BusinessContext["type"]}> = {
   organizations: {table:"organization_business_profiles",subject:"ORGANIZATION",fields:[
     choices("organization_type",["SCHOOL","PARTNER","OTHER","FAMILY"]),multi("roles",organizationRoles),
-    choices("partnership_stage",["PROSPECT","CONTACTING","ACTIVE","PAUSED","ENDED"]),relation("primary_contact_id","CONTACT"),
+    choices("partnership_stage",["PROSPECT","CONTACTING","ACTIVE","PAUSED","ENDED","KEY_PERSON_ENGAGED","NEEDS_QUALIFIED","SOLUTION_PROPOSED","PARTNERSHIP_AGREED","RECRUITMENT_ACTIVATED","ONGOING_ENABLEMENT"]),relation("primary_contact_id","CONTACT"),
     multi("focus_regions",targetRegions),date("agreement_expires_on"),text("next_action",false,1000),
+    choices("commercial_tier",["","S","A","B","C","D"],""),{...number("partnership_potential_score",100,true),min:10},text("competitor_analysis_markdown",false,20000),text("bd_plan_markdown",false,20000),choices("school_type",["","PUBLIC","PRIVATE","INTERNATIONAL","OTHER"],""),number("grade_min",12,true),number("grade_max",12,true),number("tuition_min"),number("tuition_max"),choices("tuition_currency",["","CNY","USD","GBP","AUD","CAD","EUR","NZD","HKD","SGD","TWD"],""),
   ]},
   needs: {table:"family_education_needs",subject:"HOUSEHOLD",fields:[
     multi("services",programTypes),multi("target_regions",targetRegions),number("budget_min"),number("budget_max"),
@@ -67,9 +69,11 @@ export function businessFieldsSchema(resource: BusinessResource) {
     else if(field.kind==="relation")shape[field.key]=field.required?z.uuid():field.key==="application_id"?z.uuid().nullable().optional():["campaign_id","product_id","cohort_id"].includes(field.key)?z.uuid().nullable().default(null):z.uuid().nullable();
     else shape[field.key]=z.string().trim().min(field.required?1:0).max(field.max!);
   }
+  if(resource==="organizations"){for(const key of commercialFields)shape[key]=commercialProfileSchema.shape[key].optional();}
   if(resource==="organizations"||resource==="needs")shape.id=z.uuid();
   return z.object(shape).strict().superRefine((value,ctx)=>{
     const issue=(key:string)=>ctx.addIssue({code:"custom",path:[key],message:"BUSINESS_FIELD_INVALID"});
+    if(resource==="organizations"){const complete=Object.fromEntries(commercialFields.map(k=>[k,value[k]??(k.endsWith("markdown")?"":null)]));const parsed=commercialProfileSchema.safeParse(complete);if(!parsed.success)for(const error of parsed.error.issues)issue(String(error.path[0]));}
     if(resource==="applications"&&["DONE","WAIVED"].includes(String(value.status))&&!String(value.next_action).trim())issue("next_action");
     if(resource==="needs"&&value.budget_min!==null&&value.budget_max!==null&&Number(value.budget_min)>Number(value.budget_max))issue("budget_max");
     if(resource==="events"){

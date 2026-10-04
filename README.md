@@ -1,10 +1,18 @@
 # Lumina CRM
 
-Current release candidate: **v3.20.0**
+Current release candidate: **v3.21.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.21.0 adds Channel Intelligence and Decision Map, atomic Public Lead Pool assignment,
+explicit Channel Activation, versioned Channel Agreements, immutable commission earnings/refund
+reversals, separate settlements and permission-filtered Channel Analytics. Enrollment contribution
+is not Revenue Attribution; commission exposure is not Channel Revenue. Shared contracts remain
+unallocated and currencies separate. No Production business rules are seeded.
+See [v3.21 release notes](docs/RELEASE_V3.21.0.md),
+[release closure](docs/V321_RELEASE_CLOSURE.md) and [Channel architecture](docs/CHANNEL_COMMERCIAL_ARCHITECTURE.md).
 
 Version 3.20.0 adds formal Enrollment 1:N Applications, independent status/decision,
 Application-linked preparation Tasks, Admission Milestones and versioned sequential

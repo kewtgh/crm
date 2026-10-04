@@ -358,7 +358,11 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="admissions-workflow-templates"||env.QA_SCOPE==="admissions-workflow-instances"){
+    if(env.QA_SCOPE==="channel-analytics"){await require("./qa-channel-analytics.cjs")({browser,base,output,report,observe});}
+    else if(["commission-agreements","commission-ledger"].includes(env.QA_SCOPE)){await require("./qa-commissions.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="lead-pool-activation"){await require("./qa-lead-pool-activation.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="channel-commercial"){await require("./qa-channel-commercial.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="admissions-workflow-templates"||env.QA_SCOPE==="admissions-workflow-instances"){
       await require("./qa-admissions-workflows.cjs")({browser,base,output,report,observe});
     }else if(env.QA_SCOPE==="admission-milestones"){
       await require("./qa-admission-milestones.cjs")({browser,base,output,report,observe});

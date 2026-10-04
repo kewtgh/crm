@@ -66,6 +66,11 @@ const phases = [
   { name: "10-support", timeout: 45, env: { QA_SCOPE: "support" } },
 ];
 
+const commissionAgreementPhase={name:"commission-agreements",timeout:55,env:{QA_SCOPE:"commission-agreements"}};
+const commissionLedgerPhase={name:"commission-ledger",timeout:55,env:{QA_SCOPE:"commission-ledger"}};
+const leadPoolPhase={name:"lead-pool-activation",timeout:55,env:{QA_SCOPE:"lead-pool-activation"}};
+const channelPhase={name:"channel-commercial",timeout:55,env:{QA_SCOPE:"channel-commercial"}};
+const channelAnalyticsPhase={name:"channel-analytics",timeout:55,env:{QA_SCOPE:"channel-analytics"}};
 const requestedPhase = process.env.QA_PHASE?.trim();
 const operationalPhase={name:"operational-readiness",timeout:55,env:{QA_SCOPE:"operational-readiness"}};
 const commercialPhase={name:"commercial-links",timeout:55,env:{QA_SCOPE:"commercial-links"}};
@@ -82,7 +87,7 @@ const uxPhase={name:"ux-refinements",timeout:55,env:{QA_SCOPE:"ux-refinements"}}
 const educationPhase={name:"education-business",timeout:55,env:{QA_SCOPE:"education-business"}};
 const purchasingPhase={name:"family-purchasing",timeout:55,env:{QA_SCOPE:"family-purchasing"}};
 const mergeOnly = process.env.QA_MERGE_ONLY === "1";
-const selectedPhases = mergeOnly ? [] : requestedPhase === "admissions-workflow-templates" ? [workflowTemplatesPhase] : requestedPhase === "admissions-workflow-instances" ? [workflowInstancesPhase] : requestedPhase === "admission-milestones" ? [milestonePhase] : requestedPhase === "applications" ? [applicationPhase] : requestedPhase === "operational-readiness" ? [operationalPhase] : requestedPhase === "commercial-links" ? [commercialPhase] : requestedPhase === "enrollments" ? [enrollmentPhase] : requestedPhase === "product-cohorts" ? [cohortPhase] : requestedPhase === "family-purchasing" ? [purchasingPhase] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
+const selectedPhases = mergeOnly ? [] : requestedPhase === "channel-analytics" ? [channelAnalyticsPhase] : requestedPhase === "commission-agreements" ? [commissionAgreementPhase] : requestedPhase === "commission-ledger" ? [commissionLedgerPhase] : requestedPhase === "lead-pool-activation" ? [leadPoolPhase] : requestedPhase === "channel-commercial" ? [channelPhase] : requestedPhase === "admissions-workflow-templates" ? [workflowTemplatesPhase] : requestedPhase === "admissions-workflow-instances" ? [workflowInstancesPhase] : requestedPhase === "admission-milestones" ? [milestonePhase] : requestedPhase === "applications" ? [applicationPhase] : requestedPhase === "operational-readiness" ? [operationalPhase] : requestedPhase === "commercial-links" ? [commercialPhase] : requestedPhase === "enrollments" ? [enrollmentPhase] : requestedPhase === "product-cohorts" ? [cohortPhase] : requestedPhase === "family-purchasing" ? [purchasingPhase] : requestedPhase === "education-business" ? [educationPhase] : requestedPhase === "ux-refinements" ? [uxPhase] : requestedPhase === "ui-system" ? [uiPhase] : requestedPhase === "forms" ? [formPhase] : requestedPhase === "customer-operations" ? [customerPhase] : requestedPhase ? phases.filter((phase) => phase.name === requestedPhase) : phases;
 if (!mergeOnly && !selectedPhases.length) throw new Error(`Unknown QA_PHASE ${requestedPhase}`);
 for (const phase of selectedPhases) {
   const index = phases.indexOf(phase);

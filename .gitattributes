@@ -10,3 +10,10 @@ db/migrations/202610040096_admission_milestones.sql -text
 
 # Preserve the forward v3.20 Workflow migration after Phase 3 verification.
 db/migrations/202610040097_admissions_workflows.sql -text
+# Preserve the forward v3.21 Channel Intelligence migration after Phase 1 verification.
+db/migrations/202610040098_channel_account_intelligence.sql -text
+
+/db/migrations/202610040099_public_lead_pool_channel_activation.sql -text
+/db/migrations/202610040100_channel_agreements_commission.sql -text
+/db/migrations/202610050101_channel_analytics.sql -text
+/db/migrations/202610050102_channel_analytics_empty_settlements.sql -text

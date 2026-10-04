@@ -1,4 +1,58 @@
-# Implementation status — v3.20.0 release candidate
+# Implementation status — v3.21.0 release candidate
+
+## v3.21 Channel Commercial Management
+
+**V321_RELEASE_READY**. All bounded release gates pass. The user authorized the local
+v3.21.0 Git checkpoint after correcting the requested version. No Production access.
+
+Phase 1–4 form a candidate combining Channel Intelligence/Decision Map, explicit Public
+Lead assignment and activation, versioned agreements and immutable commission/settlement
+records, plus read-only Channel Analytics. Current snapshots and period metrics remain
+distinct. Tenant/subject/money permissions and privacy retention are preserved. No Revenue
+Attribution, Channel Revenue/ROI or FX is inferred. The release checkpoint includes the
+validated Phase 1–4 candidate; no push, deploy or Production access. Final gates are recorded in
+[release closure](V321_RELEASE_CLOSURE.md), [release notes](RELEASE_V3.21.0.md) and
+[Channel architecture](CHANNEL_COMMERCIAL_ARCHITECTURE.md).
+
+Historical phase development evidence follows.
+
+## v3.21 Phase 3 development checkpoint
+
+Versioned Channel Agreements and explicit fixed/net-collected Rules extend Organization
+commercial operations. Eligibility reads canonical Enrollment Attribution and Finance;
+shared contracts remain unallocated. Immutable commission earnings/refund reversals and
+separate whole-entry, single-currency settlements preserve source history. Configuration,
+money visibility and settlement permissions reuse existing capabilities. Privacy retains
+financial records while clearing personal references. No customer Finance facts are copied
+or rewritten. Version stays 3.20.0; no commit, push, deploy or Production access.
+See [commission contract](V321_PHASE3_COMMISSION_CONTRACT.md),
+[Channel architecture](CHANNEL_COMMERCIAL_ARCHITECTURE.md) and
+[Phase 3 verification](V321_PHASE3_VERIFICATION.md).
+
+## v3.21 Phase 2 development checkpoint
+
+Public SCHOOL Lead Pool, atomic claim/release/reassign with assignment history,
+reason-bearing partnership stage changes/history, and a permission-filtered Channel
+Activation projection extend existing Lead/Organization/Education domains. Claim does
+not qualify; Events and attributed Enrollments never implicitly advance partnership.
+Automation reuses TASK/NOTIFICATION and contextual data-quality warnings reuse the
+existing quality engine. Version remains 3.20.0; Phase 1 and Phase 2 remain separately
+recoverable local deltas. See [Phase 2 funnel mapping](V321_PHASE2_FUNNEL_MAPPING.md),
+[Channel architecture](CHANNEL_COMMERCIAL_ARCHITECTURE.md) and
+[bounded verification](V321_PHASE2_VERIFICATION.md).
+Channel Agreements, Commission, Revenue/ROI, Sales Targets, AI and automated research
+remain deferred.
+
+## v3.21 Phase 1 development checkpoint
+
+Channel Account Intelligence & Decision Map is implemented on the committed v3.20.0 baseline.
+Version remains 3.20.0. Organization commercial tiers/potential/strategy, school profile gaps,
+school-level admissions outcomes, Contact intelligence and same-Organization relationships
+reuse current master identities and access. Unknown values remain distinct from zero/D.
+See [Channel architecture](CHANNEL_COMMERCIAL_ARCHITECTURE.md) and
+[bounded Phase 1 verification](V321_PHASE1_VERIFICATION.md).
+Phase 2 extends this foundation with Lead Pool and Channel Activation. Pipeline redesign,
+Commission, channel revenue/ROI and AI remain future scope.
 
 ## v3.20.0 scope
 

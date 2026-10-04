@@ -445,28 +445,18 @@ export async function getLead(id: string): Promise<LeadRecord | null> {
 
 export async function createLead(input: {
   type: "SCHOOL" | "HOUSEHOLD"; organizationId?: string | null; householdId?: string | null;
-  nameZh: string; nameEn: string; source: string; score: number; note: string;
+  nameZh: string; nameEn: string; source: string; score: number; note: string; status?: string; poolVisibility?: string; requestKey?: string; id?: string;
 }) {
-  const rows = await databaseJson<LeadRow[]>("/db/table/leads", {
-    method: "POST", headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      subject_type: input.type, organization_id: input.organizationId || null, household_id: input.householdId || null,
-      name_zh: input.nameZh, name_en: input.nameEn, source: input.source,
-      qualification_score: input.score, qualification_note: input.note,
-      status: input.score >= 60 ? "QUALIFIED" : "QUALIFYING",
-      pipeline_key: input.type === "SCHOOL" ? "SCHOOL_DEFAULT" : "HOUSEHOLD_DEFAULT",
-    }),
-  });
-  return rows[0];
+  return databaseJson<LeadRow>("/db/rpc/save_lead",{method:"POST",body:JSON.stringify({record_id:input.id??crypto.randomUUID(),expected_revision:null,p_request_key:input.requestKey??crypto.randomUUID(),data:{subject_type:input.type,organization_id:input.organizationId??null,household_id:input.householdId??null,name_zh:input.nameZh,name_en:input.nameEn,source:input.source,qualification_score:input.score,qualification_note:input.note,...(input.status?{status:input.status}:{}),pool_visibility:input.poolVisibility??"PRIVATE",next_action:""}})});
 }
 
 export function convertLead(input: {
-  id: string; titleZh: string; titleEn: string; amount: number; currency: string; requestKey: string;
+  id: string; titleZh: string; titleEn: string; amount: number; currency: string; requestKey: string; productId?:string|null; cohortId?:string|null; ownerId?:string|null;
 }) {
   return databaseJson("/db/rpc/convert_lead_to_opportunity", {
     method: "POST", body: JSON.stringify({
       target_lead: input.id, title_zh: input.titleZh, title_en: input.titleEn,
-      amount: input.amount, currency: input.currency, p_idempotency_key: input.requestKey,
+      amount: input.amount, currency: input.currency, p_idempotency_key: input.requestKey,next_product:input.productId??null,next_cohort:input.cohortId??null,next_owner:input.ownerId??null,
     }),
   });
 }

@@ -4,10 +4,12 @@ import { spawnSync } from "node:child_process";
 import pg from "pg";
 import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
 const container=`lumina-crm-customer-it-${randomBytes(5).toString("hex")}`,deadline=Date.now()+50_000,password=randomBytes(32).toString("hex");
+const image=process.env.CUSTOMER_TEST_POSTGRES_IMAGE||"postgres:18.6-trixie";
+assert.match(image,/^postgres:18\.\d+-(trixie|bookworm)$/);
 let client;
 function run(command,args,env=process.env){const result=spawnSync(command,args,{env,encoding:"utf8",timeout:Math.max(1,Math.min(15_000,deadline-Date.now())),windowsHide:true});if(result.error)throw result.error;if(result.status!==0)throw new Error(`${command} failed: ${result.stderr.trim()}`);return result.stdout.trim();}
 try{
-  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_customer_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD","postgres:18.6-trixie"],{...process.env,POSTGRES_PASSWORD:password});
+  run("docker",["run","--detach","--rm","--pull=never","--name",container,"--publish","127.0.0.1::5432","--tmpfs","/var/lib/postgresql:rw,noexec,nosuid,size=768m","--env","POSTGRES_DB=lumina_customer_test","--env","POSTGRES_USER=postgres","--env","POSTGRES_PASSWORD",image],{...process.env,POSTGRES_PASSWORD:password});
   const port=run("docker",["inspect","--format","{{(index (index .NetworkSettings.Ports \"5432/tcp\") 0).HostPort}}",container]);assert.match(port,/^\d+$/);
   const connectionString=`postgresql://postgres:${password}@127.0.0.1:${port}/lumina_customer_test`;
   for(let attempt=0;attempt<20;attempt++){client=new pg.Client({connectionString,connectionTimeoutMillis:500,statement_timeout:5000});try{await client.connect();break;}catch(error){await client.end().catch(()=>{});if(attempt===19)throw error;await new Promise(resolve=>setTimeout(resolve,150));}}
@@ -165,7 +167,7 @@ try{
   await client.query("update public.students set archived_at=now() where id=$1",[student]);assert.equal((await portalRecipients()).rows[0].data.total,0);
   await client.query("update public.students set archived_at=null where id=$1",[student]);
   await client.query("reset role");await context(sales);await client.query("set role crm_app");assert.equal((await portalRecipients()).rows[0].data.total,0);
-  console.log("PASS PostgreSQL 18.6: template personal privacy/admin public publishing/copy/archive, idempotency and revisions, ownership/workspace isolation, eligibility grant/expiry/revocation/bounds and customer operations.");
+  console.log("PASS PostgreSQL ${image}: template personal privacy/admin public publishing/copy/archive, idempotency and revisions, ownership/workspace isolation, eligibility grant/expiry/revocation/bounds and customer operations.");
 }finally{
   await client?.end().catch(()=>{});assert.match(container,/^lumina-crm-customer-it-[a-f0-9]{10}$/);
   const result=spawnSync("docker",["rm","--force",container],{encoding:"utf8",timeout:10_000,windowsHide:true});if(result.status!==0&&!result.stderr?.includes("No such container"))throw new Error(`Cleanup failed for ${container}`);

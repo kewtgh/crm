@@ -1,5 +1,9 @@
 "use client";
+import {EnrollmentRelation} from "./enrollment-relation";
 
+
+import {commercialTiers} from "@/lib/channel-commercial-input";
+import {useCapability} from "./app-user-context";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppUser } from "@/components/app-user-context";
 import { ArrowDown, ArrowUp, ArrowUpDown, Save, Trash2 } from "lucide-react";
@@ -19,6 +23,9 @@ const validPageSize=(value:string|null)=>[10,20,50].includes(Number(value))?Numb
 export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMetrics, savedViewsOpen=false, onCloseSavedViews }: { config: ModuleConfig; resource?: PersistentResource; initialTotal?: number; refreshKey?: number; onMetrics?:(metrics:CrmMetrics)=>void;savedViewsOpen?:boolean;onCloseSavedViews?:()=>void }) {
   const { t } = useI18n();
   const user = useAppUser();
+  const canViewCommercial=useCapability("education.view");
+  const [commercialFilter,setCommercialFilter]=useState({commercialTier:"",keyContact:"",ownerId:"",potentialMin:""});
+  const commercialQuery=new URLSearchParams(Object.entries(commercialFilter).filter(([,v])=>v)).toString();
   const [savePending, setSavePending] = useState(false);
   const savingView = useRef(false);
   const prefix = `modules.${config.key}`;
@@ -26,7 +33,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
     query,setQuery,page,setPage,pageSize,setPageSize,status,setStatus,sort,setSort,
     direction,setDirection,items:rows,total,loading,error,retry,
   }=usePagedResource<DataRow,CrmMetrics>({
-    endpoint:resource?`/api/crm/${resource}`:"",
+    endpoint:resource?`/api/crm/${resource}${resource==="schools"&&commercialQuery?`?${commercialQuery}`:""}`:"",
     enabled:Boolean(resource),
     initialItems:config.rows,
     initialTotal:initialTotal??config.rows.length,
@@ -109,6 +116,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
 
   return <><div id="record-list" className={`data-surface ${loading ? "is-loading" : ""}`} aria-busy={loading}>
     <div className="table-toolbar"><SearchField value={query} onChange={setSearch} placeholder={t(`${prefix}.search`)} /><div className="filter-chips"><label className="compact-select"><span>{t("common.status")}</span><select value={status} onChange={event=>{setStatus(event.target.value);setPage(1);}}><option value="all">{t("common.all")}</option>{statusOptions.map(value=><option value={value} key={value}>{t(resource==="people"?`contact.status.${value.toLowerCase()}`:`crm.status.${value}`)}</option>)}</select></label></div></div>
+    {resource==="schools"&&canViewCommercial&&<div className="form-grid two-column channel-account-filters">{["commercialTier","keyContact","potentialMin"].map(k=><label className="field" key={k}><span>{t("channel.filter."+k)}</span>{k==="commercialTier"||k==="keyContact"?<select value={commercialFilter[k as keyof typeof commercialFilter]} onChange={e=>{setCommercialFilter(f=>({...f,[k]:e.target.value}));setPage(1);}}><option value="">{t("common.all")}</option>{(k==="commercialTier"?[...commercialTiers,"UNKNOWN"]:["KEY","MISSING"]).map(v=><option key={v} value={v}>{commercialTiers.includes(v as typeof commercialTiers[number])?v:t("channel.option."+v)}</option>)}</select>:<input type={k==="potentialMin"?"number":"text"} min={k==="potentialMin"?10:undefined} max={k==="potentialMin"?100:undefined} placeholder={k==="ownerId"?t("channel.ownerIdHelp"):undefined} value={commercialFilter[k as keyof typeof commercialFilter]} onChange={e=>{setCommercialFilter(f=>({...f,[k]:e.target.value}));setPage(1);}}/>}</label>)}<EnrollmentRelation type="USER" label={t("channel.filter.ownerId")} value={commercialFilter.ownerId} onChange={value=>{setCommercialFilter(f=>({...f,ownerId:value}));setPage(1);}}/></div>}
     {error && <div className="table-error"><InlineMessage type="error">{error}</InlineMessage><button className="secondary-button" type="button" onClick={retry}>{t("common.retry")}</button></div>}
     <div className="table-scroll"><table className="data-table"><thead><tr>
       <SortHead field="primary" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.primary`)}</SortHead><SortHead field="secondary" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.secondary`)}</SortHead><SortHead field="status" active={sort} direction={direction} onSort={changeSort}>{t("common.status")}</SortHead><SortHead field="meta" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.meta`)}</SortHead><SortHead field="extra" active={sort} direction={direction} onSort={changeSort}>{t(`${prefix}.column.extra`)}</SortHead><SortHead field="completeness" active={sort} direction={direction} onSort={changeSort}>{t("modules.completeness")}</SortHead></tr></thead>

@@ -91,6 +91,7 @@ export function CrmRecordEditor({
       patch.courseCategories=String(form.get("courseCategories")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean);
       patch.affiliationType=String(form.get("affiliationType")??"INDEPENDENT");patch.parentOrganizationId=parentOrganization||null;
       patch.organizationOverviewMarkdown=String(form.get("organizationOverviewMarkdown")??"");patch.structureOverviewMarkdown=String(form.get("structureOverviewMarkdown")??"");
+      patch.address=String(form.get("address")??"").trim();
       patch.website=String(form.get("website")??"").trim();
       for(const field of ["foundedYear","studentCount","facultyCount","campusCount"] as const){const value=String(form.get(field)??"");patch[field]=value?Number(value):null;}
     }else if(resource==="people"){
@@ -160,6 +161,7 @@ export function CrmRecordEditor({
           <div className="form-grid two-column"><label className="field"><span>{t("modules.city")}</span><input name="city" defaultValue={detail.city} required maxLength={80}/></label><label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" defaultValue={detail.curriculum} maxLength={120} options={CURRICULUM_OPTIONS}/></label></div>
           <label className="field"><span>{t("education.courseCategories")}</span><TagsInput name="courseCategories" defaultValue={detail.courseCategories?.join(", ")}/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("education.affiliationType")}</span><select name="affiliationType" defaultValue={detail.affiliationType} required>{["INDEPENDENT","EDUCATION_GROUP","GOVERNMENT","UNIVERSITY","RELIGIOUS","OTHER"].map(value=><option key={value} value={value}>{t(`education.affiliation.${value.toLowerCase()}`)}</option>)}</select></label><SearchableSelect label={t("education.parentOrganization")} options={parentOptions} value={parentOrganization} onChange={setParentOrganization} onSearch={searchParents}/></div>
+          <label className="field"><span>{t("channel.field.address")}</span><textarea name="address" maxLength={1000} defaultValue={detail.address}/></label>
           <label className="field"><span>{t("education.website")}</span><input name="website" type="url" defaultValue={detail.website}/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><YearInput name="foundedYear" defaultValue={detail.foundedYear??""}/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0" defaultValue={detail.campusCount??""}/></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("education.studentCount")}</span><input name="studentCount" type="number" min="0" defaultValue={detail.studentCount??""}/></label><label className="field"><span>{t("education.facultyCount")}</span><input name="facultyCount" type="number" min="0" defaultValue={detail.facultyCount??""}/></label></div>

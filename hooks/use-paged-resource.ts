@@ -76,7 +76,7 @@ export function usePagedResource<T,M>({
         q:query,page:String(page),pageSize:String(pageSize),status,sort,direction,
       });
       try{
-        const result=await apiFetch<PageResult<T,M>>(`${endpoint}?${params}`,{signal:controller.signal});
+        const result=await apiFetch<PageResult<T,M>>(`${endpoint}${endpoint.includes("?")?"&":"?"}${params}`,{signal:controller.signal});
         const pages=Math.max(1,Math.ceil(result.total/pageSize));
         if(page>pages){setPageState(pages);return;}
         setItems(result.items);

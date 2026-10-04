@@ -1,3 +1,7 @@
+import {zhCNChannelAnalytics} from "./channel-analytics";
+import {zhCommissions} from "./commissions";
+import {zhLeadPool} from "./lead-pool";
+import {zhCNChannelCommercial} from "./channel-commercial";
 import {zhWorkflows} from "./workflows";
 import {zhMilestones} from "./admission-milestones";
 import {zhApplications} from "./applications";
@@ -29,6 +33,9 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...zhCNChannelAnalytics,
+  ...zhCommissions,
+  ...zhLeadPool,...zhCNChannelCommercial,
   ...zhWorkflows,
   ...zhMilestones,
   ...zhOperationalReadiness,

@@ -1,0 +1,16 @@
+import {NextResponse} from "next/server";
+import {z} from "zod";
+import {ApiError,apiRoute,requireApiCapability} from "./api";
+import {DatabaseRequestError} from "./db/gateway";
+import {mutationIsTrusted} from "./request-security";
+import {intelligenceSaveSchema,relationshipSaveSchema,outcomeSaveSchema} from "./channel-commercial-input";
+import {saveContactIntelligence} from "./contact-intelligence-repository";
+import {saveDecisionRelationship} from "./decision-relationship-repository";
+import {getOrganizationCommercial,saveOrganizationAdmissionOutcome} from "./education-business-repository";
+export const channelApiError=(error:unknown):never=>{if(error instanceof DatabaseRequestError)throw new ApiError(error.code,error.code.includes("FORBIDDEN")?403:error.code.includes("NOT_FOUND")?404:error.code.includes("CONFLICT")||error.code.includes("IMMUTABLE")?409:400);throw error;};
+export function organizationCommercialRoute(kind:"commercial"|"decision-map"|"admission-outcomes"){
+ const get=async(_:Request,context:{params:Promise<{id:string}>})=>{await requireApiCapability("education.view");const {id}=await context.params;if(!z.uuid().safeParse(id).success)throw new ApiError("CHANNEL_INPUT_INVALID",400);try{const result=await getOrganizationCommercial(id);if(!result)throw new ApiError("CHANNEL_NOT_FOUND",404);return NextResponse.json(kind==="commercial"?result:{items:kind==="decision-map"?result.relationships:result.outcomes},{headers:{"cache-control":"no-store"}});}catch(e){return channelApiError(e);}};
+ const save=async(request:Request,context:{params:Promise<{id:string}>})=>{if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);await requireApiCapability("education.manage");const {id}=await context.params;const body=await request.json().catch(()=>({}));try{if(kind==="commercial")throw new ApiError("CHANNEL_INPUT_INVALID",400);if(kind==="decision-map"){const parsed=relationshipSaveSchema.safeParse(body);if(!parsed.success||parsed.data.data.organization_id!==id||request.method==="PATCH"&&parsed.data.expectedRevision===null)throw new ApiError("CHANNEL_INPUT_INVALID",400);return NextResponse.json({item:await saveDecisionRelationship(parsed.data)});}const parsed=outcomeSaveSchema.safeParse(body);if(!parsed.success||parsed.data.data.organization_id!==id||request.method==="PATCH"&&parsed.data.expectedRevision===null)throw new ApiError("CHANNEL_INPUT_INVALID",400);return NextResponse.json({item:await saveOrganizationAdmissionOutcome(parsed.data)});}catch(e){return channelApiError(e);}};
+ return{GET:apiRoute(get,"CHANNEL_LOAD_FAILED"),POST:apiRoute(save,"CHANNEL_SAVE_FAILED"),PATCH:apiRoute(save,"CHANNEL_SAVE_FAILED")};
+}
+export const contactIntelligenceMutation=async(request:Request,context:{params:Promise<{id:string}>})=>{if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);await requireApiCapability("education.manage");const {id}=await context.params;const parsed=intelligenceSaveSchema.safeParse(await request.json().catch(()=>({})));if(!parsed.success||parsed.data.data.contact_id!==id||request.method==="PATCH"&&parsed.data.expectedRevision===null)throw new ApiError("CHANNEL_INPUT_INVALID",400);try{return NextResponse.json({item:await saveContactIntelligence(parsed.data)});}catch(e){return channelApiError(e);}};

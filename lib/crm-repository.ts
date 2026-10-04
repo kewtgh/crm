@@ -21,7 +21,7 @@ export type CrmRecordDetail = {
   shortName?:string;
   curriculum?: string;
   courseCategories?:string[];affiliationType?:string;parentOrganizationId?:string|null;
-  organizationOverviewMarkdown?:string;structureOverviewMarkdown?:string;website?:string;
+  organizationOverviewMarkdown?:string;structureOverviewMarkdown?:string;website?:string;address?:string;
   foundedYear?:number|null;studentCount?:number|null;facultyCount?:number|null;campusCount?:number|null;
   email?: string;
   phone?: string;
@@ -86,7 +86,7 @@ function toRow(resource: PersistentResource, record: Record<string, unknown>,own
   };
 }
 
-export async function listCrmRows(resource: PersistentResource, options: { query?: string; page?: number; pageSize?: number; status?: string; sort?: string; direction?: string } = {}): Promise<PagedRows> {
+export async function listCrmRows(resource: PersistentResource, options: { query?: string; page?: number; pageSize?: number; status?: string; sort?: string; direction?: string;commercialTier?:string;keyContact?:string;ownerId?:string;potentialMin?:number } = {}): Promise<PagedRows> {
   const config = resourceConfig[resource];
   const pageSize = Math.max(1, Math.min(Number(options.pageSize ?? 20), 100));
   const page = Math.max(1, Number(options.page ?? 1));
@@ -96,11 +96,12 @@ export async function listCrmRows(resource: PersistentResource, options: { query
   const query = cleanSearch(options.query ?? "");
   if (query) params.set("or", `(${config.search.map((field) => `${field}.ilike.*${query}*`).join(",")})`);
   if (options.status && options.status !== "all") params.set(resource==="people"?"contact_status":"status", `eq.${options.status}`);
+  if(resource==="schools"){if(options.commercialTier)params.set("commercial_tier",options.commercialTier==="UNKNOWN"?"is.null":`eq.${options.commercialTier}`);if(options.keyContact)params.set("has_key_contact",`eq.${options.keyContact==="KEY"}`);if(options.ownerId)params.set("owner_id",`eq.${options.ownerId}`);if(options.potentialMin!==undefined)params.set("partnership_potential_score",`gte.${options.potentialMin}`);}
   const sortKey = options.sort && options.sort in config.sort ? options.sort as keyof typeof config.sort : "primary";
   params.set("order", `${config.sort[sortKey]}.${options.direction === "desc" ? "desc" : "asc"}`);
   const [response,metrics] = await Promise.all([
-    databaseRequest(`/db/table/${config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
-    databaseJson<CrmMetrics>("/db/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
+    databaseRequest(`/db/table/${resource==="schools"?"organization_commercial_records":config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
+    resource==="schools"&&(options.commercialTier||options.keyContact||options.ownerId||options.potentialMin!==undefined)?databaseJson<CrmMetrics>("/db/rpc/organization_commercial_metrics",{method:"POST",body:JSON.stringify({search_query:query,status_filter:options.status??"all",tier_filter:options.commercialTier??null,key_filter:options.keyContact?options.keyContact==="KEY":null,owner_filter:options.ownerId??null,potential_min:options.potentialMin??null})}):databaseJson<CrmMetrics>("/db/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
   ]);
   const records = await response.json() as Record<string, unknown>[];
   const contentRange = response.headers.get("content-range") ?? "*/0";
@@ -141,7 +142,7 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
   }
   const body = { organization_type:input.organizationType??"SCHOOL",short_name:input.shortName??"",name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
       course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
-      organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",
+      organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",address:input.address??"",
       founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
     ;
   const table = resourceConfig[resource].table;
@@ -177,7 +178,7 @@ export async function loadCrmRecord(resource:PersistentResource,id:string):Promi
     ...(resource==="schools"?{organizationType:String(record.organization_type??"SCHOOL")}:{}),
     history:history.map(item=>({action:item.action,changedAt:item.changed_at,actorId:item.actor_id,actorName:item.actor_name})),
   };
-  if(resource==="schools")return{...common,city:String(record.city??""),curriculum:String(record.curriculum??""),courseCategories:(record.course_categories as string[]|undefined)??[],affiliationType:String(record.affiliation_type??"INDEPENDENT"),parentOrganizationId:record.parent_organization_id?String(record.parent_organization_id):null,organizationOverviewMarkdown:String(record.organization_overview_markdown??""),structureOverviewMarkdown:String(record.structure_overview_markdown??""),website:String(record.website??""),foundedYear:record.founded_year===null?null:Number(record.founded_year),studentCount:record.student_count===null?null:Number(record.student_count),facultyCount:record.faculty_count===null?null:Number(record.faculty_count),campusCount:record.campus_count===null?null:Number(record.campus_count)};
+  if(resource==="schools")return{...common,city:String(record.city??""),curriculum:String(record.curriculum??""),courseCategories:(record.course_categories as string[]|undefined)??[],affiliationType:String(record.affiliation_type??"INDEPENDENT"),parentOrganizationId:record.parent_organization_id?String(record.parent_organization_id):null,organizationOverviewMarkdown:String(record.organization_overview_markdown??""),structureOverviewMarkdown:String(record.structure_overview_markdown??""),website:String(record.website??""),address:String(record.address??""),foundedYear:record.founded_year===null?null:Number(record.founded_year),studentCount:record.student_count===null?null:Number(record.student_count),facultyCount:record.faculty_count===null?null:Number(record.faculty_count),campusCount:record.campus_count===null?null:Number(record.campus_count)};
   if(resource==="people")return{...common,email:String(record.email??""),phone:String(record.phone??""),title:String(record.title??""),organizationId:record.organization_id?String(record.organization_id):null,contactType:String(record.contact_type??"CONTACT"),contactStatus:String(record.contact_status??"NEW"),communicationLevel:Number(record.communication_level??1),notesMarkdown:String(record.notes_markdown??""),preferredContactMethod:String(record.preferred_contact_method??"EMAIL"),preferredLanguage:String(record.preferred_language??""),acquisitionSource:String(record.acquisition_source??""),decisionRole:String(record.decision_role??"UNKNOWN"),tags:(record.tags as string[]|undefined)??[],nextFollowUpAt:record.next_follow_up_at?String(record.next_follow_up_at):null,households:householdRows.flatMap(item=>item.households?[{id:item.households.id,nameZh:item.households.name_zh,nameEn:item.households.name_en,role:item.member_role,primary:item.primary_contact}]:[])};
   return{...common,priority:String(record.priority),dueAt:record.due_at?String(record.due_at):null,slaDueAt:record.sla_due_at?String(record.sla_due_at):null,relatedType:String(record.related_type??""),relatedId:record.related_id?String(record.related_id):null,relatedLabel:String(record.related_label??"")};
 }

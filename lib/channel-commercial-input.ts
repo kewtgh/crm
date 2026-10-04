@@ -1,0 +1,22 @@
+import {z} from "zod";
+export const commercialTiers=["S","A","B","C","D"] as const;
+export const keyContactStatuses=["UNKNOWN","KEY","NON_KEY"] as const;
+export const relationshipTypes=["REPORTS_TO","INFLUENCES","ASSISTANT_TO","PEER","WORKS_WITH","OTHER"] as const;
+export const destinationRegions=["UNITED_STATES","UNITED_KINGDOM","CANADA","AUSTRALIA","HONG_KONG","SINGAPORE","EUROPE_OTHER","ASIA_OTHER","OTHER"] as const;
+export const commercialFields=["commercial_tier","partnership_potential_score","competitor_analysis_markdown","bd_plan_markdown","school_type","grade_min","grade_max","tuition_min","tuition_max","tuition_currency"] as const;
+const score=z.number().int().min(10).max(100).nullable();
+export const commercialProfileSchema=z.object({commercial_tier:z.enum(commercialTiers).nullable(),partnership_potential_score:score,competitor_analysis_markdown:z.string().max(20000),bd_plan_markdown:z.string().max(20000),school_type:z.enum(["PUBLIC","PRIVATE","INTERNATIONAL","OTHER"]).nullable(),grade_min:z.number().int().min(0).max(12).nullable(),grade_max:z.number().int().min(0).max(12).nullable(),tuition_min:z.number().min(0).max(1e9).multipleOf(.01).nullable(),tuition_max:z.number().min(0).max(1e9).multipleOf(.01).nullable(),tuition_currency:z.string().regex(/^[A-Z]{3}$/).nullable()}).strict().superRefine((v,ctx)=>{
+ for(const [min,max] of [["grade_min","grade_max"],["tuition_min","tuition_max"]] as const)if(v[min]!==null&&v[max]!==null&&v[min]!>v[max]!)ctx.addIssue({code:"custom",path:[max],message:"CHANNEL_INPUT_INVALID"});
+ if((v.tuition_min!==null||v.tuition_max!==null)&&!v.tuition_currency)ctx.addIssue({code:"custom",path:["tuition_currency"],message:"CHANNEL_INPUT_INVALID"});
+});
+export const intelligenceDataSchema=z.object({organization_id:z.uuid(),contact_id:z.uuid(),key_contact_status:z.enum(keyContactStatuses),decision_power_score:score,contribution_score:score,working_style_markdown:z.string().max(10000),cooperation_notes:z.string().max(10000),potential_notes:z.string().max(10000)}).strict();
+export const relationshipDataSchema=z.object({organization_id:z.uuid(),source_contact_id:z.uuid(),target_contact_id:z.uuid(),relationship_type:z.enum(relationshipTypes),note:z.string().max(2000),status:z.enum(["ACTIVE","INACTIVE"])}).strict().refine(v=>v.source_contact_id!==v.target_contact_id,{path:["target_contact_id"],message:"CHANNEL_SELF_RELATIONSHIP"});
+export const outcomeDataSchema=z.object({organization_id:z.uuid(),academic_year:z.string().trim().min(4).max(20),destination_region:z.enum(destinationRegions),offer_count:z.number().int().min(0).max(1e6).nullable(),matriculation_count:z.number().int().min(0).max(1e6).nullable(),notable_destinations:z.array(z.string().trim().min(1).max(160)).max(30),source_note:z.string().max(2000),as_of_date:z.iso.date().nullable()}).strict();
+export const channelSaveBase=z.object({id:z.uuid(),expectedRevision:z.number().int().positive().nullable(),requestKey:z.string().min(8).max(120)});
+export const intelligenceSaveSchema=channelSaveBase.extend({data:intelligenceDataSchema}).strict();
+export const relationshipSaveSchema=channelSaveBase.extend({data:relationshipDataSchema}).strict();
+export const outcomeSaveSchema=channelSaveBase.extend({data:outcomeDataSchema}).strict();
+export type ContactIntelligence=z.infer<typeof intelligenceDataSchema>&{id:string;revision:number;name_zh:string;name_en:string;title:string;decision_role:string;next_follow_up_at:string|null;can_edit:boolean};
+export type ContactRelationship=z.infer<typeof relationshipDataSchema>&{id:string;revision:number;source_name_zh:string;source_name_en:string;target_name_zh:string;target_name_en:string;can_edit:boolean};
+export type AdmissionOutcome=z.infer<typeof outcomeDataSchema>&{id:string;revision:number;can_edit:boolean};
+export type ChannelSave<T>={id:string;expectedRevision:number|null;requestKey:string;data:T};

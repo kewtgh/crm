@@ -1,3 +1,6 @@
+import {commissionPrivacyRecords} from "./lib/commission-privacy-export.mjs";
+import {leadPoolPrivacyRecords} from "./lib/lead-pool-privacy-export.mjs";
+import {contactIntelligencePrivacyRecords} from "./lib/contact-intelligence-privacy-export.mjs";
 import { createWorkerHeartbeat } from "./worker-heartbeat.mjs";
 import { boundedWorkerInteger } from "./lib/bounded-concurrency.mjs";
 import { workerJson } from "./lib/worker-database.mjs";
@@ -175,7 +178,7 @@ async function privacyExport(job){
   if(!requestId||!contactId)throw new Error("Privacy export scope is missing");
   const [privacyRequests,contacts,consents,activities,appointments,memberships,guardianRelations,students]=await Promise.all([
     request(`/db/table/privacy_requests?select=id,request_type,request_note,decision_note,created_at,due_at&id=eq.${encodeURIComponent(requestId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
-    request(`/db/table/contacts?select=id,name_zh,name_en,contact_type,email,phone,title,status,created_at,updated_at&id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
+    request(`/db/table/contacts?select=id,name_zh,name_en,contact_type,email,phone,title,status,decision_role,wechat_id,created_at,updated_at&id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&limit=1`),
     requestAll(`/db/table/contact_consents?select=id,channel,purpose,status,source,evidence_note,obtained_at,revoked_at,retention_until,created_at,updated_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
     requestAll(`/db/table/crm_activities?select=id,activity_type,occurred_at,summary_zh,summary_en,next_step_zh,next_step_en,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=occurred_at`),
     requestAll(`/db/table/appointment_attendees?select=id,appointment_id,email,name,consent_confirmed,created_at&contact_id=eq.${encodeURIComponent(contactId)}&workspace_id=eq.${job.workspace_id}&order=created_at`),
@@ -194,6 +197,12 @@ async function privacyExport(job){
   const rows=[["Resource","Record ID","Field","Value"]];
   appendPrivacyRecords(rows,"privacy_request",privacyRequests);
   appendPrivacyRecords(rows,"contact",contacts);
+  const leadContext=await leadPoolPrivacyRecords(requestAll,job.workspace_id,[...new Set(memberships.map(m=>m.household_id))]);
+  appendPrivacyRecords(rows,"household_lead",leadContext.leads);
+  appendPrivacyRecords(rows,"lead_assignment_history",leadContext.assignments);
+  const commercial=await contactIntelligencePrivacyRecords(requestAll,job.workspace_id,contactId);
+  appendPrivacyRecords(rows,"contact_intelligence",commercial.intelligence);
+  appendPrivacyRecords(rows,"contact_relationship",commercial.relationships);
   appendPrivacyRecords(rows,"consent",consents);
   appendPrivacyRecords(rows,"activity",activities);
   appendPrivacyRecords(rows,"appointment_attendee",appointments);
@@ -202,6 +211,7 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"student",students);
   const enrollmentRecords=await enrollmentPrivacyRecords(requestAll,job.workspace_id,students.map(item=>item.id));
   appendPrivacyRecords(rows,"student_enrollment",enrollmentRecords.enrollments);
+  appendPrivacyRecords(rows,"commission_accrual",await commissionPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id)));
   appendPrivacyRecords(rows,"contract_enrollment_link",await contractEnrollmentPrivacyRecords(requestAll,job.workspace_id,enrollmentRecords.enrollments.map(item=>item.id)));
   appendPrivacyRecords(rows,"student_enrollment_status_history",enrollmentRecords.history);
   appendPrivacyRecords(rows,"enrollment_attribution",enrollmentRecords.attributions);
@@ -267,12 +277,12 @@ async function crmExport(job){
     },
     leads:{
       table:"leads",
-      select:"id,subject_type,name_zh,name_en,source,status,qualification_score,qualification_note,pipeline_key,owner_id,converted_at,created_at,updated_at",
+      select:"id,subject_type,name_zh,name_en,source,status,qualification_score,qualification_note,pipeline_key,owner_id,pool_visibility,revision,next_action,converted_at,created_at,updated_at",
       search:["name_zh","name_en","source"],
       activeFilter:false,
       sort:{primary:"updated_at",secondary:"name_en",status:"status",meta:"qualification_score",extra:"created_at",completeness:"updated_at"},
-      header:["ID","Subject type","Name (ZH)","Name (EN)","Source","Status","Qualification score","Evidence","Pipeline","Owner ID","Converted at","Created at","Updated at"],
-      row:item=>[item.id,item.subject_type,item.name_zh,item.name_en,item.source,item.status,item.qualification_score,item.qualification_note,item.pipeline_key,item.owner_id,item.converted_at,item.created_at,item.updated_at],
+      header:["ID","Subject type","Name (ZH)","Name (EN)","Source","Status","Qualification score","Evidence","Pipeline","Owner ID","Pool visibility","Revision","Next action","Converted at","Created at","Updated at"],
+      row:item=>[item.id,item.subject_type,item.name_zh,item.name_en,item.source,item.status,item.qualification_score,item.qualification_note,item.pipeline_key,item.owner_id,item.pool_visibility,item.revision,item.next_action,item.converted_at,item.created_at,item.updated_at],
     },
     sales:{
       table:"opportunities",

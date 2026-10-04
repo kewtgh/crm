@@ -1,4 +1,5 @@
 "use client";
+import {commercialFields} from "@/lib/channel-commercial-input";
 import {ApplicationSelector} from "./application-selector";
 
 import Link from "next/link";
@@ -20,7 +21,7 @@ import { useRemoteSearch } from "@/hooks/use-remote-search";
 type SaveAttempt={resource:BusinessResource;id:string;expectedRevision:number|null;data:Record<string,unknown>};
 const subjectKey:Record<BusinessResource,string>={organizations:"id",needs:"id",pathways:"student_id",events:"organization_id",referrals:"source_organization_id",participations:"household_id",applications:"student_id"};
 function initialDraft(resource:BusinessResource,context?:BusinessContext):Record<string,unknown>{
-  const result=Object.fromEntries(businessConfig[resource].fields.map(field=>[field.key,field.kind==="multi"?[]:field.kind==="number"||field.kind==="date"||field.kind==="relation"?null:field.initial??""]));
+  const result=Object.fromEntries(businessConfig[resource].fields.map(field=>[field.key,field.kind==="multi"?[]:field.kind==="number"||field.kind==="date"||field.kind==="relation"?null:resource==="organizations"&&commercialFields.includes(field.key as typeof commercialFields[number])&&field.kind==="enum"?null:field.initial??""]));
   if(resource==="organizations"||resource==="needs")result.id=null;
   if(resource==="organizations")result.organization_type="";
   if(context){
@@ -95,7 +96,7 @@ function BusinessEditor({resource,context,record,token,labels,onClose,onSaved,on
   const [draft,setDraft]=useState<Record<string,unknown>>(()=>record?Object.fromEntries([...config.fields.map(field=>field.key),...(resource==="organizations"||resource==="needs"?["id"]:[])].map(key=>[key,record[key]])):initialDraft(resource,context));
   const [pending,setPending]=useState(false),[uncertain,setUncertain]=useState(false),[error,setError]=useState(""),[invalidField,setInvalidField]=useState("");
   const attempt=useRef<SaveAttempt|null>(null),busy=useRef(false);
-  const change=(key:string,value:unknown)=>{setDraft(previous=>({...previous,[key]:value,...(key==="student_id"?{application_id:null}:{})}));setInvalidField("");setError("");};
+  const change=(key:string,value:unknown)=>{if(resource==="organizations"&&commercialFields.includes(key as typeof commercialFields[number])&&value===""&&config.fields.find(f=>f.key===key)?.kind==="enum")value=null;setDraft(previous=>({...previous,[key]:value,...(key==="student_id"?{application_id:null}:{})}));setInvalidField("");setError("");};
   const save=async(event?:React.FormEvent)=>{
     event?.preventDefault();if(busy.current)return;
     const payload=attempt.current??{resource,id:record?.id??(resource==="organizations"||resource==="needs"?String(draft.id??""):token),expectedRevision:record?.revision??null,data:draft};
