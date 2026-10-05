@@ -1,10 +1,14 @@
 # Lumina CRM
 
-Current release candidate: **v3.24.0**
+Current release candidate: **v3.24.1**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.24.1 restores the shared bilingual-name hint and combined name validation in the Channel
+agreement editor, fixing the CI failure affecting the v3.23.0 and v3.24.0 commits. The agreement QA
+fixture also mocks the embedded document workspace reads. See [patch notes](docs/RELEASE_V3.24.1.md).
 
 Version 3.24.0 adds Contract Operations: typed DOCX template governance, APPROVED-only deterministic
 generation, source-aware immutable lineage, private authorized downloads, external uploads, text DOCX/PDF

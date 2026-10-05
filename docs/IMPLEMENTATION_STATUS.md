@@ -1,4 +1,12 @@
-# Implementation status — v3.24.0 release candidate
+# Implementation status — v3.24.1 release candidate
+
+## v3.24.1 — Channel agreement name validation / CI patch
+
+Formal metadata is **3.24.1**. The Channel agreement editor uses the existing shared bilingual-name
+hint and combined validation, allowing either language while rejecting two blank names. The bounded
+agreement Chromium fixture mocks the v3.24 document workspace reads and checks empty/single-language
+validation. No workflow gate is weakened; no migration, schema, dependency or domain semantics change.
+See [patch notes](RELEASE_V3.24.1.md). Historical release records below retain their original versions.
 
 ## v3.24 — Contract Operations release closure
 
