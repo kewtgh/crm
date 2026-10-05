@@ -1,4 +1,49 @@
-# Implementation status — v3.22.0 release candidate
+# Implementation status — v3.23.0 release candidate
+
+## v3.23 — Management Intelligence release closure
+
+**V323_RELEASE_READY — COMMIT READY**. Formal metadata is **3.23.0**.
+Executive Overview, Operating Trends, equal-length previous
+comparison, Product/Cohort filters, canonical drill-down and full Attention with finite decision
+context form the release candidate. Management is a permission-filtered read model owning no
+business facts or mutations. Frozen 106–108 are preserved; no 109 migration or new domain object.
+See [release notes](RELEASE_V3.23.0.md), [metric and security contracts](MANAGEMENT_INTELLIGENCE_ARCHITECTURE.md)
+and [final release gate results](V323_RELEASE_CLOSURE.md). Git publishing remains separately
+authorized: no commit, push, deploy or Production access during this closure.
+
+The historical Phase 1–3 entries below retain their original 3.22.0 development baselines.
+
+## v3.23 Phase 3 — Management Attention and Decision Support
+
+**V323_PHASE3_MANAGEMENT_ATTENTION_COMPLETE**. Formal version stays **3.22.0**.
+Full Attention uses exact server pagination, stable sorting, current source predicates and
+finite permission-filtered decision context. Overview and queue share the same read query;
+source changes remove items naturally. Forward read-only 108 preserves frozen 106/107.
+No persisted Alert, acknowledgement, assignment, Task, inference or Management mutation.
+See [Attention contract](MANAGEMENT_INTELLIGENCE_ARCHITECTURE.md) and
+[Phase 3 verification](V323_PHASE3_VERIFICATION.md). No commit, push, deploy or Production access.
+
+## v3.23 Phase 2 — Operating Trends and Drill-down Consistency
+
+**V323_PHASE2_OPERATING_TRENDS_COMPLETE**. Formal version remains **3.22.0**.
+Six canonical domains support bounded business-date trends and equal adjacent previous
+periods; currency values remain separate and snapshot metrics have no invented historical
+deltas. Product/Cohort context and exact filtered canonical-list drill-downs retain source
+permissions. The independent Phase 2 delta and opening Phase 1 snapshots are saved in
+Git-ignored work evidence. No Targets, forecasts, Revenue Attribution, scores, AI or facts
+were added. See [contracts](MANAGEMENT_INTELLIGENCE_ARCHITECTURE.md) and
+[Phase 2 verification](V323_PHASE2_VERIFICATION.md). No commit, push, deploy or Production access.
+
+## v3.23 Phase 1 — Management Intelligence foundation
+
+**V323_PHASE1_MANAGEMENT_INTELLIGENCE_FOUNDATION_COMPLETE**. Formal version stays **3.22.0**.
+Executive Overview in Reports aggregates six permission-filtered canonical domains, with
+source-traceable Attention, distinct current/period metrics and separate currency amounts.
+Read-only 106 extracts the existing contract Finance formulas for reuse; Channel and Student
+Success Analytics are invoked directly. No management facts, Revenue, scores, targets,
+forecasts, AI or persisted alerts are introduced. See the
+[metric contract](MANAGEMENT_INTELLIGENCE_ARCHITECTURE.md) and
+[Phase 1 verification](V323_PHASE1_VERIFICATION.md).
 
 ## v3.22 Student Success
 

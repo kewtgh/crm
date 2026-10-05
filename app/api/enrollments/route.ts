@@ -1,3 +1,4 @@
+import {getDomainReportFilter} from "@/lib/domain-report-filter";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiRoute, requireApiCapability } from "@/lib/api";
@@ -41,7 +42,7 @@ async function get(request: Request) {
     }
     const parsed = filters.safeParse(Object.fromEntries(params));
     if (!parsed.success) throw new ApiError("ENROLLMENT_INPUT_INVALID", 400);
-    return NextResponse.json(await listEnrollments(parsed.data));
+    return NextResponse.json(await listEnrollments({...parsed.data,reportFilter:getDomainReportFilter(Object.fromEntries(params),"/enrollments")}));
   } catch (error) { return fail(error); }
 }
 async function save(request: Request) {

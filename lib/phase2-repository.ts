@@ -1,3 +1,4 @@
+import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import { databaseJson, databaseRequest } from "./db/gateway";
 
 export type TimelineEvent={occurredAt:string;type:string;entityId:string;titleZh:string;titleEn:string;summary:string;metadata:Record<string,unknown>};
@@ -80,7 +81,7 @@ async function countFinanceRows(path:string){
   return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);
 }
 
-export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string}={}):Promise<FinanceOverview>{
+export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string;reportFilter?:ReportFilter}={}):Promise<FinanceOverview>{
   const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
   const page=(value:number|undefined)=>Math.max(1,value??1);
   const quotePage=page(options.quotePage??options.page);
@@ -89,11 +90,12 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
   if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
   const context=Object.fromEntries((["studentId","productId","cohortId","enrollmentId"] as const).flatMap(key=>options[key]?[[key,options[key]]]:[]));
   const financePath=(path:string)=>{
-    if(!Object.keys(context).length)return path;
+    if(!Object.keys(context).length&&!options.reportFilter)return path;
     const url=new URL(path,"http://database.local");
     const table=url.pathname.split("/").pop()!;
     url.pathname="/db/table/"+({contracts:"finance_filtered_contracts",receivable_schedules:"finance_filtered_receivables",payments:"finance_filtered_payments",refunds:"finance_filtered_refunds",reconciliation_items:"finance_filtered_reconciliations"}[table]??table);
-    url.searchParams.set("enrollment_contexts","cs."+JSON.stringify([context]));
+    if(Object.keys(context).length)url.searchParams.set("enrollment_contexts","cs."+JSON.stringify([context]));
+    if(options.reportFilter&&table==="payments")applyReportFilter(url.searchParams,options.reportFilter);
     return url.pathname+"?"+url.searchParams;
   };
   if(options.studentId||options.enrollmentId)quoteParams.set("id","eq.00000000-0000-0000-0000-000000000000");

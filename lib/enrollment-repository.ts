@@ -1,3 +1,4 @@
+import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import { databaseJson, databaseRequest } from "./db/gateway";
 import type { EnrollmentData, AttributionData, EnrollmentLookupType } from "./enrollment-input";
 import {enrollmentFinanceProjection, type EnrollmentContractFinance} from "./enrollment-finance";
@@ -36,13 +37,14 @@ export async function getEnrollmentFinanceProjection(id: string, adapter = datab
   }
   return enrollmentFinanceProjection(id, rows, visibility);
 }
-export async function listEnrollments(options: {page?: number; pageSize?: number; query?: string; studentId?: string; cohortId?: string; status?: EnrollmentData["status"]; ownerId?: string}, adapter = database): Promise<EnrollmentPage> {
+export async function listEnrollments(options: {page?: number; pageSize?: number; query?: string; studentId?: string; cohortId?: string; status?: EnrollmentData["status"]; ownerId?: string; reportFilter?:ReportFilter}, adapter = database): Promise<EnrollmentPage> {
   const page = Math.max(1, Math.floor(options.page ?? 1)), pageSize = Math.max(1, Math.min(50, Math.floor(options.pageSize ?? 20)));
   const params = new URLSearchParams({order: "updated_at.desc,id.asc"});
   for (const [column, value] of [["student_id", options.studentId], ["cohort_id", options.cohortId], ["status", options.status], ["owner_id", options.ownerId]])
     if (value) params.set(column!, `eq.${value}`);
   const query = options.query?.replace(/[*,()%_]/g, " ").trim().slice(0, 80);
   if (query) params.set("or", `(student_name_zh.ilike.*${query}*,student_name_en.ilike.*${query}*,student_number.ilike.*${query}*)`);
+  if(options.reportFilter)applyReportFilter(params,options.reportFilter);
   const response = await adapter.request(`/db/table/student_enrollment_records?${params}`, {headers: {Prefer: "count=exact", Range: `${(page - 1) * pageSize}-${page * pageSize - 1}`}});
   const items = await response.json() as EnrollmentRecord[];
   return {items, page, pageSize, total: Number(response.headers.get("content-range")?.split("/")[1] ?? items.length)};

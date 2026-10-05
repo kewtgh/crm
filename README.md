@@ -1,19 +1,19 @@
 # Lumina CRM
 
-Current release candidate: **v3.22.0**
+Current release candidate: **v3.23.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
 
-Version 3.22.0 adds Enrollment-scoped Student Success Cases, independent lifecycle and human-confirmed
-Health, Goals and real CRM Task relationships, Check-ins and append-only Health Assessments,
-confirmed Risk Signals, independent Interventions and explicit retrospective Outcomes. Read-only
-Analytics separates current snapshots from business-date activity and Product/Cohort comparisons.
-Goal attainment is Achieved / (Achieved + Not achieved); no whole-student Success Rate, numeric
-Success/Risk Score, automatic inference or AI is defined.
-See [v3.22 release notes](docs/RELEASE_V3.22.0.md),
-[release closure](docs/V322_RELEASE_CLOSURE.md) and [Student Success architecture](docs/STUDENT_SUCCESS_ARCHITECTURE.md).
+Version 3.23.0 adds Management Intelligence in Reports: a permission-filtered Executive Overview
+across six canonical domains, business-date trends, equal-length previous-period comparison,
+Product/Cohort filters, canonical drill-down and a complete source-derived Attention queue.
+Snapshot and period activity remain separate; money is isolated by currency and restricted values
+remain distinct from zero. Management owns no business facts or mutations and provides source
+context and navigation without scores, forecasts, Targets, persisted Alerts or AI.
+See [v3.23 release notes](docs/RELEASE_V3.23.0.md),
+[release closure](docs/V323_RELEASE_CLOSURE.md) and [Management architecture](docs/MANAGEMENT_INTELLIGENCE_ARCHITECTURE.md).
 
 Version 3.21.0 adds Channel Intelligence and Decision Map, atomic Public Lead Pool assignment,
 explicit Channel Activation, versioned Channel Agreements, immutable commission earnings/refund

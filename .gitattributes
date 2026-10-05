@@ -22,3 +22,7 @@ db/migrations/202610040098_channel_account_intelligence.sql -text
 db/migrations/202610050103_student_success_foundation.sql -text
 db/migrations/202610050104_student_success_operations.sql -text
 db/migrations/202610050105_student_success_outcomes_analytics.sql -text
+db/migrations/202610050106_management_intelligence_read_model.sql -text
+db/migrations/202610050107_management_trends_query_support.sql -text
+
+db/migrations/202610050108_management_attention_read_queue.sql -text

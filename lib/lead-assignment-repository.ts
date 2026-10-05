@@ -1,9 +1,10 @@
+import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import {databaseJson,databaseRequest} from "./db/gateway";
 import type {z} from "zod";
 import type {poolFilterSchema,assignmentInputSchema} from "./lead-pool-input";
 export type PoolLead={id:string;subject_type:string;organization_id:string|null;household_id:string|null;subject_name_zh:string;subject_name_en:string;source:string;status:string;pool_visibility:string;owner_id:string|null;revision:number;qualification_score:number;qualification_note:string;next_action:string;created_at:string;updated_at:string;city:string|null;school_type:string|null;commercial_tier:string|null;partnership_potential_score:number|null;key_contact_count:number;latest_activity_at:string|null;can_edit:boolean;can_assign:boolean;is_mine:boolean};
 type Adapter={json:typeof databaseJson;request:typeof databaseRequest};const database:Adapter={json:databaseJson,request:databaseRequest};
-export async function listLeadPool(options:z.infer<typeof poolFilterSchema>&{page:number;pageSize:number;query?:string;status?:string},adapter=database){
+export async function listLeadPool(options:z.infer<typeof poolFilterSchema>&{page:number;pageSize:number;query?:string;status?:string;reportFilter?:ReportFilter},adapter=database){
  const p=new URLSearchParams({select:"*",order:options.sort==="potential"?"partnership_potential_score.desc.nullslast,id.asc":options.sort==="tier"?"commercial_tier.asc.nullslast,id.asc":`created_at.${options.sort==="oldest"?"asc":"desc"},id.asc`});
  if(options.organization)p.set("organization_id",`eq.${options.organization}`);
  if(options.view==="pool"){p.set("subject_type","eq.SCHOOL");p.set("pool_visibility","eq.WORKSPACE_PUBLIC");p.set("owner_id","is.null");p.set("status","in.(NEW,QUALIFYING,QUALIFIED)");}
@@ -14,6 +15,7 @@ export async function listLeadPool(options:z.infer<typeof poolFilterSchema>&{pag
  if(options.potentialMin!==undefined)p.set("partnership_potential_score","gte."+options.potentialMin);if(options.keyContact!=="all")p.set("key_contact_count",options.keyContact==="yes"?"gt.0":"eq.0");
  if(options.ageDays)p.set("created_at","lte."+new Date(Date.now()-options.ageDays*86400000).toISOString());
  const page=Math.max(1,options.page),pageSize=Math.max(1,Math.min(50,options.pageSize));
+ if(options.reportFilter)applyReportFilter(p,options.reportFilter);
  const response=await adapter.request(`/db/table/lead_pool_records?${p}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});
  return{items:await response.json() as PoolLead[],total:Number(response.headers.get("content-range")?.split("/")[1]??0),page,pageSize};
 }

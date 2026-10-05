@@ -17,10 +17,10 @@ import {AdmissionMilestonesSection,AdmissionsTimeline} from "./admission-milesto
 import { DetailTabs } from "./detail-tabs";
 import { EnrollmentRelation, type EnrollmentRelationType } from "./enrollment-relation";
 
-export function EnrollmentDetail({record, onClose, onEdit, onRefresh}: {record: EnrollmentRecord; onClose: () => void; onEdit: () => void; onRefresh: () => Promise<void>}) {
+export function EnrollmentDetail({record, onClose, onEdit, onRefresh,initialTab="overview"}: {initialTab?:string;record: EnrollmentRecord; onClose: () => void; onEdit: () => void; onRefresh: () => Promise<void>}) {
   const {t, locale} = useI18n(), {formatDate} = useUserPreferences();
   const [timelineRefresh,setTimelineRefresh]=useState(0);
-  const [tab, setTab] = useState("overview"), [page, setPage] = useState(1), [loading, setLoading] = useState(false), [error, setError] = useState("");
+  const [tab, setTab] = useState(["admissions","workflow"].includes(initialTab)?initialTab:"overview"), [page, setPage] = useState(1), [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [history, setHistory] = useState<EnrollmentHistory[]>([]), [sources, setSources] = useState<EnrollmentAttribution[]>([]);
   const [adding, setAdding] = useState<"PRIMARY" | "ASSIST" | null>(null), [locked, setLocked] = useState(false), [notice, setNotice] = useState("");
   const load = useCallback(async (signal?: AbortSignal) => {

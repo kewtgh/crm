@@ -1,4 +1,6 @@
 "use client";
+import {ReportScopeNotice} from "./report-scope-notice";
+import type {ReportFilter} from "@/lib/management-trend-contract";
 import Link from "next/link";
 import { CurrencySelect, DateInput, MoneyInput } from "@/components/structured-inputs";
 import { InstallmentsEditor } from "./installments-editor";
@@ -21,7 +23,7 @@ import {CommercialContextEditor} from "./commercial-context-editor";
 type ActionKind = "submit" | "accept" | "convert" | "schedule" | "payment" | "refund" | "completeRefund";
 type RelatedOption = { value: string; label: string; detail: string };
 
-export function FinancePage({ initial }: { initial: FinanceOverview }) {
+export function FinancePage({ initial,initialReportFilter={} }: {initialReportFilter?:ReportFilter; initial: FinanceOverview }) {
   const { locale, t } = useI18n();
   const { localDateTimeInput, localDateTimeToIso } = useUserPreferences();
   const user=useAppUser();
@@ -51,7 +53,7 @@ export function FinancePage({ initial }: { initial: FinanceOverview }) {
   const money = (amount: number, currency: string) => `${currency} ${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`.trim();
 
   const reload = async (nextPage = quotePage, query = quoteQuery, nextSections = sectionPages, nextPageSize = pageSize, filters = financeFilters) => {
-    const params = new URLSearchParams({
+    const params = new URLSearchParams({...Object.fromEntries(Object.entries(initialReportFilter).filter(([,v])=>v!==undefined)),
         ...filters, page: String(nextPage),
         pageSize:String(nextPageSize),
         q: query,
@@ -119,6 +121,7 @@ export function FinancePage({ initial }: { initial: FinanceOverview }) {
   };
 
   return <div className="page-stack finance-page">
+    <ReportScopeNotice filter={initialReportFilter}/>
     <section className="page-heading-row"><div><p className="eyebrow">{t("finance.eyebrow")}</p><h1>{t("finance.title")}</h1><Link href="/commissions">{t("commission.workspace")}</Link><p>{t("finance.description")}</p></div>{canManageQuotes&&<button className="primary-button" type="button" onClick={() => setCreateOpen((value) => !value)}><Plus size={17} />{t("finance.newQuote")}</button>}</section>
     <section className="quick-summary finance-risk-center" aria-label={t("finance.riskCenter")}><span><b>{data.risk.overdueReceivables}</b><small>{t("finance.overdueReceivables")}</small></span><span><b>{data.risk.openReceivables}</b><small>{t("finance.openReceivables")}</small></span><span><b>{data.risk.pendingRefunds}</b><small>{t("finance.pendingRefunds")}</small></span><span><b>{data.risk.reconciliationExceptions}</b><small>{t("finance.reconciliationExceptions")}</small></span></section>
     {canManageQuotes&&createOpen && <form className="surface finance-create" onSubmit={createQuote}><fieldset disabled={pending} className="follow-up-fields"><SectionTitle eyebrow="finance.quoteEyebrow" title="finance.createQuote" icon={BadgeDollarSign} t={t} /><SearchableSelect label={t("buyer.label")} required value={organization} onChange={setOrganization} onSearch={search} options={options} placeholder={t("buyer.search")} /><div className="form-grid three-column"><Field label={t("finance.quoteNumber")} name="number"/><Field label={t("finance.validUntil")} name="validUntil" type="date"/><label className="field"><span>{t("finance.currency")}</span><CurrencySelect name="currency" value={quoteCurrency} onChange={(event)=>setQuoteCurrency(event.target.value.toUpperCase())} required/></label></div><div className="form-grid two-column"><label className="field"><span>{t("finance.product")}</span><select value={quoteProduct} onChange={(event)=>{setQuoteProduct(event.target.value);if(event.target.value)setQuoteBundle("");}}><option value="">{t("finance.noProduct")}</option>{data.products.map(item=><option value={item.id} key={item.id}>{locale==="zh-CN"?item.nameZh:item.nameEn} · {item.code}</option>)}</select></label><label className="field"><span>{t("finance.bundle")}</span><select value={quoteBundle} onChange={(event)=>{setQuoteBundle(event.target.value);if(event.target.value)setQuoteProduct("");}}><option value="">{t("finance.noBundle")}</option>{data.bundles.map(item=><option value={item.id} key={item.id}>{locale==="zh-CN"?item.nameZh:item.nameEn} · v{item.version}</option>)}</select></label></div><ProductCohortSelector usage="QUOTE" productId={quoteProduct} value={quoteCohort} onChange={setQuoteCohort}/><label className="field"><span>{t("finance.exchangeRate")}</span><select name="exchangeRate" defaultValue=""><option value="">{t("finance.baseCurrencyRate")}</option>{data.exchangeRates.filter(item=>item.quote===quoteCurrency).map(item=><option value={item.id} key={item.id}>{item.base}/{item.quote} · {item.rate} · {item.source}</option>)}</select></label><InlineMessage type="info"><span className="required-indicator">* </span>{t("finance.productOrBundleHelp")} ({t("input.required")})</InlineMessage><div className="form-grid two-column"><Field label={t("finance.subtotal")} name="subtotal" type="number"/><Field label={t("finance.discount")} name="discount" type="number" defaultValue="0"/></div><div className="form-grid two-column"><TextArea label={t("finance.termsZh")} name="termsZh"/><TextArea label={t("finance.termsEn")} name="termsEn"/></div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" onClick={()=>setCreateOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending?t("common.saving"):t("common.create")}</button></div></fieldset></form>}

@@ -1,4 +1,6 @@
 "use client";
+import {ReportScopeNotice} from "./report-scope-notice";
+import type {ReportFilter} from "@/lib/management-trend-contract";
 import { BilingualNameHint } from "@/components/structured-inputs";
 import { DateInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
 
@@ -52,7 +54,7 @@ export function PipelinePage({
   initialCurrency,
   initialCurrencies,
   persistent = true,
-  initialFocus,
+  initialFocus,initialReportFilter={},
 }: {
   initialItems: OpportunityRecord[];
   initialTotal: number;
@@ -60,7 +62,7 @@ export function PipelinePage({
   initialCurrency: string;
   initialCurrencies: string[];
   persistent?: boolean;
-  initialFocus?:string;
+  initialFocus?:string;initialReportFilter?:ReportFilter;
 }) {
   const { locale, t } = useI18n();
   const canManage=useCapability("opportunities.manage");
@@ -115,12 +117,13 @@ export function PipelinePage({
     return `${t(fallbackKey)}${caught.requestId ? ` · ${t("common.requestId")}: ${caught.requestId}` : ""}`;
   }, [t]);
 
+  const reportQuery=new URLSearchParams(Object.entries(initialReportFilter).filter(([,v])=>v!==undefined) as [string,string][]).toString(),reportScoped=!!initialReportFilter.reportMetric;
   const load = useCallback(async (nextPage: number, nextQuery: string, nextPageSize = pageSize, nextCurrency = currencyScope) => {
     if (!persistent) return;
     setLoading(true);
     setError("");
     const result=await runPageLoad(signal=>apiFetch<OpportunityPage>(
-      `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}&currency=${encodeURIComponent(nextCurrency)}`,{signal},
+      `/api/opportunities?page=${nextPage}&pageSize=${nextPageSize}&query=${encodeURIComponent(nextQuery)}${reportScoped?"":"&currency="+encodeURIComponent(nextCurrency)}&${reportQuery}`,{signal},
     ));
     if(!result.current)return;
     setLoading(false);
@@ -138,7 +141,7 @@ export function PipelinePage({
       setFunnel(result.value.funnel);
       setCurrencyScope(result.value.currency);
       setCurrencyOptions(result.value.currencies);
-  }, [currencyScope, describeError, pageSize, persistent,runPageLoad]);
+  }, [currencyScope, describeError, pageSize, persistent,runPageLoad,reportQuery,reportScoped]);
 
   useEffect(() => {
     if (page === 1 && !query) return;
@@ -291,6 +294,7 @@ export function PipelinePage({
   const paymentAmount = funnelMap.get("PAYMENT")?.amount ?? 0;
 
   return <div className="page-stack pipeline-page">
+    <ReportScopeNotice filter={initialReportFilter}/>
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t("eyebrow.revenueMomentum")}</p>
@@ -305,15 +309,15 @@ export function PipelinePage({
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}
     {initialFocus&&<InlineMessage type="info">{t("audit.opportunityFocus")} <Link href="/opportunities">{t("audit.allOpportunities")}</Link></InlineMessage>}
-    <section className="pipeline-summary">
+    {!reportScoped&&<section className="pipeline-summary">
       <span><CircleDollarSign size={19}/><div><small>{t("pipeline.total")}</small><b>{money(totalAmount)}</b></div></span>
       <span><Sparkles size={19}/><div><small>{t("pipeline.weighted")}</small><b>{money(weighted)}</b></div></span>
       <span><CalendarDays size={19}/><div><small>{t("pipeline.paymentStage")}</small><b>{money(paymentAmount)}</b></div></span>
       <span><UserRound size={19}/><div><small>{t("pipeline.active")}</small><b>{activeCount}</b></div></span>
-    </section>
+    </section>}
     <section className="surface table-toolbar">
       <SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("pipeline.search")}/>
-      <label className="compact-field"><span>{t("pipeline.currencyScope")}</span><select value={currencyScope} onChange={(event)=>{const value=event.target.value;setCurrencyScope(value);setPage(1);void load(1,query,pageSize,value);}}>{currencyOptions.map(value=><option value={value} key={value}>{value}</option>)}</select></label>
+      {!reportScoped&&<label className="compact-field"><span>{t("pipeline.currencyScope")}</span><select value={currencyScope} onChange={(event)=>{const value=event.target.value;setCurrencyScope(value);setPage(1);void load(1,query,pageSize,value);}}>{currencyOptions.map(value=><option value={value} key={value}>{value}</option>)}</select></label>}
       <button className="icon-button" type="button" disabled={loading} aria-label={t("common.retry")} onClick={() => load(page, query)}>
         <RefreshCcw className={loading ? "spin" : ""} size={16}/>
       </button>
@@ -323,8 +327,8 @@ export function PipelinePage({
         <section className="kanban-board">
           {groups.map((group) => <div className="kanban-column" key={group.stage}>
             <div className="kanban-heading">
-              <span><i className={stageTone[group.stage]}/><b>{t(`sales.stage.${group.stage.toLowerCase()}`)}</b><small>{funnelMap.get(group.stage)?.count ?? group.items.length}</small></span>
-              <b>{money(funnelMap.get(group.stage)?.amount ?? 0)}</b>
+              <span><i className={stageTone[group.stage]}/><b>{t(`sales.stage.${group.stage.toLowerCase()}`)}</b><small>{reportScoped?group.items.length:funnelMap.get(group.stage)?.count ?? group.items.length}</small></span>
+              {!reportScoped&&<b>{money(funnelMap.get(group.stage)?.amount ?? 0)}</b>}
             </div>
             <div className="kanban-cards">
               {group.items.map((card) => <article className="opportunity-card" key={card.id}>

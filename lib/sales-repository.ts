@@ -1,3 +1,4 @@
+import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import { databaseJson, databaseRequest } from "./db/gateway";
 
 export type SalesMemberMetric = { id:string; nameZh:string; nameEn:string; team:string; role:string; target:number; actual:number; forecast:number; opportunities:number };
@@ -38,12 +39,13 @@ export async function recordRelationshipMilestone(input:{organizationId:string;m
 export type OpportunityRecord={id:string;subjectType:"SCHOOL"|"HOUSEHOLD";organizationId:string;householdId:string;subjectZh:string;subjectEn:string;organizationZh:string;organizationEn:string;pipeline:string;titleZh:string;titleEn:string;stage:FunnelMetric["stage"];amount:number;currency:string;probability:number;expectedCloseDate:string|null;nextActionZh:string;nextActionEn:string;ownerId:string;ownerZh:string;ownerEn:string;lastActivityAt:string|null;productId?:string|null;cohortId?:string|null;productZh?:string;productEn?:string;cohortZh?:string;cohortEn?:string;revision?:number};
 type OpportunityRow={id:string;product_id:string|null;cohort_id:string|null;revision:number;subject_type:"SCHOOL"|"HOUSEHOLD";pipeline_key:string;organization_id:string|null;household_id:string|null;title_zh:string;title_en:string;stage:OpportunityRecord["stage"];amount:number|string;currency:string;probability:number;expected_close_date:string|null;next_action_zh:string;next_action_en:string;owner_id:string;last_activity_at:string|null;organizations:{name_zh:string;name_en:string}|null;households:{name_zh:string;name_en:string}|null};
 
-export async function listOpportunities(input:{page?:number;pageSize?:number;query?:string;stage?:string;team?:string;currency?:string;id?:string}={}){
+export async function listOpportunities(input:{page?:number;pageSize?:number;query?:string;stage?:string;team?:string;currency?:string;id?:string;reportFilter?:ReportFilter}={}){
   const page=Math.max(1,input.page??1);const pageSize=Math.min(100,Math.max(1,input.pageSize??20));const params=new URLSearchParams({select:"id,product_id,cohort_id,revision,subject_type,pipeline_key,organization_id,household_id,title_zh,title_en,stage,amount,currency,probability,expected_close_date,next_action_zh,next_action_en,owner_id,last_activity_at,organizations:organizations!opportunities_workspace_organization_fk(name_zh,name_en),households:households!opportunities_workspace_household_fk(name_zh,name_en)",order:"updated_at.desc"});
   if(input.stage&&input.stage!=="all")params.set("stage",`eq.${input.stage}`);
   if(input.id&&/^[a-f0-9-]{36}$/i.test(input.id))params.set("id",`eq.${input.id}`);
   if(input.currency&&/^[A-Z]{3}$/.test(input.currency))params.set("currency",`eq.${input.currency}`);
   const query=input.query?.replace(/[*,()]/g," ").trim().slice(0,100);if(query)params.set("or",`(title_zh.ilike.*${query}*,title_en.ilike.*${query}*)`);
+  if(input.reportFilter)applyReportFilter(params,input.reportFilter);
   const response=await databaseRequest(`/db/table/opportunities?${params}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});const rows=await response.json() as OpportunityRow[];
   const ownerIds=[...new Set(rows.map(row=>row.owner_id))];const owners=new Map<string,{zh:string;en:string}>();if(ownerIds.length){const profiles=await databaseJson<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ownerIds.join(",")})`);profiles.forEach(profile=>owners.set(profile.user_id,{zh:profile.display_name_zh,en:profile.display_name_en}));}
   const productIds=[...new Set(rows.map(row=>row.product_id).filter(Boolean))],cohortIds=[...new Set(rows.map(row=>row.cohort_id).filter(Boolean))];

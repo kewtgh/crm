@@ -238,14 +238,14 @@ function filterSql(
   return `${quoted} ${sqlOperator} $${values.length}`;
 }
 
-function parseOrFilters(value: string, values: unknown[]) {
+function parseOrFilters(value: string, values: unknown[], conjunction: "or" | "and" = "or") {
   const entries = splitTopLevel(value.startsWith("(") && value.endsWith(")") ? value.slice(1, -1) : value);
   const clauses = entries.map((entry) => {
     const first = entry.indexOf(".");
     if (first < 1) throw new DatabaseRequestError(400, "INVALID_DATABASE_FILTER", "Invalid OR filter");
     return filterSql(entry.slice(0, first), entry.slice(first + 1), values);
   });
-  return clauses.length ? `(${clauses.join(" or ")})` : "false";
+  return clauses.length ? `(${clauses.join(` ${conjunction} `)})` : "false";
 }
 
 function queryParts(searchParams: URLSearchParams) {
@@ -254,8 +254,8 @@ function queryParts(searchParams: URLSearchParams) {
   const reserved = new Set(["select", "order", "limit", "offset", "on_conflict"]);
   for (const [column, value] of searchParams.entries()) {
     if (reserved.has(column)) continue;
-    if (column === "or") {
-      filters.push(parseOrFilters(value, values));
+    if (column === "or" || column === "and") {
+      filters.push(parseOrFilters(value, values, column));
       continue;
     }
     filters.push(filterSql(column, value, values));
@@ -307,7 +307,19 @@ async function selectRows(
   searchParams: URLSearchParams,
   headers: Headers,
 ) {
-  const { values, where } = queryParts(searchParams);
+  const ordinaryParams = new URLSearchParams(searchParams);
+  const reportFilter = ordinaryParams.get("report_filter");
+  ordinaryParams.delete("report_filter");
+  const parts = queryParts(ordinaryParams);
+  if (reportFilter) {
+    // A read-only predicate shared by row and exact-count queries. Values are
+    // bound parameters; the SQL function still reads through domain RLS.
+    const allowed = new Set(["lead_pool_records", "opportunities", "student_enrollment_records", "student_success_records", "payments", "finance_filtered_payments", "student_success_outcome_records"]);
+    if (!allowed.has(table) || reportFilter.length > 1000) throw new DatabaseRequestError(400, "INVALID_DATABASE_FILTER", "Unsupported report filter");
+    parts.values.push(table, reportFilter);
+    parts.where += `${parts.where ? " and" : " where"} public.domain_report_record_matches($${parts.values.length - 1},id,$${parts.values.length}::jsonb)`;
+  }
+  const { values, where } = parts;
   const limit = limitSql(searchParams, headers);
   const order = orderSql(searchParams.get("order"));
   const rows = (await client.query<Record<string, unknown>>(

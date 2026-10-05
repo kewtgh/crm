@@ -1,3 +1,4 @@
+import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import {databaseJson,databaseRequest} from "./db/gateway";
 import type {z} from "zod";
 import type {SuccessCaseData,SuccessGoalData,successFiltersSchema,successCaseSaveSchema,successGoalSaveSchema,successTaskLinkSchema} from "./student-success-input";
@@ -7,10 +8,11 @@ export type SuccessHistory={id:string;from_status:SuccessCaseData["status"]|null
 export type SuccessTask={id:string;task_id:string;case_id:string;goal_id:string|null;intervention_id?:string|null;revision:number;title_zh:string;title_en:string;status:string;priority:string;due_at:string|null;owner_id:string|null;can_edit:boolean};
 export type SuccessPage={items:SuccessCase[];total:number;page:number;pageSize:number};
 type Adapter={json:typeof databaseJson;request:typeof databaseRequest};const database:Adapter={json:databaseJson,request:databaseRequest};
-export async function listSuccessCases(options:Partial<z.infer<typeof successFiltersSchema>>,adapter=database):Promise<SuccessPage>{
+export async function listSuccessCases(options:Partial<z.infer<typeof successFiltersSchema>>&{reportFilter?:ReportFilter},adapter=database):Promise<SuccessPage>{
  const page=options.page??1,pageSize=options.pageSize??20,params=new URLSearchParams({order:"updated_at.desc,id.asc"});
  for(const [column,key] of [["student_id","studentId"],["enrollment_id","enrollmentId"],["product_id","productId"],["cohort_id","cohortId"],["owner_id","ownerId"],["status","status"],["health_status","health"]] as const)if(options[key])params.set(column,`eq.${options[key]}`);
  if(options.reviewFrom&&options.reviewTo)params.set("and",`(next_review_on.gte.${options.reviewFrom},next_review_on.lte.${options.reviewTo})`);else if(options.reviewFrom)params.set("next_review_on",`gte.${options.reviewFrom}`);else if(options.reviewTo)params.set("next_review_on",`lte.${options.reviewTo}`);
+ if(options.reportFilter)applyReportFilter(params,options.reportFilter);
  const response=await adapter.request(`/db/table/student_success_records?${params}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}}),items=await response.json() as SuccessCase[];
  return{items,total:Number(response.headers.get("content-range")?.split("/")[1]??items.length),page,pageSize};
 }

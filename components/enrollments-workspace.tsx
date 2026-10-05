@@ -1,4 +1,6 @@
 "use client";
+import {ReportScopeNotice} from "./report-scope-notice";
+import type {ReportFilter} from "@/lib/management-trend-contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { presentApiError } from "@/lib/api-error-presenter";
@@ -12,21 +14,22 @@ import { EnrollmentEditor } from "./enrollment-editor";
 import { EnrollmentDetail, EnrollmentStatus } from "./enrollment-detail";
 import { EnrollmentRelation } from "./enrollment-relation";
 
-export function EnrollmentsWorkspace({initial, initialDetail = null, initialStudentId = ""}: {initial: EnrollmentPage | null; initialDetail?: EnrollmentRecord | null; initialStudentId?: string}) {
+export function EnrollmentsWorkspace({initial, initialDetail = null, initialStudentId = "",initialReportFilter={},initialDetailTab="overview"}: {initialDetailTab?:string;initialReportFilter?:ReportFilter;initial: EnrollmentPage | null; initialDetail?: EnrollmentRecord | null; initialStudentId?: string}) {
   const {t, locale} = useI18n(), {formatDate} = useUserPreferences(), canManage = useCapability("education.manage");
   const [data, setData] = useState<EnrollmentPage>(initial ?? {items:[],page:1,pageSize:20,total:0});
   const [query, setQuery] = useState(""), [search, setSearch] = useState(""), [studentId, setStudentId] = useState(initialStudentId);
   const [cohortId, setCohortId] = useState(""), [status, setStatus] = useState(""), [ownerId, setOwnerId] = useState("");
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [detail, setDetail] = useState<EnrollmentRecord | null>(initialDetail), [editor, setEditor] = useState<{record?: EnrollmentRecord} | null>(null), [notice, setNotice] = useState("");
+  const reportQuery=new URLSearchParams(Object.entries(initialReportFilter).filter(([,v])=>v!==undefined) as [string,string][]).toString();
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true); setError("");
-    const params = new URLSearchParams({page:String(page),pageSize:String(pageSize)});
+    const params = new URLSearchParams(reportQuery);params.set("page",String(page));params.set("pageSize",String(pageSize));
     for (const [key, value] of [["query",search],["studentId",studentId],["cohortId",cohortId],["status",status],["ownerId",ownerId]]) if (value) params.set(key,value);
     try {const result = await apiFetch<EnrollmentPage>(`/api/enrollments?${params}`, {signal}); if (!signal?.aborted) setData(result);}
     catch (error) {if (!signal?.aborted) {setError(presentApiError(error,t,"enrollments.loadFailed").message); throw error;}}
     finally {if (!signal?.aborted) setLoading(false);}
-  }, [page,pageSize,search,studentId,cohortId,status,ownerId,t]);
+  }, [page,pageSize,search,studentId,cohortId,status,ownerId,t,reportQuery]);
   useEffect(() => {const controller = new AbortController(); const timer = setTimeout(() => void load(controller.signal).catch(() => {}),0); return () => {clearTimeout(timer);controller.abort();};}, [load]);
   const openDetail = async (id: string) => {setError(""); try {const result = await apiFetch<{item:EnrollmentRecord}>(`/api/enrollments?id=${id}`);setDetail(result.item);} catch (error) {setError(presentApiError(error,t,"enrollments.loadFailed").message);}};
   const refreshDetail = async () => {if (!detail) return; const result = await apiFetch<{item:EnrollmentRecord}>(`/api/enrollments?id=${detail.id}`);setDetail(result.item);};
@@ -36,7 +39,7 @@ export function EnrollmentsWorkspace({initial, initialDetail = null, initialStud
     catch {setNotice(t("enrollments.savedRefreshFailed"));}
   };
   const label = (zh?: string | null, en?: string | null) => (locale === "en" ? en : zh) || zh || en || "—";
-  return <div className="page-stack">
+  return <div className="page-stack"><ReportScopeNotice filter={initialReportFilter}/>
     <section className="page-heading-row"><div><p className="eyebrow">{t("education.eyebrow")}</p><h1>{t("enrollments.title")}</h1><p>{t("enrollments.description")}</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setEditor({});setNotice("");}}>{t("enrollments.create")}</button>}</section>
     {notice && <InlineMessage type="success">{notice}</InlineMessage>}
     <section className="surface">
@@ -53,7 +56,7 @@ export function EnrollmentsWorkspace({initial, initialDetail = null, initialStud
       <div className="detail-record-list enrollment-records">{!error && data.items.map(row => <article key={row.id}><div><b>{label(row.student_name_zh,row.student_name_en)}</b><small>{label(row.product_name_zh,row.product_name_en)} · {label(row.cohort_name_zh,row.cohort_name_en)}</small><small>{t("enrollments.owner")}: {label(row.owner_name_zh,row.owner_name_en)} · {formatDate(row.updated_at,{includeTime:true})}</small></div><div className="detail-actions"><EnrollmentStatus status={row.status}/><button className="secondary-button" type="button" onClick={() => void openDetail(row.id)}>{t("common.details")}</button></div></article>)}</div>
       <Pagination page={data.page} totalPages={Math.max(1,Math.ceil(data.total/data.pageSize))} total={data.total} pageSize={data.pageSize} onPage={setPage} onPageSize={value => {setPageSize(value);setPage(1);}}/>
     </section>
-    {detail && !editor && <EnrollmentDetail key={detail.id} record={detail} onClose={() => setDetail(null)} onEdit={() => setEditor({record:detail})} onRefresh={refreshDetail}/>}
+    {detail && !editor && <EnrollmentDetail initialTab={initialDetailTab} key={detail.id} record={detail} onClose={() => setDetail(null)} onEdit={() => setEditor({record:detail})} onRefresh={refreshDetail}/>}
     {editor && <EnrollmentEditor record={editor.record} studentId={studentId} onClose={() => setEditor(null)} onSaved={saved}/>}
   </div>;
 }

@@ -358,7 +358,10 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="student-success-outcomes"){await require("./qa-student-success-outcomes.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="management-attention"){await require("./qa-management-attention.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="management-trends"){await require("./qa-management-trends.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="management-overview"){await require("./qa-management-overview.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="student-success-outcomes"){await require("./qa-student-success-outcomes.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="student-success-operations"){await require("./qa-student-success-operations.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="student-success"){await require("./qa-student-success.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="channel-analytics"){await require("./qa-channel-analytics.cjs")({browser,base,output,report,observe});}

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {randomBytes,randomUUID} from "node:crypto";
 import {spawnSync} from "node:child_process";
 import pg from "pg";
+import {pathToFileURL} from "node:url";
+export async function runChannelAnalyticsIntegration(managementCheck){
 // Disposable local DB only; never loads .env.local or existing application credentials.
 const container=`lumina-crm-channel-analytics-it-${randomBytes(5).toString("hex")}`,deadline=Date.now()+50_000,password=randomBytes(32).toString("hex");
 const image=process.env.CHANNEL_ANALYTICS_TEST_POSTGRES_IMAGE||"postgres:18.6-trixie";
@@ -159,13 +161,17 @@ try{
  assert.equal((await analytics()).period.timezone,'Asia/Taipei');
  const plan=(await client.query('explain (analyze, buffers, format json) select public.channel_analytics($1)',[{from:'2026-01-01',to:'2026-12-31'}])).rows[0]['QUERY PLAN'][0];
  assert.ok(plan['Execution Time']<1500);console.log('PASS bounded analytics query plan: '+plan['Execution Time']+' ms; existing indexes retained.');
+ await managementCheck?.({client,context,ws,otherWs,admin,sales,stranger,en,en2,school,hiddenSchool,p,co,exclusive,shared,usd,payment,retained:false});
  await context();const ledgerBefore=(await scalar('select count(*)::int n from public.commission_accruals')).n;await client.query('reset role');await client.query("update public.contacts set do_not_contact_reason='PRIVACY_DELETION:commission-test' where id=$1",[person]);await context();assert.equal((await scalar('select count(*)::int n from public.commission_accruals')).n,ledgerBefore);assert.equal((await scalar('select enrollment_id,attribution_id from public.commission_accruals where id=$1',[earned.id])).enrollment_id,null);assert.equal((await scalar('select status from public.commission_settlements where id=$1',[settlement.id])).status,'PAID');assert.equal((await scalar('select count(*)::int n from public.channel_commission_rules where agreement_version_id=$1',[vid])).n,2);
  assert.equal((await scalar("select count(*)::int n from public.audit_events where entity_type='COMMISSION_ACCRUAL' and after_data::text ~ '(student_name|student_email|passport|guardian)' ")).n,0);
  const retained=await analytics();assert.equal(retained.commissionByCurrency.find(x=>x.currency==='CNY').net,'10000.00');assert.equal(retained.items.find(x=>x.organizationId===school).snapshot.primaryContributions,1);
  assert.ok(!JSON.stringify(retained).match(/student-a|passport|student_name|guardian/i));
+ await managementCheck?.({client,context,ws,retained:true});
  console.log('PASS channel analytics golden path: explicit lead claim/qualification/stage, decision map, opportunities/events, distinct attribution, canonical commission/refund/settlement, currencies, RLS/redaction, privacy retention.');
  console.log('PASS commission PostgreSQL: agreement versions/terms, fixed events, canonical payment, shared no-double-count, refund after PAID settlement, multi-currency, real settlement race, sensitive permissions/RLS, immutable ledger, privacy retention.');
 }finally{
   await otherClient?.end().catch(()=>{});await client?.end().catch(()=>{});assert.match(container,/^lumina-crm-channel-analytics-it-[a-f0-9]{10}$/);
   const cleanup=spawnSync("docker",["rm","--force",container],{encoding:"utf8",timeout:10000,windowsHide:true});if(cleanup.status!==0&&!cleanup.stderr?.includes("No such container"))throw new Error(`Could not remove isolated test container ${container}: ${cleanup.stderr}`);
 }
+}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await runChannelAnalyticsIntegration();

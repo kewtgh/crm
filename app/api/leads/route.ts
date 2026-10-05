@@ -1,3 +1,4 @@
+import {getDomainReportFilter} from "@/lib/domain-report-filter";
 import {leadUpdateSchema,poolFilterSchema} from "@/lib/lead-pool-input";
 import {listLeadPool,getPoolLead} from "@/lib/lead-assignment-repository";
 import {databaseJson} from "@/lib/db/gateway";
@@ -34,7 +35,7 @@ async function get(request: Request) {
     return NextResponse.json({ item:legacyFields(item) });
   }
   const parsed=poolFilterSchema.safeParse(Object.fromEntries([...url.searchParams].filter(([,v])=>v!=="")));if(!parsed.success)throw new ApiError("LEAD_FILTER_INVALID",400);
-  const result=await listLeadPool({...parsed.data,...parsePagination(url.searchParams,20),query:url.searchParams.get("q")??"",status:url.searchParams.get("status")??"all"});return NextResponse.json({...result,items:result.items.map(legacyFields)});
+  const result=await listLeadPool({...parsed.data,...parsePagination(url.searchParams,20),query:url.searchParams.get("q")??"",status:url.searchParams.get("status")??"all",reportFilter:getDomainReportFilter(Object.fromEntries(url.searchParams),"/leads")});return NextResponse.json({...result,items:result.items.map(legacyFields)});
 }
 
 async function post(request: Request) {

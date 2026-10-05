@@ -9,8 +9,8 @@ import {useI18n} from "./i18n-provider";
 import {InlineMessage} from "./ui";
 import {DateInput} from "./structured-inputs";
 import {EnrollmentRelation} from "./enrollment-relation";
-export function StudentSuccessAnalytics(){
- const {t,locale}=useI18n(),[data,setData]=useState<SuccessAnalytics|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[filters,setFilters]=useState({from:"",to:"",productId:"",cohortId:"",ownerId:"",health:""});
+export function StudentSuccessAnalytics({initialFilters={}}:{initialFilters?:{from?:string;to?:string;productId?:string;cohortId?:string}}={}){
+ const {t,locale}=useI18n(),[data,setData]=useState<SuccessAnalytics|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[filters,setFilters]=useState({from:"",to:"",productId:"",cohortId:"",ownerId:"",health:"",...initialFilters});
  const query=new URLSearchParams(Object.entries(filters).filter(([,v])=>v)).toString(),load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const result=await apiFetch<SuccessAnalytics>(`/api/student-success/analytics?${query}`,{signal});if(!signal?.aborted)setData(result);}catch{if(!signal?.aborted){setData(null);setError(t("success.loadFailed"));}}finally{if(!signal?.aborted)setLoading(false);}},[query,t]);
  useEffect(()=>{const c=new AbortController(),timer=setTimeout(()=>void load(c.signal),0);return()=>{clearTimeout(timer);c.abort();};},[load]);const filter=(key:string,value:string)=>setFilters(old=>({...old,[key]:value,...(key==="productId"?{cohortId:""}:{})}));
  const distribution=(kind:string,values:readonly string[],prefix:string)=><article className="settings-subform"><h3>{t(`successAnalytics.distribution.${kind}`)}</h3><dl className="enrollment-summary">{values.map(v=><div key={v}><dt>{t(`${prefix}.${v}`)}</dt><dd>{data?.snapshot.distributions[kind]?.[v]??0}</dd></div>)}</dl></article>;

@@ -1,0 +1,26 @@
+import {useEffect,useState} from "react";
+import {createRoot} from "react-dom/client";
+import {I18nProvider,useI18n} from "../../components/i18n-provider";
+import {AppUserProvider} from "../../components/app-user-context";
+import {UserPreferencesProvider} from "../../components/user-preferences-context";
+import {ExecutiveOverviewPage} from "../../components/executive-overview-page";
+import {LeadPoolWorkspace} from "../../components/lead-pool-workspace";
+import {EnrollmentsWorkspace} from "../../components/enrollments-workspace";
+import {PipelinePage} from "../../components/pipeline-page";
+import {StudentSuccessWorkspace} from "../../components/student-success-workspace";
+import {FinancePage} from "../../components/finance-page";
+import {readReportFilter} from "../../lib/management-trend-contract";
+import {managementDrillData,managementFinanceData,type DrillRows} from "./management-drill-data";
+import {zhCN} from "../../lib/i18n/locales/zh-CN";
+const user={id:"00000000-0000-4000-8000-000000000099",username:"qa",email:"qa@example.test",displayName:"QA",displayNameZh:"QA",role:"ADMIN" as const,initials:"QA",mustChangePassword:false,mfaEnabled:true,aal:"aal2" as const,emailVerified:true,accountStatus:"ACTIVE" as const};
+function Fixture(){const {setLocale}=useI18n(),[route,setRoute]=useState("/reports/executive");useEffect(()=>{const click=(event:MouseEvent)=>{const link=(event.target as Element).closest("a");if(link?.href&&new URL(link.href).origin===location.origin){const url=new URL(link.href);if(["/leads","/opportunities","/enrollments","/student-success","/finance"].includes(url.pathname)){event.preventDefault();event.stopImmediatePropagation();setRoute(url.pathname+url.search);}}};document.addEventListener("click",click,true);return()=>document.removeEventListener("click",click,true);},[]);
+ const url=new URL(route,location.origin),params=Object.fromEntries(url.searchParams),filter=url.pathname==="/reports/executive"?{}:readReportFilter(params,url.pathname),data=managementDrillData(filter.reportMetric??"");let page;
+ if(url.pathname==="/leads")page=<LeadPoolWorkspace initial={data as unknown as {items:DrillRows["leads"];total:number;page:number;pageSize:number}} initialReportFilter={filter}/>;
+ else if(url.pathname==="/opportunities")page=<PipelinePage initialItems={data.items as unknown as DrillRows["opportunities"]} initialTotal={data.total} initialFunnel={[]} initialCurrency="CNY" initialCurrencies={["CNY","USD"]} initialReportFilter={filter}/>;
+ else if(url.pathname==="/enrollments")page=<EnrollmentsWorkspace initial={data as unknown as {items:DrillRows["enrollments"];total:number;page:number;pageSize:number}} initialReportFilter={filter}/>;
+ else if(url.pathname==="/student-success")page=<StudentSuccessWorkspace initial={data as unknown as {items:DrillRows["success"];total:number;page:number;pageSize:number}} initialReportFilter={filter} initialView={params.view}/>;
+ else if(url.pathname==="/finance")page=<FinancePage initial={managementFinanceData()} initialReportFilter={filter}/>;
+ else page=<ExecutiveOverviewPage/>;
+ return <main><div className="page-actions"><button onClick={()=>void setLocale("en")}>QA English</button><button onClick={()=>void setLocale("zh-CN")}>QA 中文</button><button onClick={()=>setRoute("/reports/executive")}>QA Overview</button></div><div key={route} data-domain-route={url.pathname}>{page}</div></main>;
+}
+createRoot(document.getElementById("root")!).render(<I18nProvider initialLocale="zh-CN" initialMessages={zhCN}><AppUserProvider user={user}><UserPreferencesProvider initialPreferences={{timezone:"Asia/Taipei",dateFormat:"yyyy-MM-dd"}}><Fixture/></UserPreferencesProvider></AppUserProvider></I18nProvider>);
