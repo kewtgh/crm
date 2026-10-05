@@ -1,10 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.23.0**
+Current release candidate: **v3.24.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.24.0 adds Contract Operations: typed DOCX template governance, APPROVED-only deterministic
+generation, source-aware immutable lineage, private authorized downloads, external uploads, text DOCX/PDF
+extraction and document-only human review. Canonical conflicts never permit CRM overrides. The real v1
+templates remain DRAFT pending business/legal approval; no OCR, AI, e-signature or automatic SIGNED/financial
+mutation is introduced. See [v3.24 release notes](docs/RELEASE_V3.24.0.md),
+[release closure](docs/V324_RELEASE_CLOSURE.md) and [Contract Operations architecture](docs/CONTRACT_TEMPLATE_ARCHITECTURE.md).
 
 Version 3.23.0 adds Management Intelligence in Reports: a permission-filtered Executive Overview
 across six canonical domains, business-date trends, equal-length previous-period comparison,

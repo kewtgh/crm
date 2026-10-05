@@ -1,4 +1,6 @@
+import {enContractUploads} from "./contract-uploads";
 import {enManagement} from "./management-intelligence";
+import {enContractDocuments} from "./contract-documents";
 import {enSuccessOutcomes} from "./student-success-outcomes";
 import {enSuccessOperations} from "./student-success-operations";
 import {enSuccess} from "./student-success";
@@ -38,6 +40,8 @@ import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
   ...enManagement,
+  ...enContractDocuments,
+  ...enContractUploads,
   ...enSuccessOutcomes,...enSuccess,...enSuccessOperations,
   ...enChannelAnalytics,
   ...enCommissions,

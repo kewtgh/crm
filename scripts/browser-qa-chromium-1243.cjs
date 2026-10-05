@@ -358,7 +358,9 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="management-attention"){await require("./qa-management-attention.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="contract-extraction"){await require("./qa-contract-extraction.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="contract-documents"){await require("./qa-contract-documents.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="management-attention"){await require("./qa-management-attention.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="management-trends"){await require("./qa-management-trends.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="management-overview"){await require("./qa-management-overview.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="student-success-outcomes"){await require("./qa-student-success-outcomes.cjs")({browser,base,output,report,observe});}

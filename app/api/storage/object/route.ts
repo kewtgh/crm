@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   }
   const token = new URL(request.url).searchParams.get("token") ?? "";
   const key = verifyLocalObjectToken(token);
-  if (!key) return new NextResponse(null, { status: 404 });
+  if (!key || key.startsWith("contract-documents/")) return new NextResponse(null, { status: 404 });
   const object = await objectStore().get(key);
   if (!object) return new NextResponse(null, { status: 404 });
   return new NextResponse(Buffer.from(object.body), {

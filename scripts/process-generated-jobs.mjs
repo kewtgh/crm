@@ -12,6 +12,8 @@ import {workflowPrivacyRecords} from "./lib/workflow-privacy-export.mjs";
 import { milestonePrivacyRecords } from "./lib/milestone-privacy-export.mjs";
 import { workerObjectStore } from "./lib/worker-object-store.mjs";
 import { createHash } from "node:crypto";
+import {processContractExtraction} from "./lib/contract-extraction-worker.mjs";
+import {processContractDocument} from "./lib/contract-document-worker.mjs";
 import { readFile } from "node:fs/promises";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -198,6 +200,8 @@ async function privacyExport(job){
   const rows=[["Resource","Record ID","Field","Value"]];
   appendPrivacyRecords(rows,"privacy_request",privacyRequests);
   appendPrivacyRecords(rows,"contact",contacts);
+  appendPrivacyRecords(rows,"uploaded_contract_document",await request("/db/rpc/upload_privacy_records",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token})}));
+  appendPrivacyRecords(rows,"generated_contract_document",await request("/db/rpc/document_privacy_records",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token})}));
   const leadContext=await leadPoolPrivacyRecords(requestAll,job.workspace_id,[...new Set(memberships.map(m=>m.household_id))]);
   appendPrivacyRecords(rows,"household_lead",leadContext.leads);
   appendPrivacyRecords(rows,"lead_assignment_history",leadContext.assignments);
@@ -354,6 +358,10 @@ try{
   let ready=0;
   for(const job of jobs){
     try{
+      if(job.job_type==="CONTRACT_DOCUMENT_EXTRACTION") { await processContractExtraction(job,request,workerObjectStore());ready+=1;continue; }
+      if(job.job_type==="CONTRACT_DOCUMENT_GENERATION") {
+        await processContractDocument(job,request,workerObjectStore());ready+=1;continue;
+      }
       const rows=job.job_type==="CONTRACT_EXPORT"?await contractExport(job)
         :job.job_type==="MARKETING_CONTACT_EXPORT"?await marketingContactsExport(job)
         :job.job_type==="CRM_EXPORT"?await crmExport(job)
@@ -387,6 +395,7 @@ try{
       await request("/db/table/user_notifications",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({workspace_id:job.workspace_id,user_id:job.created_by,kind:"EXPORT",title_key:"notification.export.title",body_key:"notification.export.body",values:{type:job.job_type,format},source_type:"EXPORT",source_id:job.id})});
       ready+=1;
     }catch(error){
+      if(["CONTRACT_DOCUMENT_GENERATION","CONTRACT_DOCUMENT_EXTRACTION"].includes(job.job_type))continue;
       const failure=String(error instanceof Error?error.message:"Unknown export error").slice(0,500);
       await request("/db/rpc/fail_generated_job_leased",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token,failure})});
       if(job.job_type==="PRIVACY_EXPORT")await request("/db/rpc/fail_privacy_export_execution",{method:"POST",body:JSON.stringify({target_request:job.privacy_request_id,target_job:job.id,failure})});

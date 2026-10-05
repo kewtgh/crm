@@ -234,3 +234,10 @@ test("production controller and runner use only tracked dependency-free validato
   assert.match(service, /\/usr\/bin\/node \/opt\/lumina-crm\/source\/scripts\/deploy-production-bootstrap\.mjs/);
   assert.doesNotMatch(service, /tsx|npx|npm|node_modules/);
 });
+
+test("optional contract-document key is independent and identical across web/worker when enabled",()=>{
+ const fixture=runtimeFixture();fixture.web.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY="cd".repeat(32);assert.throws(()=>validateFixture(fixture),/ENVIRONMENT_INVALID/);
+ fixture.worker.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY="de".repeat(32);assert.throws(()=>validateFixture(fixture),/SECRET_MISMATCH/);
+ fixture.worker.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY=fixture.web.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY;assert.equal(validateFixture(fixture).status,"VALID");
+ fixture.web.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY=invitationHex;fixture.worker.DOCUMENT_CONFIGURATION_ENCRYPTION_KEY=invitationHex;assert.throws(()=>validateFixture(fixture),/SECRET_NOT_INDEPENDENT/);
+});

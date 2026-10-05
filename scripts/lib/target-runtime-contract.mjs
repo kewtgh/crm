@@ -71,6 +71,13 @@ export function validateTargetRuntimeContract({ web, worker, webStatus, workerSt
       ["INVITATION_CREDENTIAL_ENCRYPTION_KEY", ...reused],
     );
   }
+  const documentKeyName="DOCUMENT_CONFIGURATION_ENCRYPTION_KEY";
+  if(web[documentKeyName]?.trim()||worker[documentKeyName]?.trim()) {
+    const parse=value=>{const raw=String(value??"").trim();const bytes=/^[a-f0-9]{64}$/i.test(raw)?Buffer.from(raw,"hex"):Buffer.from(raw,"base64");if(bytes.length!==32||(!/^[a-f0-9]{64}$/i.test(raw)&&bytes.toString("base64").replace(/=+$/,"")!==raw.replace(/=+$/,"")))throw new TargetRuntimeContractError("TARGET_RUNTIME_ENVIRONMENT_INVALID","web,worker",[documentKeyName]);return bytes;};
+    const documentWeb=parse(web[documentKeyName]),documentWorker=parse(worker[documentKeyName]);
+    if(!documentWeb.equals(documentWorker))throw new TargetRuntimeContractError("TARGET_RUNTIME_SECRET_MISMATCH","web,worker",[documentKeyName]);
+    if(documentWeb.equals(webKey))throw new TargetRuntimeContractError("TARGET_RUNTIME_SECRET_NOT_INDEPENDENT","web,worker",[documentKeyName]);
+  }
   if (invalidByBoundary.length) {
     const [boundary, invalid] = invalidByBoundary[0];
     throw new TargetRuntimeContractError(

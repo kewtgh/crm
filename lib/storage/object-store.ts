@@ -5,8 +5,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type ObjectBody = {
@@ -29,7 +29,7 @@ export interface ObjectStore {
 }
 
 function validKey(key: string) {
-  return /^(?:avatars|exports)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$/.test(key)
+  return /^(?:avatars|exports|contract-documents)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$/.test(key)
     && !key.includes("..")
     && !key.includes("//")
     && !key.includes("\\");
@@ -111,6 +111,12 @@ class LocalObjectStore implements ObjectStore {
   async put(key: string, body: Uint8Array, metadata: ObjectMetadata) {
     const target = this.filePath(key);
     await mkdir(path.dirname(target), { recursive: true });
+    if(key.startsWith('contract-documents/uploaded/')){
+      const temporary=`${target}.upload-${randomUUID()}`;
+      try{await writeFile(temporary,body,{flag:'wx'});await link(temporary,target).catch(async(error:NodeJS.ErrnoException)=>{if(error.code!=='EEXIST')throw error;const existing=await readFile(target);if(createHash('sha256').update(existing).digest('hex')!==createHash('sha256').update(body).digest('hex'))throw new Error('UPLOAD_ARTIFACT_INTEGRITY_FAILED');});await writeFile(this.metadataPath(key),JSON.stringify(metadata),'utf8');}
+      finally{await rm(temporary,{force:true});}
+      return;
+    }
     await writeFile(target, body, { flag: "wx" }).catch(async (error: NodeJS.ErrnoException) => {
       if (error.code !== "EEXIST") throw error;
       await writeFile(target, body);
@@ -120,6 +126,7 @@ class LocalObjectStore implements ObjectStore {
 
   async get(key: string) {
     try {
+      if(key.startsWith('contract-documents/uploaded/')&&(await stat(this.filePath(key))).size>8_000_000)throw new Error('UPLOAD_SIZE_INVALID');
       const [body, metadataRaw] = await Promise.all([
         readFile(this.filePath(key)),
         readFile(this.metadataPath(key), "utf8"),
@@ -146,6 +153,7 @@ class LocalObjectStore implements ObjectStore {
 
   async signDownload(key: string, expiresInSeconds: number) {
     assertObjectKey(key);
+    if(key.startsWith("contract-documents/"))throw new Error("SOURCE_AUTHORIZED_DOWNLOAD_REQUIRED");
     return signedLocalUrl(key, expiresInSeconds);
   }
 }
@@ -173,15 +181,17 @@ class S3ObjectStore implements ObjectStore {
 
   async put(key: string, body: Uint8Array, metadata: ObjectMetadata) {
     assertObjectKey(key);
-    await this.client.send(new PutObjectCommand({
+    const original=key.startsWith('contract-documents/uploaded/');
+    try{await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       Body: body,
       ContentType: metadata.contentType,
+      IfNoneMatch: original?'*':undefined,
       ChecksumSHA256: metadata.checksum
         ? Buffer.from(metadata.checksum, "hex").toString("base64")
         : undefined,
-    }));
+    }),original?{abortSignal:AbortSignal.timeout(15_000)}:undefined);}catch(error){if(!original)throw error;const existing=await this.get(key).catch(()=>null);if(!existing||createHash('sha256').update(existing.body).digest('hex')!==createHash('sha256').update(body).digest('hex'))throw error;}
   }
 
   async get(key: string) {
@@ -192,7 +202,8 @@ class S3ObjectStore implements ObjectStore {
         Key: key,
       }));
       if (!response.Body) return null;
-      const body = await response.Body.transformToByteArray();
+      if(key.startsWith('contract-documents/uploaded/')&&(response.ContentLength??0)>8_000_000){if('destroy' in response.Body&&(typeof response.Body.destroy)==='function')response.Body.destroy();throw new Error('UPLOAD_SIZE_INVALID');}
+      const parts:Uint8Array[]=[];let size=0;for await(const part of response.Body as AsyncIterable<Uint8Array>){size+=part.length;if(key.startsWith('contract-documents/uploaded/')&&size>8_000_000)throw new Error('UPLOAD_SIZE_INVALID');parts.push(part);}const body=Buffer.concat(parts);
       return {
         body,
         contentType: response.ContentType ?? "application/octet-stream",
@@ -212,6 +223,7 @@ class S3ObjectStore implements ObjectStore {
 
   async signDownload(key: string, expiresInSeconds: number) {
     assertObjectKey(key);
+    if(key.startsWith("contract-documents/"))throw new Error("SOURCE_AUTHORIZED_DOWNLOAD_REQUIRED");
     return getSignedUrl(
       this.client,
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),

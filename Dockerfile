@@ -58,6 +58,11 @@ COPY --chown=lumina:lumina package.json package-lock.json ./
 COPY --chown=lumina:lumina \
     lib/email-delivery-runtime.mjs \
     lib/invitation-credential-crypto.mjs \
+    lib/contract-extraction-engine.mjs \
+    lib/contract-extraction-parser.mjs \
+    lib/contract-document-engine.mjs \
+    lib/contract-document-files.mjs \
+    lib/contract-document-configuration.mjs \
     ./lib/
 COPY --chown=lumina:lumina \
     scripts/bootstrap-admin.mjs \
@@ -91,8 +96,12 @@ COPY --chown=lumina:lumina \
     scripts/lib/worker-container-health.mjs \
     scripts/lib/worker-database.mjs \
     scripts/lib/worker-object-store.mjs \
+    scripts/lib/contract-extraction-worker.mjs \
+    scripts/lib/contract-extraction-thread.mjs \
+    scripts/lib/contract-document-worker.mjs \
     ./scripts/lib/
 COPY --chown=lumina:lumina db ./db
+COPY --chown=lumina:lumina templates/contracts ./templates/contracts
 USER 10001:10001
 RUN node scripts/verify-application-runtime-closure.mjs
 EXPOSE 3200

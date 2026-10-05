@@ -1,4 +1,17 @@
-# Implementation status — v3.23.0 release candidate
+# Implementation status — v3.24.0 release candidate
+
+## v3.24 — Contract Operations release closure
+
+**V324_RELEASE_READY — COMMIT READY**. Formal metadata is **3.24.0**.
+Typed template/party/field contracts, APPROVED-only deterministic DOCX generation, source-aware immutable
+evidence, existing leased jobs/private storage/download and uploaded DOCX/text-PDF extraction with
+append-only human review form the candidate. Canonical CRM Apply is zero; generated/uploaded documents
+never create signature, status, Payment/Refund or Commission facts. Real v1 templates remain DRAFT.
+Frozen 109–110 preserve 106–108; no 111 or new business capability in closure.
+See [release notes](RELEASE_V3.24.0.md), [architecture](CONTRACT_TEMPLATE_ARCHITECTURE.md) and
+[release gates](V324_RELEASE_CLOSURE.md). The user authorized a Git checkpoint after verification;
+push, deploy and Production access remain outside this task. Exact final Git evidence is recorded in
+Git-ignored release verification. Historical release and phase entries below preserve their original versions.
 
 ## v3.23 — Management Intelligence release closure
 

@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {objectStore} from '../lib/storage/object-store.ts';
+import {digest,docxMime} from '../lib/contract-document-engine.mjs';
+import {boundedUploadForm} from '../lib/contract-upload-input.mjs';
+test('actual local original storage is atomic, immutable, private and retry-safe',async()=>{process.env.OBJECT_STORAGE_LOCAL_ROOT=path.resolve('work/v324-phase3/storage-unit');process.env.OBJECT_STORAGE_PROVIDER='local';const store=objectStore(),key=`contract-documents/uploaded/synthetic/${randomUUID()}/original.docx`,bytes=Buffer.from('SYNTHETIC ORIGINAL');try{await Promise.all([store.put(key,bytes,{contentType:docxMime,checksum:digest(bytes)}),store.put(key,bytes,{contentType:docxMime,checksum:digest(bytes)})]);assert.equal(Buffer.from((await store.get(key)).body).toString(),bytes.toString());await assert.rejects(store.put(key,Buffer.from('different'),{contentType:docxMime}),/INTEGRITY/);assert.equal(Buffer.from((await store.get(key)).body).toString(),bytes.toString());await assert.rejects(store.signDownload(key,60),/SOURCE_AUTHORIZED_DOWNLOAD_REQUIRED/);}finally{await store.delete(key);}assert.equal(await store.get(key),null);});
+test('actual multipart FormData retains file bytes and explicit parent input',async()=>{const form=new FormData();form.set('input',JSON.stringify({sourceKind:'CUSTOMER_CONTRACT',sourceId:randomUUID()}));form.set('file',new File([Buffer.from('SYNTHETIC')],'contract.docx',{type:docxMime}));const parsed=await boundedUploadForm(new Request('http://localhost/upload',{method:'POST',body:form}));assert.equal(parsed.get('file').name,'contract.docx');assert.equal(await parsed.get('file').text(),'SYNTHETIC');assert.equal(JSON.parse(parsed.get('input')).sourceKind,'CUSTOMER_CONTRACT');});

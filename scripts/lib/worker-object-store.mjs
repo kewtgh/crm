@@ -1,14 +1,15 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 function objectKey(key) {
   if (
-    !/^(?:avatars|exports)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$/.test(key)
+    !/^(?:avatars|exports|contract-documents)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,500}$/.test(key)
     || key.includes("..")
     || key.includes("//")
     || key.includes("\\")
@@ -35,6 +36,7 @@ function localStore() {
       await writeFile(target, body);
       await writeFile(`${target}.metadata.json`, JSON.stringify(metadata), "utf8");
     },
+    async get(key) { const target=filePath(key);if((await stat(target)).size>8_000_000)throw new Error('UPLOAD_SIZE_INVALID');return readFile(target); },
     async delete(key) {
       const target = filePath(key);
       await Promise.all([rm(target, { force: true }), rm(`${target}.metadata.json`, { force: true })]);
@@ -69,6 +71,7 @@ function s3Store() {
           : undefined,
       }));
     },
+    async get(key) { const result=await client.send(new GetObjectCommand({Bucket:bucket,Key:objectKey(key)}));if(result.ContentLength>8_000_000)throw new Error('UPLOAD_SIZE_INVALID');const chunks=[];let size=0;for await(const part of result.Body){size+=part.length;if(size>8_000_000){result.Body.destroy();throw new Error('UPLOAD_SIZE_INVALID');}chunks.push(part);}return Buffer.concat(chunks); },
     async delete(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey(key) }));
     },

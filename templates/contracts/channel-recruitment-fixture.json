@@ -1,0 +1,51 @@
+{
+  "synthetic": true,
+  "source_context": {
+    "workspace_id": "SYNTHETIC_WORKSPACE",
+    "agreement_id": "SYNTHETIC_AGREEMENT_A",
+    "agreement_version_id": "SYNTHETIC_AGREEMENT_VERSION_A",
+    "agreement_revision": 3,
+    "commission_rule_id": "SYNTHETIC_FIXED_RULE",
+    "commission_basis": "FIXED_PER_ENROLLMENT",
+    "product_id": "SYNTHETIC_GAPP",
+    "cohort_id": "SYNTHETIC_GAPP_2027"
+  },
+  "canonical": {
+    "agreement.reference": "SYNTHETIC-AGREEMENT-2027",
+    "channel.organization_name": "合成测试学校组织（长机构名称与完整批次名称换行验证）",
+    "program.name": "GAPP（合成项目）",
+    "cohort.name": "GAPP 2027（合成批次）",
+    "agreement.effective_from": "2027-03-16",
+    "agreement.effective_to": "2028-03-15",
+    "commission.amount": "3750.00",
+    "commission.currency": "USD",
+    "agreement.signing_date": "2027-03-16"
+  },
+  "confirmed": {
+    "company.legal_name": "合成示例教育服务有限公司（非真实主体）",
+    "company.registration_identifier": "SYNTHETIC_REGISTRATION_NOT_REAL",
+    "company.address": "合成测试地址，仅限预览",
+    "company.signatory": "合成公司签约代表",
+    "company.phone": "SYNTHETIC_PHONE",
+    "company.email": "company@example.test",
+    "program.institution_name": "加州大学戴维斯分校（合成场景）",
+    "bank.beneficiary": "SYNTHETIC_BENEFICIARY",
+    "bank.institution": "SYNTHETIC_BANK",
+    "bank.account": "SYNTHETIC_ACCOUNT_NOT_FOR_PAYMENT",
+    "channel.legal_name": "合成渠道法律主体（不是 Primary Contact）",
+    "channel.address": "合成渠道地址",
+    "channel.representative": "合成授权对接人",
+    "channel.signatory": "合成渠道签约代表",
+    "channel.phone": "SYNTHETIC_CHANNEL_PHONE",
+    "channel.email": "channel@example.test",
+    "agreement.signing_place": "合成签署地点",
+    "company.background_clause": "合成项目运营说明，仅限模板预览，不确认原参考公司的授权资格。",
+    "program.description": "合成 EXAMPLE_PROGRAM 语言与学术项目描述，仅限预览。",
+    "agreement.review_clause": "合成年度评估安排；续约须另行确认。",
+    "commission.eligibility_clause": "原文登记、Offer、入读满一个月未退学的条件尚未由现有引擎支持；报备方向也须审阅。",
+    "commission.settlement_condition": "原入读及未退出资格条款仅作待审阅的合同文字。",
+    "commission.payment_terms": "合成支付期限，仅限预览",
+    "channel.coordinator": "合成项目对接人 / Coordinator",
+    "company.invoice_details": "SYNTHETIC_INVOICE_DETAILS"
+  }
+}

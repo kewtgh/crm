@@ -1,4 +1,6 @@
+import {zhContractUploads} from "./contract-uploads";
 import {zhManagement} from "./management-intelligence";
+import {zhContractDocuments} from "./contract-documents";
 import {zhSuccessOutcomes} from "./student-success-outcomes";
 import {zhSuccessOperations} from "./student-success-operations";
 import {zhSuccess} from "./student-success";
@@ -38,6 +40,8 @@ import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
   ...zhManagement,
+  ...zhContractDocuments,
+  ...zhContractUploads,
   ...zhSuccessOutcomes,...zhSuccess,...zhSuccessOperations,
   ...zhCNChannelAnalytics,
   ...zhCommissions,

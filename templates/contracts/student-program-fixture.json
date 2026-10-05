@@ -1,0 +1,50 @@
+{
+  "synthetic": true,
+  "source_context": {
+    "workspace_id": "SYNTHETIC_WORKSPACE",
+    "contract_id": "SYNTHETIC_CONTRACT_B",
+    "contract_version": 4,
+    "enrollment_id": "SYNTHETIC_ENROLLMENT_B",
+    "enrollment_revision": 2,
+    "household_id": "SYNTHETIC_HOUSEHOLD",
+    "student_id": "SYNTHETIC_STUDENT",
+    "product_id": "SYNTHETIC_HKU_PROGRAM",
+    "cohort_id": "SYNTHETIC_HKU_COHORT"
+  },
+  "canonical": {
+    "contract.reference": "SYNTHETIC-CONTRACT-2027",
+    "buyer.household_name": "合成家庭档案（不是购买/签署人的法律身份）",
+    "participant.name": "合成参与学生（不是付款人）",
+    "program.name": "香港大学计算机与人工智能（合成项目）",
+    "cohort.name": "香港大学计算机与人工智能 2027 夏季合成批次",
+    "program.start_on": "2027-07-05",
+    "program.end_on": "2027-07-11",
+    "contract.amount": "20000.00",
+    "contract.currency": "CNY"
+  },
+  "confirmed": {
+    "company.legal_name": "合成示例教育服务有限公司（非真实主体）",
+    "company.registration_identifier": "SYNTHETIC_REGISTRATION_NOT_REAL",
+    "company.address": "合成测试地址，仅限预览",
+    "company.signatory": "合成公司签约代表",
+    "company.phone": "SYNTHETIC_PHONE",
+    "company.email": "company@example.test",
+    "program.institution_name": "示例教育机构（合成场景，仅验证字段）",
+    "bank.beneficiary": "SYNTHETIC_BENEFICIARY",
+    "bank.institution": "SYNTHETIC_BANK",
+    "bank.account": "SYNTHETIC_ACCOUNT_NOT_FOR_PAYMENT",
+    "buyer.signing_name": "合成购买主体家长（与参与学生不同）",
+    "guardian.required": true,
+    "guardian.name": "合成确认监护人（非自动联系人）",
+    "guardian.capacity": "已明确确认的监护签署身份（合成 fixture）",
+    "contract.signing_date": "2027-06-18",
+    "service.accommodation": "经确认的合成住宿标准",
+    "service.program_component": "16000.00",
+    "service.logistics_component": "4000.00",
+    "payment.terms": "合成付款期限和方式，正式生成前须审阅",
+    "payment.method": "仅展示，不创建 Payment、不发起支付",
+    "buyer.notice_contact": "buyer@example.test",
+    "program.itinerary": "第1日：合成集合与报到\n第2日：合成项目课程\n第3日：合成项目实践\n第4日：合成项目讨论\n第5日：合成项目展示\n第6日：合成项目总结\n第7日：合成返程；具体行程须批准。",
+    "review.party_capacity": "原文通用条款的“甲方”同时涉及付款和参团行为；须逐条确认购买主体、学生、监护人的权利义务。本 DRAFT 不构成批准。"
+  }
+}
