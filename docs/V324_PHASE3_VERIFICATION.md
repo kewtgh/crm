@@ -244,7 +244,7 @@ Browser boundary: **actual shared React UI/components, production CSS, mocked bu
 This is not authenticated browser-to-real-database E2E. Real RLS, storage, parser, worker, receipts,
 review concurrency, rollback, privacy and canonical no-mutation behavior were verified separately with
 disposable PostgreSQL and real files. Chromium is pinned **1243**, executable
-`<workspace>`, version **153.0.8010.12**.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`, version **153.0.8010.12**.
 
 Initial browser failures exposed a native-input selector ambiguity, mock Channel context mismatch and
 incorrect dedicated-scope fall-through. These QA defects were corrected and scoped runs passed.
@@ -258,7 +258,7 @@ No failed run was counted as a passing gate or silently waived.
 Both real v1 templates remain **DRAFT**. Reader QA and technical extraction/generation completion are not
 business/legal approval. Master SHA256 remains channel `5c2dc2fc84faa9d71eedc620b41aa2b81a4eda58e55cfc376f9cd4dbb93143db`
 and student `21905febf608d07ae2564d134ae024067dca8582881a638bc077d189322313fa`.
-Original references remain AIS `3fd472fbc5dbf73b4fb4f96255d9b9fc92698d20a4b7eb8b9652156f18cc957e`
+Original references remain Channel `3fd472fbc5dbf73b4fb4f96255d9b9fc92698d20a4b7eb8b9652156f18cc957e`
 and student `b7750ecd0f91075a45a408063e71f2c39c759f4e18afa87a13d3d5e9c20f4712`.
 
 No OCR, image/AI/LLM extraction, semantic entity resolution, automatic parent creation, automatic

@@ -49,7 +49,7 @@ peer warnings and the tsconfck deprecation remain; scoped lint passes without su
 PostgreSQL uses the installed `postgres:18.4-bookworm` image in fresh disposable containers,
 with localhost-only ports and automatic cleanup. No existing application/production DB is used.
 Browser checks use Chromium **1243**, executable
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 The four affected phases are `product-cohorts`, `enrollments`, `commercial-links` and
 `operational-readiness`. Component fixtures do not replace the real PostgreSQL security tests.
 Complete repository regression, unrelated browser phases, production migration and deployment

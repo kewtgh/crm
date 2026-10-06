@@ -70,7 +70,7 @@ and DOCX format support instead of claiming today's tabular export is a legal te
 | Finance / operational dependencies | PASS | 18 existing operational-readiness tests, shared Contract/multi-currency/net receipt and existing Automation/Enrollment import boundaries |
 | Approval regression | PASS | 2 focused existing v383 approval tests; existing authority unchanged |
 | Preview before/after mutation of fixture objects | PASS | Immutable fixture/context comparison; no DB/network access in preview tooling; not a real PostgreSQL pure-read assertion |
-| Master reference/PII removal | PASS | All package XML scanned for old company, actual bank number, Cambridge, fixed signing date and literal email; no media; placeholders replace personal slots; core author metadata sanitized |
+| Master reference/PII removal | PASS | All package XML scanned for old company, actual bank number, conflicting reference institution, fixed signing date and literal email; no media; placeholders replace personal slots; core author metadata sanitized |
 | DOCX structural integrity | PASS | ZIP readable, all XML/.rels parse; master checksums, mapping coverage and preview placeholder replacement verified |
 | Actual reader opening / no repair prompt | **NOT RUN TO COMPLETION** | Word COM opening did not complete; no successful reader-open evidence |
 | Rendered pages / layout / Chinese / tables / signatures | **NOT RUN TO COMPLETION** | Required gate remains unmet; no page PNGs available to inspect |
@@ -119,7 +119,7 @@ this environment blocker. PDF production output remains deferred independently.
 | New editable Student/Product/Cohort identity? | NO |
 | Preview mutates Contract/Agreement? | NO; fixture-only tool has no business adapter |
 | Missing required fields silently blank? | NO |
-| HKU/Cambridge conflict corrected or blocked? | YES; institution parameterized, Cambridge removed; actual certificate entitlement still explicitly blocked for review |
+| Reference institution conflict corrected or blocked? | YES; institution parameterized, conflicting reference institution removed; actual certificate entitlement still explicitly blocked for review |
 | Fixed 2025-12-17 remains? | NO |
 | Upload extraction / OCR / AI implemented? | NO / NO / NO |
 | Actual rendered layout verified? | **NO — prevents COMPLETE verdict** |
@@ -197,7 +197,7 @@ for the precise changes. No party/mapping/Commission/amount/legal semantics chan
 | Missing-field visibility | PASS | Missing Guardian name remains red bilingual Missing in party/signature sections |
 | Unsupported blocker visibility | PASS | Channel eligibility/settlement and Student party-capacity review visibly remain blocked |
 | No unresolved preview placeholder / unknown master key | PASS | ZIP/XML scan and actual rendered previews; intentional mapped master tokens retained |
-| Reference SHA / reference-value scans | PASS | Both originals unchanged; fixed date, Cambridge and known reference PII scans |
+| Reference SHA / reference-value scans | PASS | Both originals unchanged; fixed date, conflicting reference institution and known reference PII scans |
 | Final master checksum / mapping unchanged | PASS | Catalog SHA matches exact bytes; rest of catalog identical to opening |
 | Template lint / complete template suite | PASS | 35/34 mapped fields; 24 tests rerun after final master fixes |
 | Node governance/storage/job tests | PASS | 4 targeted tests rerun under Node 26; existing capabilities and formats unchanged |

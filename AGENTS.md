@@ -1,5 +1,19 @@
 # Repository agent instructions
 
+## Public repository privacy gate
+
+- Conversation content and local operational files are not automatically Git-safe.
+- No future CRM change may introduce real company identity, real customer/counterparty
+  information, Production secrets, private infrastructure data or real transaction evidence
+  into the public repository.
+- Use independently fictional fixtures, reserved example addresses, neutral reference filenames,
+  and repository-relative documentation paths. Keep private audit/QA evidence under ignored `work/`.
+- Never publish original private contracts, source exports, raw operational logs or unreviewed
+  screenshots. Public CI artifacts require a reviewed, minimized publication format.
+- Do not store private values in public denial lists or reproduce them in error messages.
+- Credential rotation and public history rewrites require separate explicit authorization;
+  deleting a value from current files does not remove historical exposure.
+
 ## Keep audits and verification strictly time-bounded
 
 - Do not turn a scoped implementation task into a repository-wide audit, release audit, or full

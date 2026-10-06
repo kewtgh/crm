@@ -207,7 +207,7 @@ do not enter the production image/build; no build-affecting source changed after
 Browser boundary: **actual shared React components, production CSS, mocked business APIs**. It is not
 authenticated browser-to-real-database E2E. Real RLS, worker, storage, parser, receipts, concurrency,
 privacy and no canonical mutation are verified separately in PostgreSQL/integration.
-Pinned Chromium **1243**, executable `<workspace>`,
+Pinned Chromium **1243**, executable `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`,
 version 153.0.8010.12, covers Customer/Channel generation and uploaded review in zh-CN/en at 1440/375.
 Permission, DRAFT rejection, confirmation, missing/conflict/ambiguous, sensitive mask, history, download,
 unknown-result retry and revision conflict scenarios pass. Final QA server is STOPPED.

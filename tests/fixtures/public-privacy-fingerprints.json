@@ -1,0 +1,39 @@
+{
+  "purpose": "ONE_WAY_PRIVATE_RESIDUE_REGRESSION_NO_PLAINTEXT",
+  "guards": [
+    {
+      "category": "COUNTERPARTY_IDENTITY",
+      "sha256": "2633cff3873dc0d96c7ea7f256aaf853b53fb8143599842cb6e8296ea997cbc9",
+      "characters": 4
+    },
+    {
+      "category": "LEGAL_IDENTITY",
+      "sha256": "a43fe8559a55e70b40e6d7e97f4a8034b7f5dd95f7e16843a10c10c006cf440d",
+      "characters": 13
+    },
+    {
+      "category": "BANK_OR_CONTACT_DETAILS",
+      "sha256": "78b9210353589a6004974c3a9c27e36ab77ae265b1378134828a65c4f1f7b32e",
+      "characters": 18,
+      "normalized_sha256": "4e9e5236cb156f1749b8364de17d00707fe5949d7b2cc47d10ff6ddbf40344a6",
+      "normalized_characters": 15
+    },
+    {
+      "category": "BANK_OR_CONTACT_DETAILS",
+      "sha256": "43273eb82cac4923cbd34b226cdca2f35d98ea4a5986be15a695dac9299129ad",
+      "characters": 18,
+      "normalized_sha256": "c15f882d0b7af8c65ecf144dc5db44cc47f38e3aa26734c0acf91134eb1952ed",
+      "normalized_characters": 13
+    },
+    {
+      "category": "PRIVATE_SOURCE_FILENAME",
+      "sha256": "69a3d75773d4c182e8a097040ebab7b36cdbe258f11d5f6a78fbf16277a1122a",
+      "characters": 34
+    },
+    {
+      "category": "PRIVATE_SOURCE_FILENAME",
+      "sha256": "0c30182a9fd163fa300d1eb44f45b9c5ad9631e9416d9e078736a5c6c0919fce",
+      "characters": 35
+    }
+  ]
+}

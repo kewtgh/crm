@@ -97,7 +97,7 @@ Goal is rejected with no partial Outcome/audit/receipt. Voiding retains history 
 from distributions. Concurrent revisions have exactly one winner. Student purge retains Finance;
 Commission regression retains Agreements/Rules, immutable ledger and a Paid Settlement.
 
-Browser runtime: `<workspace>`, Chromium **153.0.8010.12**, revision **1243**.
+Browser runtime: `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`, Chromium **153.0.8010.12**, revision **1243**.
 Report: `work/browser-qa-chromium-1243/v322-phase3/phases/student-success-outcomes/report.json`. Screenshots were inspected for mobile Outcome controls and desktop
 Analytics. **Actual components + production CSS + mocked business APIs are not authenticated
 browser-to-real-database E2E.** Real RLS, calculation, transaction, retry and privacy are covered

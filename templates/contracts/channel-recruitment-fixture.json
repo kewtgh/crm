@@ -7,14 +7,14 @@
     "agreement_revision": 3,
     "commission_rule_id": "SYNTHETIC_FIXED_RULE",
     "commission_basis": "FIXED_PER_ENROLLMENT",
-    "product_id": "SYNTHETIC_GAPP",
-    "cohort_id": "SYNTHETIC_GAPP_2027"
+    "product_id": "SYNTHETIC_EXAMPLE_PROGRAM",
+    "cohort_id": "SYNTHETIC_EXAMPLE_PROGRAM_2027"
   },
   "canonical": {
     "agreement.reference": "SYNTHETIC-AGREEMENT-2027",
     "channel.organization_name": "合成测试学校组织（长机构名称与完整批次名称换行验证）",
-    "program.name": "GAPP（合成项目）",
-    "cohort.name": "GAPP 2027（合成批次）",
+    "program.name": "EXAMPLE_PROGRAM（合成项目）",
+    "cohort.name": "EXAMPLE_PROGRAM 2027（合成批次）",
     "agreement.effective_from": "2027-03-16",
     "agreement.effective_to": "2028-03-15",
     "commission.amount": "3750.00",

@@ -48,7 +48,7 @@
 | `QA_PHASE=ux-refinements npm run qa:chromium-1243` | 最终 PASS；1440×1000 与 375×812，约 10 秒，错误/警告均 0。真实组件 + 生产 CSS，API 为受控模拟；包括已接受写入但丢失响应、不能取消的旧读取。数据库持久化/权限单独验证，不将模拟测试声称为真实邮箱投递。 |
 | QA 服务 | 使用 qa:server:start/stop，完成后停止。 |
 
-浏览器证据：`work/browser-qa-chromium-1243/phases/ux-refinements/report.json` 及同目录截图（Git 忽略）。运行时为 `<workspace>`，浏览器 153.0.8010.12，Playwright 1.63.0，应用 3.14.1。该报告对应提交前工作树，不声称已执行全部十阶段。
+浏览器证据：`work/browser-qa-chromium-1243/phases/ux-refinements/report.json` 及同目录截图（Git 忽略）。运行时为 `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`，浏览器 153.0.8010.12，Playwright 1.63.0，应用 3.14.1。该报告对应提交前工作树，不声称已执行全部十阶段。
 
 执行期间的问题：首次定向单测被沙箱的子进程策略拒绝（spawn EPERM），授权执行同一命令后通过；浏览器首次新增归档测试错误地定位 dialog，修正为实际 alertdialog 后重跑同一阶段通过。最终生产 CSS 与断言复测通过。
 

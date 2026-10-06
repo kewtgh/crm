@@ -139,7 +139,7 @@ dependency blocking/repair, explicit legal authority, progress and partial rollb
 Real RLS, mutation, concurrency, receipts, DAG, rollback, TTL, parser/templates and privacy are covered
 separately by unit/PostgreSQL tests; mocked browser outcomes are not database evidence.
 
-Pinned executable: `<workspace>`.
+Pinned executable: `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 Observed version **153.0.8010.12**; no alternative browser installed/substituted.
 Successful evidence: `work/browser-qa-chromium-1243/v325-phase3/phases/import-sets/report.json`
 and four screenshots. Mobile table min-width overflow was observed, fixed and revalidated on all four

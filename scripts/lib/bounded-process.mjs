@@ -39,6 +39,8 @@ export function runBounded({
   cwd = process.cwd(),
   spawnProcess = spawn,
   stopProcess = stopProcessTree,
+  stdout = process.stdout,
+  stderr = process.stderr,
 }) {
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new Error(`${label}: timeoutMs must be positive`);
   if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 1) throw new Error(`${label}: idleTimeoutMs must be positive`);
@@ -60,8 +62,8 @@ export function runBounded({
         target.write(chunk);
       });
     };
-    relay(child.stdout, process.stdout);
-    relay(child.stderr, process.stderr);
+    relay(child.stdout, stdout);
+    relay(child.stderr, stderr);
 
     const finish = (error, value) => {
       if (settled) return;

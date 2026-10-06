@@ -1,4 +1,15 @@
-# Implementation status — v3.25.2 release candidate
+# Implementation status — v3.25.3 release candidate
+
+## v3.25.3 — Public content privacy and CI publication hardening
+
+Formal metadata is **3.25.3**. Current repository reports, archived acceptance data and contract
+preview fixtures use neutral references and independently fictional values. Template residue guards
+contain one-way digests and never echo a detected private value, including in Office metadata.
+Public CI publication copies one fixed result summary; raw QA logs, screenshots and error bodies
+remain private. Documentation-only changes also run the privacy contracts. Contract legal-body
+publication is owner-authorized; both real v1 templates remain DRAFT. Historical disclosures require
+the separate, reviewed remediation plan. No Revenue implementation, migration or business mutation
+change. See [patch notes](RELEASE_V3.25.3.md) and [privacy audit](PUBLIC_REPOSITORY_PRIVACY_AUDIT.md).
 
 ## v3.25.2 — Independent worker dependency audit repair
 

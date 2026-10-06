@@ -264,13 +264,13 @@ Alert 协作、Management AI。不会把合同签署/上传当付款确认、Adm
 
 | Reference | 类型 / 适用链 | 必须先校对 |
 |---|---|---|
-| `<workspace>` | 渠道代理合作；应先匹配 Channel Agreement，而非强行当 Student buyer Contract | 文件年份 2026，正文签署日为 2025-12-17；主体/日期必须参数化。佣金 USD 3,000/学生，原文有登记、Offer、入学满一个月未退出等条件，不等同现有 Commission eligibility |
-| `<workspace>` | 学生项目服务；Buyer/Household/Guardian 与 participant Enrollment 区分 | 标题是香港大学项目，证书条款写Example Education Organization，不能直接套用；费用 15,980 RMB，分项 12,980 + 3,000 是参考值，不是默认产品价格/成本；项目行程及收费/退款条款需批准 |
+| `channel-recruitment-reference.docx` (private original; neutral alias) | 渠道合作；关联 Channel Agreement | 主体、日期、佣金需正式来源和批准；参考履约条款不等同 Commission engine eligibility |
+| `student-program-reference.docx` (private original; neutral alias) | 学生项目服务；区分 Buyer/Household/Guardian 和 participant Enrollment | 机构、金额、费用分项、行程、收费及退款条款需批准；参考值不得成为业务默认值 |
 
 原件 SHA256：
 
 ```text
-AIS agent reference:
+Channel reference:
 3fd472fbc5dbf73b4fb4f96255d9b9fc92698d20a4b7eb8b9652156f18cc957e
 
 Summer student reference:

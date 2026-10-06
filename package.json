@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.25.2",
+  "version": "3.25.3",
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
@@ -13,6 +13,9 @@
     "esbuild@0.28.2": true
   },
   "scripts": {
+    "ci:private-stage": "node scripts/run-private-ci-stage.mjs",
+    "ci:stop-local-database": "docker compose -f compose.postgres.yml down",
+    "test:public-privacy": "node --test --test-isolation=none tests/public-repository-privacy.test.mjs tests/public-ci-artifacts.test.mjs",
     "test:management:attention:postgres": "node scripts/run-bounded.mjs --label management-attention-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-management-attention-postgres.mjs",
     "test:management:attention": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/management-attention.test.mjs",
     "test:management": "node --import tsx --test --test-isolation=none --test-concurrency=1 tests/management-intelligence.test.mjs tests/management-trends.test.mjs",

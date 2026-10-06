@@ -79,7 +79,7 @@ The final affected browser evidence is retained under
 `work/browser-qa-chromium-1243/v321-release-final/`. Each phase uses the same final build:
 Channel Intelligence, Lead Pool/Activation, Agreements, Commission Ledger and Analytics.
 Pinned executable:
-`<workspace>`;
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`;
 browser version 153.0.8010.12 / playwright-core 1.63.0. Local QA server: STOPPED.
 The first Analytics attempt exposed negative reversal/open-exposure rendering; it was fixed
 using exact signed decimal formatting, with a meaningful regression and required source

@@ -27,7 +27,7 @@
 - Full lint: PASS; final added/changed UI QA components/scripts additionally targeted lint PASS.
 - Contracts: PASS, 137 main + 8 captcha = 145; includes 6 new UI contracts. Existing product-purchaser contract follows the extracted real detail component rather than dropping its assertion.
 - Production build: PASS. A source-affecting responsive fix required one updated build; the final Chromium checks use that build.
-- Chromium 1243 / Playwright 1.63.0: PASS, browser 153.0.8010.12 at the pinned executable <workspace>
+- Chromium 1243 / Playwright 1.63.0: PASS, browser 153.0.8010.12 at the pinned executable %LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe.
 - UI system phase: PASS at 1440, 768, 375 pixels. Checks subject boundaries, roving keyboard focus, tab navigation, same-line actions, hidden deletion, outside/Escape dismissal, cancellation preserving the product, separated currency prices, modal details and no document overflow.
 - Forms phase: PASS at 1440, 768, 375 pixels. Covers centered editor, bilingual names, money, required markers, dropdowns and date calendar interactions with production CSS.
 - Screenshots visually inspected, including desktop and mobile product dialogs.

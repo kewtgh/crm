@@ -112,7 +112,7 @@ fail closed 并显示明确待配置状态，不得以本地测试值伪装生�
 - 从空数据库应用至迁移 `202607190040`，schema lint 为 0 条告警，pgTAP 为 222/222。
 - TypeScript、ESLint、production build、23 条 Node 契约、依赖审计与全部业务/HTTP smoke 通过。
 - `work/browser-qa-chromium-1228/report.json` 记录 23 组真实页面/视口检查，精确使用
-  `<workspace>`，
+  `%LOCALAPPDATA%/ms-playwright\chromium-1228\chrome-win64\chrome.exe`，
   Chromium `149.0.7827.55`；两个隔离 QA 身份均已删除。
 - 最终遗漏复审补齐了学籍批次与 AI 建议的精确服务端分页、低权限工作台链接、
   选择器占位文字对比度、旧工作流 request ID 错误反馈和样式层拆分。

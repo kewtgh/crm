@@ -50,3 +50,18 @@ next-env.d.ts
 /work/
 /supabase/.branches/
 /supabase/.temp/
+
+# Private operational material; schema migrations and reviewed public templates stay tracked.
+*.env
+*.log
+*.dump
+*.backup
+*.key
+*.p12
+*.pfx
+/logs/
+/backups/
+/exports/
+/private-documents/
+/private-contracts/
+__pycache__/

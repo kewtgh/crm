@@ -148,6 +148,18 @@ def validate_schema(version: dict) -> None:
         raise TemplateError("INVALID_VERSION")
     if not re.fullmatch(r"[a-f0-9]{64}", version.get("source_sha256", "")):
         raise TemplateError("INVALID_REFERENCE_CHECKSUM")
+    if "forbidden_literals" in version:
+        raise TemplateError("PLAINTEXT_REFERENCE_GUARD_NOT_ALLOWED")
+    guards = version.get("forbidden_literal_digests")
+    if not isinstance(guards, list) or not guards:
+        raise TemplateError("INVALID_REFERENCE_GUARD")
+    for guard in guards:
+        if (not isinstance(guard, dict)
+                or not isinstance(guard.get("sha256"), str)
+                or not re.fullmatch(r"[a-f0-9]{64}", guard["sha256"])
+                or type(guard.get("characters")) is not int
+                or not 1 <= guard["characters"] <= 256):
+            raise TemplateError("INVALID_REFERENCE_GUARD")
     seen = set()
     for field in version["fields"]:
         if field["key"] in seen:
@@ -177,9 +189,15 @@ def lint(version: dict, data: bytes) -> dict:
     if "word/document.xml" not in parts or "[Content_Types].xml" not in parts:
         raise TemplateError("INVALID_DOCX")
     # Parse every XML part, not only the visible body.
+    package_text = []
     for name, content in parts.items():
         if name.endswith((".xml", ".rels")):
-            minidom.parseString(content)
+            parsed = minidom.parseString(content)
+            for element in parsed.getElementsByTagName("*"):
+                package_text.extend(node.data for node in element.childNodes
+                                    if node.nodeType in {node.TEXT_NODE, node.CDATA_SECTION_NODE})
+                package_text.extend(element.attributes.item(i).value
+                                    for i in range(element.attributes.length))
     found = set()
     text = ""
     for _, content in xml_parts(parts):
@@ -195,9 +213,16 @@ def lint(version: dict, data: bytes) -> dict:
         raise TemplateError("UNKNOWN_PLACEHOLDER:" + ",".join(sorted(found - fields)))
     if any(field["required"] and field["key"] not in found for field in version["fields"]):
         raise TemplateError("UNUSED_REQUIRED_FIELD")
-    for forbidden in version["forbidden_literals"]:
-        if forbidden in text:
-            raise TemplateError("REFERENCE_LITERAL_REMAINING:" + forbidden)
+    # Keep reference-residue detection without publishing private reference values.
+    # Character counts use Unicode code points, matching Python substring semantics.
+    guards_by_length: dict[int, set[str]] = {}
+    for guard in version["forbidden_literal_digests"]:
+        guards_by_length.setdefault(guard["characters"], set()).add(guard["sha256"])
+    residue_text = text + "\n" + "\n".join(package_text)
+    for length, digests in guards_by_length.items():
+        for offset in range(max(0, len(residue_text) - length + 1)):
+            if sha256(residue_text[offset:offset + length].encode("utf-8")) in digests:
+                raise TemplateError("PRIVATE_TEMPLATE_RESIDUE_DETECTED")
     if version["status"] == "DRAFT" and "DRAFT" not in text:
         raise TemplateError("MISSING_DRAFT_NOTICE")
     return {"template_key": version["template_key"], "version": version["version_number"],

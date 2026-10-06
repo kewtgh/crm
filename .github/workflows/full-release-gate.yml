@@ -27,6 +27,13 @@ jobs:
       QA_BASE_URL: http://localhost:3200
 
     steps:
+      - name: Mask private runner paths
+        shell: powershell
+        run: |
+          foreach ($runnerPath in @($env:USERPROFILE, $env:LOCALAPPDATA, $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP)) {
+            if ($runnerPath) { Write-Output "::add-mask::$runnerPath" }
+          }
+
       - name: Check out repository
         uses: actions/checkout@v7.0.1
 
@@ -54,22 +61,27 @@ jobs:
 
       - name: Configure isolated local PostgreSQL release environment
         timeout-minutes: 10
-        run: npm run env:configure-local
+        run: npm run ci:private-stage -- configure
 
       - name: Run bounded full release gate
         timeout-minutes: 20
-        run: npm run release:gate
+        run: npm run ci:private-stage -- release
 
-      - name: Upload fixed-browser QA evidence
+      - name: Prepare allowlisted public QA summary
         if: always()
+        id: public_summary
+        run: node scripts/publish-public-ci-artifacts.mjs
+
+      - name: Upload allowlisted public QA summary
+        if: ${{ always() && steps.public_summary.outcome == 'success' }}
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: browser-qa-chromium-1243
-          path: work/browser-qa-chromium-1243/
-          if-no-files-found: warn
+          name: public-browser-qa-summary
+          path: work/public-artifacts/browser-qa-summary.json
+          if-no-files-found: error
           retention-days: 14
 
       - name: Stop local CRM PostgreSQL stack
         if: always()
         timeout-minutes: 3
-        run: docker compose -f compose.postgres.yml down
+        run: npm run ci:private-stage -- cleanup

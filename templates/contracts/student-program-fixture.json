@@ -8,15 +8,15 @@
     "enrollment_revision": 2,
     "household_id": "SYNTHETIC_HOUSEHOLD",
     "student_id": "SYNTHETIC_STUDENT",
-    "product_id": "SYNTHETIC_HKU_PROGRAM",
-    "cohort_id": "SYNTHETIC_HKU_COHORT"
+    "product_id": "SYNTHETIC_EXAMPLE_STUDENT_PROGRAM_PROGRAM",
+    "cohort_id": "SYNTHETIC_EXAMPLE_STUDENT_PROGRAM_COHORT"
   },
   "canonical": {
     "contract.reference": "SYNTHETIC-CONTRACT-2027",
     "buyer.household_name": "合成家庭档案（不是购买/签署人的法律身份）",
     "participant.name": "合成参与学生（不是付款人）",
-    "program.name": "香港大学计算机与人工智能（合成项目）",
-    "cohort.name": "香港大学计算机与人工智能 2027 夏季合成批次",
+    "program.name": "示例计算机与人工智能项目（合成项目）",
+    "cohort.name": "示例计算机与人工智能项目 2027 夏季合成批次",
     "program.start_on": "2027-07-05",
     "program.end_on": "2027-07-11",
     "contract.amount": "20000.00",

@@ -111,7 +111,7 @@ privacy export uses queued queries on one pg client and reports the existing pg 
 warning; all assertions pass. No real Production credentials or database target are used.
 
 Browser: `ms-playwright/chromium-1243`, version **153.0.8010.12**, executable
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 Evidence: `work/browser-qa-chromium-1243/v322-phase2/phases/student-success-operations/report.json`.
 Actual components and production CSS use **mocked business APIs**. This is **not authenticated
 browser-to-real-database E2E**. PostgreSQL tests verify actual calculations, RLS, concurrency,

@@ -43,7 +43,7 @@
 - 业务/HTTP/导出/真实设备认证冒烟：通过。
 - 生产资产：26 个 CSS/JS、5 个 PNG、metadata、favicon redirect 全部通过。
 - Chromium：固定 `ms-playwright/chromium-1228`，
-  `<workspace>`，
+  `%LOCALAPPDATA%/ms-playwright/chromium-1228/chrome-win64/chrome.exe`，
   Chromium `149.0.7827.55`；10 阶段、80 页面/视口、0 error、0 warning、9/9 身份清理。
 
 在线依赖公告查询因运行策略拒绝向外部 npm 服务发送依赖元数据而未执行；没有绕过该限制。

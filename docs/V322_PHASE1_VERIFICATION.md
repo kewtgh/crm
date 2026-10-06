@@ -69,7 +69,7 @@ Production credentials or network target. Four bounded scripts cover Success, En
 Admissions and Commission. No whole-repository regression suite was run.
 
 Browser: `ms-playwright/chromium-1243`, version `153.0.8010.12`, executable
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 Evidence: `work/browser-qa-chromium-1243/v322-phase1/phases/student-success/report.json`.
 Tests exercise actual components and production CSS with mocked business APIs. This is
 **not authenticated browser-to-real-database E2E**. Real RLS, transaction, concurrency,

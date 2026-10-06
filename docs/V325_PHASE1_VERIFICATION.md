@@ -14,7 +14,7 @@ are explicitly recorded in [Import Operations Architecture](IMPORT_OPERATIONS_AR
 | Starting / final HEAD | eee07f1866a314129f2ae1923ab45d87ac93ec6f |
 | Starting / final version | 3.24.1 |
 | Runtime | Node 26.10.0; npm 12.2.0 |
-| Worktree | <workspace> |
+| Worktree | . |
 | Opening state | CLEAN; empty staging; zero candidates |
 | Final candidate | Four new files: architecture, this verification, typed registry, tests |
 | Commit / push / deploy | NOT RUN |

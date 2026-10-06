@@ -145,7 +145,7 @@ disposable PostgreSQL. No Production connection is used.
 | management-attention | PASS | 4 | work/browser-qa-chromium-1243/v323-release/phases/management-attention/report.json |
 
 Pinned revision **1243**, version **153.0.8010.12**; executable
-`<workspace>`. Each phase covers zh-CN/en and 1440/375. All reports share
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`. Each phase covers zh-CN/en and 1440/375. All reports share
 source fingerprint **fe278a136aa6c26581f3da7c0fc46eb2216f6d5134c7a4484988e982256611b9** and build hash **533e19df3c370b0bad784dcd4609f83f366db054ba3dc72e4734f7d896030a8a**.
 The production build ran once after final metadata. QA server: **STOPPED**. No complete
 ten-phase browser matrix, full database suite or repository-wide audit was run.

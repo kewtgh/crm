@@ -11,8 +11,8 @@ See [architecture](CONTRACT_TEMPLATE_ARCHITECTURE.md) and [verification](V324_PH
 | CHANNEL_RECRUITMENT_AGREEMENT | `3fd472fbc5dbf73b4fb4f96255d9b9fc92698d20a4b7eb8b9652156f18cc957e` | `5c2dc2fc84faa9d71eedc620b41aa2b81a4eda58e55cfc376f9cd4dbb93143db` |
 | STUDENT_PROGRAM_SERVICE_AGREEMENT | `b7750ecd0f91075a45a408063e71f2c39c759f4e18afa87a13d3d5e9c20f4712` | `21905febf608d07ae2564d134ae024067dca8582881a638bc077d189322313fa` |
 
-Original A: `<workspace>`.
-Original B: `<workspace>`.
+Original A is held privately; public alias: `channel-recruitment-reference.docx`.
+Original B is held privately; public alias: `student-program-reference.docx`.
 New files: [channel v1](../templates/contracts/channel-recruitment-agreement-v1.docx) and
 [student v1](../templates/contracts/student-program-agreement-v1.docx).
 Exact field definitions and unresolved review items: [catalog](../templates/contracts/catalog.json).
@@ -21,12 +21,12 @@ Exact field definitions and unresolved review items: [catalog](../templates/cont
 
 | Original issue | Resolution / field key | Source | Review still required? |
 |---|---|---|---|
-| Filename 2026, fixed 2025-12-17 signing date | Fixed date removed; `agreement.signing_date` | Agreement Version signed_on; missing blocks, no fallback to today | Actual signing/effective dates must be correct |
+| Fixed reference signing date | Fixed date removed; `agreement.signing_date` | Agreement Version signed_on; missing blocks, no fallback to today | Actual signing/effective dates must be correct |
 | Fixed company/address/contact/invoice/bank slots | Parameterized `company.*`, `channel.*`, `bank.*`; personal core metadata cleared | Approved company configuration / explicit confirmations, not .env | YES: legal entity, authority, account and invoice data |
 | 甲/乙 names treated as interchangeable | Company legal party vs Channel legal organization; CRM organization display shown separately | Organization reference + confirmed legal names/signatories | YES: contact is not authorized signatory |
-| Company AIS authorization/background and UCD GAPP description | `company.background_clause`, `program.description`, explicit `program.name`, institution and Cohort | Confirmed document clauses + Product/Cohort context | YES: no assertion of current company authorization |
-| Fixed 2026–2027 cooperation term / one-year implication | `agreement.effective_from/to`, `agreement.review_clause` | Existing Agreement Version dates; separately confirmed annual review | YES: no hard-coded duration claim |
-| USD 3,000 per Student | `commission.amount/currency` from explicitly selected FIXED_PER_ENROLLMENT Rule | Existing Rule only; synthetic preview uses USD 3,750 to prove reference does not win | YES: Rule ID/source revision; never creates a Rule |
+| Reference authorization/background and program description | `company.background_clause`, `program.description`, explicit `program.name`, institution and Cohort | Confirmed document clauses + Product/Cohort context | YES: no assertion of current company authorization |
+| Fixed reference cooperation term / one-year implication | `agreement.effective_from/to`, `agreement.review_clause` | Existing Agreement Version dates; separately confirmed annual review | YES: no hard-coded duration claim |
+| Fixed reference commission | `commission.amount/currency` from explicitly selected FIXED_PER_ENROLLMENT Rule | Existing Rule only; independently synthetic preview values | YES: Rule ID/source revision; never creates a Rule |
 | Registration + Offer + one-month attendance/no withdrawal | Original eligibility conditions retained and explicit red unsupported review field added | Reference legal conditions, not current engine facts | **UNSUPPORTED_BY_CURRENT_COMMISSION_ENGINE**; blocks formal generation |
 | Original registration reporting direction may be inconsistent | Retained for review; no staff-role guess or reversed party rewrite | Reference paragraph 53 | **REQUIRES_BUSINESS_OR_LEGAL_REVIEW** |
 | Payment after enrollment / settlement timing | Unsupported settlement condition and confirmed payment terms | Legal clause vs actual ledger/settlement are separate | YES; no automatic accrual/payment |
@@ -40,12 +40,12 @@ university/provider does not establish the company's gross Revenue or refund res
 
 | Original issue | Resolution / field key | Source | Review still required? |
 |---|---|---|---|
-| HKU title with Cambridge certificate clause | Cambridge removed; program title and all institutional references use `program.name` / `program.institution_name` consistently | Product name + explicitly confirmed institution | YES: actual certificate/recommendation entitlement, not assumed by this correction |
+| Inconsistent institution references | Conflicting names removed; program title and institutional references use `program.name` / `program.institution_name` consistently | Product name + explicitly confirmed institution | YES: actual certificate/recommendation entitlement requires approval |
 | 甲方 mixes participant and payer | Separate Buyer/signing name, Household reference, Participant and Guardian captions; `review.party_capacity` blocks approval | Household / Student Contact context + explicit signing/guardian confirmations | **REQUIRES_BUSINESS_OR_LEGAL_REVIEW** for general rights/duties |
 | Missing Guardian assumed from Contact | No fallback; explicit guardian.required/name/capacity | Confirmed human legal capacity | Missing required Guardian → MISSING_REQUIRED_FIELD |
-| Fixed RMB 15,980 and uppercase amount | `contract.amount/currency/amount_words` | Contract amount; CNY deterministic uppercase; USD remains ISO decimal | Reference amount is not Product price; no canonical override |
-| 12,980 + 3,000 service split | Confirmed fee components replace reference amounts and must sum to Contract amount | Document confirmations; original service-inclusion descriptions retained | YES: fee decomposition/actual inclusions; not internal costs |
-| Fixed 2026.2.6–2026.2.12 dates | `program.start_on/end_on` | Enrollment → Cohort dates | Known actual Cohort dates required |
+| Fixed reference contract amount | `contract.amount/currency/amount_words` | Contract amount; CNY deterministic uppercase; USD remains ISO decimal | Reference amount is not Product price; no canonical override |
+| Fixed reference fee split | Confirmed fee components must sum to Contract amount | Document confirmations; service-inclusion descriptions require review | YES: fee decomposition/actual inclusions; not internal costs |
+| Fixed reference program dates | `program.start_on/end_on` | Enrollment → Cohort dates | Known actual Cohort dates required |
 | Reference seven-day itinerary | Replaced with one multiline `program.itinerary` slot | Confirmed document content; no permanent Product itinerary | YES: current program arrangements; original read-only reference retained |
 | Reference company and actual bank number | Cleared/parameterized, including recurring header company name | Approved company/static configuration or confirmations | YES: bank/signatory authority; no payment operation |
 | Receipt + two days / mini-program payment method | Confirmed `payment.terms/method` slots; no promise that this is a Payment due fact | Document terms, not a generated Payment | YES: payment/refund/cancellation commercial terms |

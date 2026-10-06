@@ -90,7 +90,7 @@ The full CRM browser matrix and repository-wide regression are outside this clos
 Five phases cover Applications (5), Milestones (4), Workflow Templates (4), Workflow
 Instances (4) and Enrollment/Student integration (5). Exact browser is
 `ms-playwright/chromium-1243`, version `153.0.8010.12`, executable
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 Reports, screenshots and combined affected-only report are under
 `work/browser-qa-chromium-1243/v320-release-final/`. No other browser was installed.
 The local QA server is stopped after verification. Later changes only finalize

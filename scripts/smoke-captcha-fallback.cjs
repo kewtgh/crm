@@ -4,8 +4,8 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright-core");
 
-const executable = process.env.PLAYWRIGHT_CHROMIUM_1243_PATH
-  || "<workspace>";
+const { chromium1243Path } = require("./lib/chromium-runtime-path.cjs");
+const executable = chromium1243Path();
 const base = (process.env.QA_BASE_URL || "http://localhost:3200").replace(/\/$/, "");
 const output = path.resolve(
   process.env.QA_OUTPUT_DIR || "work/browser-qa-chromium-1243/captcha-fallback",

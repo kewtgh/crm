@@ -42,7 +42,7 @@
 浏览器证据记录：
 
 - runtime：`ms-playwright/chromium-1228`
-- executable：`<workspace>`
+- executable：`%LOCALAPPDATA%/ms-playwright/chromium-1228/chrome-win64/chrome.exe`
 - browser：`149.0.7827.55`
 - control library：`playwright-core` `1.61.1`
 - action timeout：`12000ms`

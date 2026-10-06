@@ -45,7 +45,7 @@
 `work/browser-qa-chromium-1228/report.json`。报告记录：
 
 - runtime：`ms-playwright/chromium-1228`
-- executable：`<workspace>`
+- executable：`%LOCALAPPDATA%/ms-playwright/chromium-1228/chrome-win64/chrome.exe`
 - browser version：`149.0.7827.55`
 - control library：`playwright-core` `1.61.1`
 - app version：`2.3.0`

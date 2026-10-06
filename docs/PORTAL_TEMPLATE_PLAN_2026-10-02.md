@@ -29,7 +29,7 @@
 - `npm run test:customer-operations:postgres`：PASS；隔离 PostgreSQL 完整应用前向迁移至 086，定向验证 EMAIL/PORTAL 隔离、修订更新/冲突/重试、管理员公共与本人个人模板权限、家庭成员/学生监护人候选、三项 AND 筛选、归档排除和 RLS 隔离。容器已清理，不修改开发/生产数据。
 - `npm run build`：PASS。首次构建后浏览器发现邀请正文长链接在 375px 下横向溢出；修复预览 `overflow-wrap:anywhere` 后重新构建，最终构建 PASS。没有重复未变化源码的构建。
 - `$env:QA_PHASE='ux-refinements'; npm run qa:chromium-1243`：PASS，1440×1000 / 375×812 两个视口，0 errors / 0 warnings，耗时 16.55 秒。测试基于真实组件与生产 CSS，API 受控模拟；没有创建真实邀请/身份或发送邮件。新增原生 select 的测试使用正确的可访问名称匹配和 option 存在状态，未放宽布局/业务断言。
-- 固定浏览器：Playwright 1.63.0，`ms-playwright/chromium-1243`，Chromium `153.0.8010.12`，可执行文件 `<workspace>`；生产 QA 基址 `http://localhost:3200`，health 版本 v3.15.0。
+- 固定浏览器：Playwright 1.63.0，`ms-playwright/chromium-1243`，Chromium `153.0.8010.12`，可执行文件 `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`；生产 QA 基址 `http://localhost:3200`，health 版本 v3.15.0。
 - 证据：Git 忽略目录 `work/browser-qa-chromium-1243/phases/ux-refinements/report.json` 与 `portal-dialog-{1440,375}.png`、`portal-result-{1440,375}.png`、`email-{1440,375}.png`。已目视检查手机邀请编辑和结果截图。
 
 不执行全浏览器矩阵、全数据库回归、额外 Docker 镜像构建或真实邮件投递。本次没有改变生产部署行为、Docker context allowlist 或 CI 工作流。上线须应用迁移 086；本次仅本地提交，不推送、不部署。

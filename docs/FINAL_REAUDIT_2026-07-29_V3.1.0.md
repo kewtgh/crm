@@ -49,7 +49,7 @@ P1/P2/P3 缺口全部关闭；导入进度、分层健康接口、时区安全�
 | Chromium 1228 | 四阶段、46 页面/视口、0 error、0 warning、4/4 身份清理 |
 
 Chromium 证据使用
-`<workspace>`，
+`%LOCALAPPDATA%/ms-playwright/chromium-1228/chrome-win64/chrome.exe`，
 浏览器 `149.0.7827.55`，四阶段的源码指纹与 build hash 完全一致。报告保留在 Git 忽略的
 `work/browser-qa-chromium-1228/phases/`。
 

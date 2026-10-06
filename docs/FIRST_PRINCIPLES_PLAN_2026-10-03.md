@@ -32,7 +32,7 @@
 |版本 / 迁移清单|7/7；版本与锁文件一致，迁移按动态清单发现并校验。|
 |浏览器|Chromium 1243 / 153.0.8010.12；升学工作台 1440×900、375×812，七类记录、失败/冲突/重试、报名及清单完成依据；家庭合同/报价提交与响应式布局通过。最终报告无非预期错误，手机截图人工核对。|
 
-浏览器证据目录：`work/browser-qa-chromium-1243/phases/education-business/` 与 `work/browser-qa-chromium-1243/phases/family-purchasing/`（Git 忽略）。固定执行文件：`<workspace>`。
+浏览器证据目录：`work/browser-qa-chromium-1243/phases/education-business/` 与 `work/browser-qa-chromium-1243/phases/family-purchasing/`（Git 忽略）。固定执行文件：`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`。
 
 两个报告对应生产构建哈希 `5e122579b5fc8b4b8bb9421fec5ee7c7b9310e3b20125a7bcdeca7cde78d5113`，应用版本 3.17.0，迁移头 089；运行时间分别为 UTC 2026-10-02 18:14 和 18:16（本地 10 月 3 日）。这是 d90c9c5 之后待提交修改的验证，不能称为提交后完整发布验证。浏览器使用真实组件/生产 CSS 与模拟 API；数据库写入和权限由真实临时 PostgreSQL 单独验证。未运行完整十阶段浏览器矩阵。
 

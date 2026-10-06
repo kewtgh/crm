@@ -171,7 +171,7 @@ browser-to-real-database E2E**. Real RLS, calculations, transactions, concurrenc
 retry and privacy are verified separately by PostgreSQL tests.
 
 Pinned Chromium **1243**, version **153.0.8010.12**:
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 **15** passed scenario groups cover Success List/Start, multiple Enrollments, Overview,
 Goals/Tasks, Check-ins with/without assessment, Risks, Interventions, Outcomes edit/void,
 Analytics snapshot/period and Product/Cohort filters, conflicts and uncertain retry.

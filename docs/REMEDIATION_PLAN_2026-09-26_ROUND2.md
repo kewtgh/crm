@@ -43,7 +43,7 @@
 - 报告：`work/browser-qa-chromium-1243/audit-2026-09-26-round2/final/report.json`（Git 忽略路径）。
 - 执行时间：2026-09-26 09:11 UTC，耗时 22.934 秒；9 组页面、7 类关键交互，`errors=[]`、`warnings=[]`。
 - Playwright Core `1.63.0`；运行时 `ms-playwright/chromium-1243`；实际版本 `153.0.8010.12`。
-- 执行文件：`<workspace>`。
+- 执行文件：`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`。
 - 本地 URL：`http://localhost:3200`；构建 hash：`9982c1d6b971c5d5dd8e68f5f049ccb97e3237620c0d30994ae4a82a8b404939`；源码指纹和 dirty 状态保留在报告中。
 - 首次浏览器运行因测试选择了不存在的 pageSize=100 而停止，已修正为现有 pageSize=10。该次身份也已清理，不能将该次根目录报告当作完整通过；最终通过证据仅以上述 `final/` 为准。
 

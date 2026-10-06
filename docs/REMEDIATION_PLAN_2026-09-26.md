@@ -40,7 +40,7 @@
 最终浏览器证据：`work/browser-qa-chromium-1243/audit-2026-09-26/final/report.json` 及同目录截图（Git 忽略，不纳入版本库）。
 
 - 固定运行时：`ms-playwright/chromium-1243`，Playwright Core `1.63.0`，实际浏览器版本 `153.0.8010.12`。
-- 执行文件：`<workspace>`。
+- 执行文件：`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`。
 - 本地 URL：`http://localhost:3200`；最终构建 hash：`110f87f57460402a33865d1dcbec87d9afc73235e16551eac2f09e4bf8f07836`。报告保留源码指纹、Git dirty 状态和迁移头，未以提交 SHA 冒充本轮未提交代码。
 - 早期导入浏览器用例因文本定位方式产生一次误报，已改为等待错误区域文字及旧映射清空；最终证据以 `final/` 为准。Request 请求体重试测试曾揭示已消费 body 问题，修复为每次请求 clone 后重跑通过。
 - 收尾：`git diff --check` 无空白错误（仅 Windows LF/CRLF 提示）；QA 服务状态为 `running:false`。本轮启动的 `crm-postgres-1` 已停止，保留容器、持久卷和迁移结果，未停止其他项目容器。仅清理本轮临时 QA 数据，未删除现有业务数据。

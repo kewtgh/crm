@@ -6,7 +6,8 @@ const {spawnSync}=require("node:child_process");
 const pg=require("pg");
 const argon2=require("argon2");
 
-const executable=process.env.PLAYWRIGHT_CHROMIUM_1243_PATH||"<workspace>";
+const { chromium1243Path } = require("./lib/chromium-runtime-path.cjs");
+const executable = chromium1243Path();
 const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
 const {chromium}=require(playwrightPath);
 const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://localhost:3200").replace(/\/$/,"");

@@ -29,7 +29,7 @@
       "status": "DRAFT",
       "document_format": "DOCX",
       "template_path": "templates/contracts/channel-recruitment-agreement-v1.docx",
-      "source_filename": "student-program-reference.docx",
+      "source_filename": "channel-recruitment-reference.docx",
       "source_sha256": "3fd472fbc5dbf73b4fb4f96255d9b9fc92698d20a4b7eb8b9652156f18cc957e",
       "template_sha256": "5c2dc2fc84faa9d71eedc620b41aa2b81a4eda58e55cfc376f9cd4dbb93143db",
       "fixture_path": "templates/contracts/channel-recruitment-fixture.json",

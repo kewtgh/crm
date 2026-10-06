@@ -93,7 +93,7 @@ compatible and are not implicitly synchronized.
 | Architecture/checkpoint | PASS | Updated domain boundaries, independent reverse-checkable delta and preserved baseline |
 
 Browser reports retain exact `ms-playwright/chromium-1243` executable evidence:
-`<workspace>`,
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`,
 browser version `153.0.8010.12`, under `work/browser-qa-chromium-1243/phases/`.
 Scenarios use actual UI components and production CSS with mocked business APIs;
 real unauthenticated endpoints and database transactions/access are tested separately.

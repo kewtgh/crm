@@ -12,7 +12,7 @@ commit after completion; the final commit identity and clean status are recorded
 | Starting HEAD / validation HEAD | eee07f1866a314129f2ae1923ab45d87ac93ec6f |
 | Starting / final version | 3.24.1 → 3.25.0 |
 | Runtime | Node 26.10.0; npm 12.2.0 |
-| Worktree | <workspace> |
+| Worktree | . |
 | Opening candidate | 42 Phase 1–3 files; staging EMPTY |
 | Complete release candidate | 50 files; 15 Phase 4 changed/added files |
 | Opening baseline | work/v325-release/opening-snapshots/; candidate and all 117 migration raw fingerprints |
@@ -145,7 +145,7 @@ function names removed by production minification; the actual final bundle conta
 ## Browser and deployment boundaries
 
 Pinned **ms-playwright/chromium-1243**, version **153.0.8010.12**;
-executable `<workspace>`.
+executable `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 Reports/screenshots: `work/browser-qa-chromium-1243/v325-release/phases/import-v2/` and `import-sets/`.
 Actual ImportsPage/ImportSetsPage, production CSS and actual workbook/parser helpers use mocked
 business APIs. Mutation, RLS, revisions, receipts, DAG, concurrency, rollback and privacy have independent

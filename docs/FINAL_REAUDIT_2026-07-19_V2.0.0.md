@@ -36,7 +36,7 @@
 | Chromium 1228 | 23/23，0 errors，2/2 身份清理 |
 
 浏览器证据位于 `work/browser-qa-chromium-1228/report.json`，精确 executable 为
-`<workspace>`，
+`%LOCALAPPDATA%/ms-playwright\chromium-1228\chrome-win64\chrome.exe`，
 版本为 Chromium `149.0.7827.55`。
 
 ## 仍需环境所有者完成

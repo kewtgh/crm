@@ -150,7 +150,7 @@ UI-01/02/03、A11Y-01、PERF-01、VALID-01、TEST-01 和 IMP-01 均已按
 
 最终指定浏览器门禁使用：
 
-`<workspace>`
+`%LOCALAPPDATA%/ms-playwright\chromium-1228\chrome-win64\chrome.exe`
 
 结果为 Chromium `149.0.7827.55`、23/23 页面/视口检查通过、0 个 console/page/network
 错误、0 个无名称控件、0 个小于 12px 的功能文字、0 个实色背景文字对比度失败、

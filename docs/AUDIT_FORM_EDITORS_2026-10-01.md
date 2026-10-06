@@ -42,7 +42,7 @@
 - `npm audit --audit-level=moderate` 通过，报告 0 个漏洞；没有降低审计级别或关闭导航 lint。
 - 隔离 PostgreSQL 18.4 产品回归通过，覆盖迁移 082 的单字中文名、120 字符英文回退、空名称拒绝，以及既有产品保存、删除、权限、并发和恢复行为。测试容器已清理，未操作生产数据库。
 - 指定 `QA_PHASE=forms` 运行 `npm run qa:chromium-1243`，55 秒硬限，实际约 8 秒。桌面 1440px、平板 768px、手机 375px 均通过，并检查截图：居中和无横向溢出、名称组合校验、必填标记、格式化金额/原始提交值、币种、日期按钮、历史选项、导入日期修补、标签、分期、嵌套确认、焦点圈定和恢复。
-- 浏览器证据：Playwright Core 1.63.0；`ms-playwright/chromium-1243`；Chromium 153.0.8010.12；可执行文件 `<workspace>`。本地生产构建地址 `http://localhost:3200`，版本 3.11.0，迁移头 082。
+- 浏览器证据：Playwright Core 1.63.0；`ms-playwright/chromium-1243`；Chromium 153.0.8010.12；可执行文件 `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`。本地生产构建地址 `http://localhost:3200`，版本 3.11.0，迁移头 082。
 - 报告及截图保存于 Git 忽略的 `work/browser-qa-chromium-1243/phases/forms/`。该检查使用真实共享组件、生产 CSS 和隔离测试表单，不是全页面或完整业务 CRUD 验收，不合并到十阶段发布验收报告。系统拥有的日历弹层无法用 DOM 检查，本次验证原生输入类型和按钮调用日历 API。
 
 部署须使用本版本并应用前向迁移 `202610010082_single_language_names.sql`。未执行远端部署、推送或 GitHub Actions 运行；本地检查不能保证外部服务或未来依赖更新不会导致 Actions 失败。

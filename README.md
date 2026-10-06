@@ -1,10 +1,15 @@
 # Lumina CRM
 
-Current release candidate: **v3.25.2**
+Current release candidate: **v3.25.3**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.25.3 sanitizes public repository examples and reports, replaces private template-residue
+literals with non-echoing digest guards, and publishes only an allowlisted CI result summary.
+Contract bodies have owner publication authorization; production template approval and historical
+privacy remediation remain separate. See [patch notes](docs/RELEASE_V3.25.3.md).
 
 Version 3.25.2 pins the email worker's transitive sharp dependency to the patched version and verifies
 its independent lockfile, preserving all three CI dependency audit gates. See [patch notes](docs/RELEASE_V3.25.2.md).

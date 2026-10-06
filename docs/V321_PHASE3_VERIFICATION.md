@@ -8,7 +8,7 @@ Verdict: `V321_PHASE3_CHANNEL_COMMISSION_COMPLETE`.
 - Starting / final HEAD: `afd0e2b1c5e54f3618e3f8382de6a50060afcc3f`.
 - Version: `3.20.0`, unchanged.
 - Formal runtime: Node `26.10.0`, npm `12.2.0`.
-- Worktree: `<workspace>`.
+- Worktree: `.`.
 - Phase 1–2: 68 changed/new product files preserved, unstaged/uncommitted.
 - Baseline: `work/v321-phase3-baseline/` contains raw snapshots, manifest, combined
   checkpoint patch and Phase 1/2 verification references. Patches were not applied.
@@ -82,7 +82,7 @@ corrected. No amount is copied to data-quality findings.
 | Commit / push / deploy | NOT RUN | Not authorized for this Phase |
 
 Chromium is the installed `ms-playwright/chromium-1243` executable at
-`<workspace>`,
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`,
 reported version `153.0.8010.12`. Browser evidence is under
 `work/browser-qa-chromium-1243/v321-phase3/phases/commission-agreements/` and
 `commission-ledger/`. It uses actual components and production CSS with mocked business

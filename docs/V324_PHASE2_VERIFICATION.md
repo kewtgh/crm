@@ -172,7 +172,7 @@ Final PostgreSQL fixture bytes match the inspected Word evidence exactly.
 
 Final evidence: `work/browser-qa-chromium-1243/v324-phase2-final/phases/contract-documents/report.json`.
 Chromium revision **1243**, executable
-`<workspace>`, browser 153.0.8010.12.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`, browser 153.0.8010.12.
 Two source types × zh-CN/en × 1440/375 = 8 scenarios; no body overflow. Actual React components and
 production CSS, **mocked business APIs**. Real RLS, source revisions, job lease, rendering, storage,
 rollback, privacy and calculations are verified separately by PostgreSQL/worker integration.

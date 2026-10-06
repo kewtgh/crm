@@ -56,6 +56,52 @@ class TemplateTests(unittest.TestCase):
         with self.assertRaisesRegex(t.TemplateError, "DUPLICATE_FIELD"):
             t.validate_schema(self.student)
 
+    def test_reference_guard_detects_residue_without_echoing_value(self):
+        for marker in ["TEST-BANK-ACCOUNT", "合成测试主体"]:
+            self.student["forbidden_literal_digests"] = [
+                {"sha256": t.sha256(marker.encode("utf-8")), "characters": len(marker)}
+            ]
+            blob = self.patch(self.blob(self.student),
+                              lambda d: t.set_text(d.getElementsByTagNameNS(t.W, "t")[0],
+                                                   d.getElementsByTagNameNS(t.W, "t")[0].firstChild.data
+                                                   + " " + marker))
+            self.student["template_sha256"] = t.sha256(blob)
+            with self.assertRaises(t.TemplateError) as error:
+                t.lint(self.student, blob)
+            self.assertEqual(str(error.exception), "PRIVATE_TEMPLATE_RESIDUE_DETECTED")
+            self.assertNotIn(marker, str(error.exception))
+
+    def test_reference_guard_schema_fails_closed(self):
+        for guards in [None, [], [{"sha256": "invalid", "characters": 8}],
+                       [{"sha256": "a" * 64, "characters": False}],
+                       [{"sha256": "a" * 64, "characters": 257}]]:
+            candidate = copy.deepcopy(self.student)
+            candidate["forbidden_literal_digests"] = guards
+            with self.assertRaisesRegex(t.TemplateError, "INVALID_REFERENCE_GUARD"):
+                t.validate_schema(candidate)
+        self.student["forbidden_literals"] = ["SYNTHETIC-REFERENCE"]
+        with self.assertRaisesRegex(t.TemplateError, "PLAINTEXT_REFERENCE_GUARD_NOT_ALLOWED"):
+            t.validate_schema(self.student)
+
+    def test_reference_residue_in_office_metadata_fails_without_echo(self):
+        marker = "INVENTED-METADATA-IDENTITY"
+        self.student["forbidden_literal_digests"] = [
+            {"sha256": t.sha256(marker.encode()), "characters": len(marker)}]
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(self.blob(self.student))) as src, zipfile.ZipFile(out, "w") as dst:
+            for item in src.infolist():
+                content = src.read(item.filename)
+                if item.filename == "docProps/core.xml":
+                    doc = t.minidom.parseString(content)
+                    t.set_text(doc.getElementsByTagName("dc:creator")[0], marker)
+                    content = doc.toxml(encoding="utf-8")
+                dst.writestr(item, content)
+        blob = out.getvalue()
+        self.student["template_sha256"] = t.sha256(blob)
+        with self.assertRaises(t.TemplateError) as error:
+            t.lint(self.student, blob)
+        self.assertEqual(str(error.exception), "PRIVATE_TEMPLATE_RESIDUE_DETECTED")
+
     def test_unknown_and_malformed_placeholders_rejected(self):
         for text in ["{{unknown.party}}", "{{bad key}}"]:
             blob = self.patch(self.blob(self.student), lambda d: t.set_text(d.getElementsByTagNameNS(t.W, "t")[0], text))

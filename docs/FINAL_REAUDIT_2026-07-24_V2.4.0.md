@@ -52,7 +52,7 @@ Chromium 证据固定为：
 - browser：`149.0.7827.55`
 - `playwright-core`：`1.61.1`
 - executable：
-  `<workspace>`
+  `%LOCALAPPDATA%/ms-playwright/chromium-1228/chrome-win64/chrome.exe`
 - combined report：`work/browser-qa-chromium-1228/report.json`
 
 ## 外部待办

@@ -10,7 +10,7 @@ Verdict: **V325_PHASE2_TEMPLATES_PREFLIGHT_COMPLETE**.
 | Starting / final HEAD | eee07f1866a314129f2ae1923ab45d87ac93ec6f |
 | Starting / final version | 3.24.1 |
 | Runtime | Node 26.10.0; npm 12.2.0 |
-| Worktree | <workspace> |
+| Worktree | . |
 | Opening candidate | Four untracked Phase 1 files; no tracked modifications; empty staging |
 | Phase 1 isolation | work/v325-phase2-baseline/: complete patch, manifests, raw snapshots, migration fingerprints |
 | Final candidate | 29 combined files; 27 Phase 2 changed files; fingerprints: work/v325-phase2/candidate-manifest.json |
@@ -125,7 +125,7 @@ PostgreSQL tests used **postgres:18.4-bookworm**, not deployment's 18.6 image. E
 and bounded; no Production DB was accessed. Browser evidence:
 `work/browser-qa-chromium-1243/v325-phase2/phases/import-v2/report.json` with four PNGs.
 Browser: pinned **ms-playwright/chromium-1243**, actual version **153.0.8010.12**, Playwright **1.63.0**,
-`<workspace>`.
+`%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`.
 
 Browser boundary: actual Imports components and production CSS on the final production build;
 mocked business APIs. Real downloaded XLSX/CSV files are re-uploaded and parsed in the browser.

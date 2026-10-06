@@ -1,0 +1,35 @@
+name: Public repository privacy
+
+# Documentation-only changes are excluded from the larger CI suite, but must still pass this gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-privacy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Set up declared Node runtime
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Use pinned npm
+        run: npm install --global npm@12.2.0
+      - name: Install locked dependencies
+        timeout-minutes: 5
+        run: npm ci --no-audit --no-fund
+      - name: Verify public content and CI publication contracts
+        run: npm run test:public-privacy
