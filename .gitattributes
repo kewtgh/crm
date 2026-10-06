@@ -26,3 +26,9 @@ db/migrations/202610050106_management_intelligence_read_model.sql -text
 db/migrations/202610050107_management_trends_query_support.sql -text
 
 db/migrations/202610050108_management_attention_read_queue.sql -text
+
+# Preserve the v3.25 strict import protocol migration raw bytes across platforms.
+db/migrations/202610060111_strict_import_protocol.sql -text
+
+# Preserve Phase 3 relationship/import-set migration bytes.
+db/migrations/202610060112_import_sets_relationship_reliability.sql -text

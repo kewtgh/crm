@@ -1,4 +1,4 @@
-export type CsvDocument={headers:string[];rows:Array<Record<string,string>>;delimiter:string};
+export type CsvDocument={headers:string[];rows:Array<Record<string,string>>;delimiter:string;rowLocations?:number[];sheet?:string;templateVersion?:string;resource?:string};
 
 export class CsvParseError extends Error{
   constructor(public code:"EMPTY"|"UNCLOSED_QUOTE"|"DUPLICATE_HEADER"|"TOO_MANY_ROWS"|"COLUMN_COUNT"|"INVALID_QUOTE",public row?:number){super(code);}
@@ -17,10 +17,11 @@ function detectDelimiter(text:string){
   return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[1]? [...counts.entries()].sort((a,b)=>b[1]-a[1])[0][0]:",";
 }
 
-export function parseCsvDocument(source:string,maxRows=10_000):CsvDocument{
+export function parseCsvDocument(source:string,maxRows=10_000,locate=false):CsvDocument{
   const text=source.replace(/^\uFEFF/,"");
   const delimiter=detectDelimiter(text);
   const parsed:string[][]=[];
+  const locations:number[]=[];
   let row:string[]=[];
   let value="";
   let quoted=false;
@@ -34,6 +35,7 @@ export function parseCsvDocument(source:string,maxRows=10_000):CsvDocument{
       if(parsed.length&&row.length!==parsed[0].length)throw new CsvParseError("COLUMN_COUNT",rowLine);
       if(parsed.length>=maxRows+1)throw new CsvParseError("TOO_MANY_ROWS",rowLine);
       parsed.push(row);
+      locations.push(rowLine);
     }
     row=[];
   };
@@ -67,6 +69,7 @@ export function parseCsvDocument(source:string,maxRows=10_000):CsvDocument{
   return{
     headers,
     delimiter,
+    ...(locate?{rowLocations:locations.slice(1)}:{}),
     rows:dataRows.map(cells=>Object.fromEntries(headers.map((header,index)=>[header,cells[index]??""]))),
   };
 }

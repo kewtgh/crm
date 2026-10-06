@@ -56,15 +56,7 @@ export async function listHouseholds(options: PageOptions = {}): Promise<PageRes
 }
 
 export async function createHousehold(input: { nameZh: string; nameEn: string; address: string;primaryParentOccupation:string;secondaryParentOccupation:string;annualIncomeAmount?:number|null;incomeCurrency:string;preferredContactMethod:string;preferredLanguage:string;educationExpectationsMarkdown:string;familyBackgroundMarkdown:string }) {
-  const rows = await databaseJson<HouseholdRow[]>("/db/table/households", {
-    method: "POST", headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ name_zh: input.nameZh, name_en: input.nameEn, address: input.address,
-      primary_parent_occupation:input.primaryParentOccupation,secondary_parent_occupation:input.secondaryParentOccupation,
-      annual_income_amount:input.annualIncomeAmount??null,income_currency:input.incomeCurrency,
-      preferred_contact_method:input.preferredContactMethod,preferred_language:input.preferredLanguage,
-      education_expectations_markdown:input.educationExpectationsMarkdown,family_background_markdown:input.familyBackgroundMarkdown }),
-  });
-  return rows[0];
+  return databaseJson<HouseholdRow>("/db/rpc/save_customer_record",{method:"POST",body:JSON.stringify({resource:"HOUSEHOLDS",record_id:crypto.randomUUID(),expected_updated_at:null,data:{...input,status:"ACTIVE"}})});
 }
 
 export type StudentRecord = {
@@ -189,16 +181,7 @@ export async function createStudent(input: {
   personId: string; householdId?: string | null; studentNumber?: string;birthDate?:string|null; grade: string;currentClass:string; academicYear: string;
   personalityMarkdown:string;learningExpectationsMarkdown:string;strengthsMarkdown:string;supportNeedsMarkdown:string;interests:string[];preferredLearningStyle:string;
 }) {
-  const rows = await databaseJson<StudentRow[]>("/db/table/students", {
-    method: "POST", headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      person_id: input.personId, household_id: input.householdId || null,
-      student_number: input.studentNumber || null,birth_date:input.birthDate||null, current_grade: input.grade,current_class:input.currentClass, academic_year: input.academicYear,
-      personality_markdown:input.personalityMarkdown,learning_expectations_markdown:input.learningExpectationsMarkdown,strengths_markdown:input.strengthsMarkdown,
-      support_needs_markdown:input.supportNeedsMarkdown,interests:input.interests,preferred_learning_style:input.preferredLearningStyle,
-    }),
-  });
-  return rows[0];
+  return databaseJson<StudentRow>("/db/rpc/save_customer_record",{method:"POST",body:JSON.stringify({resource:"STUDENTS",record_id:crypto.randomUUID(),expected_updated_at:null,data:{...input,currentGrade:input.grade,status:"ACTIVE",householdId:input.householdId||null,birthDate:input.birthDate||null}})});
 }
 
 export type HouseholdDetail = HouseholdRecord & {

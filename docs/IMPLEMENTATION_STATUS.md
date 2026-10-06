@@ -1,4 +1,17 @@
-# Implementation status — v3.24.1 release candidate
+# Implementation status — v3.25.0 release candidate
+
+## v3.25 — Data Import Operations release closure
+
+Formal metadata is **3.25.0**. Typed field coverage, categorized v2 XLSX/CSV, strict zero-write
+preflight, canonical row execution, authorized references, exact decimals and blank/clear semantics
+extend the existing Import workspace. Five independent relationship resources and SET_V1 typed aliases
+use bounded dependency-aware orchestration, revision/receipt guards, repair/resume and explicit partial
+rollback. New private evidence has 30-day retention and Contact/Household/Student subject cleanup.
+Migrations 111–112 are frozen; no 113, new CRM fields or external services are added. Historical legacy
+evidence is not destructively purged. No automatic identity resolution, arbitrary reassignment, AI/OCR,
+Revenue, Targets or Forecast. See [release notes](RELEASE_V3.25.0.md),
+[architecture](IMPORT_OPERATIONS_ARCHITECTURE.md) and [closure evidence](V325_RELEASE_CLOSURE.md).
+Historical records below retain their original versions and verdicts.
 
 ## v3.24.1 — Channel agreement name validation / CI patch
 

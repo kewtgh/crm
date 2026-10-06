@@ -1,4 +1,8 @@
 "use client";
+import {ImportSetsPage} from "./import-sets-page";
+import {v2FieldLabel} from "@/lib/import-v2-labels";
+import {ImportReferencePanel} from "./import-reference-panel";
+import {v2Headers,v2Resources,validateV2Headers,type V2Resource} from "@/lib/import-v2";
 import { BilingualNameHint } from "./structured-inputs";
 import { ImportRepairField } from "./import-repair-field";
 
@@ -38,13 +42,21 @@ export function ImportsPage({
 }) {
   const { t,locale } = useI18n();
   const { formatDate } = useUserPreferences();
+  const [workspaceTab,setWorkspaceTab]=useState("entities");
   const canMerge = useCapability("duplicates.manage");
   const [batches, setBatches] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [pageSize,setPageSize]=useState(10);
   const [resource, setResource] = useState<keyof typeof targetFieldsByResource>("CONTACTS");
-  const targetFields=targetFieldsByResource[resource] as readonly string[];
+  const [templateVersion,setTemplateVersion]=useState("2");
+  const [format,setFormat]=useState("xlsx");
+  const [rowLocations,setRowLocations]=useState<number[]>([]);
+  const [sheet,setSheet]=useState<string|undefined>();
+  const v2=templateVersion==="2"&&(v2Resources as readonly string[]).includes(resource);
+  const targetFields=v2?v2Headers(resource as V2Resource):targetFieldsByResource[resource] as readonly string[];
+  const zh=locale==="zh-CN";
+  const fieldLabel=(field:string)=>{const key=field.startsWith("profile.")?"business.field."+field.slice(8):"imports.field."+field;const label=t(key);return v2?v2FieldLabel(field,locale):label===key?field:label;};
   const [fileName, setFileName] = useState("");
   const [fileLoading, setFileLoading] = useState(false);
   const [fileHash, setFileHash] = useState("");
@@ -156,8 +168,9 @@ export function ImportsPage({
     const request=await runFileLoad(async()=>{
       if(file.size>10*1024*1024)throw new Error("IMPORT_FILE_TOO_LARGE");
       const parsed = file.name.toLowerCase().endsWith(".xlsx")
-        ? await parseXlsxDocument(file,10_000)
-        : parseCsvDocument(await file.text(),10_000);
+        ? await parseXlsxDocument(file,10_000,v2?{resource,templateVersion:"2"}:undefined)
+        : parseCsvDocument(await file.text(),10_000,v2);
+      if(v2)validateV2Headers(resource as V2Resource,parsed.headers);
       return {parsed,hash:await hashFile(file)};
     });
     if(!request.current)return;
@@ -167,10 +180,10 @@ export function ImportsPage({
       setFileName(file.name);
       setFileHash(hash);
       setHeaders(parsed.headers);
-      setRawRows(parsed.rows);
+      setRawRows(parsed.rows);setRowLocations(parsed.rowLocations??parsed.rows.map((_,i)=>i+2));setSheet(parsed.sheet);
       const automatic: Record<string, string> = {};
       for (const field of targetFields) {
-        const match = parsed.headers.find((header) => header.toLowerCase().replace(/[_\s-]/g, "") === field.toLowerCase());
+        const match = parsed.headers.find((header) => v2?header===field:header.toLowerCase().replace(/[_\s-]/g, "") === field.toLowerCase());
         if (match) automatic[field] = match;
       }
       setMapping(automatic);
@@ -184,13 +197,13 @@ export function ImportsPage({
                 :caught.code==="INVALID_QUOTE"?"imports.invalidQuote"
               :"imports.parseFailed"
         :caught instanceof Error&&caught.message==="IMPORT_FILE_TOO_LARGE"?"imports.fileTooLarge":"imports.parseFailed";
-      setError(t(key,{row:caught instanceof CsvParseError?caught.row??1:1}));
+      setError(v2&&caught instanceof Error&&! (caught instanceof CsvParseError)?caught.message:t(key,{row:caught instanceof CsvParseError?caught.row??1:1}));
     }
   };
 
   const createBatch = async () => {
     if(fileLoading||pending)return;
-    if (!rawRows.length || !importMappingReady(resource,mapping)) {
+    if (!rawRows.length || (!v2&&!importMappingReady(resource,mapping))) {
       setError(t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.mappingRequired"));
       return;
     }
@@ -202,7 +215,7 @@ export function ImportsPage({
       const result = await apiFetch<{ item: ImportBatchRecord }>("/api/imports", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "create", resource, filename: fileName, content_hash: hash, request_key: `${resource}:${hash}`, mapping, rows: normalized }),
+        body: JSON.stringify(v2?{operation:"createV2",resource,templateVersion:"2",filename:fileName,contentHash:hash,requestKey:`${resource}:2:${hash}`,headers,rows:rawRows,rowLocations,sheet}:{ operation: "create", resource, filename: fileName, content_hash: hash, request_key: `${resource}:${hash}`, mapping, rows: normalized }),
       });
       await loadBatches(1);
       await open(result.item.id);
@@ -225,7 +238,7 @@ export function ImportsPage({
     if(!mappingName.trim()||!headers.length){setError(t("imports.mappingNameRequired"));return;}
     setPending(true);setError("");
     try{
-      const result=await apiFetch<{item:ImportMappingProfile}>("/api/imports",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"saveMapping",resource,name:mappingName.trim(),mapping})});
+      const result=await apiFetch<{item:ImportMappingProfile}>("/api/imports",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(v2?{operation:"saveMappingV2",resource,name:mappingName.trim(),mapping,expectedRevision:mappingProfiles.find(p=>p.name===mappingName.trim()&&p.resource===resource&&p.templateVersion==="2")?.revision??null}:{operation:"saveMapping",resource,name:mappingName.trim(),mapping})});
       setMappingProfiles(current=>[...current.filter(item=>item.id!==result.item.id),result.item].sort((a,b)=>a.name.localeCompare(b.name)));
       setMappingProfileId(result.item.id);setToast(t("imports.mappingSaved"));
     }catch{setError(t("imports.mappingSaveFailed"));}
@@ -238,7 +251,7 @@ export function ImportsPage({
       await apiFetch("/api/imports", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "decide", target_row: row.id, chosen_action: chosenAction }),
+        body: JSON.stringify(row.templateVersion==="2"?{ operation:"decideV2",target_row:row.id,expected_revision:row.reviewRevision,chosen_action:chosenAction}:{ operation: "decide", target_row: row.id, chosen_action: chosenAction }),
       });
     } catch {
       setError(t("imports.decisionFailed"));
@@ -253,7 +266,7 @@ export function ImportsPage({
     const replacement=Object.fromEntries(repairFields.map(field=>[field,String(form.get(field)??"")]));
     setPending(true);setError("");
     try{
-      await apiFetch("/api/imports",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"repair",target_row:repairRow.id,replacement})});
+      await apiFetch("/api/imports",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(repairRow.templateVersion==="2"?{operation:"repairV2",target_row:repairRow.id,expected_revision:repairRow.reviewRevision,replacement}:{operation:"repair",target_row:repairRow.id,replacement})});
       const batchId=repairRow.batchId;setRepairRow(null);await open(batchId,rowPage);await loadBatches();setToast(t("imports.rowRepaired"));
     }catch{setError(t("imports.rowRepairFailed"));}
     finally{setPending(false);}
@@ -287,10 +300,10 @@ export function ImportsPage({
         const result = await apiFetch<{ item: ImportBatchRecord }>("/api/imports", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ operation: "process", target_batch: selected, batch_size: IMPORT_EXECUTION_BATCH_SIZE }),
+          body: JSON.stringify({ operation: current?.executionContract==="CANONICAL_V2"?"processV2":"process", target_batch: selected, batch_size: IMPORT_EXECUTION_BATCH_SIZE }),
         });
         latest = result.item;
-        status = result.item.status;
+        status = current?.executionContract==="CANONICAL_V2"&&result.item.valid>0&&!result.item.duplicates?"PROCESSING":result.item.status;
         setExecutionProgress({
           processed: result.item.applied + result.item.failed,
           total: result.item.total,
@@ -306,7 +319,7 @@ export function ImportsPage({
     await loadBatches();
     await open(selected, Math.min(rowPage, rowPages));
     if (latest && isImportExecutionTerminal(latest.status)) {
-      setToast(t("imports.executed"));
+      setToast(latest.failed||latest.invalid?(zh?"部分失败：请查看每行结果。":"Partially failed: review row outcomes."):t("imports.executed"));
     } else {
       setError(t("imports.executionIncomplete"));
     }
@@ -320,7 +333,7 @@ export function ImportsPage({
       await apiFetch("/api/imports", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "rollback", target_batch: selected,requestKey:crypto.randomUUID() }),
+        body: JSON.stringify({ operation: current?.executionContract==="CANONICAL_V2"?"rollbackV2":"rollback", target_batch: selected,requestKey:crypto.randomUUID() }),
       });
     } catch {
       setPending(false);
@@ -387,7 +400,10 @@ export function ImportsPage({
     setMergeOptions(result.value.items.filter(item=>item.type===expected).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`,detail:t(mergeResource==="CONTACTS"?"imports.contacts":"imports.organizations")})));
   };
 
+  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"实体":"Entities"],["relationships",zh?"关系":"Relationships"],["sets",zh?"Import Sets":"Import Sets"]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
+  if(workspaceTab!=="entities")return <div className="page-stack imports-page">{workspaceTabs}<ImportSetsPage key={workspaceTab} relationships={workspaceTab==="relationships"}/></div>;
   return <div className="page-stack imports-page">
+    {workspaceTabs}
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t(duplicatesOnly ? "duplicates.eyebrow" : "imports.eyebrow")}</p>
@@ -412,22 +428,24 @@ export function ImportsPage({
     </section>}
 
     {!duplicatesOnly && <section className="surface import-create">
-      <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{t("imports.newBatch")}</h2></div><Upload size={21} /></div>
-      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
+      <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{v2?(zh?"上传 CSV / XLSX 并预检":"Upload CSV / XLSX and preflight"):t("imports.newBatch")}</h2></div><Upload size={21} /></div>
+      <div className="form-grid two-column"><label className="field"><span>{zh?"模板版本":"Template version"}</span><select value={v2?"2":"LEGACY_UNVERSIONED"} disabled={pending||fileLoading} onChange={e=>{setTemplateVersion(e.target.value);setHeaders([]);setRawRows([]);setMapping({});setFileName("");}}>{(v2Resources as readonly string[]).includes(resource)&&<option value="2">v2</option>}<option value="LEGACY_UNVERSIONED">Legacy</option></select></label>{v2&&<label className="field"><span>{zh?"下载格式":"Download format"}</span><select value={format} onChange={e=>setFormat(e.target.value)}><option value="xlsx">XLSX</option><option value="csv">CSV</option></select></label>}</div>
+      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}&templateVersion=${v2?"2":"LEGACY_UNVERSIONED"}&format=${kind==="guide"?"csv":v2?format:"csv"}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{v2?(zh?"使用当前资源的 v2 模板。CREATE 至少填写一种姓名，其他必需字段见 Guide；UPDATE 需要授权目标引用。预检不会修改业务数据。":"Use this resource’s v2 template. CREATE requires one name; consult Guide for other requirements. UPDATE needs an authorized target reference. Preflight does not change business data."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
       <div className="form-grid two-column">
-        <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option><option value="COHORTS">{t("cohorts.title")}</option><option value="ENROLLMENTS">{t("enrollments.title")}</option></select></label>
-        <div className="field file-field"><span>{t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
+        <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setTemplateVersion((v2Resources as readonly string[]).includes(event.target.value)?"2":"LEGACY_UNVERSIONED");setHeaders([]);setRawRows([]);setFileName("");setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option><option value="COHORTS">{t("cohorts.title")}</option><option value="ENROLLMENTS">{t("enrollments.title")}</option></select></label>
+        <div className="field file-field"><span>{v2?"CSV / XLSX":t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
       </div>
+      {v2&&<><InlineMessage type="info">{zh?"UPDATE 空白保持原值；__CLEAR__ 仅允许清空 Guide 中列出的可空字段。敏感字段为可选，不要求收集。未知列会阻止预检。":"UPDATE blanks preserve current values; __CLEAR__ only clears nullable fields listed in Guide. Sensitive fields are optional. Unknown columns block preflight."}</InlineMessage><ImportReferencePanel/></>}
       {fileLoading&&<InlineMessage type="info">{t("imports.readingFile")}</InlineMessage>}
       {headers.length > 0 && <>
         <div className="form-grid three-column import-mapping-profiles">
-          <label className="field"><span>{t("imports.mappingProfile")}</span><select value={mappingProfileId} onChange={event=>applyMappingProfile(event.target.value)}><option value="">{t("imports.mappingNone")}</option>{mappingProfiles.filter(item=>item.resource===resource).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="field"><span>{t("imports.mappingProfile")}</span><select value={mappingProfileId} onChange={event=>applyMappingProfile(event.target.value)}><option value="">{t("imports.mappingNone")}</option>{mappingProfiles.filter(item=>item.resource===resource&&(item.templateVersion??"LEGACY_UNVERSIONED")===(v2?"2":"LEGACY_UNVERSIONED")).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="field"><span>{t("imports.mappingName")}</span><input value={mappingName} maxLength={80} onChange={event=>setMappingName(event.target.value)} placeholder={t("imports.mappingNamePlaceholder")}/></label>
           <button className="secondary-button import-mapping-save" type="button" disabled={pending||!mappingName.trim()} onClick={()=>void saveMapping()}><Save size={16}/>{t("imports.saveMapping")}</button>
         </div>
         <div className="mapping-grid">
-          <p className="name-pair-hint"><span className="required-indicator">* </span>{t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.nameMappingHelp")}</p>
-          {targetFields.map((field) => <SearchableSelect key={field} label={t(`imports.field.${field}`)} options={headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
+          <p className="name-pair-hint"><span className="required-indicator">* </span>{v2?(zh?"v2 列名必须与模板一致；字段是否必填由操作及 Guide 决定。":"v2 columns must match the template; operation and Guide determine required values."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.nameMappingHelp")}</p>
+          {targetFields.map((field) => <SearchableSelect key={field} label={fieldLabel(field)} options={v2?headerOptions.filter(o=>o.value===field):headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
         <button className="primary-button" type="button" disabled={pending||fileLoading} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>
@@ -439,7 +457,7 @@ export function ImportsPage({
       <div className="surface batch-list">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.historyEyebrow")}</p><h2>{t("imports.batches")}</h2></div><FileSpreadsheet size={21} /></div>
         {batches.map((item) => <button className={item.id === selected ? "batch-card selected" : "batch-card"} type="button" key={item.id} onClick={() => void open(item.id)}>
-          <span><b>{item.filename}</b><small>{item.resourceType} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
+          <span><b>{item.filename}</b><small>{item.resourceType} · {item.templateVersion??"Legacy"} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}
@@ -453,14 +471,14 @@ export function ImportsPage({
         {rows.map((row) => <article className={`import-row${current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?" import-domain-row":""}`} key={row.id}>
           <span>#{row.rowNumber}</span>
           <div>
-            <b>{current?.resourceType==="ENROLLMENTS"?`${row.normalized.studentNumber||"—"} · ${row.normalized.cohortCode||"—"}`:current?.resourceType==="COHORTS"?`${row.normalized.productCode||"—"} · ${row.normalized.cohortCode||"—"}`:`${row.normalized.nameZh||""} / ${row.normalized.nameEn||""}`}</b>
+            <b>{row.templateVersion==="2"&&row.normalized.operation==="UPDATE"?`UPDATE · ${row.normalized.targetLabel||(zh?"已授权目标":"Authorized target")}`:current?.resourceType==="ENROLLMENTS"?`${row.normalized.studentNumber||"—"} · ${row.normalized.cohortCode||"—"}`:current?.resourceType==="COHORTS"?`${row.normalized.productCode||"—"} · ${row.normalized.cohortCode||"—"}`:`${row.normalized.nameZh||""} / ${row.normalized.nameEn||""}`}</b>
             <small>{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?row.normalized.ownerEmail||"—":row.normalized.email || row.normalized.phone || row.normalized.city || "—"}</small>
-            {row.errors.map((item) => <small className="error-text" key={item.code}>{t(`imports.error.${item.code.toLowerCase()}`)}{item.field && ` · ${t(`imports.field.${item.field}`)}`}{item.reason && ` · ${(t(`imports.reason.${item.reason}`)===`imports.reason.${item.reason}`?t("imports.reason.generic"):t(`imports.reason.${item.reason}`))}`}</small>)}
+            {row.targetRevision&&<small>{zh?"预检版本":"Preflight revision"}: {row.targetRevision}</small>}{row.errors.map((item,index) => <small className="error-text" key={index}>{row.templateVersion==="2"?`${item.code} · ${item.sheet??"CSV"}:${item.row??row.rowNumber} · ${item.column??item.field??"row"}`:t(`imports.error.${item.code.toLowerCase()}`)}{item.field && ` · ${fieldLabel(item.field)}`}{item.reason && ` · ${(t(`imports.reason.${item.reason}`)===`imports.reason.${item.reason}`?t("imports.reason.generic"):t(`imports.reason.${item.reason}`))}`}</small>)}
             {row.lastError && <small className="error-text">{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?t("imports.reason.generic"):row.lastError}</small>}
           </div>
           <StatusBadge tone={row.status === "APPLIED" ? "green" : row.status === "INVALID" || row.status === "FAILED" ? "red" : row.status === "DUPLICATE" ? "amber" : "blue"}>{t(`imports.rowStatus.${row.status.toLowerCase()}`)}</StatusBadge>
-          {(row.status === "INVALID" || row.status === "FAILED") && <button className="secondary-button" type="button" disabled={!current||!importFields(current.resourceType).length} onClick={()=>{setRepairFields(importFields(current?.resourceType??""));setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
-          {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {row.reasons.join(", ")}</small>{["CREATE", "UPDATE", "MERGE", "SKIP"].map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
+          {(row.status === "INVALID" || row.status === "FAILED" || row.templateVersion==="2"&&row.status==="DUPLICATE") && <button className="secondary-button" type="button" disabled={!current||!importFields(current.resourceType).length} onClick={()=>{setRepairFields(current?.executionContract==="CANONICAL_V2"?v2Headers(current.resourceType as V2Resource):importFields(current?.resourceType??""));setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
+          {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {row.reasons.join(", ")}</small>{(row.templateVersion==="2"?["CREATE","SKIP"]:["CREATE", "UPDATE", "MERGE", "SKIP"]).map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
         </article>)}
         {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} onPageSize={(value)=>void open(selected,1,value)} />}
         {current && !rows.length && <div className="empty-state"><span>{t("imports.noRows")}</span></div>}
@@ -471,7 +489,7 @@ export function ImportsPage({
         {error && <InlineMessage type="error">{error}</InlineMessage>}
       </div>
     </section>
-    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span><ImportRepairField field={field} value={repairRow.normalized[field]??""}/></label>)}<BilingualNameHint/></div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
+    {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span>{repairRow.templateVersion==="2"?<input name={field} defaultValue={repairRow.normalized[field]??""}/>:<ImportRepairField field={field} value={repairRow.normalized[field]??""}/>}</label>)}<BilingualNameHint/></div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
     {rollbackOpen&&current&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("common.actionCannotUndo")} onClose={()=>setRollbackOpen(false)}><InlineMessage type="warning">{t("imports.rollbackConfirm",{count:current.applied})}</InlineMessage><div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRollbackOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void rollback()}>{pending?t("common.processing"):t("imports.rollback")}</button></div></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
   </div>;

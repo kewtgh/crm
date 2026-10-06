@@ -202,6 +202,7 @@ async function privacyExport(job){
   appendPrivacyRecords(rows,"contact",contacts);
   appendPrivacyRecords(rows,"uploaded_contract_document",await request("/db/rpc/upload_privacy_records",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token})}));
   appendPrivacyRecords(rows,"generated_contract_document",await request("/db/rpc/document_privacy_records",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token})}));
+  appendPrivacyRecords(rows,"import_lineage",await request("/db/rpc/import_privacy_records",{method:"POST",body:JSON.stringify({job_id:job.id,token:job.lease_token})}));
   const leadContext=await leadPoolPrivacyRecords(requestAll,job.workspace_id,[...new Set(memberships.map(m=>m.household_id))]);
   appendPrivacyRecords(rows,"household_lead",leadContext.leads);
   appendPrivacyRecords(rows,"lead_assignment_history",leadContext.assignments);

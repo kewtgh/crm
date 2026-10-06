@@ -678,3 +678,11 @@ body { overflow-x:hidden; }
 
 .surface.staff-directory { overflow:visible; }
 @media(max-width:680px){.surface.staff-directory{padding:0}}
+.import-sets-page { min-width: 0; }
+.import-sets-page .panel { min-width: 0; padding: 20px; }
+.import-sets-page .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+.import-sets-page li, .import-sets-page td, .import-sets-page code { overflow-wrap: anywhere; }
+.import-sets-page input, .import-sets-page select, .import-sets-page textarea { min-width: 0; max-width: 100%; }
+@media (max-width: 720px) {
+  .import-sets-page .data-table { min-width: 0; max-width: 100%; }
+}

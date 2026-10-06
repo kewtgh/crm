@@ -140,14 +140,8 @@ export async function createCrmRecord(resource: PersistentResource, input: Recor
     });
     return toRow(resource,created);
   }
-  const body = { organization_type:input.organizationType??"SCHOOL",short_name:input.shortName??"",name_zh: input.nameZh, name_en: input.nameEn, city: input.city, curriculum: input.curriculum, status: "UNVERIFIED", completeness: 90,owner_id:requestedOwner,
-      course_categories:input.courseCategories??[],affiliation_type:input.affiliationType??"INDEPENDENT",parent_organization_id:input.parentOrganizationId||null,
-      organization_overview_markdown:input.organizationOverviewMarkdown??"",structure_overview_markdown:input.structureOverviewMarkdown??"",website:input.website??"",address:input.address??"",
-      founded_year:input.foundedYear??null,student_count:input.studentCount??null,faculty_count:input.facultyCount??null,campus_count:input.campusCount??null }
-    ;
-  const table = resourceConfig[resource].table;
-  const created = await databaseJson<Record<string, unknown>[]>(`/db/table/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) });
-  return toRow(resource, created[0]);
+  const created=await databaseJson<Record<string,unknown>>("/db/rpc/save_customer_record",{method:"POST",body:JSON.stringify({resource:"ORGANIZATIONS",record_id:crypto.randomUUID(),expected_updated_at:null,data:{...input,ownerId:requestedOwner}})});
+  return toRow(resource,created);
 }
 
 function tableFor(resource:PersistentResource){return resourceConfig[resource].table;}

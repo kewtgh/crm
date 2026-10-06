@@ -1,10 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.24.1**
+Current release candidate: **v3.25.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.25.0 upgrades Data Import Operations with categorized XLSX/CSV templates, strict preflight,
+canonical domain execution, authorized references, five relationship resources and bounded Import Sets.
+Typed aliases, revision/receipt guards, exact decimals, blank/clear semantics and subject-aware private
+evidence support repair/resume and guarded partial rollback. No automatic identity matching or arbitrary
+Organization reassignment is introduced. See [release notes](docs/RELEASE_V3.25.0.md),
+[release closure](docs/V325_RELEASE_CLOSURE.md) and [Import architecture](docs/IMPORT_OPERATIONS_ARCHITECTURE.md).
 
 Version 3.24.1 restores the shared bilingual-name hint and combined name validation in the Channel
 agreement editor, fixing the CI failure affecting the v3.23.0 and v3.24.0 commits. The agreement QA

@@ -15,6 +15,7 @@ try {
   });
   const deadlineEvents = await workerJson("/db/rpc/process_cohort_deadline_events", {method:"POST",body:JSON.stringify({batch_size:100})});
   const milestoneDueEvents=await workerJson("/db/rpc/process_milestone_due_events",{method:"POST",body:JSON.stringify({batch_size:100})});
+  await workerJson("/db/rpc/purge_expired_import_v2_evidence",{method:"POST",body:"{}"});
   await heartbeat.success({ milestoneDueEvents:Number(milestoneDueEvents??0),processed: Number(result ?? 0), cohortDeadlineEvents:Number(deadlineEvents??0) });
   process.stdout.write(`Processed ${Number(result ?? 0)} due reminders.\n`);
 } catch (error) {
