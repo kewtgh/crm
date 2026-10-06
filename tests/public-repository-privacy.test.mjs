@@ -59,6 +59,8 @@ test("operational files are ignored while migration and public example contracts
   const ignored = execFileSync("git", ["check-ignore", "--no-index", "--stdin"],
     { cwd: root, encoding: "utf8", input: files.join("\n") }).trim().split(/\r?\n/);
   assert.deepEqual(ignored, files.slice(0, 7));
+  // Fresh hosted checkouts have no ignored work/ directory yet.
+  mkdirSync(path.join(root, "work"), { recursive: true });
   const temporary = mkdtempSync(path.join(root, "work/privacy-ignore-fixture-"));
   try {
     const privateFiles = ["fake.env", "fake.log", "fake.dump", "private-evidence/result.json"];

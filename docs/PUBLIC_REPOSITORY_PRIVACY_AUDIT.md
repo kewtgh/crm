@@ -164,6 +164,7 @@ PASS applies to the described current-file check, not to all historical/external
 | Revenue candidate privacy | PASS | Six candidates reviewed, uncommitted and excluded |
 | Client env / existing bundle | PASS | Static review and existing local artifacts; no Production access |
 | Privacy / CI regression tests | PASS | 13 targeted tests |
+| Fresh-checkout privacy tests | PASS | 13 tests in an isolated source snapshot with no pre-existing work directory; CI ENOENT fixture defect repaired |
 | Offline template tests | PASS | 27 tests, including metadata residue and non-echoing failures |
 | Template governance/storage and version regressions | PASS | 6 targeted tests |
 | Scoped lint | PASS | Ten privacy/CI/QA JavaScript files |
@@ -202,7 +203,8 @@ revoke/rotate and verify invalidation before history cleanup, with separate auth
 
 **Not performed:** BFG, remote branch/tag deletion, credential rotation, historical Actions removal
 or Production access/deployment. Only the explicitly authorized main rewrite is published; private
-backups and any retained local legacy refs are not pushed. Force push cannot recall old logs,
+backups are not pushed. The owner separately approved retargeting the local legacy fix branch to its
+corresponding sanitized commit; that branch is not published. Force push cannot recall old logs,
 downloaded clones, fork refs, unreachable hosting objects or external caches.
 
 ## Gate for future development
