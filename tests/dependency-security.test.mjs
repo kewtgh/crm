@@ -107,3 +107,27 @@ test("dependency policy pins patched advisories without weakening CI", async () 
   }
   assert.match(workflow, /npm audit --audit-level=moderate/);
 });
+
+test("independent CI audit projects pin patched sharp including native binaries", async () => {
+  const workerRoot = new URL("../infrastructure/email-delivery-worker/", import.meta.url);
+  const [manifest, lock, workflow] = await Promise.all([
+    readFile(new URL("package.json", workerRoot), "utf8").then(JSON.parse),
+    readFile(new URL("package-lock.json", workerRoot), "utf8").then(JSON.parse),
+    readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
+  ]);
+  assert.equal(manifest.overrides.sharp, "0.35.5");
+  assert.deepEqual(lock.packages[""].devDependencies, manifest.devDependencies);
+  const sharpEntries = Object.entries(lock.packages).filter(([key]) => key.endsWith("node_modules/sharp"));
+  assert.ok(sharpEntries.length, "worker audit has its own transitive sharp dependency");
+  for (const [key, entry] of sharpEntries) {
+    assert.equal(entry.version, manifest.overrides.sharp, `${key} must not retain vulnerable sharp`);
+    for (const [name, version] of Object.entries(entry.optionalDependencies)) {
+      const native = lock.packages[`node_modules/${name}`];
+      assert.ok(native, `${name} must have a reproducible native dependency entry`);
+      assert.equal(native.version, version, `${name} must match patched sharp's native dependency`);
+    }
+  }
+  for (const prefix of ["infrastructure/email-delivery-worker", "planning-source/education-intelligent-crm-planning-v1"]) {
+    assert.ok(workflow.includes(`npm --prefix ${prefix} audit --audit-level=moderate`));
+  }
+});

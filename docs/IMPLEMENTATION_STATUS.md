@@ -1,4 +1,11 @@
-# Implementation status — v3.25.1 release candidate
+# Implementation status — v3.25.2 release candidate
+
+## v3.25.2 — Independent worker dependency audit repair
+
+Formal metadata is **3.25.2**. The email delivery worker pins its transitive sharp dependency to
+0.35.5 and verifies its native dependency lock entries. CI continues auditing the main application,
+email worker and planning project independently. No audit threshold or workflow gate is relaxed.
+See [patch notes](RELEASE_V3.25.2.md).
 
 ## v3.25.1 — Runtime packaging and CI contract repair
 
