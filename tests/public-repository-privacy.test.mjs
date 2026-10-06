@@ -13,6 +13,10 @@ const root = path.resolve(import.meta.dirname, "..");
 const currentFiles = () => execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
 const digest = value => createHash("sha256").update(value).digest("hex");
+function readPublicJson(relative) {
+  try { return JSON.parse(readFileSync(path.join(root, relative), "utf8")); }
+  catch { throw new Error(`PUBLIC_JSON_SCHEMA_INVALID:${relative}`); }
+}
 
 test("pinned Chromium resolves from operator environment without a committed home path", () => {
   assert.equal(chromium1243Path({ PLAYWRIGHT_CHROMIUM_1243_PATH: "selected-browser" }), "selected-browser");
@@ -23,14 +27,15 @@ test("pinned Chromium resolves from operator environment without a committed hom
 });
 
 test("contract reference guards contain digests and neutral source aliases", () => {
-  const catalog = JSON.parse(readFileSync(path.join(root, "templates/contracts/catalog.json"), "utf8"));
-  assert.deepEqual(catalog.versions.map(version => version.source_filename),
-    ["channel-recruitment-reference.docx", "student-program-reference.docx"]);
+  const catalog = readPublicJson("templates/contracts/catalog.json");
+  assert.ok(JSON.stringify(catalog.versions.map(version => version.source_filename)) ===
+    JSON.stringify(["channel-recruitment-reference.docx", "student-program-reference.docx"]),
+  "PRIVATE_SOURCE_ALIAS_DETECTED");
   for (const version of catalog.versions) {
-    assert.equal(version.status, "DRAFT");
+    assert.ok(version.status === "DRAFT", "TEMPLATE_STATUS_MUST_REMAIN_DRAFT");
     assert.equal(Object.hasOwn(version, "forbidden_literals"), false);
     assert.ok(version.forbidden_literal_digests.length > 0);
-    for (const guard of version.forbidden_literal_digests) assert.match(guard.sha256, /^[a-f0-9]{64}$/);
+    for (const guard of version.forbidden_literal_digests) assert.ok(/^[a-f0-9]{64}$/.test(guard.sha256), "PUBLIC_DIGEST_SCHEMA_INVALID");
   }
 });
 
@@ -42,8 +47,8 @@ test("tracked documentation and pending Revenue decisions do not publish persona
     let text;
     try { text = readFileSync(path.join(root, relative), "utf8"); }
     catch (error) { if (error.code === "ENOENT" && candidates.includes(relative)) continue; throw error; }
-    assert.doesNotMatch(text, /[A-Z]:[\\/]+Users[\\/]+[^\\/\s<>]+[\\/]/i, relative);
-    assert.doesNotMatch(text, /[A-Z]:[\\/]+[^\\/\s<>]+[\\/]+(?:Downloads|Documents)[\\/]/i, relative);
+    assert.ok(!/[A-Z]:[\\/]+Users[\\/]+[^\\/\s<>]+[\\/]/i.test(text), `PRIVATE_WORKSTATION_PATH:${relative}`);
+    assert.ok(!/[A-Z]:[\\/]+[^\\/\s<>]+[\\/]+(?:Downloads|Documents)[\\/]/i.test(text), `PRIVATE_WORKSTATION_PATH:${relative}`);
   }
 });
 
@@ -69,7 +74,7 @@ test("operational files are ignored while migration and public example contracts
 });
 
 test("known private identities, bank and source filenames are absent from every tracked/candidate file", () => {
-  const { guards } = JSON.parse(readFileSync(path.join(root, "tests/fixtures/public-privacy-fingerprints.json"), "utf8"));
+  const { guards } = readPublicJson("tests/fixtures/public-privacy-fingerprints.json");
   assert.ok(guards.length >= 4);
   for (const relative of currentFiles()) {
     const data = readFileSync(path.join(root, relative));
@@ -78,7 +83,7 @@ test("known private identities, bank and source filenames are absent from every 
       : [data.toString("utf8")];
     for (const text of parts) {
       for (const guard of guards) {
-        assert.match(guard.sha256, /^[a-f0-9]{64}$/);
+        assert.ok(/^[a-f0-9]{64}$/.test(guard.sha256), "PUBLIC_DIGEST_SCHEMA_INVALID");
         const chunks = guard.category === "PRIVATE_SOURCE_FILENAME" ? text.split(/\r?\n/).filter(line => line.includes(".docx"))
           : guard.category === "BANK_OR_CONTACT_DETAILS" ? text.match(/[\d+\-\s]{12,}/g) ?? [] : text.match(/[\u4e00-\u9fff]+/g) ?? [];
         for (const chunk of chunks) for (let i = 0; i + guard.characters <= chunk.length; i++) {
@@ -101,19 +106,19 @@ test("known private identities, bank and source filenames are absent from every 
 
 test("contract previews and archived acceptance identities are independently fictional", () => {
   for (const name of ["channel-recruitment-fixture.json", "student-program-fixture.json"]) {
-    const fixture = JSON.parse(readFileSync(path.join(root, "templates/contracts", name), "utf8"));
+    const fixture = readPublicJson(`templates/contracts/${name}`);
     assert.equal(fixture.synthetic, true);
     assert.ok(Object.entries(fixture.source_context).filter(([key]) => key.endsWith("_id"))
       .every(([, value]) => value.startsWith("SYNTHETIC_")));
     for (const value of Object.values(fixture.confirmed)) {
-      if (typeof value === "string" && value.includes("@")) assert.match(value, /@example\.test$/);
+      if (typeof value === "string" && value.includes("@")) assert.ok(/@example\.test$/.test(value), "NON_SYNTHETIC_FIXTURE_EMAIL");
     }
-    assert.match(fixture.confirmed["bank.account"], /^(TEST-|SYNTHETIC_)/);
-    assert.equal(fixture.confirmed["company.phone"], "SYNTHETIC_PHONE");
+    assert.ok(/^(TEST-|SYNTHETIC_)/.test(fixture.confirmed["bank.account"]), "NON_SYNTHETIC_BANK_FIXTURE");
+    assert.ok(fixture.confirmed["company.phone"] === "SYNTHETIC_PHONE", "NON_SYNTHETIC_PHONE_FIXTURE");
   }
   const seed = readFileSync(path.join(root, "archive/supabase/seed.sql"), "utf8");
-  assert.match(seed, /Independently fictional/);
-  for (const email of seed.match(/[\w.+-]+@[\w.-]+\.[a-z]+/g) ?? []) assert.match(email, /@example\.test$/);
+  assert.ok(/Independently fictional/.test(seed), "SEED_PROVENANCE_REQUIRED");
+  for (const email of seed.match(/[\w.+-]+@[\w.-]+\.[a-z]+/g) ?? []) assert.ok(/@example\.test$/.test(email), "NON_SYNTHETIC_SEED_EMAIL");
 });
 
 test("DOCX metadata and source relationships contain only neutral template identities", () => {
@@ -121,15 +126,15 @@ test("DOCX metadata and source relationships contain only neutral template ident
     const parts = unzipSync(readFileSync(path.join(root, "templates/contracts", name)));
     const core = Buffer.from(parts["docProps/core.xml"]).toString("utf8");
     for (const tag of ["dc:creator", "cp:lastModifiedBy"]) {
-      assert.match(core, new RegExp(`<${tag}(?:\\s[^>]*)?>Lumina DRAFT template</${tag}>`));
+      assert.ok(new RegExp(`<${tag}(?:\\s[^>]*)?>Lumina DRAFT template</${tag}>`).test(core), `PRIVATE_DOCX_METADATA:${name}:${tag}`);
     }
     const app = Buffer.from(parts["docProps/app.xml"]).toString("utf8");
-    assert.doesNotMatch(app, /<Company>[^<]+<\/Company>/);
+    assert.ok(!/<Company>[^<]+<\/Company>/.test(app), `PRIVATE_DOCX_COMPANY:${name}`);
     for (const [part, data] of Object.entries(parts)) if (/\.(xml|rels)$/.test(part)) {
       const text = Buffer.from(data).toString("utf8");
-      assert.doesNotMatch(text, /TargetMode=["']External["']/);
-      assert.doesNotMatch(text, /<w:(?:ins|del)\b/);
-      assert.doesNotMatch(text, /[A-Z]:[\\/]+Users[\\/]/i);
+      assert.ok(!/TargetMode=["']External["']/.test(text), `DOCX_EXTERNAL_RELATIONSHIP:${name}`);
+      assert.ok(!/<w:(?:ins|del)\b/.test(text), `DOCX_TRACKED_CHANGE:${name}`);
+      assert.ok(!/[A-Z]:[\\/]+Users[\\/]/i.test(text), `PRIVATE_DOCX_PATH:${name}`);
     }
   }
 });
@@ -139,21 +144,21 @@ test("all workflow uploads use the fixed public summary allowlist and never dump
   let uploads = 0;
   for (const name of workflows) {
     const text = readFileSync(path.join(root, name), "utf8");
-    assert.doesNotMatch(text, /\bprintenv\b|\bset\s+-x\b|echo\s+["']?\$\{?\{?\s*secrets\./);
+    assert.ok(!/\bprintenv\b|\bset\s+-x\b|echo\s+["']?\$\{?\{?\s*secrets\./.test(text), `WORKFLOW_PRIVATE_LOGGING:${name}`);
     for (const block of text.split(/\n\s+- name:/).filter(block => block.includes("actions/upload-artifact@"))) {
       uploads++;
-      assert.match(block, /path: work\/public-artifacts\/browser-qa-summary\.json\s/);
-      assert.doesNotMatch(block, /path:.*\*|path: work\/browser-qa/);
-      assert.match(block, /steps\.public_summary\.outcome == 'success'/);
+      assert.ok(/path: work\/public-artifacts\/browser-qa-summary\.json\s/.test(block), `WORKFLOW_ARTIFACT_ALLOWLIST:${name}`);
+      assert.ok(!/path:.*\*|path: work\/browser-qa/.test(block), `WORKFLOW_RAW_ARTIFACT:${name}`);
+      assert.ok(/steps\.public_summary\.outcome == 'success'/.test(block), `WORKFLOW_PUBLICATION_FAILURE_GATE:${name}`);
     }
   }
   assert.equal(uploads, 1);
   const release = readFileSync(path.join(root, ".github/workflows/full-release-gate.yml"), "utf8");
-  assert.match(release, /publish-public-ci-artifacts\.mjs/);
-  assert.match(release, /ci:private-stage -- release/);
-  assert.match(release, /::add-mask::/);
+  assert.ok(/publish-public-ci-artifacts\.mjs/.test(release), "PUBLIC_SUMMARY_STEP_REQUIRED");
+  assert.ok(/ci:private-stage -- release/.test(release), "PRIVATE_RELEASE_CAPTURE_REQUIRED");
+  assert.ok(/::add-mask::/.test(release), "RUNNER_PATH_MASK_REQUIRED");
   const privacy = readFileSync(path.join(root, ".github/workflows/public-privacy.yml"), "utf8");
-  assert.doesNotMatch(privacy, /paths-ignore:/);
-  assert.match(privacy, /pull_request:/);
-  assert.match(privacy, /npm run test:public-privacy/);
+  assert.ok(!/paths-ignore:/.test(privacy), "DOCUMENTATION_PRIVACY_GATE_REQUIRED");
+  assert.ok(/pull_request:/.test(privacy), "PR_PRIVACY_GATE_REQUIRED");
+  assert.ok(/npm run test:public-privacy/.test(privacy), "PRIVACY_CONTRACT_STEP_REQUIRED");
 });

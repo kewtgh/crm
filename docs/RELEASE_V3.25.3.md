@@ -16,10 +16,12 @@ and checked against the current run. Screenshots, raw logs, network traces, envi
 executable paths and failure messages are excluded. Missing or stale evidence cannot produce a QA
 PASS. Privacy contracts also run for documentation-only changes.
 
-The current patch addresses public-file content and future CI publication. Reachable Git history,
-historical commit identities, older Actions outputs and external copies remain a separate remediation
-scope. See [the public-safe audit](PUBLIC_REPOSITORY_PRIVACY_AUDIT.md). History rewrite/force push
-requires independent explicit approval of its plan; ordinary patch publication does not erase history.
+The current patch addresses public-file content and future CI publication. The owner separately
+approved the main-history sanitization plan and GitHub noreply replacement. The rewritten history was
+verified in isolation before installing it, preserving the reviewed final tree and all historical
+migration bytes. Older Actions outputs, forks, caches and downloaded copies require separate follow-up.
+See [the public-safe audit](PUBLIC_REPOSITORY_PRIVACY_AUDIT.md). History rewrite/force push requires
+independent explicit scope approval; ordinary patch publication does not erase history.
 
 No migration, dependency upgrade, business domain mutation, Revenue implementation, production
 template approval or Production deployment is included. Pending Revenue policy inputs stay unresolved
