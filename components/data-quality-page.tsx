@@ -102,7 +102,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
     <section className="surface quality-rules">
       <div className="surface-heading"><div><h2>{t("quality.rules")}</h2><p>{t("quality.rulesHelp")}</p></div></div>
       <div className="quality-rule-grid">{rules.map(rule=><article key={rule.id} data-severity={rule.severity} data-enabled={rule.enabled}>
-        <div><b>{t(qualityRuleKey(rule.ruleKey))}</b><small>{rule.ruleKey}</small></div>
+        <div><b>{(t(`quality.rule.${rule.ruleKey}`)!==`quality.rule.${rule.ruleKey}`?t(`quality.rule.${rule.ruleKey}`):t(qualityRuleKey(rule.ruleKey))===qualityRuleKey(rule.ruleKey)?t("quality.rule.generic"):t(qualityRuleKey(rule.ruleKey)))}</b></div>
         <div className="quality-rule-controls">
           <label className="quality-rule-enabled"><input type="checkbox" checked={rule.enabled} disabled={pending} onChange={event=>void configureRule(rule,{enabled:event.target.checked})}/><span>{t("quality.enabled")}</span></label>
           <label><span>{t("quality.severityLabel")}</span><select value={rule.severity} disabled={pending} onChange={event=>void configureRule(rule,{severity:event.target.value as QualityRuleConfig["severity"]})}>{["LOW","MEDIUM","HIGH"].map(value=><option value={value} key={value}>{t(`quality.severity.${value.toLowerCase()}`)}</option>)}</select></label>
@@ -129,7 +129,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
   </div>;
 }
 
-function qualityRuleKey(ruleKey:string){if(["COHORT_","ENROLLMENT_","APPLICATION_","MILESTONE_","VISA_RESULT_","WORKFLOW_","STRATEGIC_ACCOUNT_","HIGH_TIER_ACCOUNT_","KEY_CONTACT_","CHANNEL_ACCOUNT_","CLAIMED_LEAD_","QUALIFYING_SCHOOL_","QUALIFIED_SCHOOL_","RECRUITMENT_ACTIVATED_","SOLUTION_PROPOSED_"].some(prefix=>ruleKey.startsWith(prefix)))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
+function qualityRuleKey(ruleKey:string){if(["SUCCESS_","COHORT_","ENROLLMENT_","APPLICATION_","MILESTONE_","VISA_RESULT_","WORKFLOW_","STRATEGIC_ACCOUNT_","HIGH_TIER_ACCOUNT_","KEY_CONTACT_","CHANNEL_ACCOUNT_","CLAIMED_LEAD_","QUALIFYING_SCHOOL_","QUALIFIED_SCHOOL_","RECRUITMENT_ACTIVATED_","SOLUTION_PROPOSED_"].some(prefix=>ruleKey.startsWith(prefix)))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
 
 function qualityHref(item:QualityIssue){
   if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;

@@ -1,4 +1,14 @@
-# Implementation status — v3.25.3 release candidate
+# Implementation status — v3.26.0 release candidate
+
+## v3.26.0 — Business workflows and interface upgrade
+
+Contextual organization contact and draft-contract editing, product catalog access, compact shared
+filters, student-centered family navigation and participation views are implemented. Migration 113
+adds authorized family search and automatic annual progression using the workspace timezone on
+September 1; manual retention/acceleration corrections remain available. Revenue specifications
+are separate uncommitted candidates, with no Revenue runtime in this release.
+
+See [release notes](RELEASE_V3.26.0.md) and [repair plan](CRM_EXPERIENCE_REPAIR_PLAN.md).
 
 ## v3.25.3 — Public content privacy and CI publication hardening
 

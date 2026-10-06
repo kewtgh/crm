@@ -59,7 +59,9 @@ export async function createHousehold(input: { nameZh: string; nameEn: string; a
   return databaseJson<HouseholdRow>("/db/rpc/save_customer_record",{method:"POST",body:JSON.stringify({resource:"HOUSEHOLDS",record_id:crypto.randomUUID(),expected_updated_at:null,data:{...input,status:"ACTIVE"}})});
 }
 
+export type StudentFamilyMember={contactId:string;relationship:string;nameZh:string;nameEn:string};
 export type StudentRecord = {
+  familyMembers?:StudentFamilyMember[];
   id: string; personId: string; nameZh: string; nameEn: string; householdZh: string;
   householdEn: string; studentNumber: string; grade: string; academicYear: string; status: string; updatedAt: string;
 };
@@ -71,12 +73,12 @@ type StudentRow = {
 type StudentPageRow = {
   id: string; person_id: string; student_number: string | null; current_grade: string; academic_year: string;
   status: string; updated_at: string; name_zh: string; name_en: string;
-  household_name_zh: string | null; household_name_en: string | null; total_count: number | string;
+  household_name_zh: string | null; household_name_en: string | null; total_count: number | string;family_members?:StudentFamilyMember[];
 };
 
 export async function listStudents(options: PageOptions = {}): Promise<PageResult<StudentRecord>> {
   const { page, pageSize } = pageValues(options);
-  const rows = await databaseJson<StudentPageRow[]>("/db/rpc/list_students_page", {
+  const rows = await databaseJson<StudentPageRow[]>("/db/rpc/list_student_family_page", {
     method: "POST",
     body: JSON.stringify({
       search_query: options.query ?? "",
@@ -87,7 +89,7 @@ export async function listStudents(options: PageOptions = {}): Promise<PageResul
   });
   return {
     items: rows.map((row) => ({
-      id: row.id, personId: row.person_id, nameZh: row.name_zh, nameEn: row.name_en,
+      id: row.id, personId: row.person_id, nameZh: row.name_zh, nameEn: row.name_en,familyMembers:row.family_members??[],
       householdZh: row.household_name_zh ?? "", householdEn: row.household_name_en ?? "",
       studentNumber: row.student_number ?? "", grade: row.current_grade,
       academicYear: row.academic_year, status: row.status, updatedAt: row.updated_at,

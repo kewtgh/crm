@@ -9,9 +9,9 @@ export const generateMetadata = () => localizedPageMetadata("meta.households");
 export default async function Page({searchParams}:{searchParams:Promise<{focus?:string;tab?:string}>}) {
   await requireCapability("education.view");
   const {focus,tab}=await searchParams;
-  if(tab==="students"){
+  if(tab!=="families"&&(!focus||tab==="students")){
     const [data,detail]=await Promise.all([listStudents().catch(()=>null),focus?getStudentDetail(focus).catch(()=>null):null]);
-    return <div className="page-stack"><WorkspaceTabs items={familyTabs} active="/households?tab=students"/>{data?<StudentsWorkspace initial={data} initialDetail={detail}/>:<DataLoadError/>}</div>;
+    return <div className="page-stack"><WorkspaceTabs items={familyTabs} active="/households"/>{data?<StudentsWorkspace initial={data} initialDetail={detail}/>:<DataLoadError/>}</div>;
   }
   const initialDetail=focus?await getHouseholdDetail(focus).catch(()=>null):null;
   const data = await listHouseholds().catch(() => null);

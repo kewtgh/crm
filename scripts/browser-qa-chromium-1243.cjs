@@ -359,7 +359,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="import-sets"){await require("./qa-import-sets.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="experience"){await require("./qa-workflow-experience.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="import-sets"){await require("./qa-import-sets.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="import-v2"){await require("./qa-import-v2.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="contract-extraction"){await require("./qa-contract-extraction.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="contract-documents"){await require("./qa-contract-documents.cjs")({browser,base,output,report,observe});}

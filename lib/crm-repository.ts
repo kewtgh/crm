@@ -86,7 +86,7 @@ function toRow(resource: PersistentResource, record: Record<string, unknown>,own
   };
 }
 
-export async function listCrmRows(resource: PersistentResource, options: { query?: string; page?: number; pageSize?: number; status?: string; sort?: string; direction?: string;commercialTier?:string;keyContact?:string;ownerId?:string;potentialMin?:number } = {}): Promise<PagedRows> {
+export async function listCrmRows(resource: PersistentResource, options: { query?: string; page?: number; pageSize?: number; status?: string; sort?: string; direction?: string;commercialTier?:string;keyContact?:string;ownerId?:string;potentialMin?:number;organizationId?:string;contactType?:string } = {}): Promise<PagedRows> {
   const config = resourceConfig[resource];
   const pageSize = Math.max(1, Math.min(Number(options.pageSize ?? 20), 100));
   const page = Math.max(1, Number(options.page ?? 1));
@@ -97,11 +97,12 @@ export async function listCrmRows(resource: PersistentResource, options: { query
   if (query) params.set("or", `(${config.search.map((field) => `${field}.ilike.*${query}*`).join(",")})`);
   if (options.status && options.status !== "all") params.set(resource==="people"?"contact_status":"status", `eq.${options.status}`);
   if(resource==="schools"){if(options.commercialTier)params.set("commercial_tier",options.commercialTier==="UNKNOWN"?"is.null":`eq.${options.commercialTier}`);if(options.keyContact)params.set("has_key_contact",`eq.${options.keyContact==="KEY"}`);if(options.ownerId)params.set("owner_id",`eq.${options.ownerId}`);if(options.potentialMin!==undefined)params.set("partnership_potential_score",`gte.${options.potentialMin}`);}
+  if(resource==="people"){if(options.organizationId)params.set("organization_id",`eq.${options.organizationId}`);if(options.ownerId)params.set("owner_id",`eq.${options.ownerId}`);if(options.contactType)params.set("contact_type",`eq.${options.contactType}`);}
   const sortKey = options.sort && options.sort in config.sort ? options.sort as keyof typeof config.sort : "primary";
   params.set("order", `${config.sort[sortKey]}.${options.direction === "desc" ? "desc" : "asc"}`);
   const [response,metrics] = await Promise.all([
     databaseRequest(`/db/table/${resource==="schools"?"organization_commercial_records":config.table}?${params}`, { headers: { Prefer: "count=exact", Range: `${start}-${start + pageSize - 1}` } }),
-    resource==="schools"&&(options.commercialTier||options.keyContact||options.ownerId||options.potentialMin!==undefined)?databaseJson<CrmMetrics>("/db/rpc/organization_commercial_metrics",{method:"POST",body:JSON.stringify({search_query:query,status_filter:options.status??"all",tier_filter:options.commercialTier??null,key_filter:options.keyContact?options.keyContact==="KEY":null,owner_filter:options.ownerId??null,potential_min:options.potentialMin??null})}):databaseJson<CrmMetrics>("/db/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
+    resource==="people"&&(options.organizationId||options.ownerId||options.contactType)?databaseJson<CrmMetrics>("/db/rpc/contact_directory_metrics",{method:"POST",body:JSON.stringify({search_query:query,status_filter:options.status??"all",org_filter:options.organizationId??null,owner_filter:options.ownerId??null,type_filter:options.contactType??null})}):resource==="schools"&&(options.commercialTier||options.keyContact||options.ownerId||options.potentialMin!==undefined)?databaseJson<CrmMetrics>("/db/rpc/organization_commercial_metrics",{method:"POST",body:JSON.stringify({search_query:query,status_filter:options.status??"all",tier_filter:options.commercialTier??null,key_filter:options.keyContact?options.keyContact==="KEY":null,owner_filter:options.ownerId??null,potential_min:options.potentialMin??null})}):databaseJson<CrmMetrics>("/db/rpc/crm_resource_metrics", { method:"POST",body:JSON.stringify({resource_key:resource,search_query:query,status_filter:options.status??"all"}) }),
   ]);
   const records = await response.json() as Record<string, unknown>[];
   const contentRange = response.headers.get("content-range") ?? "*/0";

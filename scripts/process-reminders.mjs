@@ -13,6 +13,7 @@ try {
       name:"REMINDER_BATCH_SIZE",defaultValue:100,maximum:200,
     }) }),
   });
+  await workerJson("/db/rpc/process_annual_student_progression",{method:"POST",body:"{}"});
   const deadlineEvents = await workerJson("/db/rpc/process_cohort_deadline_events", {method:"POST",body:JSON.stringify({batch_size:100})});
   const milestoneDueEvents=await workerJson("/db/rpc/process_milestone_due_events",{method:"POST",body:JSON.stringify({batch_size:100})});
   await workerJson("/db/rpc/purge_expired_import_v2_evidence",{method:"POST",body:"{}"});

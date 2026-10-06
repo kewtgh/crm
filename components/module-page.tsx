@@ -28,12 +28,14 @@ export function ModulePage({
   initialTotal,
   initialMetrics,
   taskWorkspace,
+  organizationId, createOnly=false, onCreated,
 }: {
   config: ModuleConfig;
   resource?: PersistentResource;
   initialTotal?: number;
   initialMetrics?: CrmMetrics;
   taskWorkspace?:TaskWorkspace;
+  organizationId?:string; createOnly?:boolean; onCreated?:()=>void;
 }) {
   const { locale, t } = useI18n();
   const user=useAppUser();
@@ -55,7 +57,7 @@ export function ModulePage({
     needsAttention: 0,
     averageCompleteness: 0,
   });
-  const [organization, setOrganization] = useState("");
+  const [organization, setOrganization] = useState(organizationId??"");
   const [related, setRelated] = useState("");
   const [relatedLabel, setRelatedLabel] = useState("");
   const [owner, setOwner] = useState("");
@@ -77,7 +79,7 @@ export function ModulePage({
     setDuplicateChecked(false);
     setDuplicates([]);
     setError("");
-    setOrganization("");
+    setOrganization(organizationId??"");
     setRelated("");
     setRelatedLabel("");
     setOwner("");
@@ -206,6 +208,7 @@ export function ModulePage({
       close();
       setRefreshKey((value) => value + 1);
       setToast(t("records.created"));
+      onCreated?.();
     } catch (caught) {
       const key = caught instanceof ApiClientError && caught.code === "DUPLICATE_FOUND"
         ? "records.error.duplicate"
@@ -232,6 +235,7 @@ export function ModulePage({
   };
 
   return <div className="page-stack module-page">
+    {createOnly?<button type="button" className="secondary-button" onClick={()=>setDrawer(true)}><Plus size={16}/>{t(`${prefix}.add`)}</button>:<>
     <section className="page-heading-row">
       <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div>
       <div className="page-actions">
@@ -255,6 +259,7 @@ export function ModulePage({
       savedViewsOpen={savedViewsOpen}
       onCloseSavedViews={() => setSavedViewsOpen(false)}
     />
+    </>}
     {drawer && <AccessibleDrawer
       pending={saving}
       title={t("modules.createRecord", { record: t(`${prefix}.singular`) })}
@@ -283,7 +288,7 @@ export function ModulePage({
           <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
         </>}
         {resource === "people" && <>
-          <SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>
+          {!organizationId&&<SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>}
           {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>}
           <label className="field"><span>{t("modules.title")}</span><input name="title" maxLength={120}/></label>
           <div className="form-grid two-column">

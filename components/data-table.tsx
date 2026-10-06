@@ -1,4 +1,5 @@
 "use client";
+import {SearchFilterBar} from "./search-filter-bar";
 import {EnrollmentRelation} from "./enrollment-relation";
 
 
@@ -10,7 +11,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { DataRow, ModuleConfig } from "@/lib/crm-data";
 import type { CrmMetrics, PersistentResource } from "@/lib/crm-repository";
-import { AccessibleDrawer, ConfirmDialog, InlineMessage, Pagination, ProgressBar, SearchField, StatusBadge } from "@/components/ui";
+import { AccessibleDrawer, ConfirmDialog, InlineMessage, Pagination, ProgressBar, StatusBadge } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
 import { apiFetch } from "@/lib/api-client";
 import { useUserPreferences } from "@/components/user-preferences-context";
@@ -25,6 +26,8 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
   const user = useAppUser();
   const canViewCommercial=useCapability("education.view");
   const [commercialFilter,setCommercialFilter]=useState({commercialTier:"",keyContact:"",ownerId:"",potentialMin:""});
+  const [contactFilters,setContactFilters]=useState({organizationId:"",ownerId:"",contactType:""});
+  const contactQuery=new URLSearchParams(Object.entries(contactFilters).filter(([,v])=>v)).toString();
   const commercialQuery=new URLSearchParams(Object.entries(commercialFilter).filter(([,v])=>v)).toString();
   const [savePending, setSavePending] = useState(false);
   const savingView = useRef(false);
@@ -33,7 +36,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
     query,setQuery,page,setPage,pageSize,setPageSize,status,setStatus,sort,setSort,
     direction,setDirection,items:rows,total,loading,error,retry,
   }=usePagedResource<DataRow,CrmMetrics>({
-    endpoint:resource?`/api/crm/${resource}${resource==="schools"&&commercialQuery?`?${commercialQuery}`:""}`:"",
+    endpoint:resource?`/api/crm/${resource}${resource==="schools"&&commercialQuery?`?${commercialQuery}`:resource==="people"&&contactQuery?`?${contactQuery}`:""}`:"",
     enabled:Boolean(resource),
     initialItems:config.rows,
     initialTotal:initialTotal??config.rows.length,
@@ -115,7 +118,7 @@ export function DataTable({ config, resource, initialTotal, refreshKey = 0, onMe
   };
 
   return <><div id="record-list" className={`data-surface ${loading ? "is-loading" : ""}`} aria-busy={loading}>
-    <div className="table-toolbar"><SearchField value={query} onChange={setSearch} placeholder={t(`${prefix}.search`)} /><div className="filter-chips"><label className="compact-select"><span>{t("common.status")}</span><select value={status} onChange={event=>{setStatus(event.target.value);setPage(1);}}><option value="all">{t("common.all")}</option>{statusOptions.map(value=><option value={value} key={value}>{t(resource==="people"?`contact.status.${value.toLowerCase()}`:`crm.status.${value}`)}</option>)}</select></label></div></div>
+    <SearchFilterBar value={query} onChange={setSearch} placeholder={t(`${prefix}.search`)}><label className="field"><span>{t("common.status")}</span><select value={status} onChange={event=>{setStatus(event.target.value);setPage(1);}}><option value="all">{t("common.all")}</option>{statusOptions.map(value=><option value={value} key={value}>{t(resource==="people"?`contact.status.${value.toLowerCase()}`:`crm.status.${value}`)}</option>)}</select></label>{resource==="people"&&<><EnrollmentRelation type="ORGANIZATION" label={t("modules.organization")} value={contactFilters.organizationId} onChange={value=>{setContactFilters(f=>({...f,organizationId:value}));setPage(1);}}/><EnrollmentRelation type="USER" label={t("crm.owner")} value={contactFilters.ownerId} onChange={value=>{setContactFilters(f=>({...f,ownerId:value}));setPage(1);}}/><label className="field"><span>{t("contact.type")}</span><select value={contactFilters.contactType} onChange={e=>{setContactFilters(f=>({...f,contactType:e.target.value}));setPage(1);}}><option value="">{t("common.all")}</option>{["CONTACT","SCHOOL_STAFF","PARENT","STUDENT","PAYER"].map(v=><option key={v} value={v}>{t(`contact.type.${v.toLowerCase()}`)}</option>)}</select></label></>}</SearchFilterBar>
     {resource==="schools"&&canViewCommercial&&<div className="form-grid two-column channel-account-filters">{["commercialTier","keyContact","potentialMin"].map(k=><label className="field" key={k}><span>{t("channel.filter."+k)}</span>{k==="commercialTier"||k==="keyContact"?<select value={commercialFilter[k as keyof typeof commercialFilter]} onChange={e=>{setCommercialFilter(f=>({...f,[k]:e.target.value}));setPage(1);}}><option value="">{t("common.all")}</option>{(k==="commercialTier"?[...commercialTiers,"UNKNOWN"]:["KEY","MISSING"]).map(v=><option key={v} value={v}>{commercialTiers.includes(v as typeof commercialTiers[number])?v:t("channel.option."+v)}</option>)}</select>:<input type={k==="potentialMin"?"number":"text"} min={k==="potentialMin"?10:undefined} max={k==="potentialMin"?100:undefined} placeholder={k==="ownerId"?t("channel.ownerIdHelp"):undefined} value={commercialFilter[k as keyof typeof commercialFilter]} onChange={e=>{setCommercialFilter(f=>({...f,[k]:e.target.value}));setPage(1);}}/>}</label>)}<EnrollmentRelation type="USER" label={t("channel.filter.ownerId")} value={commercialFilter.ownerId} onChange={value=>{setCommercialFilter(f=>({...f,ownerId:value}));setPage(1);}}/></div>}
     {error && <div className="table-error"><InlineMessage type="error">{error}</InlineMessage><button className="secondary-button" type="button" onClick={retry}>{t("common.retry")}</button></div>}
     <div className="table-scroll"><table className="data-table"><thead><tr>

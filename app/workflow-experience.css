@@ -1,0 +1,27 @@
+/* Shared compact controls. Controls wrap before their labels become unreadable. */
+.search-filter-bar{display:flex;flex-wrap:wrap;align-items:end;gap:12px;padding:16px;border:1px solid var(--border,#e3e8ef);border-radius:14px;background:var(--surface,#fff)}
+.search-filter-bar>*{flex:1 1 170px;min-width:0;max-width:320px}
+.search-filter-bar>.search-filter-query{flex:2 1 240px;max-width:none}
+.search-filter-bar .search-field,.search-filter-bar input,.search-filter-bar select{width:100%;min-width:0}
+.search-filter-bar .field{margin:0}
+.search-filter-bar>.search-filter-actions{display:flex;flex:0 1 auto;gap:8px;align-items:center}
+.channel-account-filters{display:grid!important;grid-template-columns:repeat(4,minmax(160px,1fr))!important;gap:12px;padding:16px;align-items:end}
+.channel-account-filters>*{min-width:0;margin:0}
+.channel-account-filters input,.channel-account-filters select{min-width:0;width:100%}
+.success-filters,.lead-pool-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+.success-filters .field{margin:0}
+.detail-record-list article{gap:12px;flex-wrap:wrap}
+.detail-record-list article>div:first-child{min-width:0;flex:1 1 180px}
+.detail-record-list .secondary-button{flex:none}
+.commercial-section-picker{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border,#e3e8ef)}
+.commercial-section-picker button{border-radius:999px}
+@media(max-width:900px){.channel-account-filters{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){.search-filter-bar{padding:12px;gap:10px}.search-filter-bar>*{flex-basis:140px;max-width:none}.search-filter-bar>.search-filter-query{flex-basis:100%}.channel-account-filters{grid-template-columns:minmax(0,1fr)!important}.search-filter-actions button{min-height:42px}}
+
+.lead-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;margin-top:20px}
+.lead-card{border-radius:16px;padding:20px;border:1px solid var(--border,#e3e8ef);box-shadow:0 3px 12px #13233b06}
+.lead-card .surface-heading{align-items:start}.lead-card h3{font-size:18px;line-height:1.4;margin:0}.lead-card .customer-profile{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.lead-card .page-actions{border-top:1px solid var(--border,#e3e8ef);padding-top:12px;gap:8px;justify-content:flex-start}.lead-card .page-actions button{font-size:12px;padding:7px 10px}.import-reference-panel .three-column,.imports-page .three-column{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end}.import-format{max-width:240px}
+@media(max-width:650px){.import-reference-panel .three-column,.imports-page .three-column{grid-template-columns:minmax(0,1fr)}}
+
+.search-filter-bar>a.secondary-button,.search-filter-bar>button{flex:0 1 auto;max-width:none}
+.search-filter-bar .field>span{white-space:normal;line-height:1.5}

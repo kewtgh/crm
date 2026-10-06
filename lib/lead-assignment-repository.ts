@@ -2,7 +2,7 @@ import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import {databaseJson,databaseRequest} from "./db/gateway";
 import type {z} from "zod";
 import type {poolFilterSchema,assignmentInputSchema} from "./lead-pool-input";
-export type PoolLead={id:string;subject_type:string;organization_id:string|null;household_id:string|null;subject_name_zh:string;subject_name_en:string;source:string;status:string;pool_visibility:string;owner_id:string|null;revision:number;qualification_score:number;qualification_note:string;next_action:string;created_at:string;updated_at:string;city:string|null;school_type:string|null;commercial_tier:string|null;partnership_potential_score:number|null;key_contact_count:number;latest_activity_at:string|null;can_edit:boolean;can_assign:boolean;is_mine:boolean};
+export type PoolLead={owner_name?:string;id:string;subject_type:string;organization_id:string|null;household_id:string|null;subject_name_zh:string;subject_name_en:string;source:string;status:string;pool_visibility:string;owner_id:string|null;revision:number;qualification_score:number;qualification_note:string;next_action:string;created_at:string;updated_at:string;city:string|null;school_type:string|null;commercial_tier:string|null;partnership_potential_score:number|null;key_contact_count:number;latest_activity_at:string|null;can_edit:boolean;can_assign:boolean;is_mine:boolean};
 type Adapter={json:typeof databaseJson;request:typeof databaseRequest};const database:Adapter={json:databaseJson,request:databaseRequest};
 export async function listLeadPool(options:z.infer<typeof poolFilterSchema>&{page:number;pageSize:number;query?:string;status?:string;reportFilter?:ReportFilter},adapter=database){
  const p=new URLSearchParams({select:"*",order:options.sort==="potential"?"partnership_potential_score.desc.nullslast,id.asc":options.sort==="tier"?"commercial_tier.asc.nullslast,id.asc":`created_at.${options.sort==="oldest"?"asc":"desc"},id.asc`});
@@ -17,7 +17,9 @@ export async function listLeadPool(options:z.infer<typeof poolFilterSchema>&{pag
  const page=Math.max(1,options.page),pageSize=Math.max(1,Math.min(50,options.pageSize));
  if(options.reportFilter)applyReportFilter(p,options.reportFilter);
  const response=await adapter.request(`/db/table/lead_pool_records?${p}`,{headers:{Prefer:"count=exact",Range:`${(page-1)*pageSize}-${page*pageSize-1}`}});
- return{items:await response.json() as PoolLead[],total:Number(response.headers.get("content-range")?.split("/")[1]??0),page,pageSize};
+ const items=await response.json() as PoolLead[];const ids=[...new Set(items.map(row=>row.owner_id).filter(Boolean))];
+ if(ids.length){const owners=await adapter.json<Array<{user_id:string;display_name_zh:string;display_name_en:string}>>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${ids.join(",")})`);for(const row of items){const owner=owners.find(o=>o.user_id===row.owner_id);if(owner)row.owner_name=[owner.display_name_zh,owner.display_name_en].filter(Boolean).join(" / ");}}
+ return{items,total:Number(response.headers.get("content-range")?.split("/")[1]??0),page,pageSize};
 }
 export function assignLead(id:string,operation:string,input:z.infer<typeof assignmentInputSchema>,adapter=database){return adapter.json<PoolLead>("/db/rpc/manage_lead_assignment",{method:"POST",body:JSON.stringify({target_lead:id,expected_revision:input.expectedRevision,operation,target_owner:input.ownerId??null,reason:input.reason,p_request_key:input.requestKey})});}
 export function listLeadAssignmentHistory(id:string,adapter=database){return adapter.json<Array<{id:string;event_type:string;from_owner_id:string|null;to_owner_id:string|null;changed_at:string;reason:string|null;lead_revision:number}>>(`/db/table/lead_assignment_history?lead_id=eq.${id}&order=changed_at.desc,id.asc&limit=100`);}
