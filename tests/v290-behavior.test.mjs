@@ -138,7 +138,8 @@ test("self-managed identity boundaries retain compensation, CSRF, and session re
 });
 
 test("nested relation cardinality ignores composite and partial unique indexes", async () => {
-  const gateway = await readFile(new URL("../lib/db/gateway.ts", import.meta.url), "utf8");
+  const gateway = (await readFile(new URL("../lib/db/gateway.ts", import.meta.url), "utf8"))
+    .replaceAll("\r\n", "\n");
   const uniquenessProbe = gateway.slice(
     gateway.indexOf("exists(\n        select 1 from pg_index"),
     gateway.indexOf('as "childUnique"'),

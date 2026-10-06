@@ -61,7 +61,7 @@ test("deployment examples require only the configured public hostname", async ()
 });
 
 test("deploy runner requires public Tunnel liveness without any origin secret", async () => {
-  const runner = await source("scripts/deploy-production-runner.mjs");
+  const runner = (await source("scripts/deploy-production-runner.mjs")).replaceAll("\r\n", "\n");
   const acceptance = runner.match(
     /async function acceptRuntime[\s\S]+?\n\}\n\nasync function prepareBuilderAndCapacity/,
   )?.[0] ?? "";

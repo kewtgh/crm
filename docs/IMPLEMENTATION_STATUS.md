@@ -1,4 +1,13 @@
-# Implementation status — v3.25.0 release candidate
+# Implementation status — v3.25.1 release candidate
+
+## v3.25.1 — Runtime packaging and CI contract repair
+
+Formal metadata is **3.25.1**. The explicit application-stage allowlist includes all nine generated-job
+privacy helpers. Recursive closure validation reports the complete missing set and enforces module
+ownership; COPY fixture regressions cover all entrypoints, each helper omission and extraction threads.
+The operations image explicitly inherits Node's libatomic system dependency and runs the same final
+closure gate. The legacy import source contract checks both strict v2 field selection and legacy fallback.
+No migration, npm dependency or business mutation changes. See [patch notes](RELEASE_V3.25.1.md).
 
 ## v3.25 — Data Import Operations release closure
 

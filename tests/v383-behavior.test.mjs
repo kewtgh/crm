@@ -85,7 +85,7 @@ test("provides rich templates plus repair and rollback for every import resource
   assert.match(fieldsSource, /STUDENTS:\["nameZh"/);
   assert.match(imports, /importFieldsByResource as targetFieldsByResource/);
   assert.match(imports, /from "@\/lib\/import-fields"/);
-  assert.match(imports, /targetFields=targetFieldsByResource\[resource\]/);
+  assert.match(imports, /targetFields\s*=\s*v2\s*\?\s*v2Headers\(resource as V2Resource\)\s*:\s*targetFieldsByResource\[resource\]/);
   for (const [resource, requiredFields] of Object.entries({
     CONTACTS: ["email", "phone"],
     ORGANIZATIONS: ["organizationOverviewMarkdown", "structureOverviewMarkdown"],

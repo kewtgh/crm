@@ -99,6 +99,15 @@ COPY --chown=lumina:lumina \
     scripts/lib/contract-extraction-worker.mjs \
     scripts/lib/contract-extraction-thread.mjs \
     scripts/lib/contract-document-worker.mjs \
+    scripts/lib/commission-privacy-export.mjs \
+    scripts/lib/student-success-privacy-export.mjs \
+    scripts/lib/lead-pool-privacy-export.mjs \
+    scripts/lib/contact-intelligence-privacy-export.mjs \
+    scripts/lib/contract-enrollment-privacy-export.mjs \
+    scripts/lib/enrollment-privacy-export.mjs \
+    scripts/lib/application-privacy-export.mjs \
+    scripts/lib/workflow-privacy-export.mjs \
+    scripts/lib/milestone-privacy-export.mjs \
     ./scripts/lib/
 COPY --chown=lumina:lumina db ./db
 COPY --chown=lumina:lumina templates/contracts ./templates/contracts
@@ -122,10 +131,13 @@ ENV NODE_ENV=production \
     XDG_CACHE_HOME=/tmp/lumina-cache \
     PATH=/app/node_modules/.bin:/usr/lib/postgresql/18/bin:$PATH
 COPY --from=application /usr/local /usr/local
+COPY --from=application /usr/lib/*-linux-gnu/libatomic.so.1.* /usr/local/lib/
+RUN ldconfig
 RUN groupadd --gid 10001 lumina \
     && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/lumina lumina
 WORKDIR /app
 COPY --from=application --chown=lumina:lumina /app /app
 USER 10001:10001
+RUN node scripts/verify-application-runtime-closure.mjs
 ENTRYPOINT ["node", "scripts/container-entrypoint.mjs"]
 CMD ["backup"]

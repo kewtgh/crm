@@ -29,6 +29,7 @@ export const APPLICATION_RUNTIME_ENTRYPOINTS = [
 const localSpecifierPatterns = [
   /\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/g,
   /\bimport\s*\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g,
+  /\bnew\s+URL\s*\(\s*["'](\.{1,2}\/[^"']+\.mjs)["']\s*,\s*import\.meta\.url\s*\)/g,
 ];
 
 function localSpecifiers(source) {
@@ -58,6 +59,9 @@ export async function verifyApplicationRuntimeClosure({
     importedBy: "application-entrypoint",
   }));
   const visited = new Set();
+  const imports = [];
+  const missingModules = new Map();
+  let checkedOwnedModules = 0;
 
   while (pending.length > 0) {
     const current = pending.pop();
@@ -72,17 +76,41 @@ export async function verifyApplicationRuntimeClosure({
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
       const missing = path.relative(applicationRoot, current.absolutePath).replaceAll("\\", "/");
-      throw runtimeError("APPLICATION_RUNTIME_MODULE_MISSING", `${missing} imported by ${current.importedBy}`);
+      missingModules.set(missing, { module: missing, importedBy: current.importedBy });
+      continue;
     }
     visited.add(current.absolutePath);
 
     const importer = path.relative(applicationRoot, current.absolutePath).replaceAll("\\", "/");
+    const moduleStat = await stat(current.absolutePath);
+    if (!moduleStat.isFile()) {
+      throw runtimeError("APPLICATION_RUNTIME_MODULE_INVALID", importer);
+    }
+    if (enforceImageIdentity) {
+      if (moduleStat.uid !== 10001 || moduleStat.gid !== 10001) {
+        throw runtimeError("APPLICATION_RUNTIME_MODULE_OWNER_INVALID", importer);
+      }
+      checkedOwnedModules += 1;
+    }
     for (const specifier of localSpecifiers(source)) {
+      const absolutePath = path.resolve(path.dirname(current.absolutePath), specifier);
+      imports.push({
+        module: path.relative(applicationRoot, absolutePath).replaceAll("\\", "/"),
+        importedBy: importer,
+      });
       pending.push({
-        absolutePath: path.resolve(path.dirname(current.absolutePath), specifier),
+        absolutePath,
         importedBy: importer,
       });
     }
+  }
+
+  if (missingModules.size > 0) {
+    const missing = [...missingModules.values()].sort((a, b) => a.module.localeCompare(b.module));
+    const error = runtimeError("APPLICATION_RUNTIME_MODULE_MISSING",
+      missing.map(({ module, importedBy }) => `${module} imported by ${importedBy}`).join("; "));
+    error.missingModules = missing;
+    throw error;
   }
 
   const invitationModule = path.join(applicationRoot, "lib", "invitation-credential-crypto.mjs");
@@ -101,10 +129,16 @@ export async function verifyApplicationRuntimeClosure({
   }
   if (importInvitationModule) await import(pathToFileURL(invitationModule).href);
 
-  return { checkedModules: visited.size, invitationModule: "readable-and-importable" };
+  return {
+    checkedModules: visited.size,
+    checkedOwnedModules,
+    modules: [...visited].map((file) => path.relative(applicationRoot, file).replaceAll("\\", "/")).sort(),
+    imports,
+    invitationModule: "readable-and-importable",
+  };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await verifyApplicationRuntimeClosure();
-  process.stdout.write(`APPLICATION_RUNTIME_CLOSURE_OK modules=${result.checkedModules}\n`);
+  process.stdout.write(`APPLICATION_RUNTIME_CLOSURE_OK modules=${result.checkedModules} ownedModules=${result.checkedOwnedModules}\n`);
 }
