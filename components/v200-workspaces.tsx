@@ -1,4 +1,5 @@
 "use client";
+import {useRemoteSearch} from "@/hooks/use-remote-search";
 import Link from "next/link";
 import {SearchFilterBar} from "./search-filter-bar";
 import {DetailTabs} from "./detail-tabs";
@@ -41,6 +42,7 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
   const { locale, t } = useI18n();
   const canManage = useCapability("education.manage");
   const [data, setData] = useState(initial);
+  const latestStudents=useRemoteSearch();
   const [studentStatus,setStudentStatus]=useState("all");
   const [detailTab,setDetailTab]=useState("profile");
   const [query, setQuery] = useState("");
@@ -59,10 +61,10 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
   const [confirmation,setConfirmation]=useState<{kind:"archive"}|{kind:"guardian";id:string}|null>(null);
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const load = async (page = data.page, pageSize = data.pageSize, q = query) => {
-    try {
-      setData(await apiFetch<PageResult<StudentRecord>>(`/api/education?resource=students&page=${page}&pageSize=${pageSize}&status=${studentStatus}&q=${encodeURIComponent(q)}`));
-      setError("");
-    } catch (caught) { setError(presentApiError(caught, t, "education.loadFailed").message); }
+    const result=await latestStudents(signal=>apiFetch<PageResult<StudentRecord>>('/api/education?'+new URLSearchParams({resource:'students',page:String(page),pageSize:String(pageSize),status:studentStatus,q}),{signal}));
+    if(!result.current)return;
+    if('error' in result)setError(presentApiError(result.error,t,'education.loadFailed').message);
+    else{setData(result.value);setError('');}
   };
   const searchPeople = useCallback(async (q: string) => {
     const result = await apiFetch<{ items: Array<{ value: string; labelZh: string; labelEn: string; type: string }> }>(`/api/search/related?types=CONTACT&q=${encodeURIComponent(q)}`).catch(() => ({ items: [] }));

@@ -19,6 +19,6 @@ export function EnrollmentRelation({type, label, value, initialLabel, required =
     if ("error" in outcome) {setError(t("modules.relatedSearchFailed")); return;}
     setOptions(outcome.value.items.map(item => ({value: scoped ? item.value : item.value.split(":")[1], label: locale === "en" ? item.labelEn : item.labelZh}))); setError("");
   };
-  const selected = value && !options.some(item => item.value === value) ? [{value, label: initialLabel || value}] : [];
+  const selected = value && !options.some(item => item.value === value) ? [{value, label: initialLabel || t("flow.selectedRecord")}] : [];
   return <fieldset className="follow-up-fields" disabled={disabled}><SearchableSelect label={label} required={required} value={value} options={[...selected, ...options]} onSearch={search} onChange={onChange}/>{!required && value && <button className="text-button" type="button" onClick={() => onChange("")}>{t("business.clear")}</button>}{error && <InlineMessage type="error">{error}</InlineMessage>}</fieldset>;
 }

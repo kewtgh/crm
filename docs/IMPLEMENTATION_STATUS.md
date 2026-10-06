@@ -1,4 +1,11 @@
-# Implementation status — v3.26.0 release candidate
+# Implementation status — v3.27.0 release candidate
+
+## v3.27.0 — Daily workflow and interaction reliability
+
+The [product audit](PRODUCT_WORKFLOW_AUDIT_V327.md) and [execution plan](PRODUCT_WORKFLOW_PLAN_V327.md)
+cover shared dialog safety, contextual enrollment, filter recovery, business navigation, optional
+read isolation and financial-label accuracy. No schema or Revenue implementation is added.
+See [release notes](RELEASE_V3.27.0.md). Policy-dependent feature suggestions remain explicitly deferred.
 
 ## v3.26.0 — Business workflows and interface upgrade
 

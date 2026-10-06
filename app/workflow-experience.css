@@ -25,3 +25,22 @@
 
 .search-filter-bar>a.secondary-button,.search-filter-bar>button{flex:0 1 auto;max-width:none}
 .search-filter-bar .field>span{white-space:normal;line-height:1.5}
+
+/* Task-oriented, compact surfaces with a clear keyboard focus target. */
+.workflow-launchpad{padding:24px}
+.workflow-launchpad .surface-heading{margin-bottom:18px}
+.workflow-launchpad h2{font-size:22px;letter-spacing:-.02em}
+.workflow-launchpad p{color:var(--muted,#536577);font-size:13px;line-height:1.65;margin:5px 0 0}
+.workflow-launch-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.workflow-launch-card{display:flex;gap:12px;align-items:flex-start;padding:18px 14px;border:1px solid var(--border,#dce7eb);border-radius:14px;background:linear-gradient(145deg,#fbfefe,#f4f8f9);text-decoration:none;min-width:0;transition:transform .15s,border-color .15s,box-shadow .15s}
+.workflow-launch-card:hover{border-color:#70a8b0;box-shadow:0 5px 16px #154d5910;transform:translateY(-2px)}
+.workflow-launch-card>div{flex:1;min-width:0}.workflow-launch-card strong{font-size:14px;line-height:1.6}.workflow-launch-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#e2f0f1;color:#176c78;flex:none}.workflow-launch-card>svg{color:#628188;flex:none;margin-top:5px}
+.action-freshness{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;color:var(--muted,#536577);font-size:13px}
+.search-filter-actions .secondary-button{white-space:nowrap}
+.workflow-launch-card:focus-visible,.commercial-section-picker button:focus-visible,.search-filter-bar button:focus-visible{outline:3px solid #147687;outline-offset:3px}
+.record-drawer .drawer-heading{position:sticky;top:0;z-index:2;background:var(--surface,#fff);padding-bottom:16px;border-bottom:1px solid var(--border,#dce7eb)}
+@media(max-width:1100px){.workflow-launch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.workflow-launchpad{padding:16px}.workflow-launch-grid{grid-template-columns:minmax(0,1fr)}.workflow-launch-card{padding:14px}.action-freshness .secondary-button{width:auto}}
+@media(prefers-reduced-motion:reduce){.workflow-launch-card{transition:none}.workflow-launch-card:hover{transform:none}}
+
+.workflow-audience{display:flex;gap:8px;margin:0 0 18px;flex-wrap:wrap}.workflow-audience button{flex:1;min-width:160px;padding:12px 18px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--muted);font:inherit;font-weight:650;cursor:pointer}.workflow-audience button[aria-pressed=true]{background:var(--accent-soft,#e7f3ee);color:var(--text);border-color:var(--accent,#2e7860)}.workflow-audience button:focus-visible{outline:2px solid var(--accent,#2e7860);outline-offset:3px}

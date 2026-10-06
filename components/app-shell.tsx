@@ -113,7 +113,7 @@ const navigation: NavigationGroup[] = [
 function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
   if(pathname==="/automation")pathname=groups.flatMap(group=>group.items).find(item=>item.labelKey==="nav.assistance")?.href??pathname;
   if(pathname==="/sales/allocation")pathname="/sales/performance";
-  if(pathname==="/students"||pathname==="/progression"||pathname==="/enrollments"||pathname==="/applications"||pathname==="/workflow-templates")pathname="/households";
+  if(pathname==="/student-success"||pathname==="/students"||pathname==="/progression"||pathname==="/enrollments"||pathname==="/applications"||pathname==="/workflow-templates")pathname="/households";
   if(pathname==="/guardian-portal")pathname="/messages";
   const hrefs = groups.flatMap((group) => group.items.flatMap((item) => [
     ...(item.href ? [item.href] : []),
@@ -259,6 +259,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       setSearchError("");
       try {
         const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        if(controller.signal.aborted)return;
         setRecordSearchResults(result.items
           .filter((item): item is typeof item & { type: Exclude<typeof item.type, "USER"> } => item.type !== "USER")
           .map((item) => ({

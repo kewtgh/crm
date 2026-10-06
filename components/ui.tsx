@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, createContext, useContext } from "react";
 import {
   Check,
   ChevronDown,
@@ -10,6 +10,19 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { createPortal } from "react-dom";
+const subscribeToClient=()=>()=>{};
+const clientSnapshot=()=>true;
+const serverSnapshot=()=>false;
+const ModalDepth=createContext(0);
+const bodyLocks=new Set<symbol>();let originalOverflow='';
+function lockBody(){const token=Symbol();if(!bodyLocks.size)originalOverflow=document.body.style.overflow;bodyLocks.add(token);document.body.style.overflow='hidden';return()=>{bodyLocks.delete(token);if(!bodyLocks.size)document.body.style.overflow=originalOverflow;};}
+const modalLayers=new Set<HTMLElement>();
+function syncModalLayers(){const layers=[...modalLayers].sort((a,b)=>Number(a.dataset.modalDepth??0)-Number(b.dataset.modalDepth??0));const top=layers.at(-1);for(const element of layers){element.inert=element!==top;if(element===top)element.removeAttribute('aria-hidden');else element.setAttribute('aria-hidden','true');}}
+function registerModal(element:HTMLElement|null){if(!element)return()=>{};modalLayers.add(element);syncModalLayers();return()=>{modalLayers.delete(element);element.inert=false;element.removeAttribute('aria-hidden');syncModalLayers();};}
+function topModal(){return Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]:not([inert])')).sort((a,b)=>Number(a.dataset.modalDepth??0)-Number(b.dataset.modalDepth??0)).at(-1);}
+function restoreModalFocus(previous:HTMLElement|null){queueMicrotask(()=>{const top=topModal();const target=top?(previous?.isConnected&&top.contains(previous)?previous:top.querySelector<HTMLElement>('button:not([disabled]),input:not([disabled]),[tabindex="0"]')):previous?.isConnected?previous:null;target?.focus();});}
+
 import { useI18n } from "./i18n-provider";
 
 export function StatusBadge({ tone = "gray", children }: { tone?: string; children: React.ReactNode }) {
@@ -208,6 +221,7 @@ export function ConfirmDialog({
   onClose: () => void;
 }) {
   const {t}=useI18n();
+  const ready=useSyncExternalStore(subscribeToClient,clientSnapshot,serverSnapshot),depth=useContext(ModalDepth);
   const titleId=useId();
   const descriptionId=useId();
   const dialogRef=useRef<HTMLDivElement>(null);
@@ -217,14 +231,14 @@ export function ConfirmDialog({
   const pendingRef=useRef(pending);
   useEffect(()=>{closeRef.current=onClose;pendingRef.current=pending;},[onClose,pending]);
   useEffect(()=>{
+    if(!ready)return;
     previousFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const previousOverflow=document.body.style.overflow;
-    const backgroundModals=Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]')).filter(element=>element!==dialogRef.current);
-    const backgroundState=backgroundModals.map(element=>({element,inert:element.inert,ariaHidden:element.getAttribute("aria-hidden")}));
-    backgroundModals.forEach(element=>{element.inert=true;element.setAttribute("aria-hidden","true");});
+    const unlockBody=lockBody();
+    const unregisterModal=registerModal(dialogRef.current);
     document.body.style.overflow="hidden";
-    const frame=window.requestAnimationFrame(()=>cancelRef.current?.focus());
+    const frame=window.requestAnimationFrame(()=>{if(topModal()===dialogRef.current)cancelRef.current?.focus();});
     const key=(event:KeyboardEvent)=>{
+      if(event.defaultPrevented||dialogRef.current?.inert||topModal()!==dialogRef.current)return;
       if(event.key==="Escape"&&!pendingRef.current){event.preventDefault();event.stopPropagation();closeRef.current();return;}
       if(event.key!=="Tab"||!dialogRef.current)return;
       const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]),[tabindex]:not([tabindex='-1'])"));
@@ -234,11 +248,11 @@ export function ConfirmDialog({
       else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
     };
     document.addEventListener("keydown",key,true);
-    return()=>{window.cancelAnimationFrame(frame);document.removeEventListener("keydown",key,true);document.body.style.overflow=previousOverflow;backgroundState.forEach(({element,inert,ariaHidden})=>{element.inert=inert;if(ariaHidden===null)element.removeAttribute("aria-hidden");else element.setAttribute("aria-hidden",ariaHidden);});previousFocus.current?.focus();};
-  },[]);
-  return <>
-    <button className="confirm-overlay" type="button" tabIndex={-1} disabled={pending} aria-hidden="true" aria-label={t("common.cancel")} onClick={onClose}/>
-    <div ref={dialogRef} className="confirm-dialog surface" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
+    return()=>{window.cancelAnimationFrame(frame);document.removeEventListener("keydown",key,true);unlockBody();unregisterModal();restoreModalFocus(previousFocus.current);};
+  },[ready,depth]);
+  return ready?createPortal(<ModalDepth.Provider value={depth+1}>
+    <button style={{zIndex:119+depth*100}} className="confirm-overlay" type="button" tabIndex={-1} disabled={pending} aria-hidden="true" aria-label={t("common.cancel")} onClick={onClose}/>
+    <div ref={dialogRef} data-modal-depth={depth} style={{zIndex:120+depth*100}} className="confirm-dialog surface" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
       <div><CircleAlert size={22}/><h2 id={titleId}>{title}</h2></div>
       <p id={descriptionId}>{description}</p>
       <div className="drawer-actions">
@@ -246,7 +260,7 @@ export function ConfirmDialog({
         <button className={tone==="danger"?"danger-button":"primary-button"} type="button" disabled={pending} aria-busy={pending} onClick={onConfirm}>{pending?t("common.processing"):confirmLabel}</button>
       </div>
     </div>
-  </>;
+  </ModalDepth.Provider>,document.body):null;
 }
 
 export function AccessibleDrawer({
@@ -254,6 +268,8 @@ export function AccessibleDrawer({
   eyebrow,
   description,
   pending = false,
+  guardChanges = false,
+  dirty: suppliedDirty = false,
   onClose,
   children,
 }: {
@@ -261,10 +277,17 @@ export function AccessibleDrawer({
   eyebrow?: string;
   description?: string;
   pending?: boolean;
+  guardChanges?: boolean;
+  dirty?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   const { t } = useI18n();
+  const ready=useSyncExternalStore(subscribeToClient,clientSnapshot,serverSnapshot),depth=useContext(ModalDepth);
+  const [changed,setChanged]=useState(false),[discard,setDiscard]=useState(false);
+  const dirty=guardChanges&&(changed||suppliedDirty);
+  const requestClose=()=>{if(pending)return;if(dirty)setDiscard(true);else onClose();};
+  useEffect(()=>{if(!dirty)return;const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty]);
   const titleId = useId();
   const descriptionId = useId();
   const drawerRef = useRef<HTMLElement>(null);
@@ -273,21 +296,24 @@ export function AccessibleDrawer({
   const onCloseRef = useRef(onClose);
   const pendingRef = useRef(pending);
   useEffect(() => {
-    onCloseRef.current = onClose;
+    onCloseRef.current = requestClose;
     pendingRef.current = pending;
-  }, [onClose, pending]);
+  });
   useEffect(() => {
+    if(!ready)return;
+    const unregisterModal=registerModal(drawerRef.current);
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
+    const unlockBody=lockBody();
     document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => {
-      const preferred = drawerRef.current?.querySelector<HTMLElement>(
+      if(topModal()!==drawerRef.current)return;
+        const preferred = drawerRef.current?.querySelector<HTMLElement>(
         "input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
       );
       (preferred ?? closeRef.current)?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if(drawerRef.current?.inert)return;
+      if(event.defaultPrevented||drawerRef.current?.inert||topModal()!==drawerRef.current)return;
       if (event.key === "Escape" && !pendingRef.current) {
         event.preventDefault();
         onCloseRef.current();
@@ -316,14 +342,18 @@ export function AccessibleDrawer({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previousFocus.current?.focus();
+      unlockBody();
+      unregisterModal();
+      restoreModalFocus(previousFocus.current);
     };
-  }, []);
-  return <>
-    <button className="drawer-overlay" type="button" tabIndex={-1} aria-hidden="true" aria-label={t("common.close")} disabled={pending} onClick={onClose}/>
+  }, [ready,depth]);
+  return ready?createPortal(<ModalDepth.Provider value={depth+1}>
+    <button style={{zIndex:65+depth*100}} className="drawer-overlay" type="button" tabIndex={-1} aria-hidden="true" aria-label={t("common.close")} disabled={pending} onClick={requestClose}/>
     <aside
       ref={drawerRef}
+      data-modal-depth={depth} style={{zIndex:70+depth*100}}
+      onChangeCapture={event=>{if(guardChanges&&(event.target as HTMLElement).closest('[role="dialog"]')===drawerRef.current)setChanged(true);}}
+      onClickCapture={event=>{const target=event.target as HTMLElement;if(target.closest('[role="dialog"]')!==drawerRef.current)return;if(target.closest("[data-drawer-dismiss]")){event.preventDefault();event.stopPropagation();requestClose();}else if(guardChanges&&target.closest('[role="option"]'))setChanged(true);}}
       className="record-drawer editor-dialog"
       role="dialog"
       aria-modal="true"
@@ -337,9 +367,10 @@ export function AccessibleDrawer({
           <h2 id={titleId}>{title}</h2>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
-        <button ref={closeRef} className="icon-button" type="button" disabled={pending} aria-label={t("common.close")} onClick={onClose}><X size={20}/></button>
+        <button ref={closeRef} className="icon-button" type="button" disabled={pending} aria-label={t("common.close")} onClick={requestClose}><X size={20}/></button>
       </div>
       {children}
     </aside>
-  </>;
+    {discard&&<ConfirmDialog title={t("flow.unsavedTitle")} description={t("flow.unsavedHelp")} confirmLabel={t("flow.discard")} onClose={()=>setDiscard(false)} onConfirm={()=>{setDiscard(false);onClose();}}/>}
+  </ModalDepth.Provider>,document.body):null;
 }

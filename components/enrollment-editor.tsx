@@ -14,17 +14,19 @@ import { DateInput } from "./structured-inputs";
 import { AccessibleDrawer, InlineMessage } from "./ui";
 import { EnrollmentRelation } from "./enrollment-relation";
 
-export function EnrollmentEditor({record, studentId = "", onClose, onSaved}: {
-  record?: EnrollmentRecord; studentId?: string; onClose: () => void; onSaved: (id: string) => Promise<void>;
+export function EnrollmentEditor({record, studentId = "", cohortId = "", studentLabel, cohortLabel, onClose, onSaved}: {
+  record?: EnrollmentRecord; studentId?: string; cohortId?: string; studentLabel?: string; cohortLabel?: string; onClose: () => void; onSaved: (id: string) => Promise<void>;
 }) {
   const {t, locale} = useI18n(), user = useAppUser(), preferences = useUserPreferences(), prefill = useRemoteSearch();
   const [id] = useState(() => record?.id ?? crypto.randomUUID());
-  const [data, setData] = useState<EnrollmentData>(() => ({student_id: record?.student_id ?? studentId, cohort_id: record?.cohort_id ?? "",
+  const [data, setData] = useState<EnrollmentData>(() => ({student_id: record?.student_id ?? studentId, cohort_id: record?.cohort_id ?? cohortId,
     household_id: record?.household_id ?? null, opportunity_id: record?.opportunity_id ?? null, status: record?.status ?? "LEAD",
     owner_id: record?.owner_id ?? user.id, sales_owner_id: record?.sales_owner_id ?? null, enrolled_at: record?.enrolled_at ?? null,
     completed_at: record?.completed_at ?? null, withdrawn_at: record?.withdrawn_at ?? null, withdrawal_reason: record?.withdrawal_reason ?? ""}));
   const [statusReason, setStatusReason] = useState(""), [householdLabel, setHouseholdLabel] = useState(locale === "en" ? record?.household_name_en : record?.household_name_zh);
   const [pending, setPending] = useState(false), [uncertain, setUncertain] = useState(false), [error, setError] = useState("");
+  const [committed,setCommitted]=useState(false);
+  const [original]=useState(()=>JSON.stringify(data));
   const attempt = useRef<ReturnType<typeof enrollmentSaveSchema.parse> | null>(null), busy = useRef(false);
   const change = <K extends keyof EnrollmentData>(key: K, value: EnrollmentData[K]) => setData(current => ({...current, [key]: value}));
   const selectStudent = async (value: string) => {
@@ -36,7 +38,7 @@ export function EnrollmentEditor({record, studentId = "", onClose, onSaved}: {
     setHouseholdLabel(locale === "en" ? outcome.value.item.householdEn : outcome.value.item.householdZh);
   };
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); if (busy.current) return;
+    event.preventDefault(); if (busy.current||committed) return;
     if (!attempt.current) {
       const parsed = enrollmentSaveSchema.safeParse({id, expectedRevision: record?.revision ?? null, requestKey: crypto.randomUUID(), statusReason, data});
       if (!parsed.success) {setError(t("enrollments.invalid")); return;}
@@ -52,16 +54,17 @@ export function EnrollmentEditor({record, studentId = "", onClose, onSaved}: {
       setError(presentApiError(error, t, "enrollments.saveFailed").message);
       busy.current = false; setPending(false); return;
     }
-    // A committed save remains successful even if a subsequent detail/list fetch fails.
-    await onSaved(id);
-    busy.current = false; setPending(false);
+    // A refresh failure must never repeat the accepted domain mutation.
+    setCommitted(true);
+    try{await onSaved(id);}catch{setError(t("flow.savedRefreshFailed"));}
+    finally{busy.current=false;setPending(false);}
   };
-  return <AccessibleDrawer pending={pending || uncertain} title={t(record ? "enrollments.edit" : "enrollments.create")} description={t("enrollments.identityHelp")} onClose={onClose}>
+  return <AccessibleDrawer guardChanges={!committed} dirty={JSON.stringify(data)!==original||!!statusReason} pending={pending || uncertain} title={t(record ? "enrollments.edit" : "enrollments.create")} description={t("enrollments.identityHelp")} onClose={onClose}>
     <form onSubmit={submit}>
-      <fieldset className="follow-up-fields" disabled={pending || uncertain}>
+      <fieldset className="follow-up-fields" disabled={pending || uncertain || committed}>
         {record ? <div className="form-grid two-column"><label className="field"><span>{t("enrollments.student")}</span><input readOnly value={locale === "en" ? record.student_name_en : record.student_name_zh}/></label><label className="field"><span>{t("enrollments.cohort")}</span><input readOnly value={locale === "en" ? record.cohort_name_en : record.cohort_name_zh}/></label></div> : <>
-          <EnrollmentRelation type="STUDENT" label={t("enrollments.student")} value={data.student_id} required onChange={value => void selectStudent(value)}/>
-          <EnrollmentRelation type="COHORT" label={t("enrollments.cohort")} value={data.cohort_id} required onChange={value => change("cohort_id", value)}/><p className="field-help">{t("enrollments.cohortRule")}</p>
+          <EnrollmentRelation type="STUDENT" label={t("enrollments.student")} value={data.student_id} initialLabel={studentLabel} disabled={!!studentId} required onChange={value => void selectStudent(value)}/>
+          <EnrollmentRelation type="COHORT" label={t("enrollments.cohort")} value={data.cohort_id} initialLabel={cohortLabel} disabled={!!cohortId} required onChange={value => change("cohort_id", value)}/><p className="field-help">{t("enrollments.cohortRule")}</p>
         </>}
         <EnrollmentRelation type="HOUSEHOLD" label={t("enrollments.household")} value={data.household_id ?? ""} initialLabel={householdLabel ?? undefined} onChange={value => change("household_id", value || null)}/><p className="field-help">{t("enrollments.householdHelp")}</p>
         <EnrollmentRelation type="OPPORTUNITY" label={t("enrollments.opportunity")} value={data.opportunity_id ?? ""} initialLabel={(locale === "en" ? record?.opportunity_title_en : record?.opportunity_title_zh) ?? undefined} onChange={value => change("opportunity_id", value || null)}/>
@@ -73,7 +76,7 @@ export function EnrollmentEditor({record, studentId = "", onClose, onSaved}: {
         <label className="field"><span>{t("enrollments.statusReason")}</span><textarea name="statusReason" maxLength={1000} rows={2} value={statusReason} onChange={event => setStatusReason(event.target.value)}/></label>
       </fieldset>
       {error && <InlineMessage type="error">{error}</InlineMessage>}{uncertain && <InlineMessage type="warning">{t("enrollments.uncertain")}</InlineMessage>}
-      <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending || uncertain} onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={pending} aria-busy={pending}>{t(pending ? "common.saving" : uncertain ? "enrollments.retry" : "common.save")}</button></div>
+      <div className="drawer-actions">{committed?<button type="button" className="primary-button" onClick={onClose}>{t("common.close")}</button>:<><button className="secondary-button" type="button" disabled={pending || uncertain} data-drawer-dismiss onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={pending} aria-busy={pending}>{t(pending ? "common.saving" : uncertain ? "enrollments.retry" : "common.save")}</button></>}</div>
     </form>
   </AccessibleDrawer>;
 }

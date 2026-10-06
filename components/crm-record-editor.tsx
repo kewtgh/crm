@@ -149,7 +149,7 @@ export function CrmRecordEditor({
 
   return <>
     <button className="secondary-button" type="button" onClick={()=>void begin()}><Pencil size={16}/>{t("crm.edit")}</button>
-    {open&&<AccessibleDrawer pending={pending} title={detail?`${detail.nameZh} / ${detail.nameEn}`:t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
+    {open&&<AccessibleDrawer guardChanges pending={pending} title={detail?`${detail.nameZh} / ${detail.nameEn}`:t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
       {loading&&!detail&&<p role="status">{t("common.loading")}</p>}
       {detail&&<form onSubmit={save}>
         <div className="form-grid two-column">
@@ -193,7 +193,7 @@ export function CrmRecordEditor({
         {error&&<InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions">
           <button className="danger-button" type="button" disabled={pending} onClick={()=>setArchiveOpen(true)}><Archive size={16}/>{t("crm.archive")}</button>
-          <button className="secondary-button" type="button" disabled={pending} onClick={()=>setOpen(false)}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={pending} data-drawer-dismiss onClick={()=>setOpen(false)}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button>
         </div>
       </form>}

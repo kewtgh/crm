@@ -1,3 +1,4 @@
+import {enWorkflowUsability} from "./workflow-usability";
 import {enWorkflowExperience} from "./workflow-experience";
 import {enContractUploads} from "./contract-uploads";
 import {enManagement} from "./management-intelligence";
@@ -489,4 +490,5 @@ export const en: Messages = {
   ...enEducationBusiness,
   ...enApplications,
   ...enWorkflowExperience,
+  ...enWorkflowUsability,
 };

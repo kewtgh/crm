@@ -1,3 +1,4 @@
+import {zhWorkflowUsability} from "./workflow-usability";
 import {zhWorkflowExperience} from "./workflow-experience";
 import {zhContractUploads} from "./contract-uploads";
 import {zhManagement} from "./management-intelligence";
@@ -488,4 +489,5 @@ export const zhCN: Messages = {
   ...zhEducationBusiness,
   ...zhApplications,
   ...zhWorkflowExperience,
+  ...zhWorkflowUsability,
 };
