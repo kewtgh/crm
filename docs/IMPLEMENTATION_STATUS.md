@@ -1,4 +1,12 @@
-# Implementation status — v3.28.0 release candidate
+# Implementation status — v3.28.1 release candidate
+
+## v3.28.1 — Shared-navigation CI contract correction
+
+The workspace-settings regression now checks the canonical navigation destination instead of
+requiring its definition inside AppShell. It verifies the existing admin.access capability,
+ADMIN/SUPER_ADMIN role restriction and visibility for all six staff roles. Existing route AAL2
+and trusted-origin assertions remain. No application, dependency, migration or Revenue change
+is introduced. See [patch notes](RELEASE_V3.28.1.md).
 
 ## v3.28.0 — Product UX architecture and workflow experience
 

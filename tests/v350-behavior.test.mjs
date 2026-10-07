@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { dateKeyFor } from "../lib/timezone.ts";
+import { navigationDestinations, visibleDestinations } from "../lib/navigation-destinations.ts";
+import { APP_ROLES } from "../lib/roles.ts";
 
 const repositoryFile = (path) => new URL(`../${path}`, import.meta.url);
 const source = (path) => readFile(repositoryFile(path), "utf8");
@@ -67,8 +69,19 @@ test("exposes organization settings behind admin AAL2 and trusted-origin checks"
   assert.match(component, /dateKeyFor\(new Date\(\), businessTimezone\)/);
   assert.match(component, /personalDifference/);
   assert.match(component, /workspaceSettings\.turnstile/);
-  assert.match(shell, /nav\.workspaceSettings/);
-  assert.match(shell, /"\/admin\/workspace": "admin\.access"/);
+  assert.match(shell, /visibleDestinations\(role\)/);
+  const workspaceSettings = navigationDestinations.find(destination => destination.id === "admin-workspace");
+  assert.ok(workspaceSettings, "workspace settings must remain a navigation destination");
+  assert.equal(workspaceSettings.labelKey, "nav.workspaceSettings");
+  assert.equal(workspaceSettings.href, "/admin/workspace");
+  assert.equal(workspaceSettings.space, "admin");
+  assert.equal(workspaceSettings.capability, "admin.access");
+  assert.equal(workspaceSettings.guard, "ROLE_AND_CAPABILITY");
+  assert.deepEqual(workspaceSettings.roles, ["ADMIN", "SUPER_ADMIN"]);
+  for (const role of APP_ROLES) {
+    assert.equal(visibleDestinations(role).some(destination => destination.id === "admin-workspace"),
+      role === "ADMIN" || role === "SUPER_ADMIN", `workspace settings visibility for ${role}`);
+  }
   assert.match(styles, /\.workspace-settings-page \.quick-summary[\s\S]*grid-template-columns: repeat\(2/);
   assert.match(styles, /\.switch span \{[\s\S]*pointer-events: none/);
   assert.match(captcha, /TURNSTILE_DISABLED/);
