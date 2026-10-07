@@ -71,7 +71,11 @@ async function get(request: Request) {
   }
   const page = parsePagination(url.searchParams, 20);
   const options = { ...page, query: url.searchParams.get("q") ?? "", status: url.searchParams.get("status") ?? "all" };
-  if (resource === "students") return NextResponse.json(await listStudents(options));
+  if (resource === "students") {
+    const parsed = z.object({grade:z.string().max(40),academicYear:z.string().max(20)}).safeParse({grade:url.searchParams.get("grade")??"",academicYear:url.searchParams.get("academicYear")??""});
+    if(!parsed.success) throw new ApiError("INVALID_EDUCATION_FILTER",400);
+    return NextResponse.json(await listStudents({...options,...parsed.data}));
+  }
   if (resource === "households") return NextResponse.json(await listHouseholds(options));
   if (resource === "progression") {
     await requireApiCapability("progression.manage");

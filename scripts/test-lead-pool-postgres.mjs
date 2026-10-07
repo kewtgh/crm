@@ -72,7 +72,7 @@ try{
  const stageKey=randomUUID();let updated=await stage(1,'SOLUTION_PROPOSED','Explicit review',stageKey);assert.equal(updated.revision,2);await stage(1,'SOLUTION_PROPOSED','Explicit review',stageKey);
  const count=async()=>(await client.query('select count(*)::int n from public.organization_channel_stage_history where organization_id=$1',[o])).rows[0].n;
  assert.equal(await count(),2);updated=await stage(2,'NEEDS_QUALIFIED');assert.equal(await count(),3);
- const ordinary={...updated,bd_plan_markdown:'Ordinary narrative'};for(const k of ['workspace_id','revision','updated_at'])delete ordinary[k];await client.query("select public.save_education_business('organizations',$1,$2,$3)",[o,3,ordinary]);assert.equal(await count(),3);
+ const ordinary={...updated,bd_plan_markdown:'Ordinary narrative'};for(const k of ['workspace_id','revision','updated_at','archived_at'])delete ordinary[k];await client.query("select public.save_education_business('organizations',$1,$2,$3)",[o,3,ordinary]);assert.equal(await count(),3);
  const proj=(await client.query('select public.channel_activation_projection($1) item',[o])).rows[0].item;assert.equal(proj.currentPartnershipStage,'NEEDS_QUALIFIED');assert.equal(proj.openLeadCount,2);assert.equal(proj.primaryEnrollmentCount,0);
  // Contextual quality rules appear and resolve; no automatic stage/qualification.
  const quality=async()=>{await client.query('select public.run_data_quality_rules()');return(await client.query("select rule_key,severity from public.data_quality_issues where status='OPEN' and rule_key in ('CLAIMED_LEAD_WITHOUT_NEXT_ACTION','QUALIFYING_SCHOOL_LEAD_WITHOUT_KEY_CONTACT','SOLUTION_PROPOSED_WITHOUT_OPPORTUNITY','RECRUITMENT_ACTIVATED_WITHOUT_KEY_CONTACT')")).rows;};
@@ -108,5 +108,72 @@ try{
  assert.equal((await client.query("select count(*)::int n from public.mutation_receipts where operation in ('LEAD_SAVE','LEAD_ASSIGNMENT') and result->'item'->>'id'=$1",[rollbackLead.id])).rows[0].n,0);
  assert.equal((await client.query('select count(*)::int n from public.organizations where id=$1',[o])).rows[0].n,1);
  assert.equal((await client.query("select count(*)::int n from public.data_quality_rule_configs where workspace_id=$1 and rule_key='CLAIMED_LEAD_WITHOUT_NEXT_ACTION'",[otherWs])).rows[0].n,1);
- console.log('PASS Lead pool PostgreSQL: create/private/household, claim/retry/race/release/reassign, tenant isolation, immutable subject, strict revision, stage real-change/history/regression, invoker projection, audit rollback.');
+ // Recoverable removal uses the same revision/receipt guarantees as ordinary mutations.
+ await context();const deleteTarget=await save(randomUUID(),null,{...data,pool_visibility:'PRIVATE'}),deleteKey=randomUUID();
+ const archive=async(rev,key=deleteKey)=>(await client.query('select to_jsonb(public.archive_lead($1,$2,$3)) item',[deleteTarget.id,rev,key])).rows[0].item;
+ await assert.rejects(archive(deleteTarget.revision+1),/lead_version_conflict/);
+ const beforeLeadCount=(await client.query('select public.dashboard_snapshot(null) item')).rows[0].item.newLeads;
+ const deleted=await archive(deleteTarget.revision);assert.ok(deleted.archived_at);assert.equal((await client.query('select public.dashboard_snapshot(null) item')).rows[0].item.newLeads,beforeLeadCount-1);
+ assert.equal((await archive(deleteTarget.revision)).revision,deleted.revision);
+ assert.equal((await client.query('select count(*)::int n from public.lead_pool_records where id=$1',[deleteTarget.id])).rows[0].n,0);
+ await assert.rejects(save(deleteTarget.id,deleted.revision,{next_action:'Cannot edit a deleted lead'}),/lead_forbidden/);
+ await context(stranger,otherWs);await assert.rejects(archive(deleteTarget.revision),/lead_forbidden/);
+ await context();await assert.rejects(client.query("select public.restore_crm_recycle_bin('LEAD',$1)",[deleteTarget.id]),/super_admin_required/);
+ await client.query('reset role');await client.query("update public.workspace_memberships set role='SUPER_ADMIN' where workspace_id=$1 and user_id=$2",[ws,admin]);await context();
+ await client.query("select public.restore_crm_recycle_bin('LEAD',$1)",[deleteTarget.id]);
+ assert.equal((await client.query('select count(*)::int n from public.lead_pool_records where id=$1',[deleteTarget.id])).rows[0].n,1);
+ // Directory filters operate before count/paging, with real canonical columns.
+ await client.query('reset role');await client.query("update public.students set current_grade='G8',academic_year='2026-2027' where id=$1",[student]);await client.query("update public.organizations set city='Example City',curriculum='IB' where id=$1",[o]);await context();
+ assert.equal((await client.query("select * from public.list_student_family_page('',1,10,'ACTIVE','G8','2026-2027')")).rows.length,1);
+ assert.equal((await client.query("select * from public.list_student_family_page('',1,10,'ACTIVE','G9','2026-2027')")).rows.length,0);
+ assert.equal((await client.query("select public.organization_commercial_metrics('','all',null,null,null,null,'Example City','IB','SCHOOL') item")).rows[0].item.total,1);
+ assert.equal((await client.query("select public.organization_commercial_metrics('','all',null,null,null,null,'Unmatched City','IB','SCHOOL') item")).rows[0].item.total,0);
+ // Every supported kind is actually readable through the same RLS-bound cleanup endpoint.
+ const kinds=['ORGANIZATION','CONTACT','STUDENT','HOUSEHOLD','TASK','PRODUCT','LEAD','OPPORTUNITY','CONTRACT','ENROLLMENT','APPLICATION','SUPPORT_CASE','SUPPORT_GOAL','SUPPORT_CHECKIN','SUPPORT_RISK','SUPPORT_INTERVENTION','ORGANIZATION_PROFILE','FAMILY_NEED','PATHWAY','OUTREACH_EVENT','REFERRAL','EVENT_PARTICIPATION','ACADEMIC_RECORD','COHORT','BUNDLE','QUOTE','CAMPAIGN','ADMISSION_JOURNEY','MILESTONE','WORKFLOW_TEMPLATE','APPOINTMENT','EXCHANGE_RATE','ADMISSION_OUTCOME','CONTACT_INTELLIGENCE','CONTACT_RELATIONSHIP','FOLLOWUP_PLAN','FOLLOWUP_ENTRY','ACTIVITY','IMPORT_BATCH','IMPORT_MAPPING','IMPORT_SET','PRODUCT_PRICE','CHANNEL_AGREEMENT','CHANNEL_AGREEMENT_VERSION'];
+ for(const kind of kinds){const listed=(await client.query('select public.list_deletable_business_records($1,$2,1,20) item',[kind,''])).rows[0].item;assert.ok(Array.isArray(listed.items),kind);assert.ok(Number.isInteger(listed.total),kind);}
+ const cleanup=async(kind,id,rev,token,key)=>(await client.query('select public.archive_business_record($1,$2,$3,$4,$5) item',[kind,id,rev,token,key])).rows[0].item;
+ // A stale editor cannot establish a new link to a removed cohort.
+ await client.query('reset role');const emptyCohort=(await client.query("insert into public.product_cohorts(workspace_id,product_id,code,name_zh,name_en,status) values($1,$2,'EXAMPLE-EMPTY','示例空批次','Example empty cohort','RECRUITING') returning id",[ws,product])).rows[0].id;await context();
+ const empty=(await client.query("select public.list_deletable_business_records('COHORT',$1,1,20) item",[emptyCohort])).rows[0].item.items[0];await cleanup('COHORT',emptyCohort,empty.revision,empty.updatedAt,randomUUID());
+ await assert.rejects(client.query("select public.save_student_enrollment($1,null,$2,$3,'')",[randomUUID(),{student_id:student,cohort_id:emptyCohort,household_id:null,opportunity_id:null,status:'INTERESTED',owner_id:admin,sales_owner_id:null,enrolled_at:null,completed_at:null,withdrawn_at:null,withdrawal_reason:''},randomUUID()]),/linked_record_deleted|forbidden/);
+ // Channel drafts can be removed, while their immutable earning records cannot.
+ const agreementId=randomUUID(),versionId=randomUUID(),agreementData={organization_id:o,agreement_code:'EXAMPLE-DRAFT',name_zh:'示例渠道协议',name_en:'Example channel agreement',effective_from:'2027-01-01',effective_to:null,signed_on:null,reference_number:null,notes:'',rules:[]};
+ await client.query('select public.save_channel_agreement($1,$2,null,$3,$4)',[agreementId,versionId,agreementData,randomUUID()]);
+ const getDelete=async(kind,id)=>(await client.query('select public.list_deletable_business_records($1,$2,1,20) item',[kind,id])).rows[0].item.items[0];
+ let agreementRecord=await getDelete('CHANNEL_AGREEMENT',agreementId);assert.equal(agreementRecord.blockedReason,'REFERENCED');
+ const draft=await getDelete('CHANNEL_AGREEMENT_VERSION',versionId);assert.equal(draft.canDelete,true);assert.equal(draft.blockedReason,null);
+ await cleanup('CHANNEL_AGREEMENT_VERSION',versionId,draft.revision,draft.updatedAt,randomUUID());
+ assert.equal((await client.query('select public.get_channel_agreements($1) item',[o])).rows[0].item.items[0].versions.length,0);
+ await assert.rejects(client.query('select public.save_channel_agreement($1,$2,$3,$4,$5)',[agreementId,versionId,draft.revision+1,agreementData,randomUUID()]),/not_found/);
+ agreementRecord=await getDelete('CHANNEL_AGREEMENT',agreementId);await cleanup('CHANNEL_AGREEMENT',agreementId,agreementRecord.revision,agreementRecord.updatedAt,randomUUID());
+ assert.equal((await client.query('select public.get_channel_agreements($1) item',[o])).rows[0].item.items.length,0);
+ const recycled=(await client.query('select public.list_deleted_business_records() item')).rows[0].item;assert.ok(recycled.some(item=>item.kind==='CHANNEL_AGREEMENT_VERSION'&&item.id===versionId));assert.ok(recycled.some(item=>item.kind==='CHANNEL_AGREEMENT'&&item.id===agreementId));
+ await assert.rejects(client.query('select public.save_channel_agreement($1,$2,null,$3,$4)',[agreementId,randomUUID(),agreementData,randomUUID()]),/not_found/);
+ await client.query("select public.restore_crm_recycle_bin('CHANNEL_AGREEMENT',$1)",[agreementId]);await client.query("select public.restore_crm_recycle_bin('CHANNEL_AGREEMENT_VERSION',$1)",[versionId]);
+ assert.equal((await client.query('select public.get_channel_agreements($1) item',[o])).rows[0].item.items[0].versions.length,1);
+ // Price cleanup cannot select another tenant or silently reuse an archived current price.
+ await client.query("select public.set_product_price($1,'CNY',250,current_date)",[product]);
+ await client.query("select set_config('app.aal','aal1',false)");await assert.rejects(cleanup('PRODUCT',product,null,'2026-01-01T00:00:00Z',randomUUID()),/mfa_required|business_delete_forbidden/);await client.query("select set_config('app.aal','aal2',false)");
+ const price=(await client.query("select public.list_deletable_business_records('PRODUCT_PRICE','',1,20) item")).rows[0].item.items[0];assert.ok(price);assert.equal(price.canDelete,true);
+ await cleanup('PRODUCT_PRICE',price.id,price.revision,price.updatedAt,randomUUID());
+ await client.query("select public.set_product_price($1,'CNY',300,current_date)",[product]);
+ const catalog=(await client.query('select public.product_catalog_snapshot() item')).rows[0].item;const priced=catalog.find(p=>p.id===product);assert.ok(priced);assert.ok(priced.prices.every(p=>Number(p.amount)!==250));assert.ok(priced.prices.some(p=>Number(p.amount)===300));
+ const event=(await client.query("select public.list_deletable_business_records('OUTREACH_EVENT',$1,1,20) item",[eventId])).rows[0].item.items[0],eventKey=randomUUID();assert.equal(event.canDelete,true);
+ await assert.rejects(cleanup('OUTREACH_EVENT',eventId,event.revision+1,event.updatedAt,eventKey),/version_conflict/);
+ await cleanup('OUTREACH_EVENT',eventId,event.revision,event.updatedAt,eventKey);await cleanup('OUTREACH_EVENT',eventId,event.revision,event.updatedAt,eventKey);
+ assert.equal((await client.query('select count(*)::int n from public.education_outreach_events where id=$1',[eventId])).rows[0].n,0);
+ await assert.rejects(client.query("select public.save_education_business('events',$1,$2,$3)",[eventId,event.revision+1,{organization_id:o,partner_organization_id:null,name:'Cannot modify a removed event',kind:'SEMINAR',starts_on:'2026-10-04',ends_on:'2026-10-04',location:'Campus',capacity:null,attendee_count:null,status:'CONFIRMED',next_action:'',campaign_id:null,product_id:product,cohort_id:cohort}]),/forbidden|deleted/);
+ await context(stranger,otherWs);await assert.rejects(cleanup('OUTREACH_EVENT',eventId,event.revision,event.updatedAt,randomUUID()),/forbidden/);
+ await context();await client.query("select public.restore_crm_recycle_bin('OUTREACH_EVENT',$1)",[eventId]);assert.equal((await client.query('select count(*)::int n from public.education_outreach_events where id=$1',[eventId])).rows[0].n,1);
+ // Archiving an Enrollment with active related facts is blocked without removing those facts.
+ const enrolled=(await client.query("select public.list_deletable_business_records('ENROLLMENT',$1,1,20) item",[eid])).rows[0].item.items[0];assert.ok(enrolled);
+ await client.query('reset role');await client.query("update public.workspace_memberships set role='SALES_SUPPORT' where workspace_id=$1 and user_id=$2",[ws,sales]);await context(sales);
+ assert.equal((await client.query("select public.business_record_delete_access('PRODUCT',to_jsonb(p)) permitted from public.products p where id=$1",[product])).rows[0].permitted,false);
+ await client.query('reset role');await client.query("update public.workspace_memberships set role='SALES_SPECIALIST' where workspace_id=$1 and user_id=$2",[ws,sales]);await context();
+ // PostgreSQL JSON keeps the exact token; the gateway's parser must preserve it too.
+ await client.query('reset role');await client.query("update public.organizations set updated_at='2026-10-07T12:34:56.123456Z' where id=$1",[o]);await context();
+ const token=(await client.query("select updated_at::text token from public.organizations where id=$1",[o])).rows[0].token;
+ await assert.rejects(client.query("select public.save_crm_record('schools',$1,$2,'{\"archived\":true}')",[o,'2026-10-07T12:34:56.123Z']),/crm_version_conflict/);
+ await client.query("select public.save_crm_record('schools',$1,$2,'{\"archived\":true}')",[o,token]);
+ console.log('PASS Lead pool PostgreSQL: existing action/tenant/revision/audit contracts, recoverable archive/replay/restore, exact microsecond Organization deletion, 44 resource read contracts, generic archive/replay/restore and negative permissions.');
 }finally{if(otherClient)await otherClient.end().catch(()=>{});if(client)await client.end().catch(()=>{});spawnSync('docker',['rm','--force',container],{encoding:'utf8',windowsHide:true,timeout:5000});}

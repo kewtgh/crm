@@ -21,11 +21,11 @@ test('primary action is reordered only from existing eligibility and edit author
 });
 test('governance actions stay under their exact gates and More retains history',()=>{
  const owned={...lead,owner_id:'self',is_mine:true,can_edit:true,can_assign:true,status:'QUALIFIED'};
- assert.deepEqual(leadQueueActions(owned,'mine',true,true).more,['update','release','reassign','visibility','history']);
+ assert.deepEqual(leadQueueActions(owned,'mine',true,true).more,['update','release','reassign','visibility','history','archive']);
  assert.deepEqual(leadQueueActions(owned,'mine',false,false).more,['history']);
- assert.deepEqual(leadQueueActions({...owned,subject_type:'HOUSEHOLD'},'mine',true,true).more,['update','release','reassign','history']);
+ assert.deepEqual(leadQueueActions({...owned,subject_type:'HOUSEHOLD'},'mine',true,true).more,['update','release','reassign','history','archive']);
  assert.ok(!leadQueueActions({...owned,status:'CONVERTED'},'all',true,true).more.includes('release'));
- assert.deepEqual(leadQueueActions({...owned,is_mine:false,can_assign:false},'all',true,false).more,['update','history']);
+ assert.deepEqual(leadQueueActions({...owned,is_mine:false,can_assign:false},'all',true,false).more,['update','history','archive']);
 });
 test('Lead visibility uses every canonical staff capability, not a guessed role permission',()=>{
  for(const role of APP_ROLES){const manage=hasCapability(role,'leads.manage'),manager=['SUPER_ADMIN','ADMIN','SALES_DIRECTOR','SALES_MANAGER'].includes(role);const actions=leadQueueActions({...lead,owner_id:'self',is_mine:true,can_edit:true,can_assign:manager},'mine',manage,manager);assert.equal(actions.primary,manage?'update':null);assert.equal(actions.more.includes('reassign'),manager);}

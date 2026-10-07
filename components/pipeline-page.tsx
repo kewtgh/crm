@@ -1,4 +1,5 @@
 "use client";
+import {RecordDeleteAction} from "./record-delete-action";
 import {ReportScopeNotice} from "./report-scope-notice";
 import type {ReportFilter} from "@/lib/management-trend-contract";
 import { BilingualNameHint } from "@/components/structured-inputs";
@@ -352,7 +353,7 @@ export function PipelinePage({
                 </span>
                 <b>{locale === "zh-CN" ? card.titleZh : card.titleEn}</b>
                 {card.productId && <small>{locale === "en" ? card.productEn : card.productZh}{card.cohortId ? ` · ${locale === "en" ? card.cohortEn : card.cohortZh}` : ""}</small>}
-                {canManage && <button type="button" className="text-button" onClick={() => setCommercialRecord(card)}>{t("commercial.editContext")}</button>}
+                {canManage && <div className="page-actions"><button type="button" className="text-button" onClick={() => setCommercialRecord(card)}>{t("commercial.editContext")}</button><RecordDeleteAction kind="OPPORTUNITY" id={card.id} onDeleted={()=>load(page,query)}/></div>}
                 <small>{t(card.subjectType === "SCHOOL" ? "leads.type.school" : "leads.type.household")} · {locale === "zh-CN" ? card.subjectZh : card.subjectEn}</small>
                 <div className="opportunity-meta">
                   <b>{money(card.amount, card.currency)}</b>

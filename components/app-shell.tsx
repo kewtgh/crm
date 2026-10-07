@@ -55,7 +55,11 @@ function navigationFor(role: AppUser["role"]): NavigationGroup[] {
   const visible = visibleDestinations(role);
   return (Object.keys(spaceIcons) as NavigationSpace[]).map(space => ({
     titleKey: space === "account" ? "nav.account" : "ux.space." + space,
-    items: visible.filter(d => d.space === space).map(d => ({ labelKey: d.labelKey, href: d.href, icon: destinationIcons[d.id] ?? spaceIcons[space], documentChildNavigation: d.documentNavigation })),
+    items: visible.filter(d => d.space === space && (!d.parentId || !visible.some(parent => parent.id === d.parentId))).map(d => {
+      const children = visible.filter(child => child.parentId === d.id);
+      return { labelKey: d.labelKey, href: d.href, icon: destinationIcons[d.id] ?? spaceIcons[space], documentChildNavigation: d.documentNavigation,
+        ...(children.length ? { children: [{ labelKey: "nav.messages", href: d.href }, ...children.map(child => ({ labelKey: child.labelKey, href: child.href }))] } : {}) };
+    }),
   })).filter(group => group.items.length);
 }
 
@@ -355,7 +359,7 @@ function GlobalSearchResults({
 function NavEntry({ item, activeHref, expanded, onExpand, onNavigate }: { item: NavItem; activeHref?: string; expanded: boolean; onExpand: () => void; onNavigate: () => void }) {
   const { t } = useI18n();
   const Icon = item.icon;
-  const active = item.href ? activeHref === item.href : item.children?.some((child) => child.href === activeHref);
+  const active = activeHref === item.href || item.children?.some((child) => child.href === activeHref);
   if (item.children) return <div className={`nav-parent ${active ? "active" : ""}`}>
     <button type="button" className="nav-link" aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
     {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=activeHref===child.href;const properties={className:childActive?"active":"",...(childActive?{"aria-current":"page" as const}:{}),href:child.href,onClick:onNavigate};const content=<><span>{t(child.labelKey)}</span>{child.badge&&<b className="nav-badge">{child.badge}</b>}</>;return item.documentChildNavigation?<a {...properties} data-navigation="document" key={child.href}>{content}</a>:<Link {...properties} key={child.href}>{content}</Link>;})}</div>}

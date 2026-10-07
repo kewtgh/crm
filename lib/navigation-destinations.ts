@@ -8,6 +8,7 @@ export type NavigationDestination = {
   matches: readonly Match[]; capability?: Capability; roles?: readonly AppRole[];
   guard: "AUTH_RLS" | "CAPABILITY" | "ROLE_AND_CAPABILITY";
   secondary?: boolean; documentNavigation?: boolean;
+  parentId?: string;
 };
 const entry = (id: string, space: NavigationSpace, labelKey: string, href: string, capability?: Capability, secondary = false): NavigationDestination => ({
   id, space, labelKey, href, capability, secondary, guard: capability ? "CAPABILITY" : "AUTH_RLS",
@@ -20,8 +21,8 @@ export const navigationDestinations: readonly NavigationDestination[] = [
   entry("tasks", "work", "ux.nav.tasks", "/tasks", "tasks.view"),
   entry("calendar", "work", "nav.calendar", "/calendar", "calendar.view"),
   entry("approvals", "work", "ux.nav.approvals", "/approvals", "approvals.decide"),
-  { ...entry("messages", "work", "nav.messages", "/messages", "messages.view", true), matches: [{ pathname: "/messages" }, { pathname: "/notifications" }] },
-  entry("portal", "work", "nav.guardianPortal", "/guardian-portal", "portal.manage", true),
+  { ...entry("messages", "work", "repair.communications", "/messages", "messages.view", true), matches: [{ pathname: "/messages" }, { pathname: "/notifications" }] },
+  { ...entry("portal", "work", "nav.guardianPortal", "/guardian-portal", "portal.manage", true), parentId: "messages" },
   entry("organizations", "relationships", "nav.schools", "/schools"),
   entry("contacts", "relationships", "ux.nav.contacts", "/people"),
   { ...entry("students", "students", "ux.nav.students", "/students", "education.view"), matches: [{ pathname: "/students", descendants: true }, { pathname: "/households", notQuery: { tab: "families" } }] },
@@ -46,6 +47,7 @@ export const navigationDestinations: readonly NavigationDestination[] = [
   entry("imports", "governance", "nav.imports", "/imports", "imports.view"),
   entry("quality", "governance", "nav.quality", "/data-quality", "dataQuality.manage"),
   entry("duplicates", "governance", "nav.duplicates", "/duplicates", "duplicates.manage"),
+  entry("record-cleanup", "governance", "repair.cleanup", "/record-cleanup", undefined, true),
   entry("workflows", "governance", "workflow.templates", "/workflow-templates", "education.view"),
   entry("education-business", "governance", "business.title", "/education-business", "education.view", true),
   entry("privacy", "governance", "nav.privacyRequests", "/privacy-requests", "privacyRequests.manage", true),

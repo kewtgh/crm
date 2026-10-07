@@ -1,6 +1,10 @@
 # Lumina CRM
 
-Current release candidate: **v3.28.1**
+Current release candidate: **v3.29.0**
+
+## v3.29.0 — Operational deletion and compact workspaces
+
+Recoverable cleanup now covers 44 business resource types, including unused channel drafts, with existing record permissions, precise conflict tokens and mutation receipts. Directory and operational filters use aligned compact desktop controls and mobile disclosure. Student academic correction is searchable; commission filtering runs before server paging; channel analysis and imports disclose secondary detail. Historical financial facts retain their formal cancellation/reversal workflows. Additive migration 114 leaves all previous migration bytes unchanged. See [release notes](docs/RELEASE_V3.29.0.md) and [verification](docs/V329_OPERATIONS_VERIFICATION.md).
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the

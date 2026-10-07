@@ -31,7 +31,7 @@ export function CrmRecordEditor({
   initial?:CrmRecordDetail;
   onSaved?:(item:CrmRecordDetail)=>void;
 }){
-  const {t}=useI18n();
+  const {t,locale}=useI18n();
   const canAssignOwner=["SUPER_ADMIN","ADMIN","SALES_DIRECTOR"].includes(useAppUser().role);
   const {formatDate,localDateTimeInput,localDateTimeToIso}=useUserPreferences();
   const router=useRouter();
@@ -60,7 +60,7 @@ export function CrmRecordEditor({
   },[id,resource,t]);
   useEffect(()=>()=>ownerSearch.current?.abort(),[]);
 
-  const begin=async()=>{setOpen(true);if(!detail)await load();};
+  const begin=async()=>{setOpen(true);await load();};
   const searchOwners=useCallback(async(query:string)=>{
     ownerSearch.current?.abort();
     const controller=new AbortController();ownerSearch.current=controller;
@@ -128,7 +128,7 @@ export function CrmRecordEditor({
       setToast(t("crm.saved"));router.refresh();
     }catch(caught){
       setError(t(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT"?"crm.conflict":"crm.saveFailed"));
-      if(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT")await load();
+      if(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT"){await load();setError(t("crm.conflict"));}
     }finally{setPending(false);}
   };
 
@@ -144,12 +144,13 @@ export function CrmRecordEditor({
       router.refresh();
     }catch(caught){
       setError(t(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT"?"crm.conflict":"crm.saveFailed"));
+      if(caught instanceof ApiClientError&&caught.code==="CRM_VERSION_CONFLICT")await load();
     }finally{setPending(false);}
   };
 
   return <>
     <button className="secondary-button" type="button" onClick={()=>void begin()}><Pencil size={16}/>{t("crm.edit")}</button>
-    {open&&<AccessibleDrawer guardChanges pending={pending} title={detail?`${detail.nameZh} / ${detail.nameEn}`:t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
+    {open&&<AccessibleDrawer guardChanges pending={pending} title={detail?((locale==="en"?detail.nameEn:detail.nameZh)||detail.nameZh||detail.nameEn):t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
       {loading&&!detail&&<p role="status">{t("common.loading")}</p>}
       {detail&&<form onSubmit={save}>
         <div className="form-grid two-column">
@@ -204,7 +205,7 @@ export function CrmRecordEditor({
       </section>}
     </AccessibleDrawer>}
     {archiveOpen&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("crm.archiveConfirm")} onClose={()=>setArchiveOpen(false)}>
-      <InlineMessage type="warning">{t("common.actionCannotUndo")}</InlineMessage>
+      <InlineMessage type="warning">{t("repair.recoverable")}</InlineMessage>
       {error&&<InlineMessage type="error">{error}</InlineMessage>}
       <div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setArchiveOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void archive()}>{pending?t("common.processing"):t("crm.archive")}</button></div>
     </AccessibleDrawer>}

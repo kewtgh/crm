@@ -1,6 +1,6 @@
 import { databaseJson, databaseRequest } from "./db/gateway";
 
-type PageOptions = { page?: number; pageSize?: number; query?: string; status?: string };
+type PageOptions = { page?: number; pageSize?: number; query?: string; status?: string; grade?: string; academicYear?: string };
 export type PageResult<T> = { items: T[]; total: number; page: number; pageSize: number };
 
 function pageValues(options: PageOptions) {
@@ -36,7 +36,7 @@ type HouseholdRow = {
 export async function listHouseholds(options: PageOptions = {}): Promise<PageResult<HouseholdRecord>> {
   const params = new URLSearchParams({
     select: "id,name_zh,name_en,status,address,updated_at,primary_parent_occupation,secondary_parent_occupation,annual_income_amount,income_currency,preferred_contact_method,preferred_language,education_expectations_markdown,family_background_markdown,household_members:household_members!household_members_household_id_fkey(count)",
-    order: "updated_at.desc",
+    order: "updated_at.desc", archived_at: "is.null",
   });
   const query = options.query?.replace(/[*,()]/g, " ").trim();
   if (query) params.set("or", `(name_zh.ilike.*${query}*,name_en.ilike.*${query}*)`);
@@ -85,6 +85,8 @@ export async function listStudents(options: PageOptions = {}): Promise<PageResul
       page_number: page,
       page_size: pageSize,
       status_filter: options.status ?? "all",
+      grade_filter: options.grade || null,
+      year_filter: options.academicYear || null,
     }),
   });
   return {

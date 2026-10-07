@@ -1,4 +1,8 @@
-# Implementation status — v3.28.1 release candidate
+# Implementation status — v3.29.0 release candidate
+
+## v3.29.0 — Operational deletion and compact workspaces
+
+The follow-up closes missing cleanup paths and timestamp precision conflicts, consolidates responsive filters across daily workspaces, adds direct searchable academic correction, and refines commission/channel/import presentation. Migration 114 adds recoverable storage and canonical deletion guards; prior SQL remains unchanged. Revenue is excluded. See [audit](UX_OPERATIONS_AUDIT.md), [plan](UX_OPERATIONS_REPAIR_PLAN.md), [release](RELEASE_V3.29.0.md) and [verification](V329_OPERATIONS_VERIFICATION.md).
 
 ## v3.28.1 — Shared-navigation CI contract correction
 
@@ -387,7 +391,6 @@ export/deletion support. Unknown legacy values remain unfilled. No production mi
 external messaging or inferred admissions changes. [Audit](FIRST_PRINCIPLES_AUDIT_2026-10-02.md)
 and [implementation/verification](FIRST_PRINCIPLES_PLAN_2026-10-02.md).
 
-
 v3.15.0 replaces searchable recipient facets with a shared three-column structured selector.
 Portal invitations add two bilingual presets, personal/public custom template storage, recipient
 filtering from household membership and guardian relationships, record filters and copyable localized
@@ -425,7 +428,6 @@ keyboard-accessible tabs. Schools show institution contacts, not family sections
 is tucked inside More actions with confirmation; details show prices per currency. Suggestions and
 automation share the final Operations entry with permission-filtered tabs and execution guidance.
 No new schema or deployment changes. [UI audit and plan](UI_AUDIT_PLAN_2026-10-01.md).
-
 
 v3.12.0 adds organization, customer and household follow-up goals/entries with rule-based advice;
 existing relationship milestones remain authoritative. Customer/family panels, school aliases and

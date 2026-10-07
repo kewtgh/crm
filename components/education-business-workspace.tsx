@@ -1,4 +1,5 @@
 "use client";
+import { RecordDeleteAction } from "./record-delete-action";
 import {commercialFields} from "@/lib/channel-commercial-input";
 import {ApplicationSelector} from "./application-selector";
 
@@ -81,7 +82,7 @@ export function EducationBusinessWorkspace({context,initialResource,embedded=fal
     <DetailTabs hideNavigation={embedded} items={resources.map(key=>({key,label:`business.resource.${key}`}))} active={resource} onChange={key=>{setResource(key as BusinessResource);setData(null);setNotice("");setError("");}} disabled={pending||!!editor} label={t("business.title")}>
       {loading&&<p role="status">{t("common.loading")}</p>}
       {data&&<><p>{t("business.total",{count:data.total})}</p><div className="business-record-grid">{data.items.map(row=><article className="detail-section business-record-card" key={row.id}>
-        <div className="surface-heading"><h2>{label(row)}</h2>{canManage&&data.editableIds.includes(row.id)&&<button className="secondary-button" onClick={()=>setEditor({record:row,token:row.id})}>{t("crm.edit")}</button>}</div>
+        <div className="surface-heading"><h2>{label(row)}</h2>{canManage&&data.editableIds.includes(row.id)&&<button className="secondary-button" onClick={()=>setEditor({record:row,token:row.id})}>{t("crm.edit")}</button>}{canManage&&data.editableIds.includes(row.id)&&<RecordDeleteAction kind={({organizations:"ORGANIZATION_PROFILE",needs:"FAMILY_NEED",pathways:"PATHWAY",events:"OUTREACH_EVENT",referrals:"REFERRAL",participations:"EVENT_PARTICIPATION",applications:"APPLICATION"} as const)[resource]} id={row.id} onDeleted={()=>load(data.page)}/>}</div>
         <dl className="customer-profile">{businessConfig[resource].fields.filter(field=>["campaign_id","product_id","cohort_id","roles","partnership_stage","services","budget_min","budget_max","budget_currency","stage","program_type","kind","starts_on","status","referred_on","household_id","event_id","party_size","due_on","title","next_action"].includes(field.key)).map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl>
         {businessWarnings(resource,row,data.today).map(warning=><p className="business-warning" key={warning}>{t(`business.warning.${warning}`)}</p>)}
         <details><summary>{t("business.details")}</summary><dl className="customer-profile">{businessConfig[resource].fields.map(field=><div key={field.key}><dt>{t(`business.field.${field.key}`)}</dt><dd>{showValue(row,field)}</dd></div>)}</dl><small>{t("business.updated")}: {formatDate(row.updated_at,{includeTime:true})}</small></details>

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { PoolClient } from "pg";
+import { preciseTimestampTypes } from "./timestamp";
 import { loadSession, sessionCookieName } from "../auth/session-store";
 import { withDatabaseContext, type DatabaseContext } from "./context";
 
@@ -322,10 +323,11 @@ async function selectRows(
   const { values, where } = parts;
   const limit = limitSql(searchParams, headers);
   const order = orderSql(searchParams.get("order"));
-  const rows = (await client.query<Record<string, unknown>>(
-    `select * from public.${quoteIdentifier(table)}${where}${order}${limit.sql}`,
+  const rows = (await client.query<Record<string, unknown>>({
+    text: `select * from public.${quoteIdentifier(table)}${where}${order}${limit.sql}`,
     values,
-  )).rows;
+    types: preciseTimestampTypes,
+  })).rows;
   await hydrateRelations(client, table, rows, nestedSelections(searchParams.get("select")));
   const responseHeaders = new Headers();
   if (headers.get("prefer")?.toLowerCase().includes("count=exact")) {

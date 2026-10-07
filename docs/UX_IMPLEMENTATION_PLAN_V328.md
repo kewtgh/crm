@@ -1,6 +1,8 @@
 # v3.28 — UX Implementation Plan
 
-状态：**PLAN ONLY**。依赖 [UX_ARCHITECTURE_V328.md](UX_ARCHITECTURE_V328.md) 的冻结设计；当前版本仍为 `3.27.0`。本计划不批准现在实施、发布或修改领域政策。
+冻结时状态：**PLAN ONLY**。依赖 [UX_ARCHITECTURE_V328.md](UX_ARCHITECTURE_V328.md) 的冻结设计；当前版本仍为 `3.27.0`。本计划不批准现在实施、发布或修改领域政策。
+
+执行记录：Phase 1–5 已随 v3.28.0 提交；上述版本和状态描述保留为 Phase 0 冻结基线。后续实际使用暴露的删除、筛选和响应式遗漏，已纳入 [运营体验审计](UX_OPERATIONS_AUDIT.md) 与 [修复计划](UX_OPERATIONS_REPAIR_PLAN.md)，不表示所有运营流程都已通过实际使用验收。
 
 ## 1. 交付原则与次序
 

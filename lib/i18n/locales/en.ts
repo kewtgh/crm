@@ -1,4 +1,5 @@
 import {uxClosureEn} from "./ux-closure";
+import {operationsRepairEn} from "./operations-repair";
 import { frontlineEn } from './frontline';
 import { recordWorkspaceEn } from './record-workspaces';
 import { enManagementUX } from './management-ux';
@@ -501,4 +502,5 @@ export const en: Messages = {
   ...enWorkflowExperience,
   ...enWorkflowUsability,
   ...frontlineEn,
+  ...operationsRepairEn,
 };

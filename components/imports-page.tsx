@@ -402,7 +402,7 @@ export function ImportsPage({
     setMergeOptions(result.value.items.filter(item=>item.type===expected).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`,detail:t(mergeResource==="CONTACTS"?"imports.contacts":"imports.organizations")})));
   };
 
-  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"实体":"Entities"],["relationships",zh?"关系":"Relationships"],["sets",t("closure.importSets")]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
+  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"导入资料":"Records"],["relationships",zh?"关联已有资料":"Link records"],["sets",t("closure.importSets")]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
   if(workspaceTab!=="entities")return <div className="page-stack imports-page">{workspaceTabs}<ImportSetsPage key={workspaceTab} relationships={workspaceTab==="relationships"}/></div>;
   return <div className="page-stack imports-page">
     {workspaceTabs}
@@ -429,7 +429,8 @@ export function ImportsPage({
       {error && <InlineMessage type="error">{error}</InlineMessage>}
     </section>}
 
-    {!duplicatesOnly && <section className="surface import-create">
+    {!duplicatesOnly&&workspaceTabs}
+    {!duplicatesOnly && <section className="surface import-create" data-surface-tone="work">
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{v2?(zh?"上传 CSV / XLSX 并预检":"Upload CSV / XLSX and preflight"):t("imports.newBatch")}</h2></div><Upload size={21} /></div>
       {v2&&<label className="field import-format"><span>{zh?"下载格式":"Download format"}</span><select value={format} onChange={e=>setFormat(e.target.value)}><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></label>}
       <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}&templateVersion=${v2?"2":"LEGACY_UNVERSIONED"}&format=${kind==="guide"?"csv":v2?format:"csv"}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{v2?(zh?"使用最新模板。新增资料至少填写一种名称，其他必填内容见字段说明；更新资料需要先选择已有记录。预检不会修改业务数据。":"Use this resource’s v2 template. CREATE requires one name; consult Guide for other requirements. UPDATE needs an authorized target reference. Preflight does not change business data."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
@@ -440,6 +441,7 @@ export function ImportsPage({
       {v2&&<><InlineMessage type="info">{zh?"UPDATE 空白保持原值；__CLEAR__ 仅允许清空 Guide 中列出的可空字段。敏感字段为可选，不要求收集。未知列会阻止预检。":"UPDATE blanks preserve current values; __CLEAR__ only clears nullable fields listed in Guide. Sensitive fields are optional. Unknown columns block preflight."}</InlineMessage><details><summary>{zh?"关联已有资料（可选）":"Link existing records (optional)"}</summary><ImportReferencePanel/></details></>}
       {fileLoading&&<InlineMessage type="info">{t("imports.readingFile")}</InlineMessage>}
       {headers.length > 0 && <>
+        <details className="operational-disclosure" open={v2?undefined:true}><summary>{t("repair.mappingDetails")}</summary>
         <div className="form-grid three-column import-mapping-profiles">
           <label className="field"><span>{t("imports.mappingProfile")}</span><select value={mappingProfileId} onChange={event=>applyMappingProfile(event.target.value)}><option value="">{t("imports.mappingNone")}</option>{mappingProfiles.filter(item=>item.resource===resource&&(item.templateVersion??"LEGACY_UNVERSIONED")===(v2?"2":"LEGACY_UNVERSIONED")).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="field"><span>{t("imports.mappingName")}</span><input value={mappingName} maxLength={80} onChange={event=>setMappingName(event.target.value)} placeholder={t("imports.mappingNamePlaceholder")}/></label>
@@ -449,6 +451,7 @@ export function ImportsPage({
           <p className="name-pair-hint"><span className="required-indicator">* </span>{v2?(zh?"v2 列名必须与模板一致；字段是否必填由操作及 Guide 决定。":"v2 columns must match the template; operation and Guide determine required values."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.identityMappingRequired":"imports.nameMappingHelp")}</p>
           {targetFields.map((field) => <SearchableSelect key={field} label={fieldLabel(field)} options={v2?headerOptions.filter(o=>o.value===field):headerOptions} value={mapping[field] ?? ""} placeholder={t("imports.ignore")} onChange={(value) => setMapping((currentMapping) => ({ ...currentMapping, [field]: value }))} />)}
         </div>
+        </details>
         <InlineMessage type="info">{t("imports.preview", { rows: rawRows.length, columns: headers.length })}</InlineMessage>
         <button className="primary-button" type="button" disabled={pending||fileLoading} onClick={() => void createBatch()}><SearchCheck size={16} />{pending ? t("imports.validating") : t("imports.validate")}</button>
       </>}
@@ -456,7 +459,7 @@ export function ImportsPage({
     </section>}
 
     <section className="import-workspace">
-      <div className="surface batch-list">
+      <div className="surface batch-list" data-surface-tone="context">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.historyEyebrow")}</p><h2>{t("imports.batches")}</h2></div><FileSpreadsheet size={21} /></div>
         {batches.map((item) => <button className={item.id === selected ? "batch-card selected" : "batch-card"} type="button" key={item.id} onClick={() => void open(item.id)}>
           <span><b>{item.filename}</b><small>{t(({CONTACTS:"imports.contacts",ORGANIZATIONS:"imports.organizations",HOUSEHOLDS:"education.households",STUDENTS:"education.students",COHORTS:"cohorts.title",ENROLLMENTS:"enrollments.title"} as Record<string,string>)[item.resourceType]??"closure.unknownResource")} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
@@ -466,7 +469,7 @@ export function ImportsPage({
         <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => void loadBatches(next)} onPageSize={(value)=>void loadBatches(1,value)} />
       </div>
 
-      <div className="surface import-rows">
+      <div className="surface import-rows" data-surface-tone="governance">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.rowsEyebrow")}</p><h2>{current ? current.filename : t("imports.selectBatch")}</h2></div>{current && <StatusBadge tone="blue">{t(`imports.status.${current.status.toLowerCase()}`)}</StatusBadge>}</div>
         {current && dryRun && <div className={`import-dry-run ${dryRun.canExecute ? "ready" : "blocked"}`}><SearchCheck size={20}/><div><b>{t("imports.dryRun")}</b><small>{t("imports.dryRunHelp", { create: dryRun.create, update: dryRun.update, merge: dryRun.merge, skip: dryRun.skip, invalid: dryRun.invalid, unresolved: dryRun.unresolved })}</small></div><StatusBadge tone={dryRun.canExecute ? "green" : "amber"}>{t(dryRun.canExecute ? "imports.dryRunReady" : "imports.dryRunBlocked")}</StatusBadge></div>}
         {current && pending && executionProgress && <InlineMessage type="info">{t("imports.executionProgress",{processed:executionProgress.processed,total:executionProgress.total})}</InlineMessage>}

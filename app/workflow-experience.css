@@ -1,14 +1,28 @@
 /* Shared compact controls. Controls wrap before their labels become unreadable. */
-.search-filter-bar{display:flex;flex-wrap:wrap;align-items:end;gap:12px;padding:16px;border:1px solid var(--border,#e3e8ef);border-radius:14px;background:var(--surface,#fff)}
-.search-filter-bar>*{flex:1 1 170px;min-width:0;max-width:320px}
-.search-filter-bar>.search-filter-query{flex:2 1 240px;max-width:none}
+.search-filter-bar{display:grid;grid-template-columns:minmax(200px,1.5fr) repeat(2,minmax(140px,1fr)) auto;align-items:end;gap:12px;padding:14px 16px;border:1px solid var(--border,#e3e8ef);border-radius:12px;background:var(--surface,#fff)}
+.search-filter-bar>*{min-width:0;max-width:none}
+.search-filter-bar>.search-filter-query{display:grid;gap:6px}
+.search-filter-bar>.ux-primary-filters{display:contents}
+.filter-control-label{font-size:13px;font-weight:600;line-height:1.5;color:var(--muted,#536577)}
+.search-filter-bar input,.search-filter-bar select,.search-filter-bar .search-field{min-height:38px;height:38px;font-size:14px}
 .search-filter-bar .search-field,.search-filter-bar input,.search-filter-bar select{width:100%;min-width:0}
 .search-filter-bar .field{margin:0}
-.search-filter-bar>.search-filter-actions{display:flex;flex:0 1 auto;gap:8px;align-items:center}
+.search-filter-bar>.search-filter-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.search-filter-actions button{min-height:38px;font-size:13px;white-space:nowrap}
+.enrollment-filters.two-column,.success-filters{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}
+.enrollment-filters .field,.success-filters .field{margin:0}
+.enrollment-filters .follow-up-fields,.success-filters .follow-up-fields{min-width:0}
+.enrollment-filters input,.enrollment-filters select,.success-filters input,.success-filters select{min-height:38px;height:38px;font-size:14px}
+.ux-record-utilities{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:flex-start;font-size:13px}
+.ux-record-utilities details{padding:6px 0;max-width:320px;min-width:0}
+.ux-record-utilities summary{cursor:pointer;min-height:28px}
+@media(min-width:1600px){.ux-queue-item{grid-template-columns:minmax(220px,1fr) minmax(340px,1.1fr) minmax(240px,.9fr) auto;align-items:center}.ux-queue-context{grid-column:2;grid-row:1 / span 2}.ux-queue-next{grid-column:3;grid-row:1 / span 2}.ux-queue-actions{grid-column:4;grid-row:1 / span 2;flex-direction:column;align-items:flex-end}.ux-queue-actions .action-disclosure{margin-left:0}.ux-queue-signal{grid-column:1;grid-row:2}.ux-lead-items{gap:8px}}
+@media(min-width:680px) and (max-width:1100px){.search-filter-bar{grid-template-columns:repeat(2,minmax(0,1fr))}.enrollment-filters.two-column,.success-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:679px){.search-filter-bar{grid-template-columns:minmax(0,1fr);padding:12px;gap:10px}.search-filter-bar>.ux-primary-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.search-filter-bar>.search-filter-actions{justify-content:flex-start}.enrollment-filters.two-column,.success-filters{grid-template-columns:minmax(0,1fr)}}
 .channel-account-filters{display:grid!important;grid-template-columns:repeat(4,minmax(160px,1fr))!important;gap:12px;padding:16px;align-items:end}
 .channel-account-filters>*{min-width:0;margin:0}
 .channel-account-filters input,.channel-account-filters select{min-width:0;width:100%}
-.success-filters,.lead-pool-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+.lead-pool-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
 .success-filters .field{margin:0}
 .detail-record-list article{gap:12px;flex-wrap:wrap}
 .detail-record-list article>div:first-child{min-width:0;flex:1 1 180px}
@@ -44,3 +58,6 @@
 @media(prefers-reduced-motion:reduce){.workflow-launch-card{transition:none}.workflow-launch-card:hover{transform:none}}
 
 .workflow-audience{display:flex;gap:8px;margin:0 0 18px;flex-wrap:wrap}.workflow-audience button{flex:1;min-width:160px;padding:12px 18px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--muted);font:inherit;font-weight:650;cursor:pointer}.workflow-audience button[aria-pressed=true]{background:var(--accent-soft,#e7f3ee);color:var(--text);border-color:var(--accent,#2e7860)}.workflow-audience button:focus-visible{outline:2px solid var(--accent,#2e7860);outline-offset:3px}
+
+/* Desktop flex basis must not become a minimum height in vertical record rows. */
+@media(max-width:679px){.detail-record-list article>div:first-child{flex:0 1 auto;width:100%}}

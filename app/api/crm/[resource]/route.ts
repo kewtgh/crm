@@ -6,7 +6,7 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
-const commercialFilters=z.object({organizationId:z.uuid().optional(),contactType:z.enum(["CONTACT","SCHOOL_STAFF","PARENT","STUDENT","PAYER"]).optional(),commercialTier:z.enum(["S","A","B","C","D","UNKNOWN"]).optional(),keyContact:z.enum(["KEY","MISSING"]).optional(),ownerId:z.uuid().optional(),potentialMin:z.coerce.number().int().min(10).max(100).optional()});
+const commercialFilters=z.object({city:z.string().trim().min(1).max(80).optional(),curriculum:z.string().trim().min(1).max(120).optional(),organizationType:z.enum(["SCHOOL","PARTNER","OTHER"]).optional(),organizationId:z.uuid().optional(),contactType:z.enum(["CONTACT","SCHOOL_STAFF","PARENT","STUDENT","PAYER"]).optional(),commercialTier:z.enum(["S","A","B","C","D","UNKNOWN"]).optional(),keyContact:z.enum(["KEY","MISSING"]).optional(),ownerId:z.uuid().optional(),potentialMin:z.coerce.number().int().min(10).max(100).optional()});
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
 const baseRecordSchema = z.object({
   operation: z.enum(["check", "create"]).default("create"),

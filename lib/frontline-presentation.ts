@@ -10,11 +10,12 @@ export function leadQueueActions(lead: PoolLead, scope: string, manage: boolean,
   const primary: "claim"|"convert"|"update"|null = manage && scope === "pool" && availablePoolLead(lead) ? "claim" :
     manage && lead.can_edit && lead.status === "QUALIFIED" ? "convert" :
     manage && lead.can_edit && ["NEW","QUALIFYING"].includes(lead.status) ? "update" : null;
-  const more: Array<"update"|"release"|"reassign"|"visibility"|"history"> = [];
+  const more: Array<"update"|"release"|"reassign"|"visibility"|"history"|"archive"> = [];
   if (manage && lead.can_edit && lead.status !== "CONVERTED" && primary !== "update") more.push("update");
   if (manage && lead.pool_visibility === "WORKSPACE_PUBLIC" && lead.owner_id && (lead.is_mine || lead.can_assign) && !["DISQUALIFIED","CONVERTED"].includes(lead.status)) more.push("release");
   if (manager && lead.can_assign) { more.push("reassign"); if (lead.subject_type === "SCHOOL") more.push("visibility"); }
   more.push("history");
+  if (manage && lead.can_edit) more.push("archive");
   return {primary, more};
 }
 export type DashboardMode = "daily" | "management";

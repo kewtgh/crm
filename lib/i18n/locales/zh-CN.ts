@@ -500,4 +500,6 @@ export const zhCN: Messages = {
   ...zhWorkflowExperience,
   ...zhWorkflowUsability,
   ...frontlineZh,
+  ...operationsRepairZh,
 };
+import {operationsRepairZh} from "./operations-repair";

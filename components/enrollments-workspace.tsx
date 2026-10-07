@@ -1,4 +1,6 @@
 "use client";
+import { FilterBar } from "./filter-bar";
+import { RecordDeleteAction } from "./record-delete-action";
 import {ReportScopeNotice} from "./report-scope-notice";
 import type {ReportFilter} from "@/lib/management-trend-contract";
 import { useCallback, useEffect, useState } from "react";
@@ -9,7 +11,7 @@ import type { EnrollmentRecord, EnrollmentPage } from "@/lib/enrollment-reposito
 import { useCapability } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
 import { useUserPreferences } from "./user-preferences-context";
-import { InlineMessage, Pagination, SearchField } from "./ui";
+import { InlineMessage, Pagination } from "./ui";
 import { EnrollmentEditor } from "./enrollment-editor";
 import { EnrollmentDetail, EnrollmentStatus } from "./enrollment-detail";
 import { EnrollmentRelation } from "./enrollment-relation";
@@ -43,17 +45,11 @@ export function EnrollmentsWorkspace({initial, initialDetail = null, initialStud
     <section className="page-heading-row"><div><p className="eyebrow">{t("education.eyebrow")}</p><h1>{t("enrollments.title")}</h1><p>{t("enrollments.description")}</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setEditor({});setNotice("");}}>{t("enrollments.create")}</button>}</section>
     {notice && <InlineMessage type="success">{notice}</InlineMessage>}
     <section className="surface">
-      <div className="table-toolbar"><SearchField value={query} onChange={setQuery} placeholder={t("enrollments.search")}/><button className="secondary-button" type="button" onClick={() => {setSearch(query);setPage(1);}}>{t("common.search")}</button></div>
-      <div className="form-grid two-column enrollment-filters">
-        <EnrollmentRelation type="STUDENT" label={t("enrollments.student")} value={studentId} initialLabel={data.items[0]?.student_id === studentId ? label(data.items[0].student_name_zh,data.items[0].student_name_en) : undefined} onChange={value => {setStudentId(value);setPage(1);}}/>
-        <EnrollmentRelation type="COHORT" label={t("enrollments.cohort")} value={cohortId} onChange={value => {setCohortId(value);setPage(1);}}/>
-        <label className="field"><span>{t("common.status")}</span><select value={status} onChange={event => {setStatus(event.target.value);setPage(1);}}><option value="">{t("common.all")}</option>{enrollmentStatuses.map(value => <option key={value} value={value}>{t(`enrollments.status.${value}`)}</option>)}</select></label>
-        <EnrollmentRelation type="USER" label={t("enrollments.owner")} value={ownerId} onChange={value => {setOwnerId(value);setPage(1);}}/>
-      </div>
+      <FilterBar search={query} onSearchChange={setQuery} onSearch={()=>{setSearch(query);setPage(1);}} placeholder={t("enrollments.search")} applied={{cohortId,ownerId}} defaults={{cohortId:"",ownerId:""}} advancedCount={Number(Boolean(cohortId))+Number(Boolean(ownerId))} activeCount={Number(Boolean(search))+Number(Boolean(studentId))+Number(Boolean(status))+Number(Boolean(cohortId))+Number(Boolean(ownerId))} onReset={()=>{setQuery("");setSearch("");setStatus("");setStudentId(initialStudentId);setCohortId("");setOwnerId("");setPage(1);}} onApply={next=>{setCohortId(next.cohortId);setOwnerId(next.ownerId);setPage(1);}} primaryFilters={<><EnrollmentRelation type="STUDENT" label={t("enrollments.student")} value={studentId} onChange={value=>{setStudentId(value);setPage(1);}}/><label className="field"><span>{t("common.status")}</span><select name="statusFilter" value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}><option value="">{t("common.all")}</option>{enrollmentStatuses.map(value=><option key={value} value={value}>{t(`enrollments.status.${value}`)}</option>)}</select></label></>} renderAdvanced={(draft,onChange)=><div className="form-grid two-column"><EnrollmentRelation type="COHORT" label={t("enrollments.cohort")} value={draft.cohortId} onChange={value=>onChange({...draft,cohortId:value})}/><EnrollmentRelation type="USER" label={t("enrollments.owner")} value={draft.ownerId} onChange={value=>onChange({...draft,ownerId:value})}/></div>}/>
       {error && <InlineMessage type="error">{error}<button type="button" className="secondary-button" onClick={() => void load().catch(() => {})}>{t("common.retry")}</button></InlineMessage>}
       {loading && <p role="status">{t("common.loading")}</p>}
       {!loading && !error && !data.items.length && <p className="detail-empty">{t("enrollments.empty")}</p>}
-      <div className="detail-record-list enrollment-records">{!error && data.items.map(row => <article key={row.id}><div><b>{label(row.student_name_zh,row.student_name_en)}</b><small>{label(row.product_name_zh,row.product_name_en)} · {label(row.cohort_name_zh,row.cohort_name_en)}</small><small>{t("enrollments.owner")}: {label(row.owner_name_zh,row.owner_name_en)} · {formatDate(row.updated_at,{includeTime:true})}</small></div><div className="detail-actions"><EnrollmentStatus status={row.status}/><button className="secondary-button" type="button" onClick={() => void openDetail(row.id)}>{t("common.details")}</button></div></article>)}</div>
+      <div className="detail-record-list enrollment-records">{!error && data.items.map(row => <article key={row.id}><div><b>{label(row.student_name_zh,row.student_name_en)}</b><small>{label(row.product_name_zh,row.product_name_en)} · {label(row.cohort_name_zh,row.cohort_name_en)}</small><small>{t("enrollments.owner")}: {label(row.owner_name_zh,row.owner_name_en)} · {formatDate(row.updated_at,{includeTime:true})}</small></div><div className="detail-actions"><EnrollmentStatus status={row.status}/>{canManage&&row.can_edit&&<RecordDeleteAction kind="ENROLLMENT" id={row.id} onDeleted={()=>load()}/>}<button className="secondary-button" type="button" onClick={() => void openDetail(row.id)}>{t("common.details")}</button></div></article>)}</div>
       <Pagination page={data.page} totalPages={Math.max(1,Math.ceil(data.total/data.pageSize))} total={data.total} pageSize={data.pageSize} onPage={setPage} onPageSize={value => {setPageSize(value);setPage(1);}}/>
     </section>
     {detail && !editor && <EnrollmentDetail initialTab={initialDetailTab} key={detail.id} record={detail} onClose={() => setDetail(null)} onEdit={() => setEditor({record:detail})} onRefresh={refreshDetail}/>}

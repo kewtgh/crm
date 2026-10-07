@@ -1,10 +1,12 @@
 "use client";
+import {RecordDeleteAction} from "./record-delete-action";
 import { RecordHeader } from "./record-header";
 import { useCapability } from "./app-user-context";
 import type { CustomerOperationsSnapshot } from "@/lib/customer-operations-repository";
 import { DateInput } from "@/components/structured-inputs";
 
 import Link from "next/link";
+import {useRouter} from "next/navigation";
 import { useState } from "react";
 import {
   Building2,
@@ -37,6 +39,7 @@ const types = ["CONTACT", "OPPORTUNITY", "TASK", "ACTIVITY", "APPOINTMENT", "CON
 const activityKinds = ["CALL", "EMAIL", "MEETING", "VISIT", "MEAL", "NOTE", "CAMPAIGN", "PAYMENT_FOLLOW_UP"];
 
 export function Customer360Page({ initial }: { initial: Organization360 }) {
+  const router=useRouter();
   const canManagePrivacy=useCapability("privacyRequests.manage");
   const { locale, t } = useI18n();
   const [snapshot,setSnapshot]=useState<CustomerOperationsSnapshot|null>(null);
@@ -100,8 +103,8 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
   const pages = Math.max(1, Math.ceil(data.timeline.total / data.timeline.pageSize));
   return <div className="page-stack customer-360">
     <RecordHeader nameZh={data.nameZh} nameEn={data.nameEn} status={<StatusBadge tone="blue">{t(`crm.status.${data.status}`)}</StatusBadge>} context={<span>{t("crm.owner")}: {snapshot?.ownerName||t("ux.record.notRecorded")} · {data.city}<br/>{t("ux.record.nextAction")}: {snapshot?.entries[0]?.next_step||t("ux.record.notRecorded")}</span>} secondaryActions={<Link className="secondary-button" href="/schools">{t("customer360.back")}</Link>} primaryAction={snapshot?.canManage&&<CrmRecordEditor resource="schools" id={initial.id}/>}/>
-    {canManagePrivacy&&<details className="ux-record-quality"><summary>{t("ux.record.privacy")}</summary><Link href="/privacy-requests">{t("nav.privacyRequests")}</Link></details>}
-    <details className="ux-record-quality"><summary>{t("modules.completeness")}: {data.completeness}%</summary><ProgressBar value={data.completeness} label={`${data.completeness}%`}/></details>
+    <div className="ux-record-utilities">{snapshot?.canManage&&<RecordDeleteAction kind="ORGANIZATION" id={initial.id} label={data.nameZh||data.nameEn} onDeleted={()=>{router.push("/schools");}}/>}{canManagePrivacy&&<details className="ux-record-quality"><summary>{t("ux.record.privacy")}</summary><Link href="/privacy-requests">{t("nav.privacyRequests")}</Link></details>}
+    <details className="ux-record-quality"><summary>{t("modules.completeness")}: {data.completeness}%</summary><ProgressBar value={data.completeness} label={`${data.completeness}%`}/></details></div>
     {snapshot?.canManage&&<div className="ux-context-actions"><button className="secondary-button" onClick={()=>setActivityOpen(true)}><Plus size={17}/>{t("customer360.recordActivity")}</button></div>}
     <CustomerOperationsPanel account subject="ORGANIZATION" id={initial.id} onSnapshot={setSnapshot} history={<section className="timeline-surface">
       <div className="table-toolbar">

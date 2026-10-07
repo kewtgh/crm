@@ -563,3 +563,61 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
  .products-page .product-kpi { padding:12px; min-width:0; gap:8px; }
  .products-page .product-kpi b { overflow-wrap:anywhere; }
 }
+/* Operational workspaces: shared compact scope and readable record rows. */
+.ux-scope-bar:has(.ux-primary-filters){display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:end;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.ux-scope-bar>.ux-primary-filters{display:contents}
+.ux-scope-bar>.scope-summary,.ux-scope-bar>small{grid-column:1 / -1}
+.ux-scope-bar .field{margin:0;min-width:0}
+.ux-filter-bar .ux-primary-filters>.field,.ux-filter-bar .ux-primary-filters>fieldset{max-width:none}
+.ux-filter-bar .ux-primary-filters .select-field{margin-bottom:0}
+.ux-filter-bar .ux-primary-filters .select-trigger{height:38px;min-height:38px;padding:6px 12px;font-size:14px}
+.ux-filter-bar .ux-primary-filters .select-label{line-height:1.5}
+.ux-filter-bar .ux-primary-filters>.follow-up-fields{position:relative}
+.ux-filter-bar .ux-primary-filters>.follow-up-fields:has(>.text-button) .select-label{padding-right:42px}
+.ux-filter-bar .ux-primary-filters>.follow-up-fields>.text-button{position:absolute;right:0;top:0;min-height:0;padding:0;font-size:12px}
+.ux-scope-bar input,.ux-scope-bar select{min-height:38px;font-size:14px}
+.scope-summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 16px;min-width:0}
+.scope-summary small{color:var(--muted);font-size:12px}
+.operational-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
+.operational-disclosure{min-width:0}
+.operational-disclosure>summary{cursor:pointer;font-size:14px;font-weight:600;padding:10px 0;min-height:40px;color:var(--text)}
+.operational-disclosure[open]>summary{margin-bottom:12px;border-bottom:1px solid var(--border)}
+.detail-record-list article>.detail-actions,.success-work-row>.detail-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0;border:0}
+.success-work-row{display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(120px,.6fr) minmax(220px,1fr) auto;gap:16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);font-size:14px}
+.success-work-row>div{min-width:0}.success-work-row p{margin:5px 0;color:var(--muted);font-size:13px}.success-work-row h3{font-size:15px;margin:0}
+
+.channel-analytics>.surface>.customer-profile{grid-template-columns:repeat(6,minmax(0,1fr))}
+.channel-account-grid .detail-section{min-width:0;padding:16px;border:1px solid var(--border);border-radius:10px}
+.channel-account-grid h3{font-size:16px;margin:0 0 8px}
+.channel-account-grid .customer-profile{grid-template-columns:repeat(2,minmax(0,1fr))}
+.commission-workspace .business-record-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.commission-workspace .business-record-grid p{font-size:13px;overflow-wrap:anywhere}
+.destructive-action{color:var(--danger,#b91c1c);white-space:nowrap}
+.imports-page .import-create>.surface-heading{margin-bottom:12px}
+.imports-page .import-template-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.imports-page .mapping-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.operational-disclosure>summary:focus-visible,.destructive-action:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+@media(max-width:1599px){.commission-workspace .business-record-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.channel-analytics>.surface>.customer-profile{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1023px){.success-work-row{grid-template-columns:minmax(0,1fr) auto}.operational-filter-grid,.imports-page .mapping-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:679px){.ux-scope-bar:has(.ux-primary-filters){grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.ux-scope-bar>.ux-filter-actions{grid-column:1 / -1}.success-work-row{grid-template-columns:minmax(0,1fr);gap:8px}.channel-account-grid,.commission-workspace .business-record-grid,.operational-filter-grid,.imports-page .mapping-grid{grid-template-columns:minmax(0,1fr)}.channel-analytics>.surface>.customer-profile{grid-template-columns:repeat(2,minmax(0,1fr))}.ux-record-utilities{gap:8px 16px}.ux-record-utilities details{max-width:100%}}
+
+/* Searchable corrections remain a short task beside the selector. */
+.compact-task-controls{display:grid;grid-template-columns:minmax(240px,480px) auto auto;align-items:end;gap:12px;justify-content:start}
+@media(max-width:679px){.compact-task-controls{grid-template-columns:minmax(0,1fr) auto}.compact-task-controls>a{grid-column:1/-1}}
+
+/* Section tones distinguish purpose; status badges retain their existing semantics. */
+:root{--surface-work:#f2f8fa;--surface-context:#f0f7f5;--surface-analysis:#f5f3fa;--surface-finance:#fbf7ef;--surface-governance:#f5f6fa;--edge-work:#6b9faa;--edge-context:#70a28e;--edge-analysis:#9a88ba;--edge-finance:#baa06a;--edge-governance:#8d99af}
+[data-surface-tone="work"]{--section-tint:var(--surface-work);--section-edge:var(--edge-work)}
+[data-surface-tone="context"]{--section-tint:var(--surface-context);--section-edge:var(--edge-context)}
+[data-surface-tone="analysis"]{--section-tint:var(--surface-analysis);--section-edge:var(--edge-analysis)}
+[data-surface-tone="finance"]{--section-tint:var(--surface-finance);--section-edge:var(--edge-finance)}
+[data-surface-tone="governance"]{--section-tint:var(--surface-governance);--section-edge:var(--edge-governance)}
+.surface[data-surface-tone]{background:var(--section-tint);box-shadow:inset 0 3px 0 var(--section-edge),0 2px 7px rgba(22,48,42,.035)}
+.ux-filter-bar .search-filter-bar,.ux-scope-bar:has(.ux-primary-filters){background:var(--surface-work)}
+.ux-metric-strip article[data-mode="SNAPSHOT"]{background:var(--surface-work);box-shadow:inset 0 3px 0 var(--edge-work)}
+.ux-metric-strip article[data-mode="PERIOD"]{background:var(--surface-analysis);box-shadow:inset 0 3px 0 var(--edge-analysis)}
+.ux-metric-strip article[data-currency]{background:var(--surface-finance);box-shadow:inset 0 3px 0 var(--edge-finance)}
+.success-work-row{background:var(--surface-context);border-radius:10px;padding:14px 16px;box-shadow:inset 3px 0 0 var(--edge-context)}
+.channel-account-grid .detail-section{background:#fff;border-color:#c8ded5}
+.commission-workspace .business-record-grid .detail-section{background:var(--surface-finance);border-radius:10px;padding:14px 16px;box-shadow:inset 3px 0 0 var(--edge-finance)}
+@media(forced-colors:active){.surface[data-surface-tone],.ux-metric-strip article,.success-work-row{box-shadow:none;border:1px solid CanvasText}}
