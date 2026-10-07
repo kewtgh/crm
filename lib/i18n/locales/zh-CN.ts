@@ -1,6 +1,7 @@
 import {uxClosureZh} from "./ux-closure";
 import { frontlineZh } from './frontline';
 import { recordWorkspaceZh } from './record-workspaces';
+import { workspaceRedesignZh } from './workspace-redesign';
 import { zhManagementUX } from './management-ux';
 import { zhUXFoundation } from './ux-foundation';
 import {zhWorkflowUsability} from "./workflow-usability";
@@ -48,6 +49,7 @@ import { zhAudit20260926 } from "./audit-2026-09-26";
 export const zhCN: Messages = {
   ...uxClosureZh,
   ...recordWorkspaceZh,
+  ...workspaceRedesignZh,
   ...zhUXFoundation,
   ...zhManagementUX,
   ...zhManagement,

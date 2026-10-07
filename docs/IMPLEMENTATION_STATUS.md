@@ -1,4 +1,16 @@
-# Implementation status — v3.29.0 release candidate
+# Implementation status — v3.30.0 release candidate
+
+## v3.30.0 — Core workspace presentation and interaction cleanup
+
+Organization Overview, Channels & Outreach, Contact Overview and Student Overview compose existing
+authorized facts into a main column and context rail. Single identity headers, concise related-record
+tables, content-sized empty states, shared semantic icons and mobile disclosure clarify daily work.
+Customer communications is primary; the family portal remains an internal communications feature.
+Product deletion stays in More, academic correction shows current Student placement, and Imports keep
+one mounted accessible tab control during content switching. Canonical APIs, mutation receipts,
+revision guards, permissions and bilingual Activity inputs remain unchanged. No migration or Revenue
+implementation is added. See [release notes](RELEASE_V3.30.0.md) and
+[verification](UI_WORKSPACE_REDESIGN.md).
 
 ## v3.29.0 — Operational deletion and compact workspaces
 

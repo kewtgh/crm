@@ -294,7 +294,7 @@ export function PipelinePage({
   const weighted = activeFunnel.reduce((sum, item) => sum + item.weighted, 0);
   const paymentAmount = funnelMap.get("PAYMENT")?.amount ?? 0;
 
-  return <div className="page-stack pipeline-page">
+  return <div data-inline-action={createOnly||undefined} className="page-stack pipeline-page">
     <ReportScopeNotice filter={initialReportFilter}/>
     {createOnly?canManage&&<button className="secondary-button" onClick={()=>setCreateOpen(true)}>{t("pipeline.new")}</button>:<>
     <section className="page-heading-row">

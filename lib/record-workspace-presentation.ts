@@ -2,9 +2,11 @@ import type { StudentDetail } from "./v200-repository";
 import { safeRelativeReturnTo } from "./return-to";
 
 export const studentWorkspaceTabs = [
-  { key: "profile", label: "ux.record.profile" },
-  { key: "family", label: "ux.record.family" },
-  { key: "journey", label: "ux.record.journey" },
+  { key: "profile", label: "workspace.studentOverview" },
+  { key: "family", label: "workspace.familyContacts" },
+  { key: "journey", label: "workspace.enrollmentsApplications" },
+  { key: "support", label: "workspace.supportStage" },
+  { key: "activity", label: "ux.record.activity" },
   { key: "academic", label: "ux.record.academic" },
 ];
 export const accountWorkspaceTabs = [

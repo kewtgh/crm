@@ -1,6 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.29.0**
+Current release candidate: **v3.30.0**
+
+## v3.30.0 — Core workspace presentation and interaction cleanup
+
+Organization and Contact records use a single identity, compact business sections and a context rail.
+Student Overview presents canonical participation, application and support records in compact tables
+and summaries, with family context and recent follow-ups. Shared semantic icons and action hierarchy
+improve record workspaces; customer communications is a primary destination with the family portal
+kept inside it. Products reuse the shared More menu; academic correction previews current placement;
+Imports use one keyboard-accessible workspace selector. No migration, new domain ownership or Revenue
+implementation is introduced. See [release notes](docs/RELEASE_V3.30.0.md) and
+[UI verification](docs/UI_WORKSPACE_REDESIGN.md).
 
 ## v3.29.0 — Operational deletion and compact workspaces
 

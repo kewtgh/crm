@@ -1,5 +1,6 @@
 "use client";
 import {SafeDiagnostics} from "./safe-diagnostics";
+import {DetailTabs} from "./detail-tabs";
 import {ImportSetsPage} from "./import-sets-page";
 import {v2FieldLabel} from "@/lib/import-v2-labels";
 import {SearchFilterBar} from "./search-filter-bar";
@@ -402,10 +403,9 @@ export function ImportsPage({
     setMergeOptions(result.value.items.filter(item=>item.type===expected).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`,detail:t(mergeResource==="CONTACTS"?"imports.contacts":"imports.organizations")})));
   };
 
-  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"导入资料":"Records"],["relationships",zh?"关联已有资料":"Link records"],["sets",t("closure.importSets")]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
-  if(workspaceTab!=="entities")return <div className="page-stack imports-page">{workspaceTabs}<ImportSetsPage key={workspaceTab} relationships={workspaceTab==="relationships"}/></div>;
+  const workspaceItems=[{key:"entities",label:"workspace.importRecords"},{key:"relationships",label:"workspace.linkRecords"},{key:"sets",label:"closure.importSets"}];
+
   return <div className="page-stack imports-page">
-    {workspaceTabs}
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t(duplicatesOnly ? "duplicates.eyebrow" : "imports.eyebrow")}</p>
@@ -429,11 +429,12 @@ export function ImportsPage({
       {error && <InlineMessage type="error">{error}</InlineMessage>}
     </section>}
 
-    {!duplicatesOnly&&workspaceTabs}
+    <DetailTabs hideNavigation={duplicatesOnly} items={workspaceItems} active={workspaceTab} onChange={setWorkspaceTab} disabled={pending||fileLoading} label={t("workspace.importWorkspace")}>
+    {workspaceTab!=="entities"?<ImportSetsPage key={workspaceTab} relationships={workspaceTab==="relationships"} embedded/>:<>
     {!duplicatesOnly && <section className="surface import-create" data-surface-tone="work">
       <div className="surface-heading"><div><p className="eyebrow">{t("imports.newEyebrow")}</p><h2>{v2?(zh?"上传 CSV / XLSX 并预检":"Upload CSV / XLSX and preflight"):t("imports.newBatch")}</h2></div><Upload size={21} /></div>
-      {v2&&<label className="field import-format"><span>{zh?"下载格式":"Download format"}</span><select value={format} onChange={e=>setFormat(e.target.value)}><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></label>}
-      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}&templateVersion=${v2?"2":"LEGACY_UNVERSIONED"}&format=${kind==="guide"?"csv":v2?format:"csv"}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div><InlineMessage type="info">{v2?(zh?"使用最新模板。新增资料至少填写一种名称，其他必填内容见字段说明；更新资料需要先选择已有记录。预检不会修改业务数据。":"Use this resource’s v2 template. CREATE requires one name; consult Guide for other requirements. UPDATE needs an authorized target reference. Preflight does not change business data."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
+      <div className="import-template-toolbar">{v2&&<label className="field import-format"><span>{zh?"下载格式":"Download format"}</span><select value={format} onChange={e=>setFormat(e.target.value)}><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></label>}
+      <div className="import-template-actions email-filter-actions">{(["blank","example","guide"] as const).map(kind=><a key={kind} className="secondary-button" href={`/api/imports/template?resource=${resource}&kind=${kind}&locale=${locale}&templateVersion=${v2?"2":"LEGACY_UNVERSIONED"}&format=${kind==="guide"?"csv":v2?format:"csv"}`}><Download size={16}/>{t(`ux.import.${kind}`)}</a>)}</div></div><InlineMessage type="info">{v2?(zh?"使用最新模板。新增资料至少填写一种名称，其他必填内容见字段说明；更新资料需要先选择已有记录。预检不会修改业务数据。":"Use this resource’s v2 template. CREATE requires one name; consult Guide for other requirements. UPDATE needs an authorized target reference. Preflight does not change business data."):t(resource==="COHORTS"||resource==="ENROLLMENTS"?"imports.operationalHelp":"ux.importHelp")}</InlineMessage>
       <div className="form-grid two-column">
         <label className="field"><span>{t("imports.resource")}</span><select disabled={fileLoading||pending} value={resource} onChange={(event) => {setResource(event.target.value as typeof resource);setTemplateVersion((v2Resources as readonly string[]).includes(event.target.value)?"2":"LEGACY_UNVERSIONED");setHeaders([]);setRawRows([]);setFileName("");setMappingProfileId("");setMapping({});}}><option value="CONTACTS">{t("imports.contacts")}</option><option value="ORGANIZATIONS">{t("imports.organizations")}</option><option value="HOUSEHOLDS">{t("education.households")}</option><option value="STUDENTS">{t("education.students")}</option><option value="COHORTS">{t("cohorts.title")}</option><option value="ENROLLMENTS">{t("enrollments.title")}</option></select></label>
         <div className="field file-field"><span>{v2?"CSV / XLSX":t("imports.file")}</span><input className="sr-only" id="import-source-file" type="file" disabled={pending} accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => {const file=event.target.files?.[0];event.target.value="";if(file)void chooseFile(file);}}/><div className="file-picker-row"><label className="secondary-button" htmlFor="import-source-file"><Upload size={16}/>{t("imports.chooseFile")}</label><span className={fileName?"selected-file":"file-placeholder"}>{fileName||t("imports.noFileSelected")}</span></div></div>
@@ -499,5 +500,7 @@ export function ImportsPage({
     {repairRow&&<AccessibleDrawer pending={pending} title={t("imports.repairRowTitle",{row:repairRow.rowNumber})} description={t("imports.repairRowHelp")} onClose={()=>setRepairRow(null)}><form onSubmit={repair}><div className="form-grid two-column">{repairFields.map(field=><label className="field" key={field}><span>{t(`imports.field.${field}`)}</span>{repairRow.templateVersion==="2"?<input name={field} defaultValue={repairRow.normalized[field]??""}/>:<ImportRepairField field={field} value={repairRow.normalized[field]??""}/>}</label>)}<BilingualNameHint/></div>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRepairRow(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}><Save size={16}/>{pending?t("common.saving"):t("common.save")}</button></div></form></AccessibleDrawer>}
     {rollbackOpen&&current&&<AccessibleDrawer pending={pending} title={t("common.confirmAction")} description={t("common.actionCannotUndo")} onClose={()=>setRollbackOpen(false)}><InlineMessage type="warning">{t("imports.rollbackConfirm",{count:current.applied})}</InlineMessage><div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} onClick={()=>setRollbackOpen(false)}>{t("common.cancel")}</button><button className="danger-button" type="button" disabled={pending} onClick={()=>void rollback()}>{pending?t("common.processing"):t("imports.rollback")}</button></div></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")} />}
+    </>}
+  </DetailTabs>
   </div>;
 }

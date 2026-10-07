@@ -1,6 +1,8 @@
 "use client";
 import {RecordDeleteAction} from "./record-delete-action";
+import { MoreActions } from "./more-actions";
 import { RecordHeader } from "./record-header";
+import { UiIcon } from "./ui-icon";
 import { useCapability } from "./app-user-context";
 import type { CustomerOperationsSnapshot } from "@/lib/customer-operations-repository";
 import { DateInput } from "@/components/structured-inputs";
@@ -102,11 +104,13 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
 
   const pages = Math.max(1, Math.ceil(data.timeline.total / data.timeline.pageSize));
   return <div className="page-stack customer-360">
-    <RecordHeader nameZh={data.nameZh} nameEn={data.nameEn} status={<StatusBadge tone="blue">{t(`crm.status.${data.status}`)}</StatusBadge>} context={<span>{t("crm.owner")}: {snapshot?.ownerName||t("ux.record.notRecorded")} · {data.city}<br/>{t("ux.record.nextAction")}: {snapshot?.entries[0]?.next_step||t("ux.record.notRecorded")}</span>} secondaryActions={<Link className="secondary-button" href="/schools">{t("customer360.back")}</Link>} primaryAction={snapshot?.canManage&&<CrmRecordEditor resource="schools" id={initial.id}/>}/>
-    <div className="ux-record-utilities">{snapshot?.canManage&&<RecordDeleteAction kind="ORGANIZATION" id={initial.id} label={data.nameZh||data.nameEn} onDeleted={()=>{router.push("/schools");}}/>}{canManagePrivacy&&<details className="ux-record-quality"><summary>{t("ux.record.privacy")}</summary><Link href="/privacy-requests">{t("nav.privacyRequests")}</Link></details>}
-    <details className="ux-record-quality"><summary>{t("modules.completeness")}: {data.completeness}%</summary><ProgressBar value={data.completeness} label={`${data.completeness}%`}/></details></div>
-    {snapshot?.canManage&&<div className="ux-context-actions"><button className="secondary-button" onClick={()=>setActivityOpen(true)}><Plus size={17}/>{t("customer360.recordActivity")}</button></div>}
-    <CustomerOperationsPanel account subject="ORGANIZATION" id={initial.id} onSnapshot={setSnapshot} history={<section className="timeline-surface">
+    <RecordHeader nameZh={data.nameZh} nameEn={data.nameEn} avatar={<Building2 size={30}/>} breadcrumb={<><Link href="/schools">{t("nav.schools")}</Link><ChevronRight size={13}/><span>{t("workspace.organizationProfile")}</span></>}
+      status={<StatusBadge tone="blue">{t(`crm.status.${data.status}`)}</StatusBadge>}
+      context={<><span className="ux-icon-label"><UiIcon name="person" size={16}/>{t("crm.owner")}: {snapshot?.ownerName||t("ux.record.notRecorded")}</span><span className="ux-icon-label"><UiIcon name="location" size={16}/>{data.city}</span><span className="ux-icon-label"><UiIcon name="program" size={16}/>{data.curriculum}</span></>}
+      primaryAction={snapshot?.canManage&&<button className="primary-button" onClick={()=>setActivityOpen(true)}><Plus size={17}/>{t("customer360.recordActivity")}</button>}
+      secondaryActions={snapshot?.canManage&&<CrmRecordEditor resource="schools" id={initial.id}/>}
+      moreActions={<MoreActions label={t("ui.moreActionsFor",{name:data.nameZh||data.nameEn})}>{snapshot?.canManage&&<div className="ux-mobile-actions"><CrmRecordEditor resource="schools" id={initial.id} menuItem/></div>}{snapshot?.canManage&&<RecordDeleteAction menuItem kind="ORGANIZATION" id={initial.id} label={data.nameZh||data.nameEn} onDeleted={()=>{router.push("/schools");}}/>}{canManagePrivacy&&<Link role="menuitem" href="/privacy-requests">{t("nav.privacyRequests")}</Link>}<span className="ux-menu-context">{t("modules.completeness")}: {data.completeness}%<ProgressBar value={data.completeness} label={`${data.completeness}%`}/></span></MoreActions>}/>
+    <CustomerOperationsPanel account subject="ORGANIZATION" id={initial.id} onSnapshot={setSnapshot} onRecordActivity={()=>setActivityOpen(true)} history={<section className="timeline-surface">
       <div className="table-toolbar">
         <label className="compact-filter"><span>{t("customer360.filter")}</span><select value={type} onChange={(event) => { const next = event.target.value; setType(next); void load(1, next); }}><option value="all">{t("common.all")}</option>{types.map((item) => <option key={item} value={item}>{t(`timeline.type.${item.toLowerCase()}`)}</option>)}</select></label>
         {loading && <span role="status"><RefreshCw className="spin" size={15}/>{t("common.loading")}</span>}

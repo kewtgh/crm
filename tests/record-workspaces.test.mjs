@@ -6,7 +6,7 @@ import {studentRecord} from './fixtures/record-workspaces.ts';
 import {recordWorkspaceZh,recordWorkspaceEn} from '../lib/i18n/locales/record-workspaces.ts';
 const source=p=>readFile(new URL('../'+p,import.meta.url),'utf8');
 test('Student and Account have bounded same-record navigation, independent from global routes',()=>{
- assert.deepEqual(studentWorkspaceTabs.map(t=>t.key),['profile','family','journey','academic']);
+ assert.deepEqual(studentWorkspaceTabs.map(t=>t.key),['profile','family','journey','support','activity','academic']);
  assert.deepEqual(accountWorkspaceTabs.map(t=>t.key),['overview','people','opportunities','business','commercial','activity']);
  assert.equal(new Set(accountWorkspaceTabs.map(t=>t.key)).size,6);
 });
@@ -23,14 +23,14 @@ test('record focus preserves directory query; return context rejects external an
 });
 test('Student focus is a workspace; Family panel is a summary, not a nested record navigation',async()=>{
  const ui=await source('components/v200-workspaces.tsx'),student=ui.slice(ui.indexOf('export function StudentsWorkspace'),ui.indexOf('export function HouseholdsWorkspace'));
- assert.match(student,/data-testid="student-workspace"/);assert.match(student,/items=\{studentWorkspaceTabs\}/);assert.doesNotMatch(student,/<CustomerOperationsPanel/);assert.doesNotMatch(student,/detail && <AccessibleDrawer/);
+ assert.match(student,/data-testid="student-workspace"/);assert.match(student,/items=\{studentWorkspaceTabs\}/);assert.match(student,/detailTab==="activity"&&<CustomerOperationsPanel subject="CONTACT" id=\{detail.personId\} contentTab="followUp"/);assert.doesNotMatch(student,/<CustomerOperationsPanel subject="HOUSEHOLD"/);assert.doesNotMatch(student,/detail && <AccessibleDrawer/);
  const summary=await source('components/student-record-context.tsx');assert.match(summary,/member\.role\.toLowerCase/);assert.doesNotMatch(summary,/PARENT.*FATHER|role.*legalAuthority/);assert.match(summary,/tab=families&focus/);
 });
 test('Journey composes canonical filtered reads and direct owning links without lifecycle mutations',async()=>{
  const ui=await source('components/student-record-context.tsx');for(const path of ['/api/applications','/api/student-success','/applications?focus=','/student-success?focus='])assert.ok(ui.includes(path));assert.match(ui,/StudentEnrollmentsSection/);assert.match(ui,/householdParticipationHelp/);assert.doesNotMatch(ui,/method:\s*["'](?:POST|PATCH|DELETE)/);
 });
 test('Account owns a single RecordHeader and retains canonical contextual editors and bilingual activity',async()=>{
- const account=await source('components/customer-360-page.tsx'),panel=await source('components/customer-operations-panel.tsx');assert.equal((account.match(/<RecordHeader /g)||[]).length,1);assert.doesNotMatch(account,/<h1>/);assert.match(panel,/!account&&!contentTab&&<header/);
+ const account=await source('components/customer-360-page.tsx'),panel=await source('components/customer-operations-panel.tsx');assert.equal((account.match(/<RecordHeader /g)||[]).length,1);assert.doesNotMatch(account,/<h1>/);assert.match(panel,/!account&&!contentTab&&!hideIdentity&&<header/);
  for(const name of ['OrganizationContractEditor','CrmRecordEditor','ProductCatalogAction','PipelinePage','EducationBusinessWorkspace'])assert.ok(panel.includes(name));
  for(const key of ['summaryZh','summaryEn','nextStepZh','nextStepEn'])assert.match(account,new RegExp('name="'+key+'"[^>]*required'));
  assert.match(panel,/accountWorkspaceTabs/);assert.match(panel,/canManage&&canManageContracts/);assert.match(panel,/onSaved/);

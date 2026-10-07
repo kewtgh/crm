@@ -25,11 +25,13 @@ export function CrmRecordEditor({
   id,
   initial,
   onSaved,
+  menuItem=false,
 }:{
   resource:PersistentResource;
   id:string;
   initial?:CrmRecordDetail;
   onSaved?:(item:CrmRecordDetail)=>void;
+  menuItem?:boolean;
 }){
   const {t,locale}=useI18n();
   const canAssignOwner=["SUPER_ADMIN","ADMIN","SALES_DIRECTOR"].includes(useAppUser().role);
@@ -149,7 +151,7 @@ export function CrmRecordEditor({
   };
 
   return <>
-    <button className="secondary-button" type="button" onClick={()=>void begin()}><Pencil size={16}/>{t("crm.edit")}</button>
+    <button role={menuItem?"menuitem":undefined} className="secondary-button" type="button" onClick={()=>void begin()}><Pencil size={16}/>{t("crm.edit")}</button>
     {open&&<AccessibleDrawer guardChanges pending={pending} title={detail?((locale==="en"?detail.nameEn:detail.nameZh)||detail.nameZh||detail.nameEn):t("crm.edit")} eyebrow={t("crm.editEyebrow")} description={t("crm.editHelp")} onClose={()=>setOpen(false)}>
       {loading&&!detail&&<p role="status">{t("common.loading")}</p>}
       {detail&&<form onSubmit={save}>

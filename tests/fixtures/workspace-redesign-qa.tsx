@@ -1,0 +1,29 @@
+import {useEffect,useState} from "react";
+import {createRoot} from "react-dom/client";
+import {AppShell} from "../../components/app-shell";
+import {I18nProvider,useI18n} from "../../components/i18n-provider";
+import {Customer360Page} from "../../components/customer-360-page";
+import {ContactWorkspace} from "../../components/contact-workspace";
+import {StudentsWorkspace,ProgressionWorkspace} from "../../components/v200-workspaces";
+import {ProductsPage} from "../../components/products-page";
+import {ImportsPage} from "../../components/imports-page";
+import {LeadPoolWorkspace} from "../../components/lead-pool-workspace";
+import {studentRecord,accountRecord,recordId} from "./record-workspaces";
+import {frontlineLeads} from "./frontline";
+import {zhCN} from "../../lib/i18n/locales/zh-CN";
+import type {AppRole} from "../../lib/roles";
+import {usePathname,qaNavigate} from "./ux-foundation-navigation";
+import {contactFixture,productFixture,importFixture} from "./workspace-redesign";
+declare global {interface Window {workspaceNavigate:(href:string)=>void;workspaceScenario:(name:string)=>void;workspaceRole:(role:AppRole)=>void;}}
+function Fixture(){
+  const pathname=usePathname(),[revision,setRevision]=useState(0),[scenario,setScenario]=useState("normal"),[role,setRole]=useState<AppRole>("ADMIN"),{setLocale}=useI18n();
+  useEffect(()=>{window.workspaceNavigate=href=>{qaNavigate(href);setRevision(v=>v+1);};window.workspaceScenario=name=>{setScenario(name);setRevision(v=>v+1);};window.workspaceRole=setRole;},[]);
+  const user={id:recordId(99),username:"advisor-a",email:"advisor@example.test",displayName:"Advisor A",displayNameZh:"顾问甲",role,initials:"AA",mustChangePassword:false,mfaEnabled:true,aal:"aal2" as const,emailVerified:true,accountStatus:"ACTIVE" as const};
+  const student={...studentRecord,...(scenario==="no-family"?{householdId:"",guardians:[]}:{}),...(scenario==="long"?{nameZh:"学生甲：示例跨学科学习与国际交流发展档案长双语身份测试",nameEn:"Student A — Example International Interdisciplinary Learning and Development Long Identity"}:{})};
+  const organization={...accountRecord,...(scenario==="long"?{nameZh:"示例国际跨学科学习与学生发展教育机构长双语身份测试",nameEn:"Example International Academy for Interdisciplinary Learning and Student Development Long Identity"}:{})};
+  return <AppShell user={user} preferences={{timezone:"Asia/Taipei",dateFormat:"yyyy-MM-dd"}} preferredLocale="zh-CN" relationshipHealth={{hasData:true,score:78,weeklyDelta:3,sampleSize:12,basis:"RELATIONSHIP_MILESTONES"}}><div key={`${pathname}:${revision}:${role}`}>
+    {pathname.startsWith("/schools/")?<Customer360Page initial={organization}/>:pathname.startsWith("/people/")?<ContactWorkspace initial={{...contactFixture,...(scenario==="long"?{nameZh:"示例机构联系人甲：跨学科项目与学生发展国际合作协调负责人",nameEn:"Advisor A — Example International Interdisciplinary Program and Student Development Coordinator"}:{})}}/>:pathname==="/students"?<StudentsWorkspace initial={{items:[student],total:1,page:1,pageSize:10}} initialDetail={student}/>:pathname==="/products"?<ProductsPage initialProducts={[productFixture]} initialBundles={[]} initialExchangeRates={[]}/>:pathname==="/leads"?<LeadPoolWorkspace initial={{items:frontlineLeads,total:frontlineLeads.length,page:1,pageSize:20}}/>:pathname==="/progression"?<ProgressionWorkspace initial={{items:[],total:0,page:1,pageSize:10}}/>:<ImportsPage initialItems={[importFixture]} initialTotal={1}/>}
+    <button className="text-button qa-locale" onClick={()=>void setLocale("en")}>QA English</button>
+  </div></AppShell>;
+}
+createRoot(document.getElementById("root")!).render(<I18nProvider initialLocale="zh-CN" initialMessages={zhCN}><Fixture/></I18nProvider>);

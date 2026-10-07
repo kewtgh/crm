@@ -23,15 +23,16 @@ test("contact projections preserve correct subject boundary and show assigned ow
 });
 test("product deletion stays behind a disclosure and retains guarded confirmation", async () => {
   const page = await source("components/products-page.tsx"), detail = await source("components/product-detail-panel.tsx");
-  assert.match(page, /canDeleteProduct&&<ActionDisclosure/);
+  assert.match(page, /canDeleteProduct&&<MoreActions/);
   assert.match(page, /SUPER_ADMIN.*ADMIN/);
   assert.match(page, /deleteProduct&&<ConfirmDialog/);
-  assert.match(detail, /canDelete&&<ActionDisclosure/);
+  assert.match(detail, /canDelete&&<MoreActions/);
   assert.match(detail, /product.prices.map/);
   assert.match(detail, /maximumFractionDigits:2/);
   assert.doesNotMatch(page, /product-action-button delete/);
   const disclosure = await source("components/action-disclosure.tsx");
   assert.match(disclosure, /pointerdown/); assert.match(disclosure, /event.key === "Escape"/);
+  assert.match(await source("components/more-actions.tsx"), /<ActionDisclosure label=\{label\} menu/);
 });
 test("suggestion review and automation have separate governance destinations and canonical guards", async () => {
   const {navigationDestinations,visibleDestinations}=await import('../lib/navigation-destinations.ts');

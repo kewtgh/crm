@@ -2,6 +2,7 @@ import {uxClosureEn} from "./ux-closure";
 import {operationsRepairEn} from "./operations-repair";
 import { frontlineEn } from './frontline';
 import { recordWorkspaceEn } from './record-workspaces';
+import { workspaceRedesignEn } from './workspace-redesign';
 import { enManagementUX } from './management-ux';
 import { enUXFoundation } from './ux-foundation';
 import {enWorkflowUsability} from "./workflow-usability";
@@ -49,6 +50,7 @@ import { enAudit20260926 } from "./audit-2026-09-26";
 export const en: Messages = {
   ...uxClosureEn,
   ...recordWorkspaceEn,
+  ...workspaceRedesignEn,
   ...enUXFoundation,
   ...enManagementUX,
   ...enManagement,

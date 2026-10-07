@@ -235,7 +235,7 @@ export function ModulePage({
     finally{setExportPending(false);}
   };
 
-  return <div className={`page-stack module-page ${resource==="schools"?"ux-organization-page":""}`}>
+  return <div data-inline-action={createOnly||undefined} className={`page-stack module-page ${resource==="schools"?"ux-organization-page":""}`}>
     {createOnly?<button type="button" className="secondary-button" onClick={()=>setDrawer(true)}><Plus size={16}/>{t(`${prefix}.add`)}</button>:<>
     {resource==="schools"?<RecordHeader nameZh={t(`${prefix}.title`)} context={<p>{t(`${prefix}.description`)}</p>}
       secondaryActions={<button className="secondary-button" type="button" onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>}
