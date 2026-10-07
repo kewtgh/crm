@@ -361,6 +361,7 @@ async function main(){
   try{
     if(["interaction-mutations","interaction-directories"].includes(env.QA_SCOPE)){await require("./qa-interaction-reliability.cjs")({browser,base,output,report,observe});}
     else if(["workspace-redesign-records","workspace-redesign-tools"].includes(env.QA_SCOPE)){await require("./qa-workspace-redesign.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="revenue-workspace"){await require(env.QA_REVENUE_CURRENT==="1"?"./qa-revenue-current.cjs":"./qa-revenue-workspace.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="ux-closure"){await require("./qa-ux-closure.cjs")({browser,base,output,report,observe});}
     else     if(["frontline-leads","frontline-dashboard"].includes(env.QA_SCOPE)){await require("./qa-frontline-experience.cjs")({browser,base,output,report,observe});}
     else if(["record-students","record-accounts"].includes(env.QA_SCOPE)){await require("./qa-record-workspaces.cjs")({browser,base,output,report,observe});}

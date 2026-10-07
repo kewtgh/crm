@@ -32,3 +32,12 @@ db/migrations/202610060111_strict_import_protocol.sql -text
 
 # Preserve Phase 3 relationship/import-set migration bytes.
 db/migrations/202610060112_import_sets_relationship_reliability.sql -text
+
+# Preserve verified Revenue Foundation migration bytes across platforms.
+db/migrations/202610070115_revenue_foundation.sql -text whitespace=cr-at-eol
+db/migrations/202610070116_revenue_fulfillment.sql -text whitespace=cr-at-eol
+db/migrations/202610080117_revenue_candidates.sql -text whitespace=cr-at-eol
+# Retain the verified final blank line in migration 118.
+db/migrations/202610080118_revenue_facts.sql -text whitespace=-blank-at-eof,cr-at-eol
+db/migrations/202610080119_cash_applications.sql -text whitespace=cr-at-eol
+db/migrations/202610080120_revenue_workspace_reads.sql -text whitespace=cr-at-eol

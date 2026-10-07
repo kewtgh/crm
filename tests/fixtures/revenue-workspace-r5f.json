@@ -1,0 +1,501 @@
+{
+  "state": "READY",
+  "synthetic": true,
+  "entities": [
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "name": "Example Reporting Entity",
+      "status": "ACTIVE"
+    }
+  ],
+  "entity": "00000000-0000-4000-8000-000000000010",
+  "actor": "00000000-0000-4000-8000-000000000092",
+  "aal2": true,
+  "authorities": [
+    "RECOGNITION_REVIEWER",
+    "POSTING_AUTHORITY",
+    "POLICY_OWNER",
+    "POLICY_APPROVER",
+    "EVIDENCE_VERIFIER",
+    "CASH_APPLICATION_MANAGER"
+  ],
+  "profile": {
+    "legal_name": "Example Reporting Entity",
+    "status": "ACTIVE",
+    "accounting_framework": "Example approved framework",
+    "business_timezone": "Asia/Taipei",
+    "allowed_currencies": [
+      "CNY",
+      "USD"
+    ],
+    "maker_checker_required": true
+  },
+  "recognized": [
+    {
+      "currency": "CNY",
+      "amount": "400.00"
+    },
+    {
+      "currency": "USD",
+      "amount": "200.00"
+    }
+  ],
+  "candidate_totals": [
+    {
+      "currency": "CNY",
+      "status": "APPROVED",
+      "amount": "100.00",
+      "count": 1
+    }
+  ],
+  "queue": [
+    {
+      "id": "00000000-0000-4000-8000-000000000020",
+      "revision": 3,
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "description_snapshot": "Example advisory service",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "binding_version": 1,
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "policy_version": 1,
+      "recognition_unit_key": "UNIT_A",
+      "amount": "100.00",
+      "currency": "CNY",
+      "business_date": "2026-01-31",
+      "period_key": "EX-2026-01",
+      "period_status": "OPEN",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "status": "APPROVED",
+      "health": "CURRENT",
+      "candidate_kind": "ORIGINAL",
+      "created_by": "00000000-0000-4000-8000-000000000090",
+      "reviewed_by": "00000000-0000-4000-8000-000000000091",
+      "approval_reference": "00000000-0000-4000-8000-000000000021",
+      "basis_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "recognition_strategy": "POINT_IN_TIME_ON_APPROVED_EVIDENCE",
+      "actions": [
+        "POST"
+      ],
+      "fact_id": null,
+      "amount_basis_snapshot": {
+        "approved": {
+          "amount": "100.00",
+          "currency": "CNY",
+          "strategy": "ACCEPTED_SERVICE_CONSIDERATION"
+        },
+        "verified_units": "1"
+      },
+      "evidence_references": [
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "source_domain": "CRM_ACTIVITY",
+          "source_id": "00000000-0000-4000-8000-000000000008",
+          "business_date": "2026-01-31",
+          "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000022",
+      "revision": 3,
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "description_snapshot": "Example advisory service",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "binding_version": 1,
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "policy_version": 1,
+      "recognition_unit_key": "UNIT_B",
+      "amount": "100.00",
+      "currency": "CNY",
+      "business_date": "2026-01-31",
+      "period_key": "EX-2026-01",
+      "period_status": "OPEN",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "status": "READY_FOR_REVIEW",
+      "health": "CURRENT",
+      "candidate_kind": "ORIGINAL",
+      "created_by": "00000000-0000-4000-8000-000000000090",
+      "reviewed_by": null,
+      "approval_reference": "00000000-0000-4000-8000-000000000021",
+      "basis_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "recognition_strategy": "POINT_IN_TIME_ON_APPROVED_EVIDENCE",
+      "actions": [
+        "APPROVE",
+        "REJECT"
+      ],
+      "fact_id": null,
+      "amount_basis_snapshot": {
+        "approved": {
+          "amount": "100.00",
+          "currency": "CNY",
+          "strategy": "ACCEPTED_SERVICE_CONSIDERATION"
+        },
+        "verified_units": "1"
+      },
+      "evidence_references": [
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "source_domain": "CRM_ACTIVITY",
+          "source_id": "00000000-0000-4000-8000-000000000008",
+          "business_date": "2026-01-31",
+          "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000023",
+      "revision": 3,
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "description_snapshot": "Example advisory service",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "binding_version": 1,
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "policy_version": 1,
+      "recognition_unit_key": "UNIT_C",
+      "amount": "100.00",
+      "currency": "CNY",
+      "business_date": "2026-01-31",
+      "period_key": "EX-2026-01",
+      "period_status": "OPEN",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "status": "APPROVED",
+      "health": "STALE",
+      "candidate_kind": "ORIGINAL",
+      "created_by": "00000000-0000-4000-8000-000000000090",
+      "reviewed_by": "00000000-0000-4000-8000-000000000091",
+      "approval_reference": "00000000-0000-4000-8000-000000000021",
+      "basis_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "recognition_strategy": "POINT_IN_TIME_ON_APPROVED_EVIDENCE",
+      "actions": [],
+      "fact_id": null,
+      "amount_basis_snapshot": {
+        "approved": {
+          "amount": "100.00",
+          "currency": "CNY",
+          "strategy": "ACCEPTED_SERVICE_CONSIDERATION"
+        },
+        "verified_units": "1"
+      },
+      "evidence_references": [
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "source_domain": "CRM_ACTIVITY",
+          "source_id": "00000000-0000-4000-8000-000000000008",
+          "business_date": "2026-01-31",
+          "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "reason": "revenue_period_closed"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000024",
+      "revision": 3,
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "description_snapshot": "Example advisory service",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "binding_version": 1,
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "policy_version": 1,
+      "recognition_unit_key": "EARLIER_UNIT",
+      "amount": "50.00",
+      "currency": "CNY",
+      "business_date": "2026-01-31",
+      "period_key": "EX-2026-01",
+      "period_status": "OPEN",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "status": "APPROVED",
+      "health": "CURRENT",
+      "candidate_kind": "ORIGINAL",
+      "created_by": "00000000-0000-4000-8000-000000000090",
+      "reviewed_by": "00000000-0000-4000-8000-000000000091",
+      "approval_reference": "00000000-0000-4000-8000-000000000021",
+      "basis_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "recognition_strategy": "POINT_IN_TIME_ON_APPROVED_EVIDENCE",
+      "actions": [],
+      "fact_id": null,
+      "amount_basis_snapshot": {
+        "approved": {
+          "amount": "100.00",
+          "currency": "CNY",
+          "strategy": "ACCEPTED_SERVICE_CONSIDERATION"
+        },
+        "verified_units": "1"
+      },
+      "evidence_references": [
+        {
+          "id": "00000000-0000-4000-8000-000000000007",
+          "source_domain": "CRM_ACTIVITY",
+          "source_id": "00000000-0000-4000-8000-000000000008",
+          "business_date": "2026-01-31",
+          "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "00000000-0000-4000-8000-000000000030",
+      "candidate_id": "00000000-0000-4000-8000-000000000130",
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "recognition_unit_key": "EARLIER_UNIT",
+      "fact_kind": "ORIGINAL",
+      "amount": "100.00",
+      "currency": "CNY",
+      "original_fact_id": null,
+      "business_date": "2026-01-31",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "posted_by": "00000000-0000-4000-8000-000000000092",
+      "posted_at": "2026-02-01T10:00:00Z",
+      "source_basis_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "posting_reference": "EX-POST",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "current_amount": "70.00"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000031",
+      "candidate_id": "00000000-0000-4000-8000-000000000131",
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "recognition_unit_key": "EARLIER_UNIT",
+      "fact_kind": "ADJUSTMENT",
+      "amount": "-30.00",
+      "currency": "CNY",
+      "original_fact_id": "00000000-0000-4000-8000-000000000030",
+      "business_date": "2026-01-31",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "posted_by": "00000000-0000-4000-8000-000000000092",
+      "posted_at": "2026-02-01T10:00:00Z",
+      "source_basis_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "posting_reference": "EX-POST",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "current_amount": "70.00"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000032",
+      "candidate_id": "00000000-0000-4000-8000-000000000132",
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "stable_service_key": "SERVICE_A",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "policy_version_id": "00000000-0000-4000-8000-000000000005",
+      "recognition_unit_key": "EARLIER_UNIT",
+      "fact_kind": "ORIGINAL",
+      "amount": "330.00",
+      "currency": "CNY",
+      "original_fact_id": null,
+      "business_date": "2026-01-31",
+      "accounting_period_id": "00000000-0000-4000-8000-000000000006",
+      "posted_by": "00000000-0000-4000-8000-000000000092",
+      "posted_at": "2026-02-01T10:00:00Z",
+      "source_basis_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "posting_reference": "EX-POST",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "current_amount": "330.00"
+    }
+  ],
+  "contracts": [
+    {
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "currency": "CNY",
+      "contracted": "1000.00",
+      "receivable": "1000.00",
+      "collected": "700.00",
+      "applied_cash": "60.00",
+      "outstanding": "300.00",
+      "refunded": "0.00"
+    }
+  ],
+  "commissions": [
+    {
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "currency": "CNY",
+      "amount": "100.00"
+    }
+  ],
+  "services": [
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_number": "EXAMPLE-CONTRACT-ALPHA",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "description_snapshot": "Example advisory service",
+      "stable_service_key": "SERVICE_A",
+      "accepted_amount": "1000.00",
+      "accepted_quantity": "1",
+      "currency": "CNY",
+      "accepted_price_source": "CONTRACT_VERSION"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "revision": 2,
+      "version": 1,
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "contract_id": "00000000-0000-4000-8000-000000000001",
+      "contract_version_id": "00000000-0000-4000-8000-000000000002",
+      "description_snapshot": "Example advisory service",
+      "policy_key": "EX_DIRECT",
+      "policy_version": 1,
+      "principal_agent_role": "PRINCIPAL",
+      "presentation": "GROSS",
+      "amount_basis_snapshot": {
+        "amount": "100.00",
+        "currency": "CNY",
+        "strategy": "ACCEPTED_SERVICE_CONSIDERATION"
+      },
+      "status": "APPROVED",
+      "can_evaluate": true,
+      "recognition_unit_schedule": [
+        {
+          "key": "UNIT_A",
+          "units": "1"
+        }
+      ],
+      "source_options": [
+        {
+          "id": "00000000-0000-4000-8000-000000000008",
+          "unit": "UNIT_A",
+          "domain": "CRM_ACTIVITY",
+          "evidence_type": "DELIVERABLE",
+          "business_date": "2026-01-31"
+        }
+      ],
+      "can_attest": true
+    }
+  ],
+  "evidence": [
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "revision": 2,
+      "specified_service_id": "00000000-0000-4000-8000-000000000003",
+      "binding_id": "00000000-0000-4000-8000-000000000004",
+      "source_domain": "CRM_ACTIVITY",
+      "source_id": "00000000-0000-4000-8000-000000000008",
+      "evidence_type": "DELIVERABLE",
+      "recognition_unit_key": "UNIT_A",
+      "business_date": "2026-01-31",
+      "verified_units": "1",
+      "status": "IN_REVIEW",
+      "health": "CURRENT",
+      "can_review": true,
+      "attested_by": "00000000-0000-4000-8000-000000000090"
+    }
+  ],
+  "policies": [
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "policy_key": "EX_DIRECT",
+      "version": 1,
+      "revision": 2,
+      "status": "IN_REVIEW",
+      "recognition_strategy": "POINT_IN_TIME_ON_APPROVED_EVIDENCE",
+      "amount_strategy": "ACCEPTED_SERVICE_CONSIDERATION",
+      "presentation": "GROSS",
+      "currency": "CNY",
+      "fulfillment_rule_reference": "EX-DELIVERABLE",
+      "refund_correction_reference": "EX-CORRECTION",
+      "correction_rule": {
+        "method": "REVISED_ENTITLEMENT",
+        "allow_prior_period": false,
+        "reference": "EX-APPROVED"
+      },
+      "effective_from": "2026-01-01",
+      "test_only": false,
+      "created_by": "00000000-0000-4000-8000-000000000090",
+      "can_review": true,
+      "approval_reference": "00000000-0000-4000-8000-000000000050"
+    }
+  ],
+  "periods": [
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "revision": 1,
+      "period_key": "EX-2026-01",
+      "start_on": "2026-01-01",
+      "end_on": "2026-01-31",
+      "status": "OPEN",
+      "can_close": true
+    }
+  ],
+  "designations": [
+    {
+      "user_id": "00000000-0000-4000-8000-000000000092",
+      "authority": "POSTING_AUTHORITY",
+      "status": "ACTIVE",
+      "effective_from": "2026-01-01"
+    }
+  ],
+  "cash": [
+    {
+      "payment": "00000000-0000-4000-8000-000000000040",
+      "currency": "CNY",
+      "amount": "100.00",
+      "reserved": "0.00",
+      "applied": "60.00",
+      "available": "40.00",
+      "refunded": "0.00",
+      "can_manage": true,
+      "targets": [
+        {
+          "service": "00000000-0000-4000-8000-000000000003",
+          "receivable": "00000000-0000-4000-8000-000000000041",
+          "currency": "CNY",
+          "amount": "1000.00",
+          "paid": "700.00",
+          "outstanding": "300.00"
+        }
+      ],
+      "history": [
+        {
+          "id": "00000000-0000-4000-8000-000000000042",
+          "kind": "APPLY",
+          "amount": "60.00",
+          "currency": "CNY",
+          "target": "00000000-0000-4000-8000-000000000041"
+        }
+      ],
+      "purpose": "CUSTODY_RECEIPT",
+      "reversible_applications": [
+        {
+          "id": "00000000-0000-4000-8000-000000000042",
+          "currency": "CNY",
+          "amount": "60.00",
+          "available_to_release": "60.00"
+        }
+      ],
+      "can_apply": true,
+      "can_reverse": true
+    }
+  ],
+  "can_create_policy": true,
+  "can_create_binding": true,
+  "can_prepare_correction": true
+}

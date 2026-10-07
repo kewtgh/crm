@@ -1,6 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.31.0**
+Current release candidate: **v3.32.0**
+
+## v3.32.0 — Revenue Foundation
+
+Revenue policies and accepted service bindings connect reviewed fulfillment evidence to deterministic
+candidates, independent review and manual posting. Immutable Revenue facts retain append-only
+corrections. Cash custody/application remains separate from earned Revenue. The Finance Revenue
+workspace and Contract tab expose governed actions and historical lineage with per-currency amounts.
+Initial entity/authority provisioning remains controlled; no historical transactions are recognized
+automatically. General ledger, tax, accounting FX, provider AP and attribution remain out of scope.
+See [release notes](docs/RELEASE_V3.32.0.md) and
+[integrated verification](docs/REVENUE_R5G_INTEGRATED_CLOSURE.md).
 
 ## v3.31.0 — Reliable operation recovery and directory context
 

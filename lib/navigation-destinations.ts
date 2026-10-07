@@ -35,6 +35,7 @@ export const navigationDestinations: readonly NavigationDestination[] = [
   entry("products", "commercial", "nav.products", "/products"),
   entry("contracts", "commercial", "nav.contracts", "/contracts", "contracts.view"),
   entry("finance", "commercial", "nav.finance", "/finance", "finance.view"),
+  entry("revenue", "commercial", "revenue.workspace", "/finance/revenue", "revenue.recognition.view"),
   entry("commissions", "commercial", "ux.nav.commissions", "/commissions", "finance.view"),
   entry("growth", "commercial", "nav.growth", "/growth", "leads.view", true),
   entry("executive", "management", "management.title", "/reports/executive", "education.view"),

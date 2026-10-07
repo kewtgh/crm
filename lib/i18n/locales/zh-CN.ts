@@ -1,3 +1,4 @@
+import {revenueNavigationZh} from "../../revenue-workspace-labels";
 import {reliabilityZh} from "./reliability";
 import {uxClosureZh} from "./ux-closure";
 import { frontlineZh } from './frontline';
@@ -505,5 +506,6 @@ export const zhCN: Messages = {
   ...zhWorkflowUsability,
   ...frontlineZh,
   ...operationsRepairZh,
+  ...revenueNavigationZh,
 };
 import {operationsRepairZh} from "./operations-repair";

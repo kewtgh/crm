@@ -28,6 +28,7 @@ import { useAppUser, useCapability } from "@/components/app-user-context";
 import {DetailTabs} from "./detail-tabs";
 import {RecordIdentity} from "./record-header";
 import {ContractEnrollmentSection} from "./contract-enrollment-section";
+import {ContractRevenueSection} from "./contract-revenue-section";
 import {ContractDocumentsSection} from "./contract-documents-section";
 
 type Contract = ContractRecord;
@@ -61,6 +62,7 @@ export function ContractsPage({ initialContracts = [], initialTotal = 0, initial
   const [flowError, setFlowError] = useState("");
   const [commercialLocked,setCommercialLocked]=useState(false);
   const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const canViewRevenue=useCapability("revenue.recognition.view");
   const [selectedSection,setSelectedSection]=useState("enrollments");
   const selectedContract=records.find(contract=>contract.id===selectedId);
   const [approvalPending, setApprovalPending] = useState(false);
@@ -123,9 +125,10 @@ export function ContractsPage({ initialContracts = [], initialTotal = 0, initial
     {selectedId&&<section className="surface contract-selected-context" id="selected-contract-context" aria-label={t("closure.selectedContract")} tabIndex={-1}>
       <div className="contract-context-heading"><h2>{t("closure.selectedContract")}</h2><span>{t("closure.contractIdentity")}: <code>{selectedId}</code></span>{canManage&&<RecordDeleteAction kind="CONTRACT" id={selectedId} onDeleted={async()=>{setSelectedId("");await load(page);}}/>}</div>
       {selectedContract?<div className="contract-context-facts"><RecordIdentity nameZh={selectedContract.customer} nameEn={selectedContract.english}/><StatusBadge tone={statusTone(selectedContract.status)}>{t(statusKeys[selectedContract.status])}</StatusBadge><span>{formatDate(selectedContract.start,{dateOnly:true})} – {formatDate(selectedContract.end,{dateOnly:true})}</span><b>{money(selectedContract.value,selectedContract.currency)}</b></div>:<p role="status">{t("closure.contextUnavailable")}</p>}
-      <DetailTabs label={t("closure.contractSections")} active={selectedSection} onChange={setSelectedSection} disabled={commercialLocked} items={[{key:"enrollments",label:"enrollments.title"},{key:"documents",label:"documents.title"}]}>
+      <DetailTabs label={t("closure.contractSections")} active={selectedSection} onChange={setSelectedSection} disabled={commercialLocked} items={[{key:"enrollments",label:"enrollments.title"},{key:"documents",label:"documents.title"},...(canViewRevenue?[{key:"revenue",label:"revenue.workspace"}]:[])]}>
         <div hidden={selectedSection!=="enrollments"}><ContractEnrollmentSection key={selectedId} contractId={selectedId} onLocked={setCommercialLocked}/></div>
         <div hidden={selectedSection!=="documents"}><ContractDocumentsSection key={`documents:${selectedId}`} sourceKind="CUSTOMER_CONTRACT" sourceId={selectedId} canManage={canManage}/></div>
+        {canViewRevenue&&selectedSection==="revenue"&&<ContractRevenueSection key={`revenue:${selectedId}`} contractId={selectedId}/>}
       </DetailTabs>
     </section>}
     {createOpen&&<AccessibleDrawer pending={createPending} title={t("contracts.new")} eyebrow={t("contracts.eyebrow")} description={t("contracts.createHelp")} onClose={()=>setCreateOpen(false)}><form onSubmit={createContract}><fieldset disabled={createPending} className="follow-up-fields"><SearchableSelect label={t("contracts.customer")} required options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={organizationLoading}/><SearchableSelect label={t("products.title")} options={productOptions} value={product} onChange={setProduct}/><label className="field"><span>{t("contracts.number")}</span><input name="contractNumber" required maxLength={80}/></label><div className="form-grid two-column"><label className="field"><span>{t("contracts.startDate")}</span><DateInput name="startDate" type="date" required/></label><label className="field"><span>{t("contracts.endDate")}</span><DateInput name="endDate" type="date" required/></label></div><div className="form-grid two-column"><label className="field"><span>{t("contracts.value")}</span><MoneyInput name="value" min="0" required/></label><label className="field"><span>{t("contracts.currency")}</span><CurrencySelect name="currency" defaultValue="CNY" required/></label></div><label className="field"><span>{t("contracts.relationshipGoal")}</span><select name="relationshipLevel" defaultValue="1" required>{[1,2,3,4].map(level=><option value={level} key={level}>{t(relationshipKeys[level])}</option>)}</select></label>{formError&&<InlineMessage type="error">{formError}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={createPending} onClick={()=>setCreateOpen(false)}>{t("common.cancel")}</button><button className="primary-button" type="submit" disabled={createPending}>{createPending?t("common.saving"):t("common.create")}</button></div></fieldset></form></AccessibleDrawer>}

@@ -1,3 +1,4 @@
+import {revenueNavigationEn} from "../../revenue-workspace-labels";
 import {reliabilityEn} from "./reliability";
 import {uxClosureEn} from "./ux-closure";
 import {operationsRepairEn} from "./operations-repair";
@@ -507,4 +508,5 @@ export const en: Messages = {
   ...enWorkflowUsability,
   ...frontlineEn,
   ...operationsRepairEn,
+  ...revenueNavigationEn,
 };
