@@ -54,7 +54,7 @@ export function PipelinePage({
   initialCurrency,
   initialCurrencies,
   persistent = true,
-  initialFocus,initialReportFilter={},
+  initialFocus,initialReportFilter={},createOnly=false,contextOrganization,onContextSaved,
 }: {
   initialItems: OpportunityRecord[];
   initialTotal: number;
@@ -62,7 +62,7 @@ export function PipelinePage({
   initialCurrency: string;
   initialCurrencies: string[];
   persistent?: boolean;
-  initialFocus?:string;initialReportFilter?:ReportFilter;
+  initialFocus?:string;initialReportFilter?:ReportFilter;createOnly?:boolean;contextOrganization?:{id:string;label:string};onContextSaved?:()=>void;
 }) {
   const { locale, t } = useI18n();
   const canManage=useCapability("opportunities.manage");
@@ -83,7 +83,7 @@ export function PipelinePage({
   const [createOpen, setCreateOpen] = useState(false);
   const [transition, setTransition] = useState<TransitionState | null>(null);
   const [subjectType, setSubjectType] = useState<"SCHOOL" | "HOUSEHOLD">("SCHOOL");
-  const [organization, setOrganization] = useState("");
+  const [organization, setOrganization] = useState(contextOrganization?.id??"");
   const [organizationOptions, setOrganizationOptions] = useState<Array<{ value: string; label: string; detail: string }>>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [product, setProduct] = useState("");
@@ -232,11 +232,11 @@ export function PipelinePage({
         body: JSON.stringify(parsed.data),
       });
       setCreateOpen(false);
-      setOrganization("");
+      setOrganization(contextOrganization?.id??"");
       setSubjectType("SCHOOL");
       setProduct("");setCohort("");
       setPage(1);
-      await load(1, query);
+      if(createOnly)onContextSaved?.();else await load(1, query);
       setToast(t("pipeline.created"));
     } catch (caught) {
       setDrawerError(describeError(caught, "pipeline.createFailed"));
@@ -295,6 +295,7 @@ export function PipelinePage({
 
   return <div className="page-stack pipeline-page">
     <ReportScopeNotice filter={initialReportFilter}/>
+    {createOnly?canManage&&<button className="secondary-button" onClick={()=>setCreateOpen(true)}>{t("pipeline.new")}</button>:<>
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t("eyebrow.revenueMomentum")}</p>
@@ -373,6 +374,7 @@ export function PipelinePage({
     <Pagination page={Math.min(page, pages)} totalPages={pages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(value)=>{setPageSize(value);setPage(1);void load(1,query,value);}}/>
     <p className="kanban-note">{t("pipeline.note")}</p>
 
+    </>}
     {createOpen && <AccessibleDrawer
       pending={submitting}
       title={t("pipeline.new")}
@@ -381,8 +383,8 @@ export function PipelinePage({
       onClose={() => setCreateOpen(false)}
     >
       <form onSubmit={create}>
-        <label className="field"><span>{t("leads.type")}</span><select required value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
-        <SearchableSelect label={t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} required options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/>
+        {!contextOrganization&&<><label className="field"><span>{t("leads.type")}</span><select required value={subjectType} onChange={(event) => { setSubjectType(event.target.value as typeof subjectType); setOrganization(""); setOrganizationOptions([]); }}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label>
+        <SearchableSelect label={t(subjectType === "SCHOOL" ? "pipeline.organization" : "education.households")} required options={organizationOptions} value={organization} onChange={setOrganization} onSearch={searchOrganizations} loading={relatedLoading}/></>}{contextOrganization&&<p>{contextOrganization.label}</p>}
         <SearchableSelect label={t("products.title")} options={productOptions} value={product} onChange={setProduct}/>
         <ProductCohortSelector usage="OPPORTUNITY" productId={product} value={cohort} onChange={setCohort}/>
         <div className="form-grid two-column">

@@ -72,7 +72,7 @@ test("follow-up insights count remaining contacts, exact UTC deadline and eviden
   assert.equal(followUpProgress(plan,[],3,"2026-11-02",4).achieved,true);
 });
 test("mutation interfaces lock in-flight drafts and explicitly confirm trigger-wide automation",async()=>{
-  const panel=await source("components/customer-operations-panel.tsx");assert.match(panel,/hidden=\{tab!=="followUp"\}/);assert.match(panel,/disabled=\{pending\}/);assert.match(panel,/if\(busy.current\)return/);assert.match(panel,/audit.savedRefreshFailed/);assert.match(panel,/runContractSearch/);
+  const panel=await source("components/customer-operations-panel.tsx");assert.match(panel,/hidden=\{activeTab!=="followUp"&&activeTab!=="activity"\}/);assert.match(panel,/disabled=\{pending\}/);assert.match(panel,/if\(busy.current\)return/);assert.match(panel,/audit.savedRefreshFailed/);assert.match(panel,/runContractSearch/);
   const email=await source("components/customer-email-panel.tsx");assert.match(email,/customerEmailBatchPayload/);assert.match(email,/if\(busy.current\)return;change\(true\);setIds\(\[\]\)/);
   const automation=await source("components/automation-workspace.tsx");assert.match(automation,/runRule&&<ConfirmDialog/);assert.match(automation,/audit.runEventConfirm/);assert.doesNotMatch(automation,/name="title(?:Zh|En)" required/);
 });

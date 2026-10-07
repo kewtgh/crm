@@ -1,10 +1,18 @@
 # Lumina CRM
 
-Current release candidate: **v3.27.0**
+Current release candidate: **v3.28.0**
 
 Lumina is a bilingual, staff-only education relationship and sales CRM. Schools, contacts, parents,
 students and household members are CRM business records; staff identities are stored in the
 application-owned authentication schema.
+
+Version 3.28.0 organizes Lumina around user tasks and business context. Students, families,
+enrollments, applications and support have explicit product locations. Organization records share
+one Account Workspace; Lead handling uses a state-aware work queue. Executive and support analytics
+prioritize attention, changes and key facts, while Dashboard puts today's work first. Shared patterns
+improve wide desktop, standard desktop and mobile use. No new domain ownership, Revenue semantics
+or migration is introduced. See [release notes](docs/RELEASE_V3.28.0.md) and
+[release closure](docs/V328_RELEASE_CLOSURE.md).
 
 Version 3.27.0 adds task-oriented navigation and contextual enrollment, protects unsaved edits,
 fixes nested dialogs and isolates optional dashboard failures. Misleading campaign ROI has been

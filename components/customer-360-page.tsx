@@ -1,4 +1,7 @@
 "use client";
+import { RecordHeader } from "./record-header";
+import { useCapability } from "./app-user-context";
+import type { CustomerOperationsSnapshot } from "@/lib/customer-operations-repository";
 import { DateInput } from "@/components/structured-inputs";
 
 import Link from "next/link";
@@ -34,7 +37,9 @@ const types = ["CONTACT", "OPPORTUNITY", "TASK", "ACTIVITY", "APPOINTMENT", "CON
 const activityKinds = ["CALL", "EMAIL", "MEETING", "VISIT", "MEAL", "NOTE", "CAMPAIGN", "PAYMENT_FOLLOW_UP"];
 
 export function Customer360Page({ initial }: { initial: Organization360 }) {
+  const canManagePrivacy=useCapability("privacyRequests.manage");
   const { locale, t } = useI18n();
+  const [snapshot,setSnapshot]=useState<CustomerOperationsSnapshot|null>(null);
   const { localDateTimeInput, localDateTimeToIso } = useUserPreferences();
   const [data, setData] = useState(initial);
   const [type, setType] = useState("all");
@@ -56,10 +61,10 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
     if("error" in request||!request.value.timeline){
       setError(t("customer360.loadFailed"));
       setLoading(false);
-      return;
+      return false;
     }
     setData(request.value);
-    setLoading(false);
+    setLoading(false);return true;
   };
 
   const saveActivity = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -88,23 +93,17 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
     setActivitySaving(false);
     setActivityOpen(false);
     setType("all");
-    await load(1, "all");
-    setToast(t("customer360.activitySaved"));
+    const refreshed=await load(1, "all");
+    setToast(t(refreshed?"customer360.activitySaved":"audit.savedRefreshFailed"));
   };
 
   const pages = Math.max(1, Math.ceil(data.timeline.total / data.timeline.pageSize));
   return <div className="page-stack customer-360">
-    <section className="page-heading-row">
-      <div><p className="eyebrow">{t("customer360.eyebrow")}</p><h1>{[initial.nameZh,initial.nameEn].filter(Boolean).join(" / ")}</h1><p>{t("customer360.description")}</p></div>
-      <div className="page-actions"><Link className="secondary-button" href="/schools">{t("customer360.back")}</Link><CrmRecordEditor resource="schools" id={initial.id}/><button className="primary-button" type="button" onClick={() => setActivityOpen(true)}><Plus size={17}/>{t("customer360.recordActivity")}</button></div>
-    </section>
-    <section className="quick-summary">
-      <span><b>{data.timeline.total}</b><small>{t("customer360.events")}</small></span>
-      <span><b>{t(`crm.status.${initial.status}`)}</b><small>{t("common.status")}</small></span>
-      <span><b>{initial.city || "—"}</b><small>{t("customer360.city")}</small></span>
-      <span><ProgressBar value={initial.completeness} label={`${initial.completeness}%`}/><small>{t("modules.completeness")}</small></span>
-    </section>
-    <CustomerOperationsPanel subject="ORGANIZATION" id={initial.id} history={<section className="timeline-surface">
+    <RecordHeader nameZh={data.nameZh} nameEn={data.nameEn} status={<StatusBadge tone="blue">{t(`crm.status.${data.status}`)}</StatusBadge>} context={<span>{t("crm.owner")}: {snapshot?.ownerName||t("ux.record.notRecorded")} · {data.city}<br/>{t("ux.record.nextAction")}: {snapshot?.entries[0]?.next_step||t("ux.record.notRecorded")}</span>} secondaryActions={<Link className="secondary-button" href="/schools">{t("customer360.back")}</Link>} primaryAction={snapshot?.canManage&&<CrmRecordEditor resource="schools" id={initial.id}/>}/>
+    {canManagePrivacy&&<details className="ux-record-quality"><summary>{t("ux.record.privacy")}</summary><Link href="/privacy-requests">{t("nav.privacyRequests")}</Link></details>}
+    <details className="ux-record-quality"><summary>{t("modules.completeness")}: {data.completeness}%</summary><ProgressBar value={data.completeness} label={`${data.completeness}%`}/></details>
+    {snapshot?.canManage&&<div className="ux-context-actions"><button className="secondary-button" onClick={()=>setActivityOpen(true)}><Plus size={17}/>{t("customer360.recordActivity")}</button></div>}
+    <CustomerOperationsPanel account subject="ORGANIZATION" id={initial.id} onSnapshot={setSnapshot} history={<section className="timeline-surface">
       <div className="table-toolbar">
         <label className="compact-filter"><span>{t("customer360.filter")}</span><select value={type} onChange={(event) => { const next = event.target.value; setType(next); void load(1, next); }}><option value="all">{t("common.all")}</option>{types.map((item) => <option key={item} value={item}>{t(`timeline.type.${item.toLowerCase()}`)}</option>)}</select></label>
         {loading && <span role="status"><RefreshCw className="spin" size={15}/>{t("common.loading")}</span>}
@@ -114,12 +113,12 @@ export function Customer360Page({ initial }: { initial: Organization360 }) {
       {!data.timeline.items.length && !loading && <div className="empty-state"><span>{t("customer360.empty")}</span></div>}
       <Pagination page={data.timeline.page} totalPages={pages} total={data.timeline.total} pageSize={data.timeline.pageSize} onPage={(page) => void load(page)} onPageSize={(value)=>{setPageSize(value);void load(1,type,value);}}/>
     </section>}/>
-    {activityOpen && <AccessibleDrawer pending={activitySaving} title={t("customer360.recordActivity")} eyebrow={t("customer360.drawerEyebrow")} description={t("customer360.activityHelp")} onClose={() => setActivityOpen(false)}><form onSubmit={saveActivity}><div className="form-grid two-column"><label className="field"><span>{t("customer360.activityKind")}</span><select name="activityKind" required>{activityKinds.map((kind) => <option value={kind} key={kind}>{t(`activity.kind.${kind}`)}</option>)}</select></label><label className="field"><span>{t("customer360.occurredAt")}</span><DateInput name="occurredAt" type="datetime-local" max={localDateTimeInput()} defaultValue={localDateTimeInput()} required/></label></div><label className="field"><span>{t("customer360.summaryZh")}</span><textarea name="summaryZh" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.summaryEn")}</span><textarea name="summaryEn" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepZh")}</span><textarea name="nextStepZh" rows={2} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepEn")}</span><textarea name="nextStepEn" rows={2} minLength={2} maxLength={1000} required/></label>{error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={activitySaving} onClick={() => setActivityOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={activitySaving} type="submit">{activitySaving ? t("common.saving") : t("common.save")}</button></div></form></AccessibleDrawer>}
+    {activityOpen && <AccessibleDrawer guardChanges pending={activitySaving} title={t("customer360.recordActivity")} eyebrow={t("customer360.drawerEyebrow")} description={t("customer360.activityHelp")} onClose={() => setActivityOpen(false)}><form onSubmit={saveActivity}><div className="form-grid two-column"><label className="field"><span>{t("customer360.activityKind")}</span><select name="activityKind" required>{activityKinds.map((kind) => <option value={kind} key={kind}>{t(`activity.kind.${kind}`)}</option>)}</select></label><label className="field"><span>{t("customer360.occurredAt")}</span><DateInput name="occurredAt" type="datetime-local" max={localDateTimeInput()} defaultValue={localDateTimeInput()} required/></label></div><label className="field"><span>{t("customer360.summaryZh")}</span><textarea name="summaryZh" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.summaryEn")}</span><textarea name="summaryEn" rows={3} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepZh")}</span><textarea name="nextStepZh" rows={2} minLength={2} maxLength={1000} required/></label><label className="field"><span>{t("customer360.nextStepEn")}</span><textarea name="nextStepEn" rows={2} minLength={2} maxLength={1000} required/></label>{error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={activitySaving} onClick={() => setActivityOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={activitySaving} type="submit">{activitySaving ? t("common.saving") : t("common.save")}</button></div></form></AccessibleDrawer>}
     {toast && <Toast message={toast} onClose={() => setToast("")}/>}
   </div>;
 }
 
-function TimelineItem({
+export function TimelineItem({
   item,
   locale,
   t,
@@ -128,6 +127,7 @@ function TimelineItem({
   locale: "zh-CN" | "en";
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
+  const { enumLabel } = useI18n();
   const { formatDate } = useUserPreferences();
   const Icon = eventIcons[item.type] ?? History;
   const title = locale === "en" ? item.titleEn || item.titleZh : item.titleZh || item.titleEn;
@@ -135,11 +135,20 @@ function TimelineItem({
   const amount = typeof item.metadata?.amount === "number"
     ? `${item.metadata.currency ?? ""} ${new Intl.NumberFormat(locale).format(item.metadata.amount)}`
     : "";
-  const summaryKey = `timeline.summary.${item.summary.toLowerCase()}`;
-  const translatedSummary = t(summaryKey);
+  // The canonical timeline supplies a contact method for CONTACT, and owning
+  // domain status/kind keys for the other sources. Never infer free text from
+  // translation output: the safe translator deliberately does not echo keys.
+  const summaryKey = item.type === "ACTIVITY" ? `activity.kind.${item.summary}`
+    : item.type === "OPPORTUNITY" ? `sales.stage.${item.summary.toLowerCase()}`
+    : item.type === "CONTRACT" ? `contracts.status.${item.summary.toLowerCase()}`
+    : item.type === "PAYMENT" ? `finance.status.${item.summary.toLowerCase()}`
+    : item.type === "APPROVAL" ? `approval.status.${item.summary.toLowerCase()}`
+    : `crm.status.${item.summary}`;
+  const translatedSummary = enumLabel(summaryKey);
+  const summary = item.type === "CONTACT" ? item.summary || t("ux.record.notRecorded") : translatedSummary.label;
   return <article className="timeline-item">
     <span className={`timeline-icon ${item.type.toLowerCase()}`}><Icon size={17}/></span>
-    <div><div><StatusBadge tone="blue">{t(`timeline.type.${item.type.toLowerCase()}`)}</StatusBadge><time>{formatDate(item.occurredAt, { includeTime: true })}</time></div><b>{title}</b><p>{translatedSummary === summaryKey ? item.summary : translatedSummary}{amount ? ` · ${amount}` : ""}</p></div>
+    <div><div><StatusBadge tone="blue">{t(`timeline.type.${item.type.toLowerCase()}`)}</StatusBadge><time>{formatDate(item.occurredAt, { includeTime: true })}</time></div><b>{title}</b><p>{summary}{amount ? ` · ${amount}` : ""}</p></div>
     {href && <Link href={href} aria-label={t("customer360.openSource", { title })}><ChevronRight size={17}/></Link>}
   </article>;
 }

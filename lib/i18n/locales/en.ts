@@ -1,3 +1,8 @@
+import {uxClosureEn} from "./ux-closure";
+import { frontlineEn } from './frontline';
+import { recordWorkspaceEn } from './record-workspaces';
+import { enManagementUX } from './management-ux';
+import { enUXFoundation } from './ux-foundation';
 import {enWorkflowUsability} from "./workflow-usability";
 import {enWorkflowExperience} from "./workflow-experience";
 import {enContractUploads} from "./contract-uploads";
@@ -41,6 +46,10 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...uxClosureEn,
+  ...recordWorkspaceEn,
+  ...enUXFoundation,
+  ...enManagementUX,
   ...enManagement,
   ...enContractDocuments,
   ...enContractUploads,
@@ -491,4 +500,5 @@ export const en: Messages = {
   ...enApplications,
   ...enWorkflowExperience,
   ...enWorkflowUsability,
+  ...frontlineEn,
 };

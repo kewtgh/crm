@@ -1,4 +1,17 @@
-# Implementation status — v3.27.0 release candidate
+# Implementation status — v3.28.0 release candidate
+
+## v3.28.0 — Product UX architecture and workflow experience
+
+Seven stable product spaces, query-aware Student/Family navigation and shared responsive primitives
+organize the application around tasks and context. Management prioritizes attention, period changes
+and canonical facts. Student/Household and Organization Account workspaces compose related domains
+without merging ownership. Lead Queue and Dashboard emphasize next actions and today's work.
+Contracts retain selected context; Products, Imports and Data Quality receive bounded presentation
+and accessibility improvements. No migration, Revenue implementation or new domain ownership is added.
+
+See [UX architecture](UX_ARCHITECTURE_V328.md), [implementation plan](UX_IMPLEMENTATION_PLAN_V328.md),
+[release notes](RELEASE_V3.28.0.md) and [release closure](V328_RELEASE_CLOSURE.md).
+This is an uncommitted release candidate; Git checkpoint and deployment require separate authorization.
 
 ## v3.27.0 — Daily workflow and interaction reliability
 

@@ -3,12 +3,13 @@
 import { useId } from "react";
 import { useI18n } from "./i18n-provider";
 
-export function DetailTabs({ items, active, onChange, children, label, disabled=false }: {
+export function DetailTabs({ items, active, onChange, children, label, disabled=false, hideNavigation=false }: {
   items: Array<{key: string; label: string}>; active: string;
-  onChange: (key: string) => void; children: React.ReactNode; label: string; disabled?:boolean;
+  onChange: (key: string) => void; children: React.ReactNode; label: string; disabled?:boolean; hideNavigation?:boolean;
 }) {
   const id = useId();
   const { t } = useI18n();
+  if (hideNavigation) return <>{children}</>;
   return <>
     <div className="page-tabs detail-tabs" role="tablist" aria-label={label}>
       {items.map((item, index) => <button key={item.key} type="button" role="tab" disabled={disabled}

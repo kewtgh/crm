@@ -1,5 +1,6 @@
 "use client";
 
+import {SafeDiagnostics} from "./safe-diagnostics";
 import { useState } from "react";
 import { CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +13,8 @@ import { useRemoteSearch } from "@/hooks/use-remote-search";
 
 type QualityTrend={snapshot_date:string;open_low:number;open_medium:number;open_high:number;resolved:number;dismissed:number;captured_at:string};
 export function DataQualityPage({ initialItems, initialTotal,initialTrend,initialRules }: { initialItems: QualityIssue[]; initialTotal: number;initialTrend:QualityTrend[];initialRules:QualityRuleConfig[] }) {
-  const { t } = useI18n();
+  const { t,enumLabel } = useI18n();
+  const ruleLabel=(key:string)=>{const direct=enumLabel(`quality.rule.${key}`);const mapped=enumLabel(qualityRuleKey(key));return direct.known?direct.label:mapped.known?mapped.label:t("quality.rule.generic");};
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [trend,setTrend]=useState(initialTrend);
@@ -102,7 +104,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
     <section className="surface quality-rules">
       <div className="surface-heading"><div><h2>{t("quality.rules")}</h2><p>{t("quality.rulesHelp")}</p></div></div>
       <div className="quality-rule-grid">{rules.map(rule=><article key={rule.id} data-severity={rule.severity} data-enabled={rule.enabled}>
-        <div><b>{(t(`quality.rule.${rule.ruleKey}`)!==`quality.rule.${rule.ruleKey}`?t(`quality.rule.${rule.ruleKey}`):t(qualityRuleKey(rule.ruleKey))===qualityRuleKey(rule.ruleKey)?t("quality.rule.generic"):t(qualityRuleKey(rule.ruleKey)))}</b></div>
+        <div><b>{ruleLabel(rule.ruleKey)}</b></div>
         <div className="quality-rule-controls">
           <label className="quality-rule-enabled"><input type="checkbox" checked={rule.enabled} disabled={pending} onChange={event=>void configureRule(rule,{enabled:event.target.checked})}/><span>{t("quality.enabled")}</span></label>
           <label><span>{t("quality.severityLabel")}</span><select value={rule.severity} disabled={pending} onChange={event=>void configureRule(rule,{severity:event.target.value as QualityRuleConfig["severity"]})}>{["LOW","MEDIUM","HIGH"].map(value=><option value={value} key={value}>{t(`quality.severity.${value.toLowerCase()}`)}</option>)}</select></label>
@@ -113,7 +115,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
       <div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("quality.search")} /><button className="secondary-button" onClick={() => void load(1)}>{t("common.search")}</button></div>
       {items.map((item) => <article className="quality-row" key={item.id}>
         <span className={`quality-icon ${item.severity.toLowerCase()}`}><ShieldAlert size={17} /></span>
-        <div><b>{t(item.titleKey)}</b><small>{t(`search.type.${item.entityType.toLowerCase()}`)} · {item.entityId.slice(0, 8)}</small><small>{Object.values(item.details).filter(Boolean).join(" / ")}</small>{qualityHref(item)&&<Link className="text-button" href={qualityHref(item)!}>{t("quality.openRecord")}</Link>}<small>{t("quality.fixFirst")}</small></div>
+        <div><b>{t(item.titleKey)}</b><small>{t(`search.type.${item.entityType.toLowerCase()}`)} · {item.entityId.slice(0, 8)}</small>{qualityHref(item)&&<Link className="text-button" href={qualityHref(item)!}>{t("quality.openRecord")}</Link>}<small>{t("quality.fixFirst")}</small><SafeDiagnostics items={[{label:t("closure.rule"),value:item.ruleKey},{label:t("closure.reference"),value:item.details.reference}]}/></div>
         <StatusBadge tone={item.severity === "HIGH" ? "red" : item.severity === "MEDIUM" ? "amber" : "blue"}>{t(`quality.severity.${item.severity.toLowerCase()}`)}</StatusBadge>
         <div className="quality-actions">{!item.assignedTo&&<button onClick={()=>void assignToMe(item.id)} disabled={pending}>{t("quality.assignToMe")}</button>}<button onClick={() => beginResolution(item.id, false)}><CheckCircle2 size={15} />{t("quality.verifyResolve")}</button><button onClick={() => beginResolution(item.id, true)}>{t("quality.dismiss")}</button></div>
         {action?.id === item.id && <form className="quality-resolution-form" onSubmit={submitResolution}>

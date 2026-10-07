@@ -1,0 +1,28 @@
+export const recordWorkspaceZh: Record<string, string> = {
+  "ux.record.family": "家庭",
+  "ux.record.overview": "概览", "ux.record.people": "联系人",
+  "ux.record.openWorkspace": "打开商机工作区", "ux.record.risks": "未结风险", "ux.record.profile": "档案", "ux.record.journey": "学生旅程", "ux.record.academic": "学业",
+  "ux.record.contractsProducts": "合同与产品", "ux.record.channelsOutreach": "渠道与活动", "ux.record.activity": "动态",
+  "ux.record.enrich": "补充资料（可在创建后编辑）", "ux.record.openFamily": "打开家庭档案", "ux.record.backStudents": "返回学生列表",
+  "ux.record.backFamilies": "返回家庭列表", "ux.record.returnStudent": "返回学生档案", "ux.record.noFamily": "尚未关联家庭",
+  "ux.record.familySummary": "家庭成员", "ux.record.nextAction": "下一步", "ux.record.lastInteraction": "最近联系",
+  "ux.record.currentContext": "当前业务上下文", "ux.record.moreOperations": "更多运营操作", "ux.record.privacy": "隐私与管理",
+  "ux.record.householdParticipation": "家庭活动参与", "ux.record.householdParticipationHelp": "这些记录属于家庭，不代表每个孩子都参与了活动。",
+  "ux.record.journeyHelp": "项目参与、升学申请和支持个案各自保留正式状态。", "ux.record.noApplications": "暂无升学申请",
+  "ux.record.noSupport": "暂无支持个案", "ux.record.needs": "教育需求", "ux.record.students": "关联学生",
+  "ux.record.notRecorded": "未记录", "ux.record.yearFilterDeferred": "可搜索学生或家庭成员；学年显示在记录中。",
+};
+export const recordWorkspaceEn: Record<string, string> = {
+  "ux.record.family": "Family",
+  "ux.record.overview": "Overview", "ux.record.people": "People",
+  "ux.record.openWorkspace": "Open opportunity workspace", "ux.record.risks": "Open risks", "ux.record.profile": "Profile", "ux.record.journey": "Student journey", "ux.record.academic": "Academic",
+  "ux.record.contractsProducts": "Contracts & Products", "ux.record.channelsOutreach": "Channels & Outreach", "ux.record.activity": "Activity",
+  "ux.record.enrich": "Additional profile (editable after creation)", "ux.record.openFamily": "Open household", "ux.record.backStudents": "Back to Students",
+  "ux.record.backFamilies": "Back to Families", "ux.record.returnStudent": "Return to student", "ux.record.noFamily": "No household linked",
+  "ux.record.familySummary": "Household members", "ux.record.nextAction": "Next action", "ux.record.lastInteraction": "Last interaction",
+  "ux.record.currentContext": "Current business context", "ux.record.moreOperations": "More operations", "ux.record.privacy": "Privacy & administration",
+  "ux.record.householdParticipation": "Household event participation", "ux.record.householdParticipationHelp": "These are household records; they do not establish participation by every child.",
+  "ux.record.journeyHelp": "Enrollments, applications and support cases retain their own formal states.", "ux.record.noApplications": "No applications",
+  "ux.record.noSupport": "No support cases", "ux.record.needs": "Education needs", "ux.record.students": "Linked students",
+  "ux.record.notRecorded": "Not recorded", "ux.record.yearFilterDeferred": "Search students or household members; academic year is shown on each record.",
+};

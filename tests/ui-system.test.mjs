@@ -33,12 +33,14 @@ test("product deletion stays behind a disclosure and retains guarded confirmatio
   const disclosure = await source("components/action-disclosure.tsx");
   assert.match(disclosure, /pointerdown/); assert.match(disclosure, /event.key === "Escape"/);
 });
-test("assistance is the final operations entry and legacy routes keep independent capability guards", async () => {
-  const shell = await source("components/app-shell.tsx");
-  const operations = shell.slice(shell.indexOf('{ titleKey: "nav.operations"'), shell.indexOf('{ titleKey: "nav.admin"'));
-  assert.ok(operations.lastIndexOf('labelKey: "nav.assistance"') > operations.lastIndexOf('labelKey: "nav.reports"'));
-  assert.doesNotMatch(operations, /labelKey: "nav.ai"|labelKey: "nav.automation"/);
-  assert.match(shell, /hasCapability\(user.role,"ai.review"\)\?"\/ai":"\/automation"/);
+test("suggestion review and automation have separate governance destinations and canonical guards", async () => {
+  const {navigationDestinations,visibleDestinations}=await import('../lib/navigation-destinations.ts');
+  for(const [id,capability] of [['ai','ai.review'],['automation','automation.manage']]){
+    const entry=navigationDestinations.find(item=>item.id===id);
+    assert.equal(entry.space,'governance');assert.equal(entry.capability,capability);
+    assert.ok(visibleDestinations('ADMIN').some(item=>item.id===id));
+  }
+  assert.ok(!visibleDestinations('SALES_SUPPORT').some(item=>item.id==='automation'));
   assert.match(await source("app/(crm)/ai/page.tsx"), /requireCapability\("ai.review"\)/);
   assert.match(await source("app/(crm)/automation/page.tsx"), /requireCapability\("automation.manage"\)/);
   const header = await source("components/assistance-workspace-header.tsx");

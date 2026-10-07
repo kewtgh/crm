@@ -1,0 +1,87 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{build}=require('esbuild');
+module.exports=async({browser,base,output,report,observe})=>{
+ const context=await browser.newContext({locale:'zh-CN',bypassCSP:true});
+ try{
+  const page=await context.newPage();observe(page);page.setDefaultTimeout(4500);
+  const health=await page.goto(`${base}/api/health`);assert.ok(health?.ok());assert.equal((await health.json()).version,report.evidence.appVersion);
+  require('tsx/cjs');const {frontlineLeads,frontlineId:id}=require('../tests/fixtures/frontline.ts');const zh=require('../lib/i18n/locales/zh-CN.ts').zhCN;
+  const requests=[],expectedFailures=[];let failure='',failedOnce=false;
+  await page.route(`${base}/api/**`,route=>{
+   const url=new URL(route.request().url()),method=route.request().method(),body=route.request().postDataJSON();requests.push({path:url.pathname,query:Object.fromEntries(url.searchParams),method,body});
+   if(method!=='GET'){
+    if(failure&&!failedOnce&&url.pathname.startsWith('/api/leads')){failedOnce=true;const status=failure==='uncertain'?503:failure==='forbidden'?403:409;expectedFailures.push({url:route.request().url(),status});return route.fulfill({status,json:{error:{code:failure==='uncertain'?'SYNTHETIC_UNAVAILABLE':failure==='claimed'?'LEAD_ALREADY_CLAIMED':failure==='forbidden'?'LEAD_FORBIDDEN':'LEAD_VERSION_CONFLICT'}}});}
+    return route.fulfill({json:{item:{id:id(1)}}});
+   }
+   if(url.pathname==='/api/leads'){const view=url.searchParams.get('view');return route.fulfill({json:{items:frontlineLeads.filter(l=>view==='pool'?l.owner_id===null:view==='mine'?l.is_mine&&l.status!=='CONVERTED':true),total:view==='pool'?1:view==='mine'?2:4,page:1,pageSize:20}});}
+   if(url.pathname.endsWith('/history'))return route.fulfill({json:{items:[{id:id(80),event_type:'CLAIMED',from_owner_id:null,to_owner_id:id(99),reason:'Example assignment',changed_at:'2026-10-07T02:00:00Z',lead_revision:2}]}});
+   if(url.pathname==='/api/notifications')return route.fulfill({json:{items:[],total:0,unread:0,page:1,pageSize:20}});
+   if(url.pathname==='/api/search/related'){const type=url.searchParams.get('types');return route.fulfill({json:{items:type==='USER'?[{value:`USER:${id(99)}`,labelZh:'顾问甲',labelEn:'Advisor A'}]:type==='PRODUCT'?[{value:`PRODUCT:${id(90)}`,labelZh:'示例学习项目',labelEn:'Example Learning Program'}]:[]}});}
+   return route.fulfill({json:{items:[],total:0,page:1,pageSize:10}});
+  });
+  const bundle=await build({entryPoints:['tests/fixtures/frontline-qa.tsx'],bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',target:'chrome145',alias:{'next/navigation':path.resolve('tests/fixtures/ux-foundation-navigation.ts'),'next/link':path.resolve('tests/fixtures/ux-foundation-link.tsx'),'next/image':path.resolve('tests/fixtures/ux-foundation-image.tsx')},define:{'process.env.NODE_ENV':'"production"'},logLevel:'silent'});
+  await page.setContent('<html lang="zh-CN"><head><title>Frontline synthetic QA</title></head><body><div id="root"></div></body></html>');
+  for(const file of fs.readdirSync('dist/client/_next/static',{recursive:true}).filter(file=>file.endsWith('.css')))await page.addStyleTag({url:`${base}/_next/static/${file.replaceAll('\\','/')}`});
+  await page.addScriptTag({content:bundle.outputFiles[0].text});
+  const nav=href=>page.evaluate(href=>window.frontNavigate(href),href);
+  const scenario=name=>page.evaluate(name=>window.frontScenario(name),name);
+  const widths=[{width:1920,height:1080},{width:1440,height:900},{width:375,height:812}];
+  const shot=async(label,viewport,checks={})=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${label}: document overflow`);await page.screenshot({path:path.join(output,`${label}.png`)});report.pages.push({label,viewport,checks,boundary:'Actual components/AppShell and production CSS; synthetic API mocks. Not DB/RLS evidence.'});process.stdout.write(`[QA frontline] ${label} passed\n`);};
+  const settled=()=>page.waitForFunction(()=>document.querySelector('.ux-lead-items')?.getAttribute('aria-busy')==='false');
+  if(process.env.QA_CORE_ONLY==='1'){
+   if(process.env.QA_SCOPE==='frontline-leads'){
+    for(const viewport of widths){await page.setViewportSize(viewport);await nav('/leads');await page.locator('.ux-lead-items').waitFor();await settled();const first=await page.locator('.ux-queue-item').first().boundingBox();if(viewport.width===375)assert.ok(first.y<812);await shot(`core-lead-${viewport.width}`,viewport,{firstLeadTop:first.y});}
+    await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('mine');await settled();const more=page.locator('.ux-queue-item summary[aria-haspopup=menu]').first();await more.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('End');await page.keyboard.press('Escape');assert.ok(await more.evaluate(e=>e===document.activeElement));
+    const trigger=page.getByRole('button',{name:'筛选 · 0',exact:true});await trigger.focus();await page.keyboard.press('Enter');await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});assert.ok(await trigger.evaluate(e=>e===document.activeElement));
+   }else{
+    await page.evaluate(id=>localStorage.setItem(`lumina:dashboard-mode:${id}`,'daily'),id(99));
+    for(const viewport of [widths[0],widths[2]]){await page.setViewportSize(viewport);await nav('/dashboard');await page.locator('[data-region=my-today]').waitFor();const positions={};for(const region of ['my-today','operational-attention','business-snapshot']){const box=await page.locator(`[data-region=${region}]`).boundingBox();positions[region]=box.y;if(viewport.width===1920)assert.ok(box.y<1080);}await shot(`core-dashboard-${viewport.width}`,viewport,positions);}
+    await page.getByRole('button',{name:'经营管理',exact:true}).click();await page.locator('[data-region=management-summary]').waitFor();assert.equal(requests.filter(r=>r.path.startsWith('/api/management')).length,0);await shot('core-dashboard-management-375',widths[2],{oneMode:true,noExecutiveRequest:true});
+   }
+   return;
+  }
+  if(process.env.QA_SCOPE==='frontline-leads'){
+   for(const viewport of widths){
+    await page.setViewportSize(viewport);await nav('/leads');await page.locator('.ux-lead-items').waitFor();await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('pool');await settled();
+    const first=page.locator('.ux-queue-item').first(),box=await first.boundingBox();if(viewport.width===375)assert.ok(box&&box.y<812,`First Lead top ${box?.y}`);
+    assert.equal(await first.locator('.ux-queue-actions > .primary-button').count(),1);assert.match(await first.locator('.primary-button').innerText(),/领取/);
+    await shot(`lead-pool-${viewport.width}`,viewport,{firstLeadTop:box.y,onePrimary:true});
+    await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('mine');await settled();
+    assert.match(await page.locator('.ux-queue-item').first().locator('.primary-button').innerText(),/跟进/);assert.match(await page.locator('.ux-queue-item').nth(1).locator('.primary-button').innerText(),/商机/);
+    assert.equal(await page.locator('.ux-queue-actions > button.secondary-button').count(),0);
+    await shot(`lead-mine-${viewport.width}`,viewport,{followUp:true,qualifiedConvert:true});
+   }
+   await page.setViewportSize(widths[2]);const first=page.locator('.ux-queue-item').first(),more=first.locator('summary[aria-haspopup=menu]');
+   await more.focus();await page.keyboard.press('ArrowDown');assert.ok(await first.getByRole('menuitem',{name:'释放线索',exact:true}).evaluate(e=>e===document.activeElement));await shot('lead-more-375',widths[2],{keyboard:true,governance:true});
+   await page.keyboard.press('End');assert.ok(await first.getByRole('menuitem',{name:'分配历史',exact:true}).evaluate(e=>e===document.activeElement));await page.keyboard.press('Escape');assert.ok(await more.evaluate(e=>e===document.activeElement));
+   await more.click();await first.getByRole('menuitem',{name:'分配历史',exact:true}).click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');assert.ok(await more.evaluate(e=>e===document.activeElement));
+   const trigger=page.getByRole('button',{name:'筛选 · 0',exact:true});await trigger.click();const dialog=page.getByRole('dialog');await dialog.getByRole('textbox',{name:'城市 / 地区',exact:true}).fill('Example city');const before=requests.length;await page.waitForTimeout(80);assert.equal(requests.length,before);await shot('lead-filter-draft-375',widths[2],{draftIsolated:true});await page.keyboard.press('Escape');assert.equal(requests.length,before);assert.ok(await trigger.evaluate(e=>e===document.activeElement));
+   await trigger.click();assert.equal(await page.getByRole('dialog').getByRole('textbox',{name:'城市 / 地区',exact:true}).inputValue(),'');await page.getByRole('dialog').getByRole('textbox',{name:'城市 / 地区',exact:true}).fill('Example city');await page.getByRole('dialog').getByRole('button',{name:'应用筛选',exact:true}).click();await settled();await page.getByRole('button',{name:'筛选 · 1',exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/api/leads').at(-1).query.city,'Example city');await shot('lead-filter-applied-375',widths[2],{oneAppliedQuery:true});
+   await page.getByRole('button',{name:'筛选 · 1',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'重置待应用条件',exact:true}).click();assert.equal(await page.getByRole('dialog').getByRole('textbox',{name:'城市 / 地区',exact:true}).inputValue(),'');await page.getByRole('dialog').getByRole('button',{name:'取消',exact:true}).click();assert.equal(requests.filter(r=>r.path==='/api/leads').at(-1).query.city,'Example city');await page.getByRole('button',{name:'清除筛选',exact:true}).click();await settled();await shot('lead-filter-reset-375',widths[2],{resetDraftNotApplied:true});
+   await scenario('long-name');await page.locator('.ux-queue-item h2').first().getByText(/长双语/).waitFor();assert.match(await page.locator('.ux-queue-next').first().innerText(),/未记录/);assert.equal(await page.locator('.ux-queue-item').first().locator('.ux-queue-actions > .primary-button').count(),1);await shot('lead-long-375',widths[2],{localeHierarchy:true,nextActionNotRecorded:true,primaryActionRetained:true});
+   await scenario('readonly');await page.evaluate(()=>window.frontAccount(99,'SALES_SUPPORT'));await page.locator('.ux-read-only').first().waitFor();assert.equal(await page.locator('.ux-queue-actions > button.primary-button').count(),0);await shot('lead-readonly-375',widths[2],{actionsOmitted:true});
+   await scenario('normal');await page.evaluate(()=>window.frontAccount(99,'ADMIN'));await page.setViewportSize(widths[0]);await nav('/leads');await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('all');await settled();assert.equal(await page.locator('.ux-queue-item').nth(3).locator('a.primary-button').getAttribute('href'),`/schools/${id(30)}`);await shot('lead-converted-1920',widths[0],{canonicalContextLink:true});
+   for(const error of ['uncertain','conflict','claimed','forbidden']){
+    failure=error;failedOnce=false;await nav('/leads');await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('pool');await settled();await page.locator('.ux-queue-item .primary-button').first().click();await page.getByRole('dialog').getByRole('button',{name:'保存',exact:true}).click();await page.getByRole('dialog').locator('.inline-message.error').waitFor();
+    if(error==='uncertain'){const body=requests.filter(r=>r.method==='POST'&&r.path.endsWith('/claim')).at(-1).body;await page.getByRole('button',{name:zh['business.retrySame'],exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});assert.deepEqual(requests.filter(r=>r.method==='POST'&&r.path.endsWith('/claim')).at(-1).body,body);assert.equal(await page.getByRole('combobox',{name:'队列范围',exact:true}).inputValue(),'mine');}
+    else{await shot(`lead-${error}-1920`,widths[0],{safeError:true});await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});}
+    failure='';
+   }
+   await page.getByRole('combobox',{name:'队列范围',exact:true}).selectOption('mine');await settled();await page.locator('.ux-queue-item').nth(1).locator('.primary-button').click();await page.getByRole('dialog').locator('input[inputmode=decimal]').waitFor();await page.getByRole('dialog').locator('input[inputmode=decimal]').fill('1200.50');const currency=page.getByRole('dialog').locator('select[name=currency]');assert.equal(await currency.evaluate(el=>el.closest('label').querySelector('span').textContent),zh['leads.currency']);await currency.selectOption('USD');assert.equal(await currency.inputValue(),'USD');assert.equal(await page.getByRole('dialog').locator('[name=amount]').inputValue(),'1200.50');await shot('lead-convert-currency-1920',widths[0],{canonicalEditor:true,currency:'USD',associatedLabel:true});await page.keyboard.press('Escape');
+   await page.getByRole('button',{name:'QA English'}).click();await shot('lead-en-1920',widths[0],{humanLabels:true});
+  }else{
+   await page.evaluate(id=>localStorage.setItem(`lumina:dashboard-mode:${id}`,'daily'),id(99));
+   for(const viewport of widths){await page.setViewportSize(viewport);await nav('/dashboard');await page.locator('[data-region=my-today]').waitFor();const positions={};for(const region of ['my-today','operational-attention','business-snapshot']){const box=await page.locator(`[data-region=${region}]`).boundingBox();positions[region]=box.y;if(viewport.width===1920)assert.ok(box.y<1080,`${region} begins ${box.y}`);}if(viewport.width===375)assert.ok(positions['my-today']<812);assert.ok(await page.locator('[data-region=quick-navigation]').evaluate(el=>document.querySelector('[data-region=business-snapshot]').compareDocumentPosition(el)&Node.DOCUMENT_POSITION_FOLLOWING));await shot(`dashboard-daily-${viewport.width}`,viewport,positions);}
+   await page.setViewportSize(widths[0]);await page.getByRole('button',{name:'经营管理',exact:true}).click();await page.locator('[data-region=management-summary]').waitFor();assert.equal(await page.locator('[data-region=my-today]').count(),0);assert.equal(await page.locator('a[href="/reports/executive"]').filter({hasText:'打开经营总览'}).count(),1);assert.equal(requests.filter(r=>r.path.startsWith('/api/management')).length,0);await shot('dashboard-management-1920',widths[0],{noExecutiveFetch:true});
+   for(const viewport of widths.slice(1)){await page.setViewportSize(viewport);await shot(`dashboard-management-${viewport.width}`,viewport,{oneMode:true});}await page.setViewportSize(widths[0]);
+   assert.match(await page.locator('[data-region=business-snapshot]').innerText(),/CNY/);assert.match(await page.locator('[data-region=business-snapshot]').innerText(),/USD/);
+   await nav('/dashboard');await page.locator('[data-region=management-summary]').waitFor();await page.evaluate(()=>window.frontAccount(100,'SALES_SPECIALIST'));await page.locator('[data-region=my-today]').waitFor();await shot('dashboard-account-b-1920',widths[0],{isolatedPreference:true,frontlineDefault:true});await page.evaluate(()=>window.frontAccount(99,'ADMIN'));await page.locator('[data-region=management-summary]').waitFor();await page.getByRole('button',{name:'日常工作',exact:true}).click();await nav('/dashboard');await page.locator('[data-region=my-today]').waitFor();
+   const taskPosts=requests.filter(r=>r.method==='PATCH').length;await page.locator('.task-check').first().click();await page.waitForFunction(()=>document.querySelectorAll('.focus-task').length===1);assert.equal(requests.filter(r=>r.method==='PATCH').length,taskPosts+1);await shot('dashboard-task-completed-1920',widths[0],{canonicalPatch:true});
+   await scenario('empty-today');await page.getByText('当前没有待办任务',{exact:true}).waitFor();await shot('dashboard-empty-1920',widths[0],{taskEmptyNotAllClear:true});await scenario('growth-failed');await page.getByText(zh['flow.growthUnavailable'],{exact:true}).waitFor();assert.equal(await page.locator('[data-region=my-today]').count(),1);await shot('dashboard-growth-unavailable-1920',widths[0],{localFailure:true});
+   await page.evaluate(()=>{localStorage.removeItem('lumina:dashboard-mode:00000000-0000-4000-8000-000000000099');});await scenario('normal');await page.locator('[data-region=management-summary]').waitFor();await shot('dashboard-default-manager-1920',widths[0],{capabilityAwareDefault:true});
+   await page.evaluate(()=>{window.frontAccount(99,'SALES_SPECIALIST');Object.defineProperty(window,'localStorage',{get(){throw new Error('Synthetic storage denied');},configurable:true});});await nav('/dashboard');await page.locator('[data-region=my-today]').waitFor();await page.getByRole('button',{name:'经营管理',exact:true}).click();await page.locator('[data-region=management-summary]').waitFor();await shot('dashboard-storage-denied-1920',widths[0],{storageNotDependency:true});
+   await page.getByRole('button',{name:'QA English'}).click();await shot('dashboard-en-1920',widths[0],{humanLabels:true});
+  }
+  const expected=report.errors.filter(e=>['console','response'].includes(e.kind)&&expectedFailures.some(f=>f.url===e.url&&e.message.includes(String(f.status))));report.expectedSyntheticFailures=expected;report.errors=report.errors.filter(e=>!expected.includes(e));report.frontlineRequests=requests;
+ }finally{await context.close();}
+};

@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Download, Plus, ScanSearch, SlidersHorizontal } from "lucide-react";
 import type { ModuleConfig } from "@/lib/crm-data";
 import type { CrmMetrics, PersistentResource } from "@/lib/crm-repository";
+import { RecordHeader } from "./record-header";
 import { DataTable } from "@/components/data-table";
 import { AccessibleDrawer, InlineMessage, SearchableSelect, Toast } from "@/components/ui";
 import { useI18n } from "@/components/i18n-provider";
@@ -234,15 +235,17 @@ export function ModulePage({
     finally{setExportPending(false);}
   };
 
-  return <div className="page-stack module-page">
+  return <div className={`page-stack module-page ${resource==="schools"?"ux-organization-page":""}`}>
     {createOnly?<button type="button" className="secondary-button" onClick={()=>setDrawer(true)}><Plus size={16}/>{t(`${prefix}.add`)}</button>:<>
-    <section className="page-heading-row">
+    {resource==="schools"?<RecordHeader nameZh={t(`${prefix}.title`)} context={<p>{t(`${prefix}.description`)}</p>}
+      secondaryActions={<button className="secondary-button" type="button" onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>}
+      primaryAction={<button className="primary-button" type="button" onClick={()=>setDrawer(true)}><Plus size={17}/>{t(`${prefix}.add`)}</button>}/>:<><section className="page-heading-row">
       <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div>
       <div className="page-actions">
         <button className="secondary-button" type="button" disabled={!resource} onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>
         <button className="primary-button" type="button" onClick={() => setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button>
       </div>
-    </section>
+    </section></>}
     <section className="quick-summary">
       <span><b>{metrics.total}</b><small>{t("modules.allRecords")}</small></span>
       <span><b>{metrics.needsAttention}</b><small>{t("modules.needsAttention")}</small></span>
@@ -261,7 +264,7 @@ export function ModulePage({
     />
     </>}
     {drawer && <AccessibleDrawer
-      pending={saving}
+      guardChanges pending={saving}
       title={t("modules.createRecord", { record: t(`${prefix}.singular`) })}
       eyebrow={t("eyebrow.createRecord")}
       description={t("modules.createHelp")}
@@ -272,11 +275,10 @@ export function ModulePage({
           <label className="field"><span>{t("products.nameZh")}</span><input name="nameZh" maxLength={120}/></label>
           <label className="field"><span>{t("products.nameEn")}</span><input name="nameEn" maxLength={160}/></label>
         <BilingualNameHint/></div>
-        {resource === "schools" && <>
-          <label className="field"><span>{t("customerOps.shortName")}</span><input name="shortName" maxLength={80}/></label>
-          <label className="field"><span>{t("business.field.organization_type")}</span><select name="organizationType" required defaultValue="SCHOOL">{["SCHOOL","PARTNER","OTHER"].map(value=><option key={value} value={value}>{t(`business.option.${value}`)}</option>)}</select></label>
+        {resource === "schools" && <><div className="form-grid two-column"><label className="field"><span>{t("modules.city")}</span><input name="city" required maxLength={80}/></label><label className="field"><span>{t("business.field.organization_type")}</span><select name="organizationType" required defaultValue="SCHOOL">{["SCHOOL","PARTNER","OTHER"].map(value=><option key={value} value={value}>{t(`business.option.${value}`)}</option>)}</select></label></div><details className="ux-enrichment"><summary>{t("ux.record.enrich")}</summary>          <label className="field"><span>{t("customerOps.shortName")}</span><input name="shortName" maxLength={80}/></label>
+
           <div className="form-grid two-column">
-            <label className="field"><span>{t("modules.city")}</span><input name="city" required maxLength={80}/></label>
+
             <label className="field"><span>{t("modules.curriculum")}</span><OptionInput name="curriculum" maxLength={120} options={CURRICULUM_OPTIONS}/></label>
           </div>
           <p className="detail-empty">{t("business.createContactHelp")}</p>
@@ -285,24 +287,22 @@ export function ModulePage({
           <label className="field"><span>{t("education.website")}</span><input name="website" type="url" placeholder="https://"/></label>
           <div className="form-grid two-column"><label className="field"><span>{t("education.foundedYear")}</span><YearInput name="foundedYear"/></label><label className="field"><span>{t("education.campusCount")}</span><input name="campusCount" type="number" min="0"/></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("education.studentCount")}</span><input name="studentCount" type="number" min="0"/></label><label className="field"><span>{t("education.facultyCount")}</span><input name="facultyCount" type="number" min="0"/></label></div>
-          <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
-        </>}
+          <label className="field"><span>{t("education.organizationOverview")}</span><textarea name="organizationOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label><label className="field"><span>{t("education.structureOverview")}</span><textarea name="structureOverviewMarkdown" rows={4} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label></details></>}
         {resource === "people" && <>
-          {!organizationId&&<SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value) => { setOrganization(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "organization")}/>}
-          {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>}
+          {!organizationId&&<SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value)=>{setOrganization(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"organization")}/>}
+          <div className="form-grid two-column"><label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label><label className="field"><span>{t("modules.phone")}</span><input name="phone" type="tel" maxLength={40}/></label></div>
+          <label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT" required>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label>
+          <details className="ux-enrichment"><summary>{t("ux.record.enrich")}</summary>          {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>}
           <label className="field"><span>{t("modules.title")}</span><input name="title" maxLength={120}/></label>
-          <div className="form-grid two-column">
-            <label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label>
-            <label className="field"><span>{t("modules.phone")}</span><input name="phone" type="tel" maxLength={40}/></label>
-          </div>
-          <div className="form-grid two-column"><label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT" required>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW" required>{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
+
+          <div className="form-grid two-column"><label className="field"><span>{t("contact.contactStatus")}</span><select name="contactStatus" defaultValue="NEW" required>{["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"].map(value=><option key={value} value={value}>{t(`contact.status.${value.toLowerCase()}`)}</option>)}</select></label></div>
           <label className="field"><span>{t("contact.communicationLevel")}</span><select name="communicationLevel" defaultValue="1" required>{[1,2,3,4].map(value=><option key={value} value={value}>{t(`contact.communication.level${value}`)}</option>)}</select></label>
           <div className="form-grid two-column"><label className="field"><span>{t("contact.preferredContactMethod")}</span><select name="preferredContactMethod" defaultValue="EMAIL" required>{["EMAIL","PHONE","SMS","WECHAT","WHATSAPP","IN_PERSON"].map(value=><option value={value} key={value}>{t(`contact.method.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("contact.preferredLanguage")}</span><OptionInput name="preferredLanguage" maxLength={80} options={LANGUAGE_OPTIONS}/></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("contact.acquisitionSource")}</span><OptionInput name="acquisitionSource" maxLength={160} options={SOURCE_OPTIONS}/></label><label className="field"><span>{t("contact.decisionRole")}</span><select name="decisionRole" defaultValue="UNKNOWN" required>{["UNKNOWN","DECISION_MAKER","INFLUENCER","USER","GATEKEEPER","OTHER"].map(value=><option value={value} key={value}>{t(`contact.decisionRole.${value.toLowerCase()}`)}</option>)}</select></label></div>
           <div className="form-grid two-column"><label className="field"><span>{t("contact.tags")}</span><TagsInput name="tags" placeholder={t("contact.tagsHelp")}/></label><label className="field"><span>{t("contact.nextFollowUp")}</span><DateInput name="nextFollowUpAt" type="datetime-local"/></label></div>
           <label className="field"><span>{t("contact.notes")}</span><textarea name="notesMarkdown" rows={5} maxLength={20000} data-markdown="true"/><small>{t("common.markdownSupported")}</small></label>
           <InlineMessage type="info"><span className="required-indicator">* </span>{t("modules.contactMethodRequired")} ({t("input.required")})</InlineMessage>
-        </>}
+</details></>}
         {resource === "tasks" && <>
           <SearchableSelect label={t("modules.relatedRecord")} required options={relatedOptions} value={related} onChange={(value) => { setRelated(value); setRelatedLabel(relatedOptions.find((item) => item.value === value)?.label ?? ""); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "related")}/>
           <SearchableSelect label={t("modules.owner")} options={ownerOptions} value={owner} onChange={(value) => { setOwner(value); invalidateDuplicateCheck(); }} onSearch={(query) => searchRelated(query, "owner")}/>
@@ -321,7 +321,7 @@ export function ModulePage({
         {!duplicateChecked && <InlineMessage type="warning">{t("modules.checkRequired")}</InlineMessage>}
         {error && <InlineMessage type="error">{error}</InlineMessage>}
         <div className="drawer-actions">
-          <button className="secondary-button" type="button" disabled={saving} onClick={close}>{t("common.cancel")}</button>
+          <button className="secondary-button" type="button" disabled={saving} data-drawer-dismiss onClick={close}>{t("common.cancel")}</button>
           <button className="primary-button" type="submit" disabled={!duplicateChecked || duplicates.length > 0 || saving}><CheckCircle2 size={17}/>{saving ? t("common.saving") : t("modules.createRecord", { record: t(`${prefix}.singular`) })}</button>
         </div>
       </form>

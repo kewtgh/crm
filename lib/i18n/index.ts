@@ -1,13 +1,12 @@
 import { en } from "./locales/en";
 import { zhCN } from "./locales/zh-CN";
 import type { Locale, Messages } from "./types";
+import { safeTranslation } from "../ux-presentation";
 
 export const dictionaries: Record<Locale, Messages> = { "zh-CN": zhCN, en };
 
 export function translate(locale: Locale, key: string, values?: Record<string, string | number>) {
-  const template = dictionaries[locale][key] ?? key;
-  if (!values) return template;
-  return Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, String(value)), template);
+  return safeTranslation(locale, dictionaries[locale], key, values);
 }
 
 export type { Locale } from "./types";

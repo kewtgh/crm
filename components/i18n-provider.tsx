@@ -3,11 +3,13 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { Locale } from "@/lib/i18n";
 import type { Messages } from "@/lib/i18n/types";
+import { safeTranslation, presentEnum } from "@/lib/ux-presentation";
 
 type I18nContextValue = {
   locale: Locale;
   setLocale: (locale: Locale) => Promise<void>;
   t: (key: string, values?: Record<string, string | number>) => string;
+  enumLabel: (key: string) => { label: string; known: boolean };
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -29,9 +31,10 @@ export function I18nProvider({ initialLocale, initialMessages, children }: { ini
       localStorage.setItem("lumina-locale", nextLocale);
     } catch {}
   }, []);
-  const value = useMemo(() => ({ locale, setLocale, t: (key: string, values?: Record<string, string | number>) => {
-    const template=messages[key]??key;
-    return values?Object.entries(values).reduce((message,[name,value])=>message.replaceAll(`{${name}}`,String(value)),template):template;
+  const value = useMemo(() => ({ locale, setLocale, enumLabel: (key: string) => presentEnum(locale, messages, key), t: (key: string, values?: Record<string, string | number>) => {
+    return safeTranslation(locale, messages, key, values, () => {
+      if (process.env.NODE_ENV === "development") console.warn("MISSING_TRANSLATION: review locale dictionary coverage");
+    });
   } }), [locale, messages, setLocale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

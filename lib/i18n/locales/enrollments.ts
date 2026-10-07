@@ -34,7 +34,7 @@ export const enEnrollments: Messages = {
   "enrollments.uncertain":"The save result is uncertain. Retry the same request to confirm before editing or closing.", "enrollments.retry":"Retry and confirm save",
 };
 export const zhEnrollments: Messages = {
-  "enrollments.title":"学生参与记录", "enrollments.description":"记录现有学生参与具体产品批次的业务生命周期与来源。",
+  "enrollments.title":"项目参与记录", "enrollments.description":"记录现有学生参与具体产品批次的业务生命周期与来源。",
   "enrollments.create":"新建参与记录", "enrollments.edit":"编辑参与记录", "enrollments.search":"搜索学生姓名或学号…",
   "enrollments.student":"学生", "enrollments.cohort":"产品批次", "enrollments.household":"家庭业务上下文", "enrollments.opportunity":"关联商机",
   "enrollments.owner":"负责人", "enrollments.salesOwner":"销售负责人", "enrollments.updatedAt":"更新时间",

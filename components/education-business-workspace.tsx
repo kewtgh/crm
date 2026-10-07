@@ -39,9 +39,9 @@ function referenceHref(type:string,id:string){
   return `/education-business?subject=ORGANIZATION&subjectId=${id}`;
 }
 
-export function EducationBusinessWorkspace({context,initialResource}:{context?:BusinessContext;initialResource?:BusinessResource}){
+export function EducationBusinessWorkspace({context,initialResource,embedded=false}:{context?:BusinessContext;initialResource?:BusinessResource;embedded?:boolean}){
   const {t}=useI18n();const canManage=useCapability("education.manage");const {formatDate}=useUserPreferences();
-  const resources=businessResourcesFor(context);
+  const resources=embedded&&initialResource?[initialResource].filter(key=>businessResourcesFor(context).includes(key)):businessResourcesFor(context);
   const [resource,setResource]=useState<BusinessResource>(initialResource&&resources.includes(initialResource)?initialResource:resources[0]);
   const [pageSize,setPageSize]=useState(20);
   const [data,setData]=useState<BusinessPage|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -73,12 +73,12 @@ export function EducationBusinessWorkspace({context,initialResource}:{context?:B
     return String(value);
   };
   return <div className="page-stack education-business-workspace">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("business.eyebrow")}</p><h1>{t("business.title")}</h1><p>{t("business.description")}</p></div><div className="page-actions"><button className="secondary-button" disabled={loading||pending} onClick={()=>void load(data?.page??1)}>{t("common.refresh")}</button>{canManage&&<button className="primary-button" disabled={pending} onClick={()=>{setError("");setEditor({record:null,token:crypto.randomUUID()});}}>{t(`business.add.${resource}`)}</button>}</div></section>
-    {context&&<InlineMessage type="info"><b>{data?.labels[`${context.type}:${context.id}`]??t("common.loading")}</b> · {t("business.contextHelp")} <Link href="/education-business">{t("business.allRecords")}</Link></InlineMessage>}
+    <section className="page-heading-row"><div><p className="eyebrow">{t("business.eyebrow")}</p>{embedded?<h2>{t(`business.resource.${resource}`)}</h2>:<h1>{t("business.title")}</h1>}<p>{t("business.description")}</p></div><div className="page-actions"><button className="secondary-button" disabled={loading||pending} onClick={()=>void load(data?.page??1)}>{t("common.refresh")}</button>{canManage&&<button className="primary-button" disabled={pending} onClick={()=>{setError("");setEditor({record:null,token:crypto.randomUUID()});}}>{t(`business.add.${resource}`)}</button>}</div></section>
+    {context&&!embedded&&<InlineMessage type="info"><b>{data?.labels[`${context.type}:${context.id}`]??t("common.loading")}</b> · {t("business.contextHelp")} <Link href="/education-business">{t("business.allRecords")}</Link></InlineMessage>}
     <InlineMessage type="info">{t(`business.help.${resource}`)}</InlineMessage>
     {error&&<InlineMessage type="error">{error}<button className="text-button" disabled={loading} onClick={()=>void load(data?.page??1)}>{t("common.retry")}</button></InlineMessage>}
     {notice&&<InlineMessage type="info">{notice}</InlineMessage>}
-    <DetailTabs items={resources.map(key=>({key,label:`business.resource.${key}`}))} active={resource} onChange={key=>{setResource(key as BusinessResource);setData(null);setNotice("");setError("");}} disabled={pending||!!editor} label={t("business.title")}>
+    <DetailTabs hideNavigation={embedded} items={resources.map(key=>({key,label:`business.resource.${key}`}))} active={resource} onChange={key=>{setResource(key as BusinessResource);setData(null);setNotice("");setError("");}} disabled={pending||!!editor} label={t("business.title")}>
       {loading&&<p role="status">{t("common.loading")}</p>}
       {data&&<><p>{t("business.total",{count:data.total})}</p><div className="business-record-grid">{data.items.map(row=><article className="detail-section business-record-card" key={row.id}>
         <div className="surface-heading"><h2>{label(row)}</h2>{canManage&&data.editableIds.includes(row.id)&&<button className="secondary-button" onClick={()=>setEditor({record:row,token:row.id})}>{t("crm.edit")}</button>}</div>

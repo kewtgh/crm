@@ -1,3 +1,8 @@
+import {uxClosureZh} from "./ux-closure";
+import { frontlineZh } from './frontline';
+import { recordWorkspaceZh } from './record-workspaces';
+import { zhManagementUX } from './management-ux';
+import { zhUXFoundation } from './ux-foundation';
 import {zhWorkflowUsability} from "./workflow-usability";
 import {zhWorkflowExperience} from "./workflow-experience";
 import {zhContractUploads} from "./contract-uploads";
@@ -41,6 +46,10 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...uxClosureZh,
+  ...recordWorkspaceZh,
+  ...zhUXFoundation,
+  ...zhManagementUX,
   ...zhManagement,
   ...zhContractDocuments,
   ...zhContractUploads,
@@ -490,4 +499,5 @@ export const zhCN: Messages = {
   ...zhApplications,
   ...zhWorkflowExperience,
   ...zhWorkflowUsability,
+  ...frontlineZh,
 };

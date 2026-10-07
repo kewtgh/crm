@@ -1,0 +1,3 @@
+import type {DataRow} from "../../lib/crm-data";
+const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
+export const organizationRows:DataRow[]=Array.from({length:6},(_,i)=>({id:id(i+1),href:`/schools/${id(i+1)}`,primary:i?`示例教育机构 ${i}`:"示例国际教育与学生发展学院",primaryEn:i?`Example Education Organization ${i}`:"Example International Academy for Global Education and Student Development",bilingualName:true,secondary:"示例城市 · IB",secondaryEn:"Example City · IB",owner:"Advisor A",status:i===2?"RISK":"HEALTHY",statusKey:i===2?"crm.status.RISK":"crm.status.HEALTHY",statusTone:i===2?"red":"green",meta:"A",extra:"2026-10-07T00:00:00Z",completeness:80}));

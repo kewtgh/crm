@@ -1,4 +1,5 @@
 "use client";
+import {SafeDiagnostics} from "./safe-diagnostics";
 import {ImportSetsPage} from "./import-sets-page";
 import {v2FieldLabel} from "@/lib/import-v2-labels";
 import {SearchFilterBar} from "./search-filter-bar";
@@ -401,7 +402,7 @@ export function ImportsPage({
     setMergeOptions(result.value.items.filter(item=>item.type===expected).map(item=>({value:item.value.split(":")[1]??"",label:`${item.labelZh} / ${item.labelEn}`,detail:t(mergeResource==="CONTACTS"?"imports.contacts":"imports.organizations")})));
   };
 
-  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"实体":"Entities"],["relationships",zh?"关系":"Relationships"],["sets",zh?"Import Sets":"Import Sets"]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
+  const workspaceTabs=<nav className="toolbar" aria-label={zh?"导入工作区":"Import workspace"}>{[["entities",zh?"实体":"Entities"],["relationships",zh?"关系":"Relationships"],["sets",t("closure.importSets")]].map(([key,label])=><button key={key} className="secondary-button" aria-pressed={workspaceTab===key} onClick={()=>setWorkspaceTab(key)}>{label}</button>)}</nav>;
   if(workspaceTab!=="entities")return <div className="page-stack imports-page">{workspaceTabs}<ImportSetsPage key={workspaceTab} relationships={workspaceTab==="relationships"}/></div>;
   return <div className="page-stack imports-page">
     {workspaceTabs}
@@ -458,7 +459,7 @@ export function ImportsPage({
       <div className="surface batch-list">
         <div className="surface-heading"><div><p className="eyebrow">{t("imports.historyEyebrow")}</p><h2>{t("imports.batches")}</h2></div><FileSpreadsheet size={21} /></div>
         {batches.map((item) => <button className={item.id === selected ? "batch-card selected" : "batch-card"} type="button" key={item.id} onClick={() => void open(item.id)}>
-          <span><b>{item.filename}</b><small>{item.resourceType} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
+          <span><b>{item.filename}</b><small>{t(({CONTACTS:"imports.contacts",ORGANIZATIONS:"imports.organizations",HOUSEHOLDS:"education.households",STUDENTS:"education.students",COHORTS:"cohorts.title",ENROLLMENTS:"enrollments.title"} as Record<string,string>)[item.resourceType]??"closure.unknownResource")} · {formatDate(item.createdAt, { includeTime: true })}</small></span>
           <StatusBadge tone={item.status === "COMPLETED" ? "green" : item.status === "ROLLED_BACK" ? "gray" : item.status.includes("FAILED") ? "red" : "amber"}>{t(`imports.status.${item.status.toLowerCase()}`)}</StatusBadge>
           <small>{t("imports.batchCounts", { total: item.total, duplicates: item.duplicates, failed: item.failed })}</small>
         </button>)}
@@ -474,12 +475,14 @@ export function ImportsPage({
           <div>
             <b>{row.templateVersion==="2"&&row.normalized.operation==="UPDATE"?`UPDATE · ${row.normalized.targetLabel||(zh?"已授权目标":"Authorized target")}`:current?.resourceType==="ENROLLMENTS"?`${row.normalized.studentNumber||"—"} · ${row.normalized.cohortCode||"—"}`:current?.resourceType==="COHORTS"?`${row.normalized.productCode||"—"} · ${row.normalized.cohortCode||"—"}`:`${row.normalized.nameZh||""} / ${row.normalized.nameEn||""}`}</b>
             <small>{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?row.normalized.ownerEmail||"—":row.normalized.email || row.normalized.phone || row.normalized.city || "—"}</small>
-            {row.targetRevision&&<small>{zh?"预检版本":"Preflight revision"}: {row.targetRevision}</small>}{row.errors.map((item,index) => <small className="error-text" key={index}>{row.templateVersion==="2"?`${item.code} · ${item.sheet??"CSV"}:${item.row??row.rowNumber} · ${item.column??item.field??"row"}`:t(`imports.error.${item.code.toLowerCase()}`)}{item.field && ` · ${fieldLabel(item.field)}`}{item.reason && ` · ${(t(`imports.reason.${item.reason}`)===`imports.reason.${item.reason}`?t("imports.reason.generic"):t(`imports.reason.${item.reason}`))}`}</small>)}
-            {row.lastError && <small className="error-text">{current?.resourceType==="COHORTS"||current?.resourceType==="ENROLLMENTS"?t("imports.reason.generic"):row.lastError}</small>}
+            {(row.errors.length>0||row.lastError)&&<><p className="error-text">{t("closure.importProblem")}</p><p>{t("closure.importNext")}</p></>}
+            {row.errors.map((item,index)=><div key={index}>{item.field&&<small>{fieldLabel(item.field)}</small>}<SafeDiagnostics items={[{label:t("closure.code"),value:item.code},{label:t("closure.row"),value:item.row??row.rowNumber},{label:t("closure.field"),value:item.column??item.field},{label:t("closure.sheet"),value:item.sheet},{label:t("closure.code"),value:item.reason}]}/></div>)}
+            {row.targetRevision&&<SafeDiagnostics items={[{label:t("closure.revision"),value:row.targetRevision}]}/>}
+
           </div>
           <StatusBadge tone={row.status === "APPLIED" ? "green" : row.status === "INVALID" || row.status === "FAILED" ? "red" : row.status === "DUPLICATE" ? "amber" : "blue"}>{t(`imports.rowStatus.${row.status.toLowerCase()}`)}</StatusBadge>
           {(row.status === "INVALID" || row.status === "FAILED" || row.templateVersion==="2"&&row.status==="DUPLICATE") && <button className="secondary-button" type="button" disabled={!current||!importFields(current.resourceType).length} onClick={()=>{setRepairFields(current?.executionContract==="CANONICAL_V2"?v2Headers(current.resourceType as V2Resource):importFields(current?.resourceType??""));setRepairRow(row);setError("");}}>{t("imports.repairRow")}</button>}
-          {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {row.reasons.join(", ")}</small>{(row.templateVersion==="2"?["CREATE","SKIP"]:["CREATE", "UPDATE", "MERGE", "SKIP"]).map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
+          {row.status === "DUPLICATE" && <div className="decision-buttons"><small>{t("duplicates.score", { score: row.score ?? 0 })} · {t("closure.importNext")}</small>{(row.templateVersion==="2"?["CREATE","SKIP"]:["CREATE", "UPDATE", "MERGE", "SKIP"]).map((choice) => <button type="button" key={choice} onClick={() => void decide(row, choice)}>{t(`imports.action.${choice.toLowerCase()}`)}</button>)}</div>}
         </article>)}
         {current && rows.length > 0 && <Pagination page={rowPage} totalPages={rowPages} total={rowTotal} pageSize={rowPageSize} onPage={(next) => void open(selected, next)} onPageSize={(value)=>void open(selected,1,value)} />}
         {current && !rows.length && <div className="empty-state"><span>{t("imports.noRows")}</span></div>}

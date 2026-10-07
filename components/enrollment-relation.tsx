@@ -6,8 +6,8 @@ import { useI18n } from "./i18n-provider";
 import { SearchableSelect, InlineMessage } from "./ui";
 
 export type EnrollmentRelationType = "PRODUCT" | "STUDENT" | "COHORT" | "HOUSEHOLD" | "USER" | "OPPORTUNITY" | "ORGANIZATION" | "CONTACT" | "EVENT" | "CAMPAIGN" | "REFERRAL";
-export function EnrollmentRelation({type, label, value, initialLabel, required = false, disabled = false, onChange}: {
-  type: EnrollmentRelationType; label: string; value: string; initialLabel?: string; required?: boolean; disabled?: boolean; onChange: (value: string) => void;
+export function EnrollmentRelation({type, label, value, initialLabel, required = false, disabled = false, onChange, onSelection}: {
+  type: EnrollmentRelationType; label: string; value: string; initialLabel?: string; required?: boolean; disabled?: boolean; onChange: (value: string) => void; onSelection?: (value: string, label: string) => void;
 }) {
   const {t, locale} = useI18n(), latest = useRemoteSearch();
   const [options, setOptions] = useState<Array<{value: string; label: string}>>([]), [error, setError] = useState("");
@@ -20,5 +20,6 @@ export function EnrollmentRelation({type, label, value, initialLabel, required =
     setOptions(outcome.value.items.map(item => ({value: scoped ? item.value : item.value.split(":")[1], label: locale === "en" ? item.labelEn : item.labelZh}))); setError("");
   };
   const selected = value && !options.some(item => item.value === value) ? [{value, label: initialLabel || t("flow.selectedRecord")}] : [];
-  return <fieldset className="follow-up-fields" disabled={disabled}><SearchableSelect label={label} required={required} value={value} options={[...selected, ...options]} onSearch={search} onChange={onChange}/>{!required && value && <button className="text-button" type="button" onClick={() => onChange("")}>{t("business.clear")}</button>}{error && <InlineMessage type="error">{error}</InlineMessage>}</fieldset>;
+  const select = (next: string) => { onChange(next); onSelection?.(next, options.find(item => item.value === next)?.label ?? (next ? initialLabel ?? t("flow.selectedRecord") : "")); };
+  return <fieldset className="follow-up-fields" disabled={disabled}><SearchableSelect label={label} required={required} value={value} options={[...selected, ...options]} onSearch={search} onChange={select}/>{!required && value && <button className="text-button" type="button" onClick={() => select("")}>{t("business.clear")}</button>}{error && <InlineMessage type="error">{error}</InlineMessage>}</fieldset>;
 }

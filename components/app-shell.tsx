@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import type { AppUser } from "@/lib/user";
 import { roleMessageKey } from "@/lib/roles";
-import { hasCapability, type Capability } from "@/lib/capabilities";
+import { activeDestination, visibleDestinations, type NavigationSpace } from "@/lib/navigation-destinations";
 import { APP_VERSION } from "@/lib/version";
 import { AppUserProvider } from "./app-user-context";
 import { useI18n } from "./i18n-provider";
@@ -49,123 +49,22 @@ type NavigationGroup = { titleKey: string; items: NavItem[] };
 type GlobalSearchResult = { title: string; detail: string; href: string; source: "page" | "record" };
 const SIDEBAR_SCROLL_STORAGE_KEY = "lumina.sidebar.scroll-top";
 
-const navigation: NavigationGroup[] = [
-  { titleKey: "nav.dashboard", items: [
-    { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { labelKey: "nav.actionCenter", href: "/action-center", icon: ListChecks },
-    { labelKey: "nav.schedule", icon: CalendarRange, children: [
-      { labelKey: "nav.calendar", href: "/calendar" },
-    { labelKey: "nav.tasks", href: "/tasks" },
-    ]},
-  ]},
-  { titleKey: "nav.relationships", items: [
-    { labelKey: "nav.schools", href: "/schools", icon: Building2 },
-    { labelKey: "nav.people", href: "/people", icon: Users },
-    { labelKey: "nav.households", href: "/households", icon: Users },
-    { labelKey: "business.title", href: "/education-business", icon: Target },
-  ]},
-  { titleKey: "nav.operations", items: [
-    { labelKey: "nav.customerService", icon: MessageSquareText, children: [
-      { labelKey:"nav.messages",href:"/messages" },
-      { labelKey:"nav.notifications",href:"/notifications" },
-      { labelKey:"nav.privacyRequests",href:"/privacy-requests" },
-    ]},
-    { labelKey: "nav.sales", icon: Target, children: [
-      { labelKey: "nav.leads", href: "/leads" },
-      { labelKey: "nav.growth", href: "/growth" },
-      { labelKey: "nav.opportunities", href: "/opportunities" },
-      { labelKey: "nav.performance", href: "/sales/performance" },
-      { labelKey: "nav.approvals", href: "/approvals" },
-    ]},
-    { labelKey: "nav.business", icon: Building2, children: [
-      { labelKey: "nav.contracts", href: "/contracts" },
-      { labelKey: "nav.products", href: "/products" },
-      { labelKey: "nav.finance", href: "/finance" },
-    ]},
-    { labelKey: "nav.data", icon: DatabaseZap, children: [
-      { labelKey: "nav.imports", href: "/imports" },
-      { labelKey: "nav.duplicates", href: "/duplicates" },
-      { labelKey: "nav.quality", href: "/data-quality" },
-    ]},
-    { labelKey: "nav.reports", icon: FileBarChart, children: [
-      { labelKey: "nav.reportCenter", href: "/reports" },
-      { labelKey: "nav.consumption", href: "/analytics/consumption" },
-      { labelKey: "nav.exports", href: "/reports/exports" },
-    ]},
-    { labelKey: "nav.assistance", href: "/ai", icon: Sparkles },
-  ]},
-  { titleKey: "nav.admin", items: [
-    { labelKey: "nav.admin", icon: ShieldCheck, documentChildNavigation: true, children: [
-      { labelKey: "nav.adminOverview", href: "/admin" },
-      { labelKey: "nav.approvals", href: "/admin/approvals" },
-      { labelKey: "nav.operationsCenter", href: "/admin/operations" },
-      { labelKey: "nav.workspaceSettings", href: "/admin/workspace" },
-      { labelKey: "nav.users", href: "/admin/users" },
-      { labelKey: "nav.recycleBin", href: "/admin/recycle-bin" },
-      { labelKey: "nav.security", href: "/admin/security" },
-    ]},
-  ]},
-  { titleKey: "nav.account", items: [
-    { labelKey: "nav.settings", href: "/settings/profile", icon: Settings },
-  ]},
-];
-
-function getActiveNavigationHref(pathname: string, groups: NavigationGroup[]) {
-  if(pathname==="/automation")pathname=groups.flatMap(group=>group.items).find(item=>item.labelKey==="nav.assistance")?.href??pathname;
-  if(pathname==="/sales/allocation")pathname="/sales/performance";
-  if(pathname==="/student-success"||pathname==="/students"||pathname==="/progression"||pathname==="/enrollments"||pathname==="/applications"||pathname==="/workflow-templates")pathname="/households";
-  if(pathname==="/guardian-portal")pathname="/messages";
-  const hrefs = groups.flatMap((group) => group.items.flatMap((item) => [
-    ...(item.href ? [item.href] : []),
-    ...(item.children ?? []).map((child) => child.href),
-  ]));
-  const matches = hrefs.filter((href) => (
-    pathname === href
-    || pathname.startsWith(`${href}/`)
-    || (href === "/settings/profile" && pathname.startsWith("/settings/"))
-  ));
-  return matches.sort((left, right) => right.length - left.length)[0];
+const spaceIcons = { work: LayoutDashboard, relationships: Building2, students: Users, commercial: Target, management: FileBarChart, governance: DatabaseZap, admin: ShieldCheck, account: Settings };
+const destinationIcons: Record<string, React.ElementType> = { tasks: ListChecks, calendar: CalendarRange, messages: MessageSquareText, ai: Sparkles };
+function navigationFor(role: AppUser["role"]): NavigationGroup[] {
+  const visible = visibleDestinations(role);
+  return (Object.keys(spaceIcons) as NavigationSpace[]).map(space => ({
+    titleKey: space === "account" ? "nav.account" : "ux.space." + space,
+    items: visible.filter(d => d.space === space).map(d => ({ labelKey: d.labelKey, href: d.href, icon: destinationIcons[d.id] ?? spaceIcons[space], documentChildNavigation: d.documentNavigation })),
+  })).filter(group => group.items.length);
 }
-
-const routeCapabilities: Partial<Record<string, Capability>> = {
-  "/students": "education.view",
-  "/enrollments": "education.view",
-  "/applications": "education.view",
-  "/workflow-templates": "education.view",
-  "/households": "education.view",
-  "/progression": "progression.manage",
-  "/leads": "leads.view",
-  "/opportunities": "opportunities.view",
-  "/contracts": "contracts.view",
-  "/calendar": "calendar.view",
-  "/tasks": "tasks.view",
-  "/messages": "messages.view",
-  "/notifications": "messages.view",
-  "/guardian-portal": "portal.manage",
-  "/privacy-requests":"privacyRequests.manage",
-  "/growth": "leads.view",
-  "/education-business": "education.view",
-  "/automation": "automation.manage",
-  "/finance": "finance.view",
-  "/imports": "imports.view",
-  "/duplicates": "duplicates.manage",
-  "/data-quality": "dataQuality.manage",
-  "/ai": "ai.review",
-  "/admin": "admin.access",
-  "/admin/approvals": "admin.access",
-  "/approvals": "approvals.decide",
-  "/admin/operations": "admin.access",
-  "/admin/workspace": "admin.access",
-  "/admin/users": "users.manage",
-  "/admin/recycle-bin": "admin.access",
-  "/admin/security": "admin.access",
-};
 
 export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferences, preferredLocale, avatarSource = null, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; preferredLocale:UserSettings["locale"]; avatarSource?:string|null; children: React.ReactNode }) {
   const [avatarOverride,setAvatarOverride]=useState<string|null>(null);
   useEffect(()=>{const update=(event:Event)=>{const url=(event as CustomEvent<{url:string}>).detail?.url;if(url?.startsWith("/api/settings/avatar"))setAvatarOverride(url);};window.addEventListener("lumina:avatar-updated",update);return()=>window.removeEventListener("lumina:avatar-updated",update);},[]);
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen,setMobileSearchOpen]=useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -219,23 +118,23 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       window.removeEventListener("pagehide", persistScrollPosition);
     };
   }, []);
-  const visibleNavigation = useMemo(() => {
-    const canVisit = (href?: string) => (!href || href!=="/admin/recycle-bin" || user.role==="SUPER_ADMIN") && (!href || !routeCapabilities[href] || hasCapability(user.role, routeCapabilities[href]));
-    const canAllocate = hasCapability(user.role, "performance.manage");
-    return navigation.map((group) => ({
-      ...group,
-      items: group.items
-        .map(item=>item.labelKey==="nav.assistance"?{...item,href:hasCapability(user.role,"ai.review")?"/ai":"/automation"}:item)
-        .filter((item) => canVisit(item.href) && (item.labelKey !== "nav.admin" || hasCapability(user.role, "admin.access")))
-        .map((item) => item.children ? { ...item, children: item.children.filter((child) => canVisit(child.href) && (child.labelKey !== "nav.allocation" || canAllocate)) } : item)
-        .filter((item) => !item.children || item.children.length > 0),
-    })).filter((group) => group.items.length > 0);
-  }, [user.role]);
-  const activeNavigationHref = useMemo(
-    () => getActiveNavigationHref(pathname, visibleNavigation),
-    [pathname, visibleNavigation],
-  );
-  const [expanded, setExpanded] = useState<string[]>(() => navigation.flatMap((group) => group.items.filter((item) => item.children?.some((child) => pathname.startsWith(child.href))).map((item) => item.labelKey)));
+  const visibleNavigation = useMemo(() => navigationFor(user.role), [user.role]);
+  const currentDestination = activeDestination(pathname, searchParams, visibleDestinations(user.role));
+  const activeNavigationHref = currentDestination?.href;
+  const activeSpaceKey = currentDestination?.space === "account" ? "nav.account" : "ux.space." + currentDestination?.space;
+  const [expandedSpaces, setExpandedSpaces] = useState<string[]>(["ux.space.work"]);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const nav = sidebarNavRef.current;
+      const link = nav?.querySelector<HTMLElement>('a[aria-current="page"]');
+      if (!nav || !link) return;
+      const bounds = nav.getBoundingClientRect(), current = link.getBoundingClientRect();
+      if (current.top < bounds.top) nav.scrollTop += current.top - bounds.top;
+      else if (current.bottom > bounds.bottom) nav.scrollTop += current.bottom - bounds.bottom;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeNavigationHref, mobileOpen, collapsed]);
+  const [expanded, setExpanded] = useState<string[]>([]);
   const pageCommands=useMemo<GlobalSearchResult[]>(()=>visibleNavigation.flatMap(group=>group.items.flatMap(item=>{
     const own=item.href?[{title:t(item.labelKey),detail:t("search.type.page"),href:item.href,source:"page" as const}]:[];
     const children=(item.children??[]).map(child=>({title:t(child.labelKey),detail:t("search.type.page"),href:child.href,source:"page" as const}));
@@ -331,7 +230,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     const trap=(event:KeyboardEvent)=>{
       if(event.key==="Escape"){event.preventDefault();setMobileOpen(false);return;}
       if(event.key!=="Tab"||!sidebarRef.current)return;
-      const focusable=Array.from(sidebarRef.current.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])"));
+      const focusable=Array.from(sidebarRef.current.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])")).filter(element=>element.getClientRects().length>0);
       if(!focusable.length)return;
       const first=focusable[0],last=focusable[focusable.length-1];
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
@@ -378,8 +277,8 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         </div>
         <nav ref={sidebarNavRef} className="sidebar-nav">
           {visibleNavigation.map((group) => <div className="nav-group" key={group.titleKey}>
-            <p>{t(group.titleKey)}</p>
-            {group.items.map((item) => <NavEntry key={item.labelKey} item={item} activeHref={activeNavigationHref} expanded={expanded.includes(item.labelKey) || Boolean(item.children?.some((child) => child.href === activeNavigationHref))} onExpand={() => { if (collapsed) setCollapsed(false); setExpanded((current) => current.includes(item.labelKey) ? current.filter((value) => value !== item.labelKey) : [...current, item.labelKey]); }} onNavigate={closeMobile} />)}
+            <button type="button" className="nav-space-heading" tabIndex={collapsed ? -1 : 0} aria-expanded={collapsed || expandedSpaces.includes(group.titleKey) || activeSpaceKey === group.titleKey} aria-controls={`space-${group.titleKey}`} onClick={() => setExpandedSpaces(current => current.includes(group.titleKey) ? current.filter(key => key !== group.titleKey) : [...current, group.titleKey])}>{t(group.titleKey)}<ChevronDown size={14}/></button>
+            <div id={`space-${group.titleKey}`} hidden={!collapsed && !expandedSpaces.includes(group.titleKey) && activeSpaceKey !== group.titleKey}>{group.items.map((item) => <NavEntry key={item.labelKey} item={item} activeHref={activeNavigationHref} expanded={expanded.includes(item.labelKey) || Boolean(item.children?.some((child) => child.href === activeNavigationHref))} onExpand={() => { if (collapsed) setCollapsed(false); setExpanded((current) => current.includes(item.labelKey) ? current.filter((value) => value !== item.labelKey) : [...current, item.labelKey]); }} onNavigate={closeMobile} />)}</div>
           </div>)}
         </nav>
         <div className="sidebar-insight">
@@ -461,7 +360,9 @@ function NavEntry({ item, activeHref, expanded, onExpand, onNavigate }: { item: 
     <button type="button" className="nav-link" aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-expanded={expanded} onClick={onExpand}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}<ChevronDown className={`nav-chevron ${expanded ? "rotate" : ""}`} size={15} /></button>
     {expanded && <div className="nav-children">{item.children.map((child) => {const childActive=activeHref===child.href;const properties={className:childActive?"active":"",...(childActive?{"aria-current":"page" as const}:{}),href:child.href,onClick:onNavigate};const content=<><span>{t(child.labelKey)}</span>{child.badge&&<b className="nav-badge">{child.badge}</b>}</>;return item.documentChildNavigation?<a {...properties} data-navigation="document" key={child.href}>{content}</a>:<Link {...properties} key={child.href}>{content}</Link>;})}</div>}
   </div>;
-  return <Link className={`nav-link ${active ? "active" : ""}`} aria-label={t(item.labelKey)} title={t(item.labelKey)} aria-current={active?"page":undefined} href={item.href ?? "#"} onClick={onNavigate}><Icon size={18} /><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</Link>;
+  const properties = { className: `nav-link ${active ? "active" : ""}`, "aria-label": t(item.labelKey), title: t(item.labelKey), "aria-current": active ? "page" as const : undefined, href: item.href ?? "#", onClick: onNavigate };
+  const content = <><Icon size={18}/><span>{t(item.labelKey)}</span>{item.badge && <b className="nav-badge">{item.badge}</b>}</>;
+  return item.documentChildNavigation ? <a {...properties} data-navigation="document">{content}</a> : <Link {...properties}>{content}</Link>;
 }
 
 function NotificationPopover({ close,triggerRef }: { close: () => void;triggerRef:React.RefObject<HTMLButtonElement|null> }) {
@@ -504,7 +405,7 @@ function searchHref(type:"ORGANIZATION"|"CONTACT"|"OPPORTUNITY"|"TASK"|"CONTRACT
   if(type==="CONTRACT")return`/contracts?focus=${id}`;
   if(type==="QUOTE")return`/finance?quote=${id}`;
   if(type==="STUDENT")return`/students?focus=${id}`;
-  if(type==="HOUSEHOLD")return`/households?focus=${id}`;
+  if(type==="HOUSEHOLD")return`/households?tab=families&focus=${id}`;
   if(type==="LEAD")return`/leads?focus=${id}`;
   return`/products?focus=${id}`;
 }

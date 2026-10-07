@@ -359,7 +359,12 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="usability"){await require("./qa-workflow-usability.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="ux-closure"){await require("./qa-ux-closure.cjs")({browser,base,output,report,observe});}
+    else     if(["frontline-leads","frontline-dashboard"].includes(env.QA_SCOPE)){await require("./qa-frontline-experience.cjs")({browser,base,output,report,observe});}
+    else if(["record-students","record-accounts"].includes(env.QA_SCOPE)){await require("./qa-record-workspaces.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="management-experience"){await require("./qa-management-experience.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="ux-foundation"){await require("./qa-ux-foundation.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="usability"){await require("./qa-workflow-usability.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="experience"){await require("./qa-workflow-experience.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="import-sets"){await require("./qa-import-sets.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="import-v2"){await require("./qa-import-v2.cjs")({browser,base,output,report,observe});}
