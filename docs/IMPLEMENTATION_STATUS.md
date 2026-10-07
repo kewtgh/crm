@@ -1,4 +1,13 @@
-# Implementation status — v3.30.0 release candidate
+# Implementation status — v3.31.0 release candidate
+
+## v3.31.0 — Reliable operation recovery and directory context
+
+The first-principles audit closes ambiguous network-error handling across five mutation consumers,
+separates save acceptance from refresh failure, adds deletion reload/review recovery, and preserves
+advanced directory scope in URLs. Shared selection/menu keyboard behavior and CI coverage improve.
+No server mutation, domain ownership, permission, migration or Revenue change is introduced.
+See [audit](FIRST_PRINCIPLES_AUDIT_V331.md), [implementation plan](FIRST_PRINCIPLES_PLAN_V331.md),
+[release notes](RELEASE_V3.31.0.md) and [verification](V331_VERIFICATION.md).
 
 ## v3.30.0 — Core workspace presentation and interaction cleanup
 

@@ -11,15 +11,18 @@ export function EnrollmentRelation({type, label, value, initialLabel, required =
 }) {
   const {t, locale} = useI18n(), latest = useRemoteSearch();
   const [options, setOptions] = useState<Array<{value: string; label: string}>>([]), [error, setError] = useState("");
+  const [pending,setPending]=useState(false),[selection,setSelection]=useState<{value:string;label:string}|null>(null);
   const search = async (q: string) => {
+    setPending(true);setError("");setOptions([]);
     const scoped = ["COHORT", "EVENT", "CAMPAIGN", "REFERRAL"].includes(type);
     const url = scoped ? `/api/enrollments?resource=options&type=${type}&q=${encodeURIComponent(q)}` : `/api/search/related?types=${type}&q=${encodeURIComponent(q)}`;
     const outcome = await latest(signal => apiFetch<{items: Array<{value: string; labelZh: string; labelEn: string}>}>(url, {signal}));
     if (!outcome.current) return;
+    setPending(false);
     if ("error" in outcome) {setError(t("modules.relatedSearchFailed")); return;}
     setOptions(outcome.value.items.map(item => ({value: scoped ? item.value : item.value.split(":")[1], label: locale === "en" ? item.labelEn : item.labelZh}))); setError("");
   };
-  const selected = value && !options.some(item => item.value === value) ? [{value, label: initialLabel || t("flow.selectedRecord")}] : [];
-  const select = (next: string) => { onChange(next); onSelection?.(next, options.find(item => item.value === next)?.label ?? (next ? initialLabel ?? t("flow.selectedRecord") : "")); };
-  return <fieldset className="follow-up-fields" disabled={disabled}><SearchableSelect label={label} required={required} value={value} options={[...selected, ...options]} onSearch={search} onChange={select}/>{!required && value && <button className="text-button" type="button" onClick={() => select("")}>{t("business.clear")}</button>}{error && <InlineMessage type="error">{error}</InlineMessage>}</fieldset>;
+  const selected = value && !options.some(item => item.value === value) ? [{value, label: initialLabel || (selection?.value===value?selection.label:t("flow.selectedRecord"))}] : [];
+  const select = (next: string) => {const label=options.find(item=>item.value===next)?.label??selected.find(item=>item.value===next)?.label??"";setSelection(next?{value:next,label}:null);onChange(next);onSelection?.(next,label);};
+  return <fieldset className="follow-up-fields" disabled={disabled}><SearchableSelect label={label} required={required} value={value} options={[...selected, ...options]} loading={pending} onSearch={search} onChange={select}/>{!required && value && <button className="text-button" type="button" onClick={() => select("")}>{t("business.clear")}</button>}{error && <InlineMessage type="error">{error}</InlineMessage>}</fieldset>;
 }

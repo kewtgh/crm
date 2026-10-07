@@ -744,3 +744,10 @@ select:not([multiple]) { appearance:none; background-image:url("data:image/svg+x
   .academic-correction .compact-task-controls > :first-child { width:100%; max-width:none; }
   .workspace-main-stack .detail-section, .workspace-rail .detail-section { padding:14px; }
 }
+
+/* Directory view management remains reachable beside compact metrics on mobile. */
+@media (max-width: 680px) {
+  .quick-summary.directory-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; overflow: visible; }
+  .quick-summary.directory-summary > span { min-width: 0; padding: 0 8px; }
+  .quick-summary.directory-summary > button { display: flex; grid-column: 1 / -1; justify-self: end; min-height: 40px; font-size: 13px; padding: 4px 8px; }
+}

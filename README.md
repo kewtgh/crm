@@ -1,6 +1,16 @@
 # Lumina CRM
 
-Current release candidate: **v3.30.0**
+Current release candidate: **v3.31.0**
+
+## v3.31.0 — Reliable operation recovery and directory context
+
+Shared mutation recovery retains exact requests after response loss and distinguishes accepted saves
+from failed refreshes. Deletion conflicts offer explicit reload/review. Organization and Contact
+advanced filters survive URL navigation and browser history; loading, invalid data and filtered-empty
+results remain distinct. Relation lookup and More keyboard interactions improve across consumers.
+Current workspace/reliability tests join regular CI. No migration, new permission or Revenue work.
+See [release notes](docs/RELEASE_V3.31.0.md), [audit](docs/FIRST_PRINCIPLES_AUDIT_V331.md) and
+[verification](docs/V331_VERIFICATION.md).
 
 ## v3.30.0 — Core workspace presentation and interaction cleanup
 

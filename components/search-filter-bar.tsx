@@ -12,7 +12,7 @@ export function SearchFilterBar({value,onChange,placeholder,children,actions,onS
 }) {
   const {t}=useI18n();
   return <section className="search-filter-bar" aria-label={t("common.search")}>
-    {onChange&&<div className="search-filter-query" onKeyDown={event=>{if(event.key==="Enter"&&onSearch&&!pending){event.preventDefault();onSearch();}}}>
+    {onChange&&<div className="search-filter-query" onKeyDown={event=>{if(event.key==="Enter"&&!event.nativeEvent.isComposing&&onSearch&&!pending){event.preventDefault();onSearch();}}}>
       <span className="filter-control-label">{t("common.search")}</span>
       <SearchField value={value??""} onChange={onChange} placeholder={placeholder??t("common.search")}/>
     </div>}

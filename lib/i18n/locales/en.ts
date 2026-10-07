@@ -1,3 +1,4 @@
+import {reliabilityEn} from "./reliability";
 import {uxClosureEn} from "./ux-closure";
 import {operationsRepairEn} from "./operations-repair";
 import { frontlineEn } from './frontline';
@@ -51,6 +52,7 @@ export const en: Messages = {
   ...uxClosureEn,
   ...recordWorkspaceEn,
   ...workspaceRedesignEn,
+  ...reliabilityEn,
   ...enUXFoundation,
   ...enManagementUX,
   ...enManagement,

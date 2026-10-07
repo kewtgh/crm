@@ -62,7 +62,7 @@ test('Dashboard daily hierarchy precedes launchpad; management summary has no Ex
 });
 test('Lead editors retain payload-bound uncertain retry, conflict handling and conversion amount/currency',()=>{
  const code=read('components/lead-pool-workspace.tsx');
- assert.match(code,/if\(!attempt.current&&event\)/);assert.match(code,/JSON.stringify\(attempt.current.body\)/);
+ assert.match(code,/if\(!attempt.current&&event\)/);assert.match(code,/const request=attempt.current/);assert.match(code,/JSON.stringify\(request.body\)/);assert.match(code,/settleMutation/);
  assert.match(code,/expectedRevision:l!\.revision/);assert.match(code,/ALREADY_CLAIMED/);assert.match(code,/VERSION_CONFLICT/);assert.match(code,/business.retrySame/);
  assert.match(code,/amount:Number\(f.get\("amount"\)\),currency:f.get\("currency"\)/);
  assert.match(code,/MoreActions/);assert.match(code,/role="menuitem"/);assert.match(code,/FilterBar/);assert.doesNotMatch(code,/ownerFilter|sourceFilter/);

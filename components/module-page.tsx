@@ -246,7 +246,7 @@ export function ModulePage({
         <button className="primary-button" type="button" onClick={() => setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button>
       </div>
     </section></>}
-    <section className="quick-summary">
+    <section className="quick-summary directory-summary">
       <span><b>{metrics.total}</b><small>{t("modules.allRecords")}</small></span>
       <span><b>{metrics.needsAttention}</b><small>{t("modules.needsAttention")}</small></span>
       <span><b>{metrics.averageCompleteness}%</b><small>{t("modules.averageCompleteness")}</small></span>

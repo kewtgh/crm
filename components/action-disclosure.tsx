@@ -15,7 +15,9 @@ export function ActionDisclosure({ children, label, menu = false }: {children: R
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
-  return <details ref={ref} className="action-disclosure" onKeyDown={event => {
+  return <details ref={ref} className="action-disclosure" onBlur={event=>{
+    if(!event.currentTarget.contains(event.relatedTarget as Node|null))event.currentTarget.open=false;
+  }} onKeyDown={event => {
     if (event.key === "Escape" && ref.current?.open) {
       event.stopPropagation(); ref.current.open = false; ref.current.querySelector("summary")?.focus();
     }
@@ -29,7 +31,7 @@ export function ActionDisclosure({ children, label, menu = false }: {children: R
   }}>
     <summary aria-haspopup={menu ? "menu" : undefined} aria-label={label || t("ui.moreActions")} title={t("ui.moreActions")}><MoreHorizontal size={18}/></summary>
     <div className="action-disclosure-content" role={menu ? "menu" : undefined} aria-label={menu ? label || t("ui.moreActions") : undefined} onClick={event => {
-      if (event.target instanceof Element && event.target.closest("button:not(:disabled)") && ref.current) { ref.current.open = false; if(menu) ref.current.querySelector("summary")?.focus(); }
+      if (event.target instanceof Element && event.target.closest("button:not(:disabled),a[href]") && ref.current) { ref.current.open = false; if(menu) ref.current.querySelector("summary")?.focus(); }
     }}>{children}</div>
   </details>;
 }

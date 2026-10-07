@@ -156,10 +156,10 @@ export function SearchableSelect({ label, options, value, onChange, placeholder,
       setActiveIndex((index) => (index + direction + filtered.length) % filtered.length);
       return;
     }
-    if((event.key==="Home"||event.key==="End")&&open&&filtered.length){
+    if((event.key==="Home"||event.key==="End")&&open&&filtered.length&&!(event.target instanceof HTMLInputElement)){
       event.preventDefault();setActiveIndex(event.key==="Home"?0:filtered.length-1);return;
     }
-    if (event.key === "Enter" && open && filtered[activeIndex]) {
+    if (event.key === "Enter" && !event.nativeEvent.isComposing && open && filtered[activeIndex]) {
       event.preventDefault();
       choose(filtered[activeIndex].value);
     }

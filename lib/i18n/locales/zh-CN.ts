@@ -1,3 +1,4 @@
+import {reliabilityZh} from "./reliability";
 import {uxClosureZh} from "./ux-closure";
 import { frontlineZh } from './frontline';
 import { recordWorkspaceZh } from './record-workspaces';
@@ -50,6 +51,7 @@ export const zhCN: Messages = {
   ...uxClosureZh,
   ...recordWorkspaceZh,
   ...workspaceRedesignZh,
+  ...reliabilityZh,
   ...zhUXFoundation,
   ...zhManagementUX,
   ...zhManagement,

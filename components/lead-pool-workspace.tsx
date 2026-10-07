@@ -9,6 +9,7 @@ import {ReportScopeNotice} from "./report-scope-notice";
 import type {ReportFilter} from "@/lib/management-trend-contract";
 import Link from "next/link";
 import {useEffect,useRef,useState} from "react";
+import {isDefinitiveMutationFailure,settleMutation} from "@/lib/mutation-outcome";
 import {apiFetch,ApiClientError} from "@/lib/api-client";
 import type {PoolLead,listLeadPool,listLeadAssignmentHistory} from "@/lib/lead-assignment-repository";
 import {leadStatuses} from "@/lib/lead-pool-input";
@@ -49,17 +50,29 @@ export function LeadPoolWorkspace({initial,focusedLead=null,organizationId,initi
 
 function LeadEditor({editor,manager,onClose,onSaved}:{editor:Editor;manager:boolean;onClose:()=>void;onSaved:()=>Promise<void>}){
  const {t}=useI18n(),{formatDate}=useUserPreferences(),l=editor.lead,k=editor.kind;
- const [type,setType]=useState<"SCHOOL"|"HOUSEHOLD">("SCHOOL"),[subject,setSubject]=useState(""),[product,setProduct]=useState(""),[cohort,setCohort]=useState(""),[owner,setOwner]=useState(l?.owner_id??""),[error,setError]=useState(""),[pending,setPending]=useState(false),[uncertain,setUncertain]=useState(false),[history,setHistory]=useState<Awaited<ReturnType<typeof listLeadAssignmentHistory>>>([]);
- const attempt=useRef<{url:string;body:unknown}|null>(null),id=useRef(crypto.randomUUID());
+ const [type,setType]=useState<"SCHOOL"|"HOUSEHOLD">("SCHOOL"),[subject,setSubject]=useState(""),[product,setProduct]=useState(""),[cohort,setCohort]=useState(""),[owner,setOwner]=useState(l?.owner_id??""),[error,setError]=useState(""),[pending,setPending]=useState(false),[saved,setSaved]=useState(false),[uncertain,setUncertain]=useState(false),[history,setHistory]=useState<Awaited<ReturnType<typeof listLeadAssignmentHistory>>>([]);
+ const attempt=useRef<{url:string;body:unknown}|null>(null),id=useRef(crypto.randomUUID()),busy=useRef(false);
  useEffect(()=>{if(k==="history"&&l)void apiFetch<{items:typeof history}>(`/api/leads/${l.id}/history`).then(r=>setHistory(r.items)).catch(()=>setError(t("pool.loadFailed")));},[k,l,t]);
- const save=async(event?:React.FormEvent<HTMLFormElement>)=>{event?.preventDefault();if(pending)return;if(!attempt.current&&event){const f=new FormData(event.currentTarget),key=crypto.randomUUID();let body:Record<string,unknown>,url="/api/leads";
+ const save=async(event?:React.FormEvent<HTMLFormElement>)=>{event?.preventDefault();if(busy.current||saved)return;if(!attempt.current&&event){const f=new FormData(event.currentTarget),key=crypto.randomUUID();let body:Record<string,unknown>,url="/api/leads";
  if(k==="create"){if(!subject){setError(t("leads.subjectRequired"));return;}body={operation:"create",id:id.current,requestKey:key,type,organizationId:type==="SCHOOL"?subject:null,householdId:type==="HOUSEHOLD"?subject:null,nameZh:f.get("nameZh"),nameEn:f.get("nameEn"),source:f.get("source"),score:Number(f.get("score")),note:f.get("note"),status:f.get("status"),poolVisibility:f.get("visibility")??"PRIVATE"};}
  else if(k==="update"){body={operation:"update",id:l!.id,expectedRevision:l!.revision,requestKey:key,status:f.get("status"),score:Number(f.get("score")),note:f.get("note"),nextAction:f.get("nextAction")};}
  else if(k==="archive"){url=`/api/leads/${l!.id}/archive`;body={expectedRevision:l!.revision,requestKey:key};}
  else if(k==="convert"){if(!product||!owner){setError(t("pool.productOwnerRequired"));return;}body={operation:"convert",id:l!.id,requestKey:key,titleZh:f.get("nameZh"),titleEn:f.get("nameEn"),amount:Number(f.get("amount")),currency:f.get("currency"),productId:product,cohortId:cohort||null,ownerId:owner};}
  else{url=`/api/leads/${l!.id}/${k}`;body={expectedRevision:l!.revision,requestKey:key,reason:f.get("reason")??"",...(k==="reassign"?{ownerId:owner}:{}),...(k==="visibility"?{visibility:f.get("visibility")}: {})};}attempt.current={url,body};}
- if(!attempt.current)return;setPending(true);try{await apiFetch(attempt.current.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(attempt.current.body)});attempt.current=null;await onSaved();}catch(caught){if(caught instanceof ApiClientError&&caught.status<500){attempt.current=null;setUncertain(false);setError(t(caught.code.includes("ALREADY_CLAIMED")?"pool.alreadyClaimed":caught.code.includes("VERSION_CONFLICT")?"pool.conflict":caught.status===403?"pool.forbidden":"pool.invalid"));}else{setUncertain(true);setError(t("pool.uncertain"));}}finally{setPending(false);}};
- return <AccessibleDrawer title={t(`pool.${k}`)} onClose={onClose} pending={pending||uncertain}>{k==="history"?<div className="detail-record-list">{history.map(h=><article key={h.id}><div>{t(`pool.event.${h.event_type}`)}<p>{h.from_owner_id||t("pool.unassigned")} → {h.to_owner_id||t("pool.unassigned")}</p><p>{h.reason}</p><small>{formatDate(h.changed_at,{includeTime:true})}</small></div></article>)}{!history.length&&<p>{t("pool.noHistory")}</p>}</div>:<form onSubmit={e=>void save(e)}><fieldset className="follow-up-fields" disabled={pending||uncertain}>
+ if(!attempt.current)return;busy.current=true;setPending(true);setError("");const request=attempt.current;
+ const outcome=await settleMutation(async()=>{
+  await apiFetch(request.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request.body)});
+  attempt.current=null;setUncertain(false);setSaved(true);
+ },onSaved);
+ if(outcome.state==="failed"){
+  const caught=outcome.error;
+  if(isDefinitiveMutationFailure(caught)){attempt.current=null;setUncertain(false);setError(t(caught.code.includes("ALREADY_CLAIMED")?"pool.alreadyClaimed":caught.code.includes("VERSION_CONFLICT")?"pool.conflict":caught.status===403?"pool.forbidden":"pool.invalid"));}
+  else{setUncertain(true);setError(t("pool.uncertain"));}
+ }else if(outcome.state==="saved-refresh-failed")setError(t("audit.savedRefreshFailed"));
+ busy.current=false;setPending(false);};
+ const refreshOnly=async()=>{if(busy.current)return;busy.current=true;setPending(true);try{await onSaved();}catch{setError(t("audit.savedRefreshFailed"));}finally{busy.current=false;setPending(false);}};
+
+ return <AccessibleDrawer title={t(`pool.${k}`)} onClose={onClose} pending={pending||uncertain}>{k==="history"?<div className="detail-record-list">{history.map(h=><article key={h.id}><div>{t(`pool.event.${h.event_type}`)}<p>{h.from_owner_id||t("pool.unassigned")} → {h.to_owner_id||t("pool.unassigned")}</p><p>{h.reason}</p><small>{formatDate(h.changed_at,{includeTime:true})}</small></div></article>)}{!history.length&&<p>{t("pool.noHistory")}</p>}</div>:<form onSubmit={e=>void save(e)}><fieldset className="follow-up-fields" disabled={pending||uncertain||saved}>
  {k==="archive"&&<InlineMessage type="warning">{t("repair.recoverable")}</InlineMessage>}
  {k==="claim"&&<InlineMessage type="info">{t("pool.claimHelp")}</InlineMessage>}
  {k==="create"&&<><label className="field"><span>{t("leads.type")}</span><select value={type} onChange={e=>{setType(e.target.value as typeof type);setSubject("");}}><option value="SCHOOL">{t("leads.type.school")}</option><option value="HOUSEHOLD">{t("leads.type.household")}</option></select></label><EnrollmentRelationPicker type={type==="SCHOOL"?"ORGANIZATION":"HOUSEHOLD"} value={subject} onChange={setSubject} label={t("leads.subject")}/><label className="field"><span>{t("leads.source")}</span><input name="source" required maxLength={80}/></label></>}
@@ -69,5 +82,5 @@ function LeadEditor({editor,manager,onClose,onSaved}:{editor:Editor;manager:bool
  {(k==="release"||k==="reassign")&&<label className="field"><span>{t("pool.reason")}</span><textarea name="reason" required maxLength={1000}/></label>}
  {(k==="reassign"||k==="convert")&&<EnrollmentRelationPicker type="USER" value={owner} onChange={setOwner} label={t("pool.owner")}/>}
  {k==="convert"&&<><EnrollmentRelationPicker type="PRODUCT" value={product} onChange={id=>setProduct(id)} label={t("pool.product")}/><ProductCohortSelector productId={product} value={cohort} onChange={setCohort} usage="OPPORTUNITY"/><label className="field"><span>{t("leads.amount")}</span><MoneyInput name="amount" min={0} defaultValue="0" required/></label><label className="field"><span>{t("leads.currency")}</span><CurrencySelect name="currency" defaultValue="CNY" required/></label></>}
- </fieldset>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button type="button" className="secondary-button" disabled={pending||uncertain} onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={pending} type={uncertain?"button":"submit"} onClick={uncertain?()=>void save():undefined}>{t(uncertain?"business.retrySame":k==="archive"?"pool.archive":"common.save")}</button></div></form>}{error&&k==="history"&&<InlineMessage type="error">{error}</InlineMessage>}</AccessibleDrawer>;
+ </fieldset>{error&&<InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button type="button" className="secondary-button" disabled={pending||uncertain} onClick={onClose}>{t("common.cancel")}</button>{saved?<button className="primary-button" type="button" disabled={pending} onClick={()=>void refreshOnly()}>{t("reliability.refreshOnly")}</button>:<button className="primary-button" disabled={pending} type={uncertain?"button":"submit"} onClick={uncertain?()=>void save():undefined}>{t(uncertain?"business.retrySame":k==="archive"?"pool.archive":"common.save")}</button>}</div></form>}{error&&k==="history"&&<InlineMessage type="error">{error}</InlineMessage>}</AccessibleDrawer>;
 }
