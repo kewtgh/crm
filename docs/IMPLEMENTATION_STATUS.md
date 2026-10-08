@@ -1,4 +1,13 @@
-# Implementation status — v3.35.0 release candidate
+# Implementation status — v3.35.1 release candidate
+
+## v3.35.1 — Follow-up input and workspace refinements
+
+Next-action fields offer bilingual suggestions alongside editable text, preserving existing
+content and canonical storage. Revenue headings avoid duplicate icons; communication tabs
+match the workspace icon. Student placement correction uses a compact responsive layout.
+No database, authorization or financial-semantic changes.
+
+See [release notes](RELEASE_V3.35.1.md).
 
 ## v3.35.0 — Unified workspaces and purchaser clarity
 

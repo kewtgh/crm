@@ -20,3 +20,8 @@ test('all operational component h1 headings use the shared heading or existing r
  const css=readFileSync('app/workspace-theme.css','utf8');for(const space of ['relationships','students','commercial','management','governance','admin','account'])assert.ok(css.includes('data-workspace-space='+space));
  assert.doesNotMatch(css,/\.status-badge|\.danger-button|(?:^|[;{])content:/);
 });
+
+test('communication subroutes use the same icon as their workspace heading',()=>{
+ for(const href of ['/messages','/messages?tab=bulk','/messages?tab=templates','/messages?tab=portal'])assert.equal(workspaceLinkIcon(href),destinationIcon('messages'));
+ assert.doesNotMatch(readFileSync('components/revenue-workspace.tsx','utf8'),/<WorkspaceHeading><UiIcon/);
+});

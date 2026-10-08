@@ -29,3 +29,13 @@
 .app-content .ux-record-avatar>svg{color:inherit}
 @media(max-width:600px){.workspace-heading{gap:9px}.workspace-heading-icon{width:34px;height:34px;flex-basis:34px;border-radius:10px}.workspace-heading-icon .ux-icon{width:20px;height:20px}.app-content .page-tabs a{gap:5px}}
 @media(prefers-reduced-motion:reduce){.workspace-heading-icon{transition:none}}
+
+/* Compact placement correction: selector and actions keep independent alignment. */
+.academic-correction .academic-correction-controls {display:grid;grid-template-columns:minmax(240px,520px) auto;gap:16px;align-items:start;justify-content:start}
+.academic-correction-actions {display:flex;align-items:center;gap:8px;padding-top:25px}
+.academic-correction .surface-heading {display:block;margin-bottom:16px}
+.academic-correction .surface-heading h2 {font-size:20px;font-weight:650}
+.academic-correction .workspace-placement-preview {background:var(--surface,#fff);border:1px solid var(--border);border-left:3px solid var(--workspace-accent);padding:14px 16px;border-radius:10px}
+.next-action-input {display:grid;gap:8px;min-width:0}
+.next-action-input select {font-size:13px;background:var(--workspace-soft,#f3f8f9);max-width:100%}
+@media(max-width:640px){.academic-correction .academic-correction-controls {grid-template-columns:minmax(0,1fr);width:100%}.academic-correction-actions {padding-top:0;flex-wrap:wrap}}

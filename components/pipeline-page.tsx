@@ -1,4 +1,5 @@
 "use client";
+import {NextActionInput} from "./next-action-input";
 import {WorkspaceHeading} from "./workspace-heading";
 
 import {RecordDeleteAction} from "./record-delete-action";
@@ -404,8 +405,8 @@ export function PipelinePage({
           <label className="field"><span>{t("pipeline.currency")}</span><CurrencySelect name="currency" defaultValue="CNY" required/></label>
         </div>
         <div className="form-grid two-column">
-          <label className="field"><span>{t("pipeline.nextActionZh")}</span><textarea name="nextActionZh" rows={3} maxLength={300} required/></label>
-          <label className="field"><span>{t("pipeline.nextActionEn")}</span><textarea name="nextActionEn" rows={3} maxLength={300} required/></label>
+          <label className="field"><span>{t("pipeline.nextActionZh")}</span><NextActionInput name="nextActionZh" rows={3} maxLength={300} required/></label>
+          <label className="field"><span>{t("pipeline.nextActionEn")}</span><NextActionInput name="nextActionEn" rows={3} maxLength={300} required/></label>
         </div>
         {drawerError && <InlineMessage type="error">{drawerError}</InlineMessage>}
         <div className="drawer-actions">
@@ -430,8 +431,8 @@ export function PipelinePage({
         {transition.stage !== "WON" && transition.stage !== "LOST" && <>
           <label className="field"><span>{t("pipeline.expectedClose")}</span><DateInput name="expectedCloseDate" type="date" defaultValue={transition.item.expectedCloseDate ?? ""} required/></label>
           <div className="form-grid two-column">
-            <label className="field"><span>{t("pipeline.nextActionZh")}</span><textarea name="nextActionZh" rows={4} defaultValue={transition.item.nextActionZh} maxLength={300} required/></label>
-            <label className="field"><span>{t("pipeline.nextActionEn")}</span><textarea name="nextActionEn" rows={4} defaultValue={transition.item.nextActionEn} maxLength={300} required/></label>
+            <label className="field"><span>{t("pipeline.nextActionZh")}</span><NextActionInput name="nextActionZh" rows={4} defaultValue={transition.item.nextActionZh} maxLength={300} required/></label>
+            <label className="field"><span>{t("pipeline.nextActionEn")}</span><NextActionInput name="nextActionEn" rows={4} defaultValue={transition.item.nextActionEn} maxLength={300} required/></label>
           </div>
         </>}
         {transition.stage === "WON" && <label className="field"><span>{t("pipeline.transition.evidence")}</span><textarea name="evidence" rows={5} maxLength={1000} required placeholder={t("pipeline.transition.evidenceHelp")}/></label>}

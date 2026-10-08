@@ -11,6 +11,8 @@ export const destinationIconNames:Record<string,UiIconName>={
 };
 export function destinationIcon(id?:string):UiIconName{return destinationIconNames[id??""]??"section";}
 export function workspaceLinkIcon(href:string):UiIconName{
- const destination=navigationDestinations.find(d=>d.href===href)??navigationDestinations.filter(d=>href.startsWith(d.href+"/")).sort((a,b)=>b.href.length-a.href.length)[0];
+ const route=href.split("?")[0];
+ if(route==="/messages")return "message";
+ const destination=navigationDestinations.find(d=>d.href===href)??navigationDestinations.find(d=>d.href===route)??navigationDestinations.filter(d=>route.startsWith(d.href+"/")).sort((a,b)=>b.href.length-a.href.length)[0];
  return destinationIcon(destination?.id);
 }
