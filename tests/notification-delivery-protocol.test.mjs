@@ -119,10 +119,10 @@ test("keeps the CRM producer and Email Worker staff template contracts identical
     { decryptCredential:() => "temporary-password-sentinel" },
   );
   const rendered = renderTemplate("staff-account-created", externalPayload, {
-    brandName:"Lumina CRM",
+    brandName:"ewaya CRM",
     applicationUrl:"https://crm.example.net",
   });
-  assert.match(rendered.subject, /Lumina Education CRM account/);
+  assert.match(rendered.subject, /ewaya Education CRM account/);
 });
 
 test("maps only bounded allow-listed Email Worker 4xx error codes", async () => {

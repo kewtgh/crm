@@ -82,6 +82,7 @@ function webPreflight() {
     "TOTP_ENCRYPTION_KEY",
     "INVITATION_CREDENTIAL_ENCRYPTION_KEY",
     "OBJECT_STORAGE_SIGNING_SECRET",
+    ...EMAIL_DELIVERY_RUNTIME_KEYS,
   ]);
   requireDatabaseRole("DATABASE_URL", "crm_app");
   requireDatabaseRole("SYSTEM_DATABASE_URL", "crm_system");

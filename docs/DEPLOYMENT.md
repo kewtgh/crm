@@ -276,22 +276,26 @@ Web/Worker reject migration, backup, restore, and database-administrator variabl
 every write-capable database URL. No normal runtime service receives migration, backup, or
 PostgreSQL administrator credentials.
 
-Starting with v3.8.15, the active Web process neither reads these values nor performs external
-communication delivery. `COMMUNICATION_DELIVERY` is the sole provider-I/O owner. For one
-application rollback release, `production.env` and `worker.env` still contain identical
-`EMAIL_DELIVERY_WEBHOOK_URL` and `EMAIL_DELIVERY_WEBHOOK_TOKEN` values. The active and rollback
-secret relationship is:
+Web owns synchronous authentication-email delivery: device verification, password reset,
+and email verification. Worker owns notification outbox, reminders, calendar delivery,
+communication delivery, and other asynchronous business email. Moving communication delivery
+to Worker does not remove Web's authentication-email configuration requirement.
+
+Both `production.env` and `worker.env` must contain valid, exactly identical
+`EMAIL_DELIVERY_WEBHOOK_URL` and `EMAIL_DELIVERY_WEBHOOK_TOKEN` values. Container startup requires
+both keys. Web readiness validates their URL/secret format without provider I/O; deployment
+preflight validates both boundaries and equality before build or switch. Failures expose only
+stable codes and variable names, never configured values.
 
 ```text
 production.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
 worker.env.EMAIL_DELIVERY_WEBHOOK_TOKEN
 =
-Cloudflare Worker secret LUMINA_WEBHOOK_TOKEN
+Cloudflare Email Worker secret LUMINA_WEBHOOK_TOKEN
 ```
 
-`worker.env` is the only active CRM consumer. `production.env` retains the values only so an
-operator can disable `COMMUNICATION_DELIVERY` and roll back to the v3.8.14 synchronous image.
-Phase 3 removes the Web template values and legacy database grants after production acceptance.
+CRM receives the webhook URL and `EMAIL_DELIVERY_WEBHOOK_TOKEN` only. `LUMINA_WEBHOOK_TOKEN`
+is a Cloudflare Email Worker secret, never a CRM Web/Worker environment variable.
 
 `RESEND_API_KEY` exists only as a Cloudflare Email Worker secret. It must never enter
 `production.env`, `worker.env`, `email-worker-deploy.env`, Compose YAML, or application deployment

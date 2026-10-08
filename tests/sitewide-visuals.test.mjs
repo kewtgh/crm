@@ -25,3 +25,11 @@ test('communication subroutes use the same icon as their workspace heading',()=>
  for(const href of ['/messages','/messages?tab=bulk','/messages?tab=templates','/messages?tab=portal'])assert.equal(workspaceLinkIcon(href),destinationIcon('messages'));
  assert.doesNotMatch(readFileSync('components/revenue-workspace.tsx','utf8'),/<WorkspaceHeading><UiIcon/);
 });
+
+test('website brand copy and active sharing assets use ewaya while internal identifiers remain compatible',()=>{
+ for(const file of readdirSync('lib/i18n/locales').filter(f=>f.endsWith('.ts')))assert.doesNotMatch(readFileSync('lib/i18n/locales/'+file,'utf8'),/Lumina/);
+ for(const file of ['app/layout.tsx','app/global-error.tsx','app/portal/invite/[token]/page.tsx','lib/auth/totp.ts','app/api/settings/mfa/route.ts','infrastructure/email-delivery-worker/src/templates.js'])assert.doesNotMatch(readFileSync(file,'utf8'),/Lumina/);
+ assert.match(readFileSync('app/layout.tsx','utf8'),/\/brand\/ewaya-social\.png/);
+ assert.match(readFileSync('components/i18n-provider.tsx','utf8'),/lumina-locale/);
+ assert.match(readFileSync('lib/trusted-devices.ts','utf8'),/crm_trusted_device/);
+});

@@ -1,4 +1,12 @@
-# Implementation status — v3.35.1 release candidate
+# Implementation status — v3.35.2 release candidate
+
+## v3.35.2 — Authentication email runtime contract
+
+Web startup and readiness require authentication-email webhook configuration. Deployment
+preflight verifies identical Web/Worker values before build or switch. Business communication
+remains asynchronous. Website and email display text use ewaya; internal identifiers stay compatible.
+
+See [release notes](RELEASE_V3.35.2.md).
 
 ## v3.35.1 — Follow-up input and workspace refinements
 

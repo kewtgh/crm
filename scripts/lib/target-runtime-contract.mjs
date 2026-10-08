@@ -1,3 +1,5 @@
+import { EMAIL_DELIVERY_RUNTIME_KEYS } from "../../lib/email-delivery-runtime.mjs";
+
 const SECURITY_SECRET_KEYS = [
   "TURNSTILE_SECRET_KEY",
   "ALTCHA_HMAC_SECRET",
@@ -51,6 +53,12 @@ export function validateTargetRuntimeContract({ web, worker, webStatus, workerSt
       "web,worker",
       missing,
     );
+  }
+
+  for (const key of EMAIL_DELIVERY_RUNTIME_KEYS) {
+    if (web[key] !== worker[key]) {
+      throw new TargetRuntimeContractError("TARGET_RUNTIME_SECRET_MISMATCH", "web,worker", [key]);
+    }
   }
 
   const webKey = invitationCredentialKey(web.INVITATION_CREDENTIAL_ENCRYPTION_KEY);

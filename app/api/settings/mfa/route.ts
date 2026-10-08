@@ -62,7 +62,7 @@ async function post(request: Request) {
           id: factor.id,
           factor_type: "totp",
           status: "unverified",
-          friendly_name: "Lumina CRM",
+          friendly_name: "ewaya CRM",
           totp: {
             secret: factor.secret,
             qr_code: await QRCode.toDataURL(uri, {

@@ -70,7 +70,7 @@ function codeAt(secret: string, step: number) {
   return String(binary % 1_000_000).padStart(6, "0");
 }
 
-export async function enrollTotp(userId: string, friendlyName = "Lumina CRM") {
+export async function enrollTotp(userId: string, friendlyName = "ewaya CRM") {
   const secret = base32Encode(randomBytes(20));
   const encrypted = encryptSecret(secret);
   await poolQuery(

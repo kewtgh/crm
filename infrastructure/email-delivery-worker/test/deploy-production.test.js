@@ -1188,7 +1188,7 @@ test("Cloudflare API failures surface only stable redacted controller codes", as
   }
 });
 
-test("Wrangler 4.102.0 accepts the generated JSON in no-upload strict dry-run", async () => {
+test("the pinned Wrangler accepts the generated JSON in no-upload strict dry-run", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "email-worker-wrangler-dry-run-"));
   try {
     const configPath = path.join(directory, "wrangler.production.json");
@@ -1200,7 +1200,8 @@ test("Wrangler 4.102.0 accepts the generated JSON in no-upload strict dry-run", 
     await writeFile(configPath, `${JSON.stringify(generated, null, 2)}\n`, "utf8");
     const packageJsonPath = path.join(workerRoot, "node_modules", "wrangler", "package.json");
     const packageManifest = JSON.parse(await readFile(packageJsonPath, "utf8"));
-    assert.equal(packageManifest.version, "4.102.0");
+    const declared = JSON.parse(await readFile(path.join(workerRoot, "package.json"), "utf8"));
+    assert.equal(packageManifest.version, declared.devDependencies.wrangler);
     const wranglerBin = path.resolve(path.dirname(packageJsonPath), packageManifest.bin.wrangler);
     await execFileAsync(process.execPath, [
       wranglerBin,

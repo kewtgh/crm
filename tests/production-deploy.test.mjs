@@ -778,6 +778,7 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
     healthRoute,
     communicationRoute,
     runner,
+    deploymentDocumentation,
   ] = await Promise.all([
     source("deploy/production.env.example"),
     source("deploy/worker.env.example"),
@@ -788,7 +789,10 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
     source("app/api/health/route.ts"),
     source("app/api/communications/route.ts"),
     source("scripts/deploy-production-runner.mjs"),
+    source("docs/DEPLOYMENT.md"),
   ]);
+  assert.doesNotMatch(deploymentDocumentation, /Web process neither reads|only active CRM consumer|rollback-only|Phase 3 removes the Web/);
+  assert.match(deploymentDocumentation, /Web owns synchronous authentication-email delivery/);
   assert.deepEqual(EMAIL_DELIVERY_RUNTIME_KEYS, [
     "EMAIL_DELIVERY_WEBHOOK_URL",
     "EMAIL_DELIVERY_WEBHOOK_TOKEN",
@@ -812,13 +816,13 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
     entrypoint.indexOf("function webPreflight"),
     entrypoint.indexOf("function workerPreflight"),
   );
-  assert.doesNotMatch(webPreflight, /EMAIL_DELIVERY_RUNTIME_KEYS/);
+  assert.match(webPreflight, /\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
   assert.match(entrypoint, /function workerPreflight\(\)[\s\S]+\.\.\.EMAIL_DELIVERY_RUNTIME_KEYS/);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_URL=https:\/\/mailer\.example\.test\/delivery/g) ?? []).length, 2);
   assert.equal((runtimeFixture.match(/EMAIL_DELIVERY_WEBHOOK_TOKEN=\$emailDeliveryToken/g) ?? []).length, 2);
   assert.equal((runtimeFixture.match(/INVITATION_CREDENTIAL_ENCRYPTION_KEY=\$invitationEncryptionKey/g) ?? []).length, 2);
   assert.match(healthRoute, /externallyHealthy:environment\.emailDeliveryExternallyHealthy/);
-  assert.match(healthRoute, /configurationBoundary:"worker"/);
+  assert.match(healthRoute, /configurationBoundary:"web-and-worker"/);
   assert.doesNotMatch(healthRoute, /fetch\([^)]*EMAIL_DELIVERY/);
   assert.doesNotMatch(communicationRoute, /configuredCommunicationDelivery|postCommunicationDelivery|EMAIL_DELIVERY_WEBHOOK/);
   assert.match(communicationRoute, /requeueCommunicationMessage/);

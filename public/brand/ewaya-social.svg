@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1726" height="911" viewBox="0 0 1726 911">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#073c49"/><stop offset="1" stop-color="#0d766d"/></linearGradient></defs>
+<rect width="1726" height="911" fill="url(#bg)"/>
+<circle cx="1510" cy="80" r="440" fill="#5ee0ca" opacity=".08"/><circle cx="1410" cy="850" r="430" fill="#6ac5ff" opacity=".08"/>
+<g fill="#fff" font-family="Arial, sans-serif"><text x="120" y="320" font-size="150" font-weight="700">ewaya</text><text x="125" y="435" font-size="70">Education CRM</text><text x="125" y="545" font-size="32" fill="#bbecdf">Relationships · Admissions · Student support</text></g>
+<g font-family="Arial, sans-serif" font-size="29" fill="#073c49"><rect x="125" y="650" width="330" height="90" rx="20" fill="#d2f6e9"/><text x="165" y="705">Connected teams</text><rect x="485" y="650" width="330" height="90" rx="20" fill="#d5ecff"/><text x="523" y="705">Clear workflows</text><rect x="845" y="650" width="330" height="90" rx="20" fill="#e6ddff"/><text x="885" y="705">Governed access</text></g>
+</svg>

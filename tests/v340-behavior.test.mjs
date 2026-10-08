@@ -152,10 +152,10 @@ test("TypeScript runtime facade has complete fixture parity with the dependency-
   }
 });
 
-test("keeps Web readiness independent from Worker-only email delivery configuration", () => {
+test("Web readiness requires authentication-email configuration without provider I/O", () => {
   const configured = inspectWebReadinessEnvironment(validWorkerEnvironment);
   assert.equal(configured.valid, true);
-  assert.equal(configured.emailDeliveryConfigured, null);
+  assert.equal(configured.emailDeliveryConfigured, true);
   assert.equal(configured.emailDeliveryExternallyHealthy, null);
   assert.equal(configured.emailDeliveryCode, null);
   const serialized = JSON.stringify(configured);
@@ -165,12 +165,12 @@ test("keeps Web readiness independent from Worker-only email delivery configurat
     const environment = { ...validWorkerEnvironment };
     delete environment[missingKey];
     const missing = inspectWebReadinessEnvironment(environment);
-    assert.equal(missing.valid, true);
-    assert.equal(missing.core, true);
-    assert.equal(missing.emailDeliveryConfigured, null);
+    assert.equal(missing.valid, false);
+    assert.equal(missing.core, false);
+    assert.equal(missing.emailDeliveryConfigured, false);
     assert.equal(missing.emailDeliveryExternallyHealthy, null);
-    assert.equal(missing.emailDeliveryCode, null);
-    assert.ok(!missing.missing.includes(missingKey));
+    assert.equal(missing.emailDeliveryCode, "EMAIL_DELIVERY_NOT_CONFIGURED");
+    assert.ok(missing.missing.includes(missingKey));
   }
 });
 

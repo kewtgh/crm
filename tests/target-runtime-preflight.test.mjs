@@ -4,9 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import {
   inspectCoreRuntimeEnvironment,
+  inspectWebReadinessEnvironment,
   inspectWorkerRuntimeEnvironment,
 } from "../lib/runtime-environment-core.mjs";
 import {
@@ -37,6 +39,8 @@ function runtimeFixture({ invitationKey = invitationHex } = {}) {
       TOTP_ENCRYPTION_KEY: "totp-secret-".padEnd(40, "e"),
       INVITATION_CREDENTIAL_ENCRYPTION_KEY: invitationKey,
       OBJECT_STORAGE_SIGNING_SECRET: "object-secret-".padEnd(40, "f"),
+      EMAIL_DELIVERY_WEBHOOK_URL: "https://mailer.example.net/delivery",
+      EMAIL_DELIVERY_WEBHOOK_TOKEN: "delivery-token-".padEnd(40, "g"),
     },
     worker: {
       WORKER_DATABASE_URL: "postgresql://crm_worker:password@postgres:5432/lumina_crm",
@@ -71,6 +75,46 @@ function validateFixture(fixture) {
 
 const envText = (values) => `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
 
+test("Web and Worker container startup require both shared email-delivery keys without leaking values", () => {
+  for (const boundary of ["web", "worker"]) {
+    for (const key of ["EMAIL_DELIVERY_WEBHOOK_URL", "EMAIL_DELIVERY_WEBHOOK_TOKEN"]) {
+      const environment = runtimeFixture()[boundary];
+      delete environment[key];
+      const result = spawnSync(process.execPath, ["scripts/container-entrypoint.mjs", boundary], {
+        cwd: repositoryRoot,
+        env: { SystemRoot: process.env.SystemRoot, ...environment },
+        encoding: "utf8", timeout: 5_000,
+      });
+      assert.equal(result.status, 1);
+      assert.ok(result.stderr.includes(`MISSING_REQUIRED_ENVIRONMENT: ${key}`));
+      for (const value of Object.values(runtimeFixture()[boundary])) {
+        if (value.length >= 32) assert.ok(!`${result.stdout}${result.stderr}`.includes(value));
+      }
+    }
+  }
+});
+
+test("Web authentication-email readiness fails closed for missing and invalid configuration, with no secret metadata", () => {
+  const fixture = runtimeFixture();
+  assert.equal(inspectWebReadinessEnvironment(fixture.web).emailDeliveryConfigured, true);
+  for (const [key, values] of [
+    ["EMAIL_DELIVERY_WEBHOOK_URL", [undefined, "", "not-a-url", "https://mailer.example.invalid/delivery"]],
+    ["EMAIL_DELIVERY_WEBHOOK_TOKEN", [undefined, "", "short", "replace-with-an-independent-32-byte-secret"]],
+  ]) {
+    for (const value of values) {
+      const state = inspectWebReadinessEnvironment({ ...fixture.web, [key]: value });
+      assert.equal(state.valid, false);
+      assert.equal(state.emailDeliveryConfigured, false);
+      assert.equal(state.emailDeliveryCode, "EMAIL_DELIVERY_NOT_CONFIGURED");
+      assert.equal(state.emailDeliveryExternallyHealthy, null);
+      assert.ok(state.missing.includes(key));
+      for (const secret of [fixture.web.EMAIL_DELIVERY_WEBHOOK_URL, fixture.web.EMAIL_DELIVERY_WEBHOOK_TOKEN, value]) {
+        if (secret) assert.ok(!JSON.stringify(state).includes(secret));
+      }
+    }
+  }
+});
+
 async function isolatedCheckout(context, fixture = runtimeFixture()) {
   const root = await mkdtemp(path.join(os.tmpdir(), "lumina-target-runtime-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -91,6 +135,36 @@ async function isolatedCheckout(context, fixture = runtimeFixture()) {
   await writeFile(path.join(secretsRoot, "worker.env"), envText(fixture.worker));
   return { root, secretsRoot };
 }
+
+test("file-backed target preflight rejects missing/invalid Web configuration and unequal webhook values before proceeding", async (context) => {
+  for (const key of ["EMAIL_DELIVERY_WEBHOOK_URL", "EMAIL_DELIVERY_WEBHOOK_TOKEN"]) {
+    for (const kind of ["missing", "invalid", "mismatch"]) {
+      const fixture = runtimeFixture();
+      if (kind === "missing") delete fixture.web[key];
+      if (kind === "invalid") fixture.web[key] = fixture.worker[key] = "invalid";
+      if (kind === "mismatch") fixture.worker[key] = key.endsWith("URL") ? "https://other-mailer.example.net/delivery" : "different-delivery-token-".padEnd(40, "h");
+      const { root, secretsRoot } = await isolatedCheckout(context, fixture);
+      const validator = await import(pathToFileURL(path.join(root, "scripts/validate-production-runtime-contract.mjs")).href);
+      const states = [], codes = [];
+      await assert.rejects(runTargetRuntimePreflight({
+        secretsRoot,
+        persist: state => states.push(state),
+        run: async () => {
+          try { return { code: 0, stdout: JSON.stringify(await validator.validateProductionRuntimeContractFiles({ secretsRoot, enforceProductionPath: false })) }; }
+          catch (error) { codes.push(error.message); return { code: 1, stderr: error.message }; }
+        },
+      }), error => {
+        const expected = kind === "missing" ? "TARGET_RUNTIME_SECRET_MISSING" : kind === "invalid" ? "TARGET_RUNTIME_ENVIRONMENT_INVALID" : "TARGET_RUNTIME_SECRET_MISMATCH";
+        assert.ok(error.message.startsWith(expected+":"));
+        assert.ok(error.message.includes(key));
+        const serialized = JSON.stringify({ error: error.message, codes, states });
+        for (const value of [fixture.web[key], fixture.worker[key]]) if (value) assert.ok(!serialized.includes(value));
+        return true;
+      });
+      assert.deepEqual(states, [{ preflight: "FAILED" }]);
+    }
+  }
+});
 
 test("target runtime validator executes from a checkout without node_modules or tsx", async (context) => {
   const { root, secretsRoot } = await isolatedCheckout(context);

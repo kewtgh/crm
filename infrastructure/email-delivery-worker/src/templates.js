@@ -237,17 +237,17 @@ export function renderTemplate(template, payload, {
   if (template === "reminder") {
     const reminderId = requiredString(payload, "reminderId", { maximum: 200 });
     content = {
-      subject: "Lumina CRM reminder",
+      subject: "ewaya CRM reminder",
       heading: "Reminder",
-      bodyHtml: `<p style="line-height:1.7">You have a reminder waiting in Lumina Education CRM.</p>${detailTable([["Reference", reminderId]])}${actionLink(appUrl, "Open Lumina CRM")}`,
-      bodyText: `You have a reminder waiting in Lumina Education CRM.\nReference: ${reminderId}\n\nOpen Lumina CRM: ${appUrl}`,
+      bodyHtml: `<p style="line-height:1.7">You have a reminder waiting in ewaya Education CRM.</p>${detailTable([["Reference", reminderId]])}${actionLink(appUrl, "Open ewaya CRM")}`,
+      bodyText: `You have a reminder waiting in ewaya Education CRM.\nReference: ${reminderId}\n\nOpen ewaya CRM: ${appUrl}`,
     };
   } else if (template === "password-reset" || template === "email-verification") {
     const url = internalUrl(requiredString(payload, "url", { maximum: 2_000 }), appUrl);
     const expires = durationLabel(requiredPositiveInteger(payload, "expiresInSeconds"));
     const passwordReset = template === "password-reset";
     content = {
-      subject: passwordReset ? "Reset your Lumina CRM password" : "Verify your Lumina CRM email",
+      subject: passwordReset ? "Reset your ewaya CRM password" : "Verify your ewaya CRM email",
       heading: passwordReset ? "Reset your password" : "Verify your email",
       bodyHtml: `<p style="line-height:1.7">This secure link expires in ${escapeHtml(expires)}.</p>${actionLink(url, passwordReset ? "Reset password" : "Verify email")}`,
       bodyText: `This secure link expires in ${expires}.\n\n${passwordReset ? "Reset password" : "Verify email"}: ${url}`,
@@ -256,7 +256,7 @@ export function renderTemplate(template, payload, {
     const code = requiredString(payload, "code", { maximum: 32 });
     const expires = durationLabel(requiredPositiveInteger(payload, "expiresInSeconds"));
     content = {
-      subject: "Your Lumina CRM verification code",
+      subject: "Your ewaya CRM verification code",
       heading: "Device verification",
       bodyHtml: `<p style="line-height:1.7">Enter this code to continue. It expires in ${escapeHtml(expires)}.</p><p style="padding:16px;border-radius:10px;background:#eef6f3;font-size:28px;font-weight:800;letter-spacing:6px;text-align:center">${escapeHtml(code)}</p>`,
       bodyText: `Enter this code to continue: ${code}\nIt expires in ${expires}.`,
@@ -275,8 +275,8 @@ export function renderTemplate(template, payload, {
       mfaRequired ? "Multi-factor authentication setup is required for this account." : "",
     ].filter(Boolean).join(" ");
     content = {
-      subject: "Your Lumina Education CRM account is ready",
-      heading: "Welcome to Lumina Education CRM",
+      subject: "Your ewaya Education CRM account is ready",
+      heading: "Welcome to ewaya Education CRM",
       bodyHtml: `<p style="line-height:1.7">Hello ${escapeHtml(displayName)},</p>${detailTable([["Username", username], ["Temporary password", temporaryPassword]])}<p style="line-height:1.7">${escapeHtml(instructions)}</p>${actionLink(loginUrl, "Sign in")}`,
       bodyText: `Hello ${displayName},\n\nUsername: ${username}\nTemporary password: ${temporaryPassword}\n${instructions}\n\nSign in: ${loginUrl}`,
     };
@@ -286,10 +286,10 @@ export function renderTemplate(template, payload, {
     const recipientName = optionalString(payload, "recipientName", { maximum: 200 }).trim();
     const greeting = recipientName ? `Hello ${recipientName},` : "Hello,";
     content = {
-      subject: singleLine(`New Lumina CRM message: ${conversationSubject}`),
+      subject: singleLine(`New ewaya CRM message: ${conversationSubject}`),
       heading: singleLine(conversationSubject, 200),
-      bodyHtml: `<p style="line-height:1.7">${escapeHtml(greeting)}</p><div style="padding:16px;border-radius:10px;background:#f5f8f7;line-height:1.7;white-space:pre-wrap">${escapeHtml(message)}</div>${actionLink(appUrl, "Open Lumina CRM")}`,
-      bodyText: `${greeting}\n\n${message}\n\nOpen Lumina CRM: ${appUrl}`,
+      bodyHtml: `<p style="line-height:1.7">${escapeHtml(greeting)}</p><div style="padding:16px;border-radius:10px;background:#f5f8f7;line-height:1.7;white-space:pre-wrap">${escapeHtml(message)}</div>${actionLink(appUrl, "Open ewaya CRM")}`,
+      bodyText: `${greeting}\n\n${message}\n\nOpen ewaya CRM: ${appUrl}`,
     };
   } else {
     content = calendarContent(template, payload);

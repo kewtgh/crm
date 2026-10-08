@@ -46,9 +46,9 @@ export function inspectWorkerRuntimeEnvironment(environment: NodeJS.ProcessEnv =
 export function inspectWebReadinessEnvironment(environment: NodeJS.ProcessEnv = process.env) {
   return inspectWebReadinessEnvironmentCore(environment) as RuntimeEnvironmentStatus & {
     core: boolean;
-    emailDeliveryConfigured: null;
+    emailDeliveryConfigured: boolean;
     emailDeliveryExternallyHealthy: null;
-    emailDeliveryCode: null;
+    emailDeliveryCode: "EMAIL_DELIVERY_NOT_CONFIGURED" | null;
     webhooksEnabled: boolean;
     integrationsEnabled: boolean;
     enabledWorkers: WorkerKey[];

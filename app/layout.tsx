@@ -22,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = translate(locale, "meta.description");
   return {
     metadataBase: baseUrl,
-    title: { default: "Lumina CRM", template: "%s · Lumina CRM" },
+    title: { default: "ewaya CRM", template: "%s · ewaya CRM" },
     description,
     icons: {
       icon: [
@@ -34,12 +34,12 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: [{ url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" }],
     },
     openGraph: {
-      title: "Lumina CRM",
+      title: "ewaya CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/og-v280.png", baseUrl).toString(), width: 1726, height: 911, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/brand/ewaya-social.png", baseUrl).toString(), width: 1726, height: 911, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "Lumina CRM", description, images: [new URL("/og-v280.png", baseUrl).toString()] },
+    twitter: { card: "summary_large_image", title: "ewaya CRM", description, images: [new URL("/brand/ewaya-social.png", baseUrl).toString()] },
   };
 }
 

@@ -27,6 +27,8 @@ const validEnvironment = {
   TOTP_ENCRYPTION_KEY: "m".repeat(40),
   INVITATION_CREDENTIAL_ENCRYPTION_KEY: "i".repeat(40),
   OBJECT_STORAGE_SIGNING_SECRET: "o".repeat(40),
+  EMAIL_DELIVERY_WEBHOOK_URL: "https://mailer.example.net/delivery",
+  EMAIL_DELIVERY_WEBHOOK_TOKEN: "e".repeat(40),
 };
 
 test("accepts only HTTPS or loopback endpoint origins", () => {
