@@ -76,7 +76,7 @@ export function parsePostDeploymentCleanupPolicy(environment = {}) {
         ?? (environment.LUMINA_BUILDKIT_CACHE_RETENTION_HOURS
           ? `${environment.LUMINA_BUILDKIT_CACHE_RETENTION_HOURS}h`
           : undefined),
-      "168h",
+      "24h",
     ),
     imageReleasesToKeep: boundedInteger(environment.LUMINA_IMAGE_RELEASES_TO_KEEP, {
       name: "LUMINA_IMAGE_RELEASES_TO_KEEP",

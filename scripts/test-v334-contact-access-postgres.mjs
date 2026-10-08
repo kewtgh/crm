@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {runManagementIntegration} from './test-management-intelligence-postgres.mjs';
+
+await runManagementIntegration(async({client,context,ws,otherWs,stranger,admin,school})=>{
+ const get=async(sql,args=[])=>(await client.query(sql,args)).rows[0];
+ await client.query('reset role');
+ const [manager,a,b]=[randomUUID(),randomUUID(),randomUUID()];
+ for(const [user,label] of [[manager,'manager'],[a,'owner'],[b,'peer']]){
+  await client.query('insert into app_auth.accounts(id,email,username) values($1,$2,$3)',[user,`${label}@visibility.example.test`,`visibility-${label}`]);
+  await client.query("insert into public.workspace_memberships(workspace_id,user_id,role) values($1,$2,'SALES_SPECIALIST')",[ws,user]);
+ }
+ const team=(await get("insert into public.sales_teams(workspace_id,code,name_zh,name_en) values($1,'VISIBILITY','示例部门','Fictional department') returning id",[ws])).id;
+ const membership=async(user,label,parent=null)=>{
+  const member=(await get("insert into public.sales_team_members(workspace_id,auth_user_id,name_zh,name_en,role,team,manager_member_id) values($1,$2,$3,$3,'SALES_SPECIALIST','Fictional team',$4) returning id",[ws,user,label,parent])).id;
+  await client.query("insert into public.sales_team_memberships(workspace_id,team_id,member_id,status,requested_by) values($1,$2,$3,'ACTIVE',$4)",[ws,team,member,user]);return member;
+ };
+ const m=await membership(manager,'Manager');const am=await membership(a,'Owner',m);await membership(b,'Peer',m);
+ const person=async(owner,label)=>(await get('insert into public.contacts(workspace_id,organization_id,name_zh,name_en,owner_id,created_by) values($1,$2,$3,$3,$4,$4) returning id',[ws,school,label,owner])).id;
+ const senior=randomUUID();
+ await client.query("insert into app_auth.accounts(id,email,username) values($1,'senior@visibility.example.test','visibility-senior')",[senior]);
+ await client.query("insert into public.workspace_memberships(workspace_id,user_id,role) values($1,$2,'SALES_DIRECTOR')",[ws,senior]);
+ const seniorMember=await membership(senior,'Unrelated senior title');
+ await client.query('update public.sales_team_members set manager_member_id=$2 where id=$1',[m,seniorMember]);
+ const ca=await person(a,'Private owner contact'),cm=await person(manager,'Private manager contact');
+ const removed=await person(a,'Fictional privacy subject');
+ await client.query("update public.contacts set occupation='Fictional occupation',employer='Fictional employer' where id=$1",[removed]);
+ await client.query("update public.contacts set do_not_contact_reason='PRIVACY_DELETION:'||gen_random_uuid()::text where id=$1",[removed]);
+ assert.deepEqual(await get('select occupation,employer from public.contacts where id=$1',[removed]),{occupation:'',employer:''});
+
+ await client.query("insert into public.record_collaborators(workspace_id,resource_type,resource_id,user_id,access_level,granted_by) values($1,'ORGANIZATION',$2,$3,'READ',$4) on conflict do nothing",[ws,school,b,admin]);
+ const count=async(id)=>Number((await get('select count(*) n from public.contacts where id=$1',[id])).n);
+ await context(senior);assert.equal(await count(ca),1,'same-department grand-manager follows the actual reporting chain');assert.equal(await count(cm),1,'registered direct manager can read own direct report');
+ await client.query('reset role');await client.query("update public.sales_team_memberships set status='REJECTED' where member_id=$1",[seniorMember]);await context(senior);assert.equal(await count(ca),0,'senior title without same-department membership grants no access');
+ await client.query('reset role');await client.query("update public.sales_team_memberships set status='ACTIVE' where member_id=$1",[seniorMember]);await client.query('update public.sales_team_members set manager_member_id=null where id=$1',[m]);await context(senior);assert.equal(await count(ca),0,'same department and higher title without reporting relationship grants no access');
+ await client.query('reset role');await client.query('update public.sales_team_members set manager_member_id=$2 where id=$1',[m,seniorMember]);
+ await context(a);assert.equal(await count(ca),1);assert.equal(await count(cm),0);
+ await context(manager);assert.equal(await count(ca),1);assert.equal((await get('select public.contact_record_access($1,true) x',[ca])).x,false,'management is read, not implicit edit');
+ await context(b);assert.equal(await count(ca),0);assert.equal(await count(cm),0);
+ assert.equal((await get('select count(*) n from public.contact_visible_records where organization_id=$1 and id=any($2::uuid[])',[school,[ca,cm]])).n,'0','Organization contact projection hides names and counts');
+ const timeline=(await get('select public.customer_timeline($1,1,100,null) x',[school])).x;assert.ok(!timeline.items.some(item=>[ca,cm].includes(item.entityId)),'Organization timeline cannot disclose hidden Contacts');
+ await assert.rejects(get('select public.contact_access_snapshot($1)',[ca]),/CONTACT_NOT_FOUND/);
+ assert.equal((await get("select public.contact_audit_payload_visible(jsonb_build_object('contact_id',$1::text)) visible",[ca])).visible,false,'linked consent/member audit payload cannot expose a hidden Contact');
+ assert.equal((await get("select public.contact_audit_payload_visible(jsonb_build_object('primary_contact_id',$1::text)) visible",[ca])).visible,false,'linked opportunity audit obeys Contact access');
+
+
+ assert.deepEqual((await get("select public.crm_duplicate_check('people',null,null,'Private owner contact','Private owner contact') x")).x,[]);
+ await context(admin);assert.equal(await count(ca),1,'ADMIN can read employee-owned Contacts');assert.equal((await get('select public.contact_record_access($1,true) x',[ca])).x,false,'ADMIN read does not independently grant edit');
+ await client.query('reset role');await client.query("update public.workspace_memberships set role='SUPER_ADMIN' where workspace_id=$1 and user_id=$2",[ws,admin]);
+ await context(admin);assert.equal(await count(ca),1,'SUPER_ADMIN has full workspace Contact access');assert.equal((await get('select public.contact_record_access($1,true) x',[ca])).x,true);
+ await assert.rejects(client.query("insert into public.record_collaborators(workspace_id,resource_type,resource_id,user_id,granted_by) values($1,'CONTACT',$2,$3,$3)",[ws,ca,admin]),/row-level security/);
+ await client.query('reset role');await client.query("update public.workspace_memberships set role='ADMIN' where workspace_id=$1 and user_id=$2",[ws,admin]);
+ await context(a);const key=randomUUID();const share=async(level,k=key)=>(await get('select public.share_contact($1,$2,$3,$4) x',[ca,b,level,k])).x;
+ const accepted=await share('READ');assert.deepEqual(await share('READ'),accepted);
+ await assert.rejects(share('EDIT'),/PAYLOAD_REUSE/);
+ await context(b);assert.equal(await count(ca),1);assert.equal((await get('select public.contact_record_access($1,true) x',[ca])).x,false);
+ assert.equal((await get("select public.contact_channel_allowed($1,'EMAIL','MARKETING') x",[ca])).x,false,'share does not grant consent');
+ await context(a);await share('REVOKE',randomUUID());await get("select public.save_contact_consent($1,'EMAIL','MARKETING','GRANTED','Fictional explicit instruction')",[ca]);
+ await context(b);assert.equal(await count(ca),0,'consent does not grant visibility');
+ assert.equal((await get('select count(*) n from public.contact_consents where contact_id=$1',[ca])).n,'0');
+ assert.equal((await get("select public.contact_channel_allowed($1,'EMAIL','MARKETING') x",[ca])).x,false);
+ await assert.rejects(get("select public.save_contact_consent($1,'EMAIL','MARKETING','REVOKED','Fictional withdrawal')",[ca]),/consent_not_authorized/);
+ await client.query('reset role');
+ await client.query("update public.contacts set email='fictional-contact@example.test' where id=$1",[ca]);
+ const thread=(await get("insert into public.communication_threads(workspace_id,contact_id,subject,channel,purpose,assigned_to,created_by) values($1,$2,'Fictional queued message','EMAIL','MARKETING',$3,$3) returning id",[ws,ca,b])).id;
+ const message=(await get("insert into public.communication_messages(workspace_id,thread_id,direction,body,sent_by,idempotency_key,next_attempt_at) values($1,$2,'OUTBOUND','Fictional message',$3,gen_random_uuid()::text,now()) returning id",[ws,thread,b])).id;
+ const claims=(await client.query("select * from public.claim_communication_deliveries_leased($1,10,'fictional-access-worker',60)",[ws])).rows;
+ assert.ok(!claims.some(row=>row.message_id===message),'consent alone cannot authorize worker delivery');
+ assert.equal((await get('select delivery_status from public.communication_messages where id=$1',[message])).delivery_status,'FAILED');
+ await client.query('update public.sales_team_members set manager_member_id=null where id=$1',[am]);
+ await context(manager);assert.equal(await count(ca),0,'manager change takes immediate effect');
+ await client.query('reset role');await client.query('update public.contacts set owner_id=$2 where id=$1',[ca,b]);
+ await context(a);assert.equal(await count(ca),0,'owner change takes immediate effect');
+ await context(b);assert.equal(await count(ca),1);
+ await context(stranger,otherWs);assert.equal(await count(ca),0);await assert.rejects(get('select public.contact_access_snapshot($1)',[ca]),/CONTACT_NOT_FOUND/);
+ await context(a);
+ const historyBefore=Number((await get('select count(*) n from public.contact_consent_events where contact_id=$1',[ca])).n);
+ await context(b);const consentKey=randomUUID(),consentData={operation:'consent',channel:'EMAIL',purpose:'MARKETING',status:'REVOKED',source:'Fictional withdrawal'};
+ const consent=async(data=consentData)=>(await get('select public.record_contact_consent($1,$2,$3) x',[ca,data,consentKey])).x;
+ const decision=await consent();assert.deepEqual(await consent(),decision);await assert.rejects(consent({...consentData,status:'GRANTED'}),/PAYLOAD_REUSE/);
+ assert.equal(await count(ca),1,'withdrawing communication consent preserves Contact');
+ const history=Number((await get('select count(*) n from public.contact_consent_events where contact_id=$1',[ca])).n);assert.ok(history>historyBefore);
+ await get('select public.record_contact_consent($1,$2,$3)',[ca,{operation:'doNotContact',enabled:true,reason:'Fictional preference'},randomUUID()]);
+ assert.equal(Number((await get('select count(*) n from public.contact_consent_events where contact_id=$1',[ca])).n),history,'DND does not rewrite consent decisions');
+ await client.query('reset role');await assert.rejects(client.query("update public.contact_consent_events set status='GRANTED' where contact_id=$1",[ca]),/CONSENT_HISTORY_IMMUTABLE/);
+ await context(a);
+ const familyInput={household:{nameZh:'示例家庭',nameEn:'Fictional visibility family'},people:[{nameEn:'Fictional guardian A',role:'PARENT',primary:true,occupation:'Designer'},{nameEn:'Fictional guardian B',role:'GUARDIAN',primary:false,occupation:'Engineer'},{nameEn:'Fictional guardian C',role:'OTHER',primary:false,occupation:'Researcher'}]};
+ const familyKey=randomUUID();const family=async(data=familyInput)=>(await get('select public.create_household_with_people($1,$2) x',[data,familyKey])).x;
+ const created=await family();assert.equal(created.members.length,3);assert.deepEqual(await family(),created);await assert.rejects(family({...familyInput,household:{...familyInput.household,nameEn:'Changed'}}),/PAYLOAD_REUSE/);
+ const ids=created.members.map(x=>x.contact_id);assert.equal((await get('select count(*) n from public.contacts where id=any($1::uuid[])',[ids])).n,'3');
+ const member=(await get('select id,updated_at::text from public.household_person_records where contact_id=$1',[ids[0]]));
+ const personEditKey=randomUUID(),personData={nameEn:'Fictional guardian A',nameZh:'',phone:'',email:'',occupation:'Architect',employer:'Example employer',title:'Designer'};
+ const editPerson=async(data=personData)=>(await get('select public.save_household_person($1,$2,$3,$4) x',[member.id,member.updated_at,data,personEditKey])).x;
+ const savedPerson=await editPerson();assert.deepEqual(await editPerson(),savedPerson);await assert.rejects(editPerson({...personData,occupation:'Changed'}),/PAYLOAD_REUSE/);
+ assert.equal((await get('select occupation from public.contacts where id=$1',[ids[1]])).occupation,'Engineer');
+ await context(b);const exportApproval=(await get("select (public.create_crm_export_approval('people','','all','primary','asc','Fictional access verification','CSV')).id id")).id;await client.query('reset role');
+ const exportJob=(await get("insert into public.generated_jobs(workspace_id,job_type,parameters,created_by,approval_request_id) values($1,'CRM_EXPORT',$2,$3,$4) returning id",[ws,{resource:'people'},b,exportApproval])).id;
+ const allowed=(await client.query('select * from public.contact_export_allowed_rows($1,$2)',[exportJob,[cm,ids[0],ca]])).rows;
+ assert.ok(!allowed.some(row=>row.id===cm||row.id===ids[0]),'worker export must not disclose inaccessible Contacts');
+ await context(a);
+
+ assert.equal((await get('select count(*) n from public.student_guardian_relationships where guardian_contact_id=any($1::uuid[])',[ids])).n,'0','membership does not create guardian authorization');
+ await context(stranger,otherWs);await assert.rejects(get("select public.save_household_member($1,$2,'PARENT',false)",[created.household.id,ids[0]]),/INVALID_REFERENCE|PERMISSION_DENIED|household/);
+ await context();
+ console.log('PASS consent decision receipts/append-only history/DND independence and atomic three-person family creation/exact retry/independent occupations/cross-workspace membership');
+ console.log('PASS Contact owner/same-department reporting-chain relationship, peer/downward denial and explicit ADMIN/SUPER_ADMIN governance, explicit read/revoke, receipt conflict, owner/manager change, consent independence, duplicate search and cross-workspace isolation');
+});

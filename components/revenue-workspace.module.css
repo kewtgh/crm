@@ -24,3 +24,8 @@
 .unit { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
 .form fieldset { border:1px solid var(--border,#cbd5e1); border-radius:6px; }
 @media(max-width:760px){.recordFields{grid-template-columns:repeat(2,minmax(0,1fr));}.summary>div{flex:1 1 140px;padding:10px;}.basis>div{grid-template-columns:1fr;gap:4px;}.filters>*{flex:1 1 130px;}.tabs{gap:4px;}.tabs button{font-size:13px;}.actions button{font-size:12px;}}
+
+.emptyContext { max-width:720px; padding:18px 20px; border:1px solid var(--line); border-radius:8px; background:var(--surface); align-self:start; }
+.emptyContext h2 { font-size:17px; margin:0 0 8px; }
+.emptyContext p { font-size:14px; margin:8px 0; color:var(--muted); }
+.emptyContext summary { cursor:pointer; font-weight:600; }

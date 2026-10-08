@@ -4,7 +4,7 @@ import type { AppUser } from "./user";
 import { createAccount } from "./auth/accounts";
 import { hashPassword } from "./auth/password";
 import { withPoolClient } from "./db/pools";
-import { DatabaseRequestError } from "./db/gateway";
+import { DatabaseRequestError, databaseJson } from "./db/gateway";
 import { applicationOrigin } from "./application-origin.mjs";
 import { encryptInvitationCredential } from "./invitation-credential-crypto.mjs";
 
@@ -484,9 +484,14 @@ export async function repairStaffIdentity(repairId: string) {
 
 export async function updateStaffUser(
   target: StaffUserRecord,
-  input: { status?: "ACTIVE" | "SUSPENDED"; role?: Exclude<AppRole, "SUPER_ADMIN"> },
+  input: { status?: "ACTIVE" | "SUSPENDED"; role?: AppRole; expectedRole?:AppRole; requestKey?:string },
   actor: AppUser,
 ) {
+  if(input.role){
+    if(input.status||!input.expectedRole||!input.requestKey)throw new DatabaseRequestError(400,"INVALID_INPUT","Role changes require a separate exact request");
+    if(actor.role!=="SUPER_ADMIN"&&(actor.role!=="ADMIN"||[target.role,input.role].some(role=>role==="ADMIN"||role==="SUPER_ADMIN")))throw new DatabaseRequestError(403,"ROLE_ASSIGNMENT_FORBIDDEN","A super administrator is required");
+    return databaseJson("/db/rpc/change_staff_role",{method:"POST",body:JSON.stringify({target_user:target.id,new_role:input.role,expected_role:input.expectedRole,p_request_key:input.requestKey})});
+  }
   if (target.id === actor.id && input.status === "SUSPENDED") {
     throw new DatabaseRequestError(
       400,
@@ -518,25 +523,29 @@ export async function updateStaffUser(
   await withPoolClient("system", async (client) => {
     await client.query("begin");
     try {
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1||':staff-identity',0))",[workspaceId]);
+      const locked=await client.query<{user_id:string;role:AppRole;status:string}>("select user_id,role,status from public.workspace_memberships where workspace_id=$1 and user_id=any($2::uuid[]) order by user_id for update",[workspaceId,[actor.id,target.id]]);
+      const acting=locked.rows.find(row=>row.user_id===actor.id),current=locked.rows.find(row=>row.user_id===target.id);
+      if(!acting||acting.status!=="ACTIVE"||!["ADMIN","SUPER_ADMIN"].includes(acting.role)||!current||(acting.role==="ADMIN"&&["ADMIN","SUPER_ADMIN"].includes(current.role)))throw new DatabaseRequestError(403,"ROLE_ASSIGNMENT_FORBIDDEN","Role authority changed");
+      if(current.role!==target.role)throw new DatabaseRequestError(409,"STALE_TARGET","Reload the staff record");
       await client.query(
         "update app_auth.accounts set status = $2, updated_at = now() where id = $1",
         [target.id, nextStatus],
       );
       const membership = await client.query(
         `update public.workspace_memberships
-         set role = $3, status = $4
+         set status = $3
          where workspace_id = $1 and user_id = $2`,
-        [workspaceId, target.id, nextRole, nextStatus],
+        [workspaceId, target.id, nextStatus],
       );
       if (!membership.rowCount) {
         throw new DatabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
       }
       await client.query(
         `update public.sales_team_members
-         set role = $3,
-             active = ($4 = 'ACTIVE')
+         set active = ($3 = 'ACTIVE')
          where workspace_id = $1 and auth_user_id = $2`,
-        [workspaceId, target.id, nextRole, nextStatus],
+        [workspaceId, target.id, nextStatus],
       );
       await client.query(
         `update app_auth.sessions

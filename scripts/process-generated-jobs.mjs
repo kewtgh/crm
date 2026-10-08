@@ -148,13 +148,22 @@ async function performanceExport(job){
   const rows=await requestAll("/db/rpc/performance_export_rows_v220",{method:"POST",body:JSON.stringify({target_workspace:ws,period_from:range.start,period_to:range.end})});
   return [["Staff ID","Name (ZH)","Name (EN)","Role","Team","Period start","Period end","Currency","Allocated target","Confirmed performance","Base currency","Exchange rate","Rate source","Rate effective at","Base target","Base actual"],...rows.map(item=>[item.staff_id,item.name_zh,item.name_en,item.staff_role,item.team,item.period_start,item.period_end,item.currency,item.allocated_target,item.confirmed_performance,item.base_currency,item.exchange_rate,item.rate_source,item.rate_effective_at,item.base_target,item.base_actual])];
 }
+async function filterContactExport(job,rows,key="id"){
+  const allowed=new Set();
+  for(let offset=0;offset<rows.length;offset+=1000){
+    const result=await requestAll("/db/rpc/contact_export_allowed_rows",{method:"POST",workspaceId:job.workspace_id,body:JSON.stringify({target_job:job.id,target_ids:rows.slice(offset,offset+1000).map(row=>row[key])})});
+    for(const row of result)allowed.add(row.id);
+  }
+  return rows.filter(row=>allowed.has(row[key]));
+}
 async function marketingContactsExport(job){
   const channel=String(job.parameters?.channel??"").toUpperCase();if(!["EMAIL","SMS","PHONE","WECHAT","WHATSAPP"].includes(channel))throw new Error("Invalid marketing channel");
-  const rows=await requestAll(`/db/rpc/marketing_export_rows`,{
+  let rows=await requestAll(`/db/rpc/marketing_export_rows`,{
     method:"POST",
     body:JSON.stringify({target_workspace:job.workspace_id,export_channel:channel}),
     workspaceId:job.workspace_id,
   });
+  rows=await filterContactExport(job,rows,"contact_id");
   return [["Contact ID","Name (ZH)","Name (EN)","Email","Phone","Authorized channel","Consent source","Obtained at","Retention until"],...rows.map(item=>[item.contact_id,item.name_zh,item.name_en,item.email,item.phone,item.channel,item.consent_source,item.obtained_at,item.retention_until])];
 }
 async function requestAll(path,options={}){
@@ -344,7 +353,8 @@ async function crmExport(job){
   }
   if(resource==="people")params.set("do_not_contact","eq.false");
   params.set("order",`${definition.sort[sort]??definition.sort.primary}.${direction}`);
-  const rows=await requestAll(`/db/table/${definition.table}?${params}`);
+  let rows=await requestAll(`/db/table/${definition.table}?${params}`);
+  if(["people","students","tasks","sales"].includes(resource))rows=await filterContactExport(job,rows);
   return [definition.header,...rows.map(definition.row)];
 }
 async function setJob(id,status,extra={}){return request(`/db/table/generated_jobs?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString(),...extra})});}

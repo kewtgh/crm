@@ -189,7 +189,7 @@ export async function createStudent(input: {
 }
 
 export type HouseholdDetail = HouseholdRecord & {
-  members: Array<{ id: string; contactId: string; role: string; primary: boolean; nameZh: string; nameEn: string }>;
+  members: Array<{ id: string; contactId: string; role: string; primary: boolean; nameZh: string; nameEn: string; phone?:string;email?:string;occupation?:string;employer?:string;title?:string;updatedAt?:string;canEdit?:boolean }>;
 };
 type HouseholdDetailRow = Omit<HouseholdRow, "household_members"> & {
   household_members?: Array<{
@@ -202,6 +202,7 @@ export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | 
   const rows = await databaseJson<HouseholdDetailRow[]>(`/db/table/households?select=id,name_zh,name_en,status,address,updated_at,primary_parent_occupation,secondary_parent_occupation,annual_income_amount,income_currency,preferred_contact_method,preferred_language,education_expectations_markdown,family_background_markdown,household_members:household_members!household_members_household_id_fkey(id,contact_id,member_role,primary_contact,contacts:contacts!household_members_contact_id_fkey(name_zh,name_en))&id=eq.${encodeURIComponent(id)}&limit=1`);
   const row = rows[0];
   if (!row) return null;
+  const people=await databaseJson<Array<{id:string;contact_id:string;member_role:string;primary_contact:boolean;name_zh:string;name_en:string;phone:string|null;email:string|null;occupation:string;employer:string;title:string;updated_at:string;can_edit:boolean}>>(`/db/table/household_person_records?household_id=eq.${id}&order=id&limit=100`);
   return {
     id: row.id, nameZh: row.name_zh, nameEn: row.name_en, status: row.status,
     address: row.address, memberCount: row.household_members?.length ?? 0, updatedAt: row.updated_at,
@@ -209,10 +210,7 @@ export async function getHouseholdDetail(id: string): Promise<HouseholdDetail | 
     annualIncomeAmount:row.annual_income_amount===null?null:Number(row.annual_income_amount),incomeCurrency:row.income_currency,
     preferredContactMethod:row.preferred_contact_method,preferredLanguage:row.preferred_language,
     educationExpectationsMarkdown:row.education_expectations_markdown,familyBackgroundMarkdown:row.family_background_markdown,
-    members: (row.household_members ?? []).map((item) => ({
-      id: item.id, contactId: item.contact_id, role: item.member_role, primary: item.primary_contact,
-      nameZh: item.contacts?.name_zh ?? "", nameEn: item.contacts?.name_en ?? "",
-    })),
+    members:people.map(p=>({id:p.id,contactId:p.contact_id,role:p.member_role,primary:p.primary_contact,nameZh:p.name_zh,nameEn:p.name_en,phone:p.phone??"",email:p.email??"",occupation:p.occupation,employer:p.employer,title:p.title,updatedAt:p.updated_at,canEdit:p.can_edit})),
   };
 }
 

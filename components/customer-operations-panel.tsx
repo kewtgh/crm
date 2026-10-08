@@ -92,6 +92,7 @@ export function CustomerOperationsPanel({subject,id,extra,history,account=false,
 </>)}
     </div>}
     <div className="page-stack follow-up-workspace" hidden={activeTab!=="followUp"&&activeTab!=="activity"}>
+      <dl className="follow-up-summary"><div><dt>{t("customerOps.goal")}</dt><dd>{data.plan?.title||t("ux.record.notRecorded")}</dd></div><div><dt>{t("customerOps.field.next_follow_up_at")}</dt><dd>{data.profile.next_follow_up_at?formatDate(String(data.profile.next_follow_up_at),{includeTime:true}):t("ux.record.notRecorded")}</dd></div><div><dt>{t("workspace.recentActivity")}</dt><dd>{data.entries[0]?formatDate(data.entries[0].occurred_at,{includeTime:true}):t("ux.record.notRecorded")}</dd></div><div><dt>{t("crm.owner")}</dt><dd>{data.ownerName||t("ux.record.notRecorded")}</dd></div></dl>
       <InlineMessage type="info">{t(progress.suggestionKey)} {t("customerOps.evidenceHelp")}</InlineMessage>
       {progress.overdue&&<InlineMessage type="warning">{t("customerOps.overdue")}</InlineMessage>}
       {data.plan&&<div className="detail-metrics" aria-live="polite"><span><b>{progress.remaining}</b><small>{t("audit.remaining")}</small></span><span><b>{progress.daysRemaining!<0?t("audit.pastDue",{days:-progress.daysRemaining!}):t("audit.daysLeft",{days:progress.daysRemaining!})}</b><small>{t("audit.deadlineUTC")}</small></span><span><b>{t(progress.achieved?"audit.achieved":"audit.inProgress")}</b><small>{t("customerOps.goal")}</small></span></div>}

@@ -11,6 +11,7 @@ import {useUserPreferences} from "./user-preferences-context";
 import {RecordHeader,RecordIdentity} from "./record-header";
 import {ResponsiveDetailLayout,SectionHeader} from "./responsive-detail-layout";
 import {CustomerOperationsPanel} from "./customer-operations-panel";
+import {ContactRecordAccess} from "./contact-record-access";
 import {ContactConsentPage} from "./contact-consent-page";
 import {CrmRecordEditor} from "./crm-record-editor";
 import {RecordDeleteAction} from "./record-delete-action";
@@ -46,6 +47,6 @@ export function ContactWorkspace({initial}:{initial:ContactPrivacy}){
     secondaryActions={snapshot?.canManage&&<CrmRecordEditor resource="people" id={data.id} onSaved={item=>setData(current=>({...current,nameZh:item.nameZh,nameEn:item.nameEn,title:item.title??"",phone:item.phone??"",email:item.email??"",ownerName:item.ownerName,nextFollowUpAt:item.nextFollowUpAt??null}))}/>}
     moreActions={snapshot?.canManage&&<MoreActions label={t("ui.moreActionsFor",{name:data.nameZh||data.nameEn})}><div className="ux-mobile-actions"><CrmRecordEditor menuItem resource="people" id={data.id}/></div><RecordDeleteAction menuItem kind="CONTACT" id={data.id} label={data.nameZh||data.nameEn} onDeleted={()=>router.push("/people")}/></MoreActions>}/>
     {refreshNotice&&<InlineMessage type="info">{refreshNotice}</InlineMessage>}
-    <CustomerOperationsPanel subject="CONTACT" id={data.id} hideIdentity overview={overview} activeSection={section} onSectionChange={setSection} recordEntryRequested={recordEntry} onSnapshot={setSnapshot} extra={<ContactConsentPage key={`${data.nameZh}:${data.nameEn}`} initial={data} onDataChange={setData} embedded/>}/>
+    <CustomerOperationsPanel subject="CONTACT" id={data.id} hideIdentity overview={overview} activeSection={section} onSectionChange={setSection} recordEntryRequested={recordEntry} onSnapshot={setSnapshot} extra={<><ContactRecordAccess id={data.id} ownerName={data.ownerName}/><ContactConsentPage key={`${data.nameZh}:${data.nameEn}`} initial={data} onDataChange={setData} embedded/></>}/>
   </div>;
 }

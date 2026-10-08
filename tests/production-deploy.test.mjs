@@ -1559,14 +1559,14 @@ test("post-acceptance BuildKit cleanup is rootless, bounded, and non-fatal", asy
     source("scripts/lib/post-deployment-cleanup.mjs"),
   ]);
   const prune = buildkitPruneArguments({
-    cacheRetentionHours: 168,
+    cacheRetentionHours: 24,
     maximumCacheGb: 12,
     reservedCacheGb: 2,
     dockerMinimumAvailableBytes: 10 * 1024 ** 3,
   });
   assert.deepEqual(prune, [
     "buildx", "--builder", "lumina-crm-buildkit", "prune",
-    "--filter", "until=168h",
+    "--filter", "until=24h",
     "--max-used-space", "12GB",
     "--reserved-space", "2GB",
     "--min-free-space", "10GB",

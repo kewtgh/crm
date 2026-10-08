@@ -8,8 +8,10 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 
 const schema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
-  role: z.enum(APP_ROLES.filter((role) => role !== "SUPER_ADMIN") as ["ADMIN", "SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]).optional(),
-}).refine((value) => value.status || value.role, { message: "EMPTY_UPDATE" });
+  role: z.enum(APP_ROLES).optional(),
+  expectedRole:z.enum(APP_ROLES).optional(),
+  requestKey:z.string().min(8).max(160).optional(),
+}).strict().refine((value) => value.status || value.role, { message: "EMPTY_UPDATE" }).refine(value=>!value.role||(!value.status&&!!value.expectedRole&&!!value.requestKey),{message:"INVALID_ROLE_REQUEST"});
 
 async function patch(request: Request, context: { params: Promise<{ id: string }> }) {
   if (!mutationIsTrusted(request)) return NextResponse.json({ code: "UNTRUSTED_ORIGIN" }, { status: 403 });
@@ -27,3 +29,4 @@ async function patch(request: Request, context: { params: Promise<{ id: string }
   }
 }
 export const PATCH=apiRoute(patch,"STAFF_USER_UPDATE_FAILED");
+export const POST=apiRoute(patch,"STAFF_USER_UPDATE_FAILED");

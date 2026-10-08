@@ -52,6 +52,8 @@ try{
  await client.query('reset role');
  const keyContact=(await client.query("insert into public.contacts(workspace_id,organization_id,name_zh,name_en,owner_id,created_by,decision_role) values($1,$2,'校长','Principal',$3,$3,'DECISION_MAKER') returning id",[ws,school,admin])).rows[0].id;
  const counselor=(await client.query("insert into public.contacts(workspace_id,organization_id,name_zh,name_en,owner_id,created_by,decision_role) values($1,$2,'顾问','Counselor',$3,$3,'INFLUENCER') returning id",[ws,school,sales])).rows[0].id;
+ // Contact access is explicit; ADMIN no longer implies access to the counselor.
+ await client.query("insert into public.record_collaborators(workspace_id,resource_type,resource_id,user_id,access_level,granted_by) values($1,'CONTACT',$2,$3,'READ',$4)",[ws,counselor,admin,sales]);
  const schoolB=await org(ws,admin,'assist-school'),hiddenSchool=await org(ws,admin,'hidden-school');
  await client.query("insert into public.opportunities(workspace_id,organization_id,product_id,cohort_id,title_zh,title_en,owner_id,created_by,next_action_zh,next_action_en,expected_close_date) values($1,$2,$3,$4,'产品机会','Product opportunity',$5,$5,'跟进','Follow up','2027-01-01'),($1,$2,$3,$4,'第二机会','Second opportunity',$5,$5,'跟进','Follow up','2027-01-01')",[ws,school,p,co,admin]);
  await context();

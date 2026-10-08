@@ -204,11 +204,14 @@ test("a target controller start failure records a control-plane failure before b
 
 test("cleanup policy defaults are bounded and invalid values fail closed", () => {
   const policy = parsePostDeploymentCleanupPolicy({});
+  assert.equal(policy.buildkitCacheMaxAge, "24h");
+  assert.equal(parsePostDeploymentCleanupPolicy({LUMINA_BUILDKIT_CACHE_RETENTION_HOURS:"24"}).buildkitCacheMaxAge,"24h");
+  assert.equal(parsePostDeploymentCleanupPolicy({LUMINA_BUILDKIT_CACHE_MAX_AGE:"24h",LUMINA_BUILDKIT_CACHE_RETENTION_HOURS:"48"}).buildkitCacheMaxAge,"24h");
   assert.equal(policy.imageReleasesToKeep, 3);
   assert.equal(policy.historyMinimumKeep, 20);
   assert.deepEqual(buildkitCleanupArguments(policy), [
     "buildx", "--builder", "lumina-crm-buildkit", "prune",
-    "--filter", "until=168h", "--max-used-space", "12GB",
+    "--filter", "until=24h", "--max-used-space", "12GB",
     "--reserved-space", "2GB", "--force",
   ]);
   assert.throws(() => parsePostDeploymentCleanupPolicy({ LUMINA_IMAGE_RELEASES_TO_KEEP: "2" }), /INVALID/);

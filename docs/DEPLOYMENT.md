@@ -635,11 +635,18 @@ image. At least `LUMINA_IMAGE_RELEASES_TO_KEEP=3` complete release pairs are ret
 3–10), which means current + rollback + at least one additional release. Unknown ownership, missing
 labels, malformed commits, incomplete pairs, or Docker inspect failure all fail closed.
 
-BuildKit defaults are maximum `12GB`, reserved `2GB`, and maximum age `168h`, configurable through
+BuildKit defaults are maximum `12GB`, reserved `2GB`, and maximum age `24h`, configurable through
 `LUMINA_BUILDKIT_MAX_USED_SPACE`, `LUMINA_BUILDKIT_RESERVED_SPACE`, and
 `LUMINA_BUILDKIT_CACHE_MAX_AGE`. Only `docker buildx --builder lumina-crm-buildkit prune ...` is
 allowed. Generic Docker prune commands and every volume/network/container prune are prohibited;
 volumes are never automatically pruned.
+
+The checked-in defaults are `LUMINA_BUILDKIT_CACHE_RETENTION_HOURS=24` and
+`LUMINA_BUILDKIT_CACHE_MAX_AGE=24h`. The hourly setting also controls storage-maintenance
+and generated BuildKit retention. For post-deployment cleanup, an explicit MAX_AGE takes
+precedence over the hourly compatibility setting. Existing operator environment overrides
+must be updated through the normal deployment configuration process; changing repository
+examples does not modify a running host.
 
 Deployment records, archived requests, and deployment logs require both age beyond
 `LUMINA_DEPLOYMENT_HISTORY_RETENTION_DAYS=30` and position beyond the newest

@@ -1,4 +1,14 @@
-# Implementation status — v3.33.0 release candidate
+# Implementation status — v3.34.0 release candidate
+
+## v3.34.0 — Workspace density, workflows and Contact access
+
+Compact activity timelines, Lead rows, Revenue empty states and agreement sections reduce
+scrolling. Workflow templates use an ordered navigator with one selected step editor.
+Contact visibility follows ownership, explicit sharing and the same-department reporting chain;
+communication consent remains independent. Families create independent parent/guardian people
+atomically. Staff role changes use guarded, audited commands with exact-request recovery.
+Revenue and Commission accounting semantics remain unchanged.
+See [release notes](RELEASE_V3.34.0.md) and [verification](V334_VERIFICATION.md).
 
 ## v3.33.0 — Operational identity, usability and recovery
 

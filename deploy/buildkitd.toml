@@ -15,7 +15,7 @@ debug = false
 
 [[worker.oci.gcpolicy]]
   all = true
-  keepDuration = "168h"
+  keepDuration = "24h"
   reservedSpace = "2GB"
   maxUsedSpace = "12GB"
   minFreeSpace = "10GB"

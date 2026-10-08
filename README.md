@@ -1,6 +1,17 @@
 # Lumina CRM
 
-Current release candidate: **v3.33.0**
+Current release candidate: **v3.34.0**
+
+## v3.34.0 — Workspace density, workflows and Contact access
+
+Compact activity timelines, Lead rows, Revenue empty states and agreement sections reduce
+scrolling. Workflow templates use an ordered navigator with one selected step editor.
+Contact visibility follows ownership, explicit sharing and the same-department reporting chain;
+communication consent remains independent. Families create independent parent/guardian people
+atomically. Staff role changes use guarded, audited commands with exact-request recovery.
+Revenue and Commission accounting semantics remain unchanged.
+See [release notes](docs/RELEASE_V3.34.0.md), [audit](docs/FIRST_PRINCIPLES_AUDIT_V334.md),
+[plan](docs/FIRST_PRINCIPLES_PLAN_V334.md) and [verification](docs/V334_VERIFICATION.md).
 
 ## v3.33.0 — Operational identity, usability and recovery
 

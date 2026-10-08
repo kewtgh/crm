@@ -145,7 +145,7 @@ export function parseStoragePolicy(environment = {}) {
       name: "LUMINA_BUILDKIT_CACHE_RETENTION_HOURS",
       minimum: 24,
       maximum: 2160,
-      fallback: 168,
+      fallback: 24,
     }),
     maximumCacheGb,
     reservedCacheGb,

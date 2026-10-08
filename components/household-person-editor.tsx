@@ -1,0 +1,11 @@
+"use client";
+import {useState} from "react";
+import type {HouseholdDetail} from "@/lib/v200-repository";
+import {useReceiptMutation} from "@/hooks/use-receipt-mutation";
+import {useI18n} from "./i18n-provider";
+import {AccessibleDrawer,InlineMessage} from "./ui";
+export function HouseholdPersonEditor({person,onClose,onSaved}:{person:HouseholdDetail["members"][number];onClose:()=>void;onSaved:()=>Promise<void>}){
+ const {t,locale}=useI18n(),mutation=useReceiptMutation("/api/households/person"),[accepted,setAccepted]=useState(false),[notice,setNotice]=useState("");
+ const save=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!accepted){const form=new FormData(e.currentTarget),data=Object.fromEntries(["nameZh","nameEn","phone","email","occupation","employer","title"].map(k=>[k,String(form.get(k)??"")]));if(!await mutation.send({id:person.id,expectedUpdatedAt:person.updatedAt,data}))return;setAccepted(true);}try{await onSaved();}catch{setNotice(t("audit.savedRefreshFailed"));}};
+ return <AccessibleDrawer title={t("common.edit")} pending={mutation.pending||mutation.uncertain} onClose={onClose}><form onSubmit={save}><fieldset className="follow-up-fields" disabled={mutation.pending||mutation.uncertain||accepted}><div className="form-grid two-column">{([['nameZh','Chinese name','中文姓名'],['nameEn','English name','英文姓名'],['phone','Mobile','手机'],['email','Email','电子邮箱'],['occupation','Occupation','职业'],['employer','Employer / organization','雇主／机构'],['title','Title','职务']] as const).map(([key,en,zh])=><label className="field" key={key}><span>{locale==="en"?en:zh}</span><input name={key} type={key==="email"?"email":"text"} maxLength={key==="email"?320:key==="phone"?40:160} defaultValue={person[key]??""}/></label>)}</div></fieldset>{mutation.error&&<InlineMessage type="error">{mutation.error}</InlineMessage>}{notice&&<InlineMessage type="info">{notice}</InlineMessage>}<div className="drawer-actions"><button className="primary-button" disabled={mutation.pending}>{t(accepted?"ux.management.refresh":mutation.uncertain?"enrollments.retry":"common.save")}</button></div></form></AccessibleDrawer>;
+}
