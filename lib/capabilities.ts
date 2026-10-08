@@ -27,6 +27,7 @@ export const CAPABILITIES = [
   "imports.view",
   "imports.execute",
   "dataQuality.manage",
+  "performance.view",
   "performance.manage",
   "relationshipTargets.manage",
   "duplicates.manage",
@@ -60,7 +61,14 @@ const administrator = new Set<Capability>(CAPABILITIES);
 const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
   SUPER_ADMIN: administrator,
   ADMIN: administrator,
+  FINANCE_MANAGER: new Set(["finance.view","finance.payment.record","contracts.view","calendar.view","calendar.manage","tasks.view","tasks.manage"]),
+  FINANCE_SPECIALIST: new Set(["finance.view","contracts.view","calendar.view","calendar.manage","tasks.view","tasks.manage"]),
+  OPERATIONS_MANAGER: new Set(["education.view","education.manage","calendar.view","calendar.manage","tasks.view","tasks.manage","messages.view"]),
+  OPERATIONS_SPECIALIST: new Set(["education.view","education.manage","calendar.view","calendar.manage","tasks.view","tasks.manage"]),
+  ACADEMIC_SPECIALIST: new Set(["education.view","education.manage","calendar.view","calendar.manage","tasks.view","tasks.manage"]),
+  CUSTOMER_SUCCESS_SPECIALIST: new Set(["education.view","calendar.view","calendar.manage","tasks.view","tasks.manage","messages.view"]),
   SALES_DIRECTOR: new Set([
+    "performance.view",
     "approvals.decide",
     "catalog.manage",
     "finance.view",
@@ -94,6 +102,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "exports.request",
   ]),
   SALES_MANAGER: new Set([
+    "performance.view",
     "approvals.decide",
     "finance.view",
     "finance.quote.create",
@@ -125,6 +134,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "exports.request",
   ]),
   SALES_SPECIALIST: new Set([
+    "performance.view",
     "finance.view",
     "finance.quote.create",
     "education.view",
@@ -146,6 +156,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "exports.request",
   ]),
   SALES_SUPPORT: new Set([
+    "performance.view",
     "finance.view",
     "education.view",
     "education.manage",

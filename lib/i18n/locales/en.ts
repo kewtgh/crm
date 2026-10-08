@@ -50,6 +50,26 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  "staff.reporting.requiresTeam": "Sales reporting requires a Sales business function and an active team / region membership.",
+  "staff.removal.deactivateFirst": "Suspend this account first, then clear business links and check again.",
+  "staff.removal.references": "Current business links remain. Clear or reassign them, then check deletion eligibility again.",
+  "staff.removal.inFlight": "An invitation is being delivered. Check eligibility again after delivery settles.",
+  "staff.removal.protected": "This account is protected by the administrator or self-removal rules.",
+  "staff.removal.multiWorkspace": "This identity belongs to multiple workspaces and needs controlled identity review.",
+  "staff.removal.external": "This account is managed by an external directory. Use its offboarding process.",
+  "role.finance_manager": "Finance manager",
+  "role.FINANCE_MANAGER": "Finance manager",
+  "role.finance_specialist": "Finance specialist",
+  "role.FINANCE_SPECIALIST": "Finance specialist",
+  "role.operations_manager": "Operations manager",
+  "role.OPERATIONS_MANAGER": "Operations manager",
+  "role.operations_specialist": "Operations specialist",
+  "role.OPERATIONS_SPECIALIST": "Operations specialist",
+  "role.academic_specialist": "Academic / student support",
+  "role.ACADEMIC_SPECIALIST": "Academic / student support",
+  "role.customer_success_specialist": "Customer success",
+  "role.CUSTOMER_SUCCESS_SPECIALIST": "Customer success",
+
   ...uxClosureEn,
   ...recordWorkspaceEn,
   ...workspaceRedesignEn,

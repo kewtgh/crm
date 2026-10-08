@@ -49,6 +49,26 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  "staff.reporting.requiresTeam": "参与销售统计需要销售业务岗位，以及有效团队 / 区域成员关系。",
+  "staff.removal.deactivateFirst": "请先停用账户，再清理业务关联后重新检查。",
+  "staff.removal.references": "当前仍有业务关联，请清理或转交后重新检查删除资格。",
+  "staff.removal.inFlight": "邀请正在投递，请待投递状态确定后重新检查删除资格。",
+  "staff.removal.protected": "该账户受管理员或禁止删除自身规则保护。",
+  "staff.removal.multiWorkspace": "该身份属于多个工作区，需要受控身份审查。",
+  "staff.removal.external": "该账户由外部目录管理，请使用对应离职流程。",
+  "role.finance_manager": "财务经理",
+  "role.FINANCE_MANAGER": "财务经理",
+  "role.finance_specialist": "财务专员",
+  "role.FINANCE_SPECIALIST": "财务专员",
+  "role.operations_manager": "运营经理",
+  "role.OPERATIONS_MANAGER": "运营经理",
+  "role.operations_specialist": "运营专员",
+  "role.OPERATIONS_SPECIALIST": "运营专员",
+  "role.academic_specialist": "教务 / 学生支持",
+  "role.ACADEMIC_SPECIALIST": "教务 / 学生支持",
+  "role.customer_success_specialist": "客户服务",
+  "role.CUSTOMER_SUCCESS_SPECIALIST": "客户服务",
+
   ...uxClosureZh,
   ...recordWorkspaceZh,
   ...workspaceRedesignZh,

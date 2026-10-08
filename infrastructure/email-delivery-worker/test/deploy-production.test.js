@@ -48,9 +48,9 @@ function fakeProductionValues(overrides = {}) {
     WORKER_NAME: "unit-test-worker",
     WORKER_PUBLIC_BASE_URL: "https://worker.example.invalid",
     CRM_APP_URL: "https://crm.example.invalid",
-    EMAIL_FROM: "Test Mail <user@example.test>",
+    EMAIL_FROM: "ewaya CRM <user@example.test>",
     EMAIL_REPLY_TO: "",
-    EMAIL_BRAND_NAME: "Fictitious Test Brand",
+    EMAIL_BRAND_NAME: "ewaya CRM",
     DELIVERY_PATH: "/delivery-test",
     HEALTH_PATH: "/health-test",
     CLOUDFLARE_ACCOUNT_ID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -424,8 +424,8 @@ test("generated production JSON contains the complete strict comparison surface"
   }]);
   assert.deepEqual(generated.vars, {
     CRM_APP_URL: "https://crm.example.invalid/",
-    EMAIL_FROM: "Test Mail <user@example.test>",
-    EMAIL_BRAND_NAME: "Fictitious Test Brand",
+    EMAIL_FROM: "ewaya CRM <user@example.test>",
+    EMAIL_BRAND_NAME: "ewaya CRM",
     DELIVERY_PATH: "/delivery-test",
     HEALTH_PATH: "/health-test",
     EMAIL_REPLY_TO: "reply@example.test",

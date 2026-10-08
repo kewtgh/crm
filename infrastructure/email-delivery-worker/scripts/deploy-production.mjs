@@ -20,6 +20,8 @@ import { fileURLToPath } from "node:url";
 import {
   parseHttpsUrl,
   validMailbox,
+  validEmailBrand,
+  validBrandedSender,
   validRoutePath,
 } from "../src/config.js";
 
@@ -160,7 +162,7 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
   )) {
     fail("PLACEHOLDER_FORBIDDEN");
   }
-  if (!validMailbox(values.EMAIL_FROM)) fail("EMAIL_FROM_INVALID");
+  if (!validBrandedSender(values.EMAIL_FROM)) fail("EMAIL_FROM_INVALID");
   if (values.EMAIL_REPLY_TO && !validMailbox(values.EMAIL_REPLY_TO)) {
     fail("EMAIL_REPLY_TO_INVALID");
   }
@@ -170,7 +172,7 @@ export function validateProductionValues(rawValues, { allowTestValues = false } 
   )) {
     fail("EMAIL_PLACEHOLDER_FORBIDDEN");
   }
-  if (values.EMAIL_BRAND_NAME.length > 120 || /[\r\n]/.test(values.EMAIL_BRAND_NAME)) {
+  if (!validEmailBrand(values.EMAIL_BRAND_NAME)) {
     fail("EMAIL_BRAND_NAME_INVALID");
   }
   if (!validRoutePath(values.DELIVERY_PATH)

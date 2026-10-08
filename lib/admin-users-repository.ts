@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import type {StaffBusinessProfile} from "./staff-business";
 import type { AppRole } from "./roles";
 import type { AppUser } from "./user";
 import { createAccount } from "./auth/accounts";
@@ -9,6 +10,7 @@ import { applicationOrigin } from "./application-origin.mjs";
 import { encryptInvitationCredential } from "./invitation-credential-crypto.mjs";
 
 export type StaffUserRecord = {
+  businessProfile?:StaffBusinessProfile;
   id: string;
   username: string;
   displayNameZh: string;
@@ -29,6 +31,7 @@ export type StaffDirectoryStatus = "ALL" | "ACTIVE" | "PENDING" | "SUSPENDED";
 export type StaffDirectoryRole = "ALL" | AppRole;
 
 type StaffRow = {
+  business_profile:StaffBusinessProfile;
   id: string;
   username: string;
   display_name_zh: string;
@@ -46,6 +49,7 @@ type StaffRow = {
 
 function mapStaff(row: StaffRow): StaffUserRecord {
   return {
+    businessProfile:row.business_profile,
     id: row.id,
     username: row.username,
     displayNameZh: row.display_name_zh,
@@ -109,6 +113,8 @@ export async function listStaffUsers(input: {
         ) as mfa_enabled,
         count(*) over() as total_count,
         invitation.invitation_delivery_status,
+        (select jsonb_build_object('revision',bp.revision,'primaryFunction',bp.primary_function,'additionalFunctions',bp.additional_functions,'salesEligible',public.staff_reporting_current(bp.member_id),'configuredEligibility',coalesce((select e.eligible from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1),false),'effectiveFrom',(select e.effective_from from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1),'updatedBy',bp.updated_by,'updatedAt',bp.updated_at,'reason',(select e.reason from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1)) from public.staff_business_profiles bp join public.sales_team_members sm on sm.id=bp.member_id where sm.auth_user_id=account.id and sm.workspace_id=membership.workspace_id) business_profile,
+
         coalesce((select jsonb_agg(jsonb_build_object('id',team.id,'code',team.code,'nameZh',team.name_zh,'nameEn',team.name_en,'role',team_membership.membership_role,'status',team_membership.status) order by team.name_en)
           from public.sales_team_members sales_member join public.sales_team_memberships team_membership on team_membership.member_id=sales_member.id and team_membership.status in ('ACTIVE','PENDING')
           join public.sales_teams team on team.id=team_membership.team_id and team.active
@@ -167,6 +173,8 @@ export async function getStaffUser(userId: string): Promise<StaffUserRecord> {
         ) as mfa_enabled,
         1 as total_count,
         invitation.invitation_delivery_status,
+        (select jsonb_build_object('revision',bp.revision,'primaryFunction',bp.primary_function,'additionalFunctions',bp.additional_functions,'salesEligible',public.staff_reporting_current(bp.member_id),'configuredEligibility',coalesce((select e.eligible from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1),false),'effectiveFrom',(select e.effective_from from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1),'updatedBy',bp.updated_by,'updatedAt',bp.updated_at,'reason',(select e.reason from public.staff_sales_eligibility_events e where e.member_id=bp.member_id order by e.effective_from desc,e.created_at desc,e.id desc limit 1)) from public.staff_business_profiles bp join public.sales_team_members sm on sm.id=bp.member_id where sm.auth_user_id=account.id and sm.workspace_id=membership.workspace_id) business_profile,
+
         coalesce((select jsonb_agg(jsonb_build_object('id',team.id,'code',team.code,'nameZh',team.name_zh,'nameEn',team.name_en,'role',team_membership.membership_role,'status',team_membership.status) order by team.name_en)
           from public.sales_team_members sales_member join public.sales_team_memberships team_membership on team_membership.member_id=sales_member.id and team_membership.status in ('ACTIVE','PENDING')
           join public.sales_teams team on team.id=team_membership.team_id and team.active
@@ -259,6 +267,14 @@ async function queueInvitation(
   return { id: deliveryId, status: "QUEUED" as const };
 }
 
+async function lockStaffAdministrator(client: PoolClient, workspaceId: string, actor: AppUser) {
+  if (actor.aal !== "aal2") throw new DatabaseRequestError(403,"MFA_REQUIRED","MFA required");
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1||':staff-identity',0))",[workspaceId]);
+  const result=await client.query<{role:AppRole}>("select m.role from public.workspace_memberships m join app_auth.accounts a on a.id=m.user_id where m.workspace_id=$1 and m.user_id=$2 and m.status='ACTIVE' and a.status='ACTIVE' for share of m,a",[workspaceId,actor.id]);
+  if (!result.rows[0] || !["ADMIN","SUPER_ADMIN"].includes(result.rows[0].role)) throw new DatabaseRequestError(403,"ROLE_ASSIGNMENT_FORBIDDEN","Role assignment forbidden");
+  return result.rows[0].role;
+}
+
 export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
   if (actor.role === "ADMIN" && input.role === "ADMIN") {
     throw new DatabaseRequestError(
@@ -296,6 +312,14 @@ export async function createStaffUser(input: CreateStaffInput, actor: AppUser) {
       teamId: selectedTeam?.id ?? null,
       managerMemberId: input.managerMemberId ?? selectedTeam?.lead_member_id ?? null,
       teamAssignmentActorId:actor.id,
+      beforeCreate: async client => {
+        const role=await lockStaffAdministrator(client,workspaceId,actor);
+        if (role==="ADMIN" && input.role==="ADMIN") throw new DatabaseRequestError(403,"ROLE_ASSIGNMENT_FORBIDDEN","Role assignment forbidden");
+        if (input.teamId) {
+          const current=await client.query("select id from public.sales_teams where id=$1 and workspace_id=$2 and active for share",[input.teamId,workspaceId]);
+          if (!current.rowCount) throw new DatabaseRequestError(400,"TEAM_NOT_FOUND","Select an active team");
+        }
+      },
       afterCreate: async (client, userId) => {
         await client.query(
           `insert into public.audit_events(
@@ -357,6 +381,7 @@ export async function resendStaffInvitation(
   const result = await withPoolClient("system", async (client) => {
     await client.query("begin");
     try {
+      const currentActorRole=await lockStaffAdministrator(client,workspaceId,actor);
       const targetResult = await client.query<{
         username: string; email: string; display_name_zh: string; display_name_en: string;
         role: Exclude<AppRole, "SUPER_ADMIN">; account_pending: boolean; membership_pending: boolean;
@@ -372,6 +397,7 @@ export async function resendStaffInvitation(
       );
       const target = targetResult.rows[0];
       if (!target) throw new DatabaseRequestError(404, "STAFF_USER_NOT_FOUND", "Staff user not found");
+      if(currentActorRole!=="SUPER_ADMIN"&&["ADMIN","SUPER_ADMIN"].includes(target.role))throw new DatabaseRequestError(403,"ROLE_ASSIGNMENT_FORBIDDEN","Role assignment forbidden");
       const existing = await client.query<{ id: string; status: StaffInvitationStatus }>(
         `select id,status from public.staff_invitation_deliveries
          where requested_by=$1 and user_id=$2 and request_key=$3`,
@@ -571,4 +597,12 @@ export async function updateStaffUser(
       throw error;
     }
   });
+}
+
+export type StaffRemovalEligibility = {retentionMode?:"NONE"|"AUDIT_IDENTITY";status:"DEACTIVATION_REQUIRED"|"DELETE_ELIGIBLE"|"PROTECTED_ACCOUNT"|"MULTI_WORKSPACE_ACCOUNT"|"EXTERNALLY_MANAGED_ACCOUNT"|"INVITATION_IN_FLIGHT"|"BUSINESS_REFERENCES_EXIST"};
+export function staffRemovalEligibility(userId:string) {
+  return databaseJson<StaffRemovalEligibility>("/db/rpc/staff_lifecycle_eligibility",{method:"POST",body:JSON.stringify({target_user:userId})});
+}
+export function removeUnusedStaffAccount(userId:string,requestKey:string) {
+  return databaseJson<{id:string;status:"REMOVED"}>("/db/rpc/remove_unused_staff_account",{method:"POST",body:JSON.stringify({target_user:userId,p_request_key:requestKey})});
 }

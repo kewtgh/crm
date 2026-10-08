@@ -11,19 +11,21 @@ import {en} from '../lib/i18n/locales/en.ts';
 import {zhUXFoundation,enUXFoundation} from '../lib/i18n/locales/ux-foundation.ts';
 const source=p=>readFile(new URL('../'+p,import.meta.url),'utf8');
 
-test('all six roles use canonical capabilities and admin role restrictions without fake view capabilities',()=>{
+test('all access roles use canonical capabilities and admin role restrictions without fake view capabilities',()=>{
   for(const role of APP_ROLES){
     const entries=visibleDestinations(role);
     assert.equal(new Set(entries.map(d=>d.href)).size,entries.length);
-    for(const d of navigationDestinations)assert.equal(entries.some(v=>v.id===d.id),(!d.capability||hasCapability(role,d.capability))&&(!d.roles||d.roles.includes(role)));
+    for(const d of navigationDestinations)assert.equal(entries.some(v=>v.id===d.id),(!d.capability||hasCapability(role,d.capability))&&(!d.roles||d.roles.includes(role))&&(!d.anyCapabilities||d.anyCapabilities.some(capability=>hasCapability(role,capability))));
     assert.equal(entries.some(d=>d.id==='commissions'),hasCapability(role,'finance.view'));
     assert.equal(entries.some(d=>d.id==='admin-recycle'),role==='SUPER_ADMIN');
     for(const d of entries){assert.ok(zhCN[d.labelKey]);assert.ok(en[d.labelKey]);}
   }
+  assert.equal(navigationDestinations.find(d=>d.id==='performance').capability,'performance.view');
+  for(const role of APP_ROLES.filter(role=>!role.startsWith('SALES_')&&!['ADMIN','SUPER_ADMIN'].includes(role)))assert.ok(!visibleDestinations(role).some(d=>d.id==='performance'));
   const support=visibleDestinations('SALES_SUPPORT');
   for(const id of ['approvals','progression','imports','quality','admin','admin-users'])assert.ok(!support.some(d=>d.id===id));
   assert.ok(support.some(d=>d.id==='commissions'),'finance-view entry remains available without settlement authority');
-  for(const id of ['products','reports','performance'])assert.equal(navigationDestinations.find(d=>d.id===id).capability,undefined);
+  for(const id of ['products','reports'])assert.equal(navigationDestinations.find(d=>d.id===id).capability,undefined);
 });
 test('query-aware navigation preserves Student/Family aliases and ignores non-identity query ordering',()=>{
   const examples={'/dashboard':'dashboard','/students':'students','/students?focus=synthetic':'students','/households':'students','/households?tab=students':'students','/households?tab=families':'families','/households?focus=synthetic&sort=primary&tab=families':'families','/enrollments':'enrollments','/applications':'applications','/student-success':'support','/progression':'progression','/workflow-templates':'workflows','/commissions':'commissions','/reports/executive':'executive','/imports':'imports','/data-quality':'quality'};

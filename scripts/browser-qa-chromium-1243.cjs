@@ -25,6 +25,7 @@ if(process.env.CI==="true"&&gitState!=="clean")throw new Error(`CI browser evide
 
 function envFile(){
   const values={};
+  if(process.env.QA_SCOPE==="staff-lifecycle")return values;
   const filename=path.resolve(".env.local");
   if(!fs.existsSync(filename))return values;
   for(const raw of fs.readFileSync(filename,"utf8").split(/\r?\n/)){
@@ -359,7 +360,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(["interaction-mutations","interaction-directories"].includes(env.QA_SCOPE)){await require("./qa-interaction-reliability.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="staff-lifecycle"){await require("./qa-staff-lifecycle.cjs")({browser,base,output,report,observe});}
+    else if(["interaction-mutations","interaction-directories"].includes(env.QA_SCOPE)){await require("./qa-interaction-reliability.cjs")({browser,base,output,report,observe});}
     else if(["workspace-redesign-records","workspace-redesign-tools"].includes(env.QA_SCOPE)){await require("./qa-workspace-redesign.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="revenue-workspace"){await require(env.QA_REVENUE_CURRENT==="1"?"./qa-revenue-current.cjs":"./qa-revenue-workspace.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="ux-closure"){await require("./qa-ux-closure.cjs")({browser,base,output,report,observe});}

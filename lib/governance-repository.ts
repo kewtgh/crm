@@ -63,7 +63,7 @@ export type PerformanceWorkspace={
 };
 
 export async function loadPerformanceWorkspace(managerId:string):Promise<PerformanceWorkspace>{
-  const membersRaw=await databaseJson<Record<string,unknown>[]>("/db/table/sales_team_members?select=id,name_zh,name_en,role,team&active=eq.true&order=name_en");
+  const membersRaw=await databaseJson<Record<string,unknown>[]>("/db/rpc/staff_sales_roster",{method:"POST",body:"{}"});
   const targets=await databaseJson<Record<string,unknown>[]>(`/db/table/performance_targets?select=id,manager_id,period_start,period_end,currency,target_amount,status&manager_id=eq.${encodeURIComponent(managerId)}&order=created_at.desc&limit=1`);
   const target=targets[0];
   const members=membersRaw.map((item)=>({id:String(item.id),name:`${item.name_zh} / ${item.name_en}`,role:item.role==="SALES_SUPPORT"?"support" as const:"specialist" as const,team:String(item.team)}));

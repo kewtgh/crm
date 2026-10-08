@@ -1,4 +1,14 @@
-# Implementation status — v3.35.3 release candidate
+# Implementation status — v3.36.0 release candidate
+
+## v3.36.0 — Email, staff lifecycle and sales scope
+
+All delivery templates share a bilingual ewaya email layout. Administrators can remove
+unused accounts through dependency-checked, audited cleanup while business identities
+remain protected. New Finance, Operations, Academic and Customer Success profiles stay
+separate from business functions and explicit sales-reporting eligibility. Approved
+historical scopes and company financial facts remain intact.
+
+See [release notes](RELEASE_V3.36.0.md).
 
 ## v3.35.3 — Staff account creation repair
 

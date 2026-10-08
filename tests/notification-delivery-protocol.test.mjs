@@ -111,7 +111,7 @@ test("leaves non-staff notification payloads unchanged", () => {
 test("keeps the CRM producer and Email Worker staff template contracts identical", () => {
   const definition = TEMPLATE_DEFINITIONS["staff-account-created"];
   assert.deepEqual(STAFF_ACCOUNT_CREATED_EXTERNAL_FIELDS, definition.requiredPayloadFields);
-  assert.deepEqual(definition.optionalPayloadFields, []);
+  assert.deepEqual(definition.optionalPayloadFields, ["locale"]);
 
   const externalPayload = externalNotificationPayload(
     "staff-account-created",
@@ -122,7 +122,7 @@ test("keeps the CRM producer and Email Worker staff template contracts identical
     brandName:"ewaya CRM",
     applicationUrl:"https://crm.example.net",
   });
-  assert.match(rendered.subject, /ewaya Education CRM account/);
+  assert.match(rendered.subject, /ewaya CRM account/);
 });
 
 test("maps only bounded allow-listed Email Worker 4xx error codes", async () => {

@@ -24,9 +24,9 @@ function environment(overrides = {}) {
   return {
     LUMINA_WEBHOOK_TOKEN: CRM_TOKEN,
     RESEND_API_KEY: RESEND_KEY,
-    EMAIL_FROM: "ewaya Test <sender@example.test>",
+    EMAIL_FROM: "ewaya CRM <sender@example.test>",
     CRM_APP_URL: APPLICATION_URL,
-    EMAIL_BRAND_NAME: "ewaya Education CRM",
+    EMAIL_BRAND_NAME: "ewaya CRM",
     DELIVERY_PATH,
     HEALTH_PATH,
     ...overrides,
@@ -556,10 +556,10 @@ test("CRM cannot override Resend from, subject, html, or reply-to", async () => 
     EMAIL_REPLY_TO: "reply@example.test",
   }));
   const providerBody = JSON.parse(provider.calls[0].init.body);
-  assert.equal(providerBody.from, "ewaya Test <sender@example.test>");
+  assert.equal(providerBody.from, "ewaya CRM <sender@example.test>");
   assert.equal(providerBody.reply_to, "reply@example.test");
   assert.equal(providerBody.subject, "Your ewaya CRM verification code");
-  assert.match(providerBody.html, /ewaya Education CRM/);
+  assert.match(providerBody.html, /ewaya CRM/);
 });
 
 test("successful Resend response returns its message id", async () => {
@@ -1128,9 +1128,9 @@ test("email footer contains only the configured brand and exact application orig
   const body = JSON.parse(provider.calls[0].init.body);
   assert.match(
     body.html,
-    /<footer[^>]*>ewaya Education CRM<br><a href="https:\/\/crm\.example\.test"[^>]*>https:\/\/crm\.example\.test<\/a><\/footer>/,
+    /ewaya CRM[\s\S]*https:\/\/crm\.example\.test/,
   );
-  assert.match(body.text, /ewaya Education CRM\nhttps:\/\/crm\.example\.test$/);
+  assert.match(body.text, /ewaya CRM[\s\S]*https:\/\/crm\.example\.test$/);
   assert.doesNotMatch(body.html, /Shanghai|address|telephone|phone/i);
 });
 

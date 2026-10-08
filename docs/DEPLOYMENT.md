@@ -723,3 +723,10 @@ fields and stable warning codes first. Do not respond to storage pressure with a
 
 Do not print secret files, use `docker inspect` to read secrets, or paste full database URLs into
 logs/tickets. Report variable names, component status, image commit, and redacted error codes.
+
+Email brand configuration: `EMAIL_BRAND_NAME` must be `ewaya` or `ewaya CRM`.
+`EMAIL_FROM` must use the matching ewaya display name, for example
+`ewaya CRM <sender@example.test>` (replace the reserved example address with an
+operator-approved sender). Worker runtime and operator preflight reject legacy
+brand values. This requires configuration review, not secret rotation. Web still
+delivers authentication email synchronously; business email stays asynchronous.

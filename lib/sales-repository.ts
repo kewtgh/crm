@@ -7,6 +7,7 @@ export type FunnelMetric = { stage:"DISCOVERY"|"EVALUATION"|"HESITATION"|"PAYMEN
 export type RelationshipScores = { contact:number; meal:number; family:number; advocacy:number };
 export type RelationshipAccount = { id:string; name_zh:string; name_en:string; owner_zh:string; owner_en:string; contract_value:number; contact:boolean; meal:boolean; family:boolean; advocacy:boolean };
 export type SalesPerformanceData = {
+  reportingPolicy?:string;unscopedActual?:number|null;
   period:"month"|"quarter"|"year"; periodStart:string; periodEnd:string; currency:string; currencies:string[];
   target:number; actual:number; forecast:number; teams:string[]; members:SalesMemberMetric[];
   trends:SalesTrendPoint[]; funnel:FunnelMetric[]; relationshipTargets:RelationshipScores;
@@ -19,6 +20,7 @@ export async function loadSalesPerformance(period:"month"|"quarter"|"year"="quar
   const score=(value:unknown):RelationshipScores=>{const item=(value??{}) as Record<string,unknown>;return{contact:number(item.contact),meal:number(item.meal),family:number(item.family),advocacy:number(item.advocacy)};};
   return {
     period:String(raw.period??period) as SalesPerformanceData["period"],periodStart:String(raw.periodStart??""),periodEnd:String(raw.periodEnd??""),currency:String(raw.currency??"CNY"),currencies:Array.isArray(raw.currencies)?raw.currencies.map(String):[String(raw.currency??"CNY")],
+    reportingPolicy:String(raw.reportingPolicy??""),unscopedActual:raw.unscopedActual===null?null:number(raw.unscopedActual),
     target:number(raw.target),actual:number(raw.actual),forecast:number(raw.forecast),teams:Array.isArray(raw.teams)?raw.teams.map(String):[],
     members:(Array.isArray(raw.members)?raw.members:[]).map((item)=>{const row=item as Record<string,unknown>;return{id:String(row.id),nameZh:String(row.nameZh??""),nameEn:String(row.nameEn??""),team:String(row.team??""),role:String(row.role??""),target:number(row.target),actual:number(row.actual),forecast:number(row.forecast),opportunities:number(row.opportunities)};}),
     trends:(Array.isArray(raw.trends)?raw.trends:[]).map((item)=>{const row=item as Record<string,unknown>;return{date:String(row.date),target:number(row.target),actual:number(row.actual)};}),

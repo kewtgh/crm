@@ -1,0 +1,4 @@
+export const BUSINESS_FUNCTIONS=["SALES","FINANCE","OPERATIONS","ACADEMIC","CUSTOMER_SUCCESS","MANAGEMENT","ADMINISTRATION","OTHER"] as const;
+export type BusinessFunction=(typeof BUSINESS_FUNCTIONS)[number];
+export const businessFunctionLabels:Record<BusinessFunction,[string,string]>={SALES:["Sales","销售"],FINANCE:["Finance","财务"],OPERATIONS:["Operations","运营"],ACADEMIC:["Academic / student support","教务 / 学生支持"],CUSTOMER_SUCCESS:["Customer success","客户服务"],MANAGEMENT:["Management","管理"],ADMINISTRATION:["Administration","行政"],OTHER:["Other","其他"]};
+export type StaffBusinessProfile={revision:number;primaryFunction:BusinessFunction;additionalFunctions:BusinessFunction[];salesEligible:boolean;effectiveFrom:string|null;configuredEligibility:boolean;updatedBy:string|null;updatedAt:string|null;reason:string|null};

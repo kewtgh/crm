@@ -40,7 +40,7 @@ export const navigationDestinations: readonly NavigationDestination[] = [
   entry("growth", "commercial", "nav.growth", "/growth", "leads.view", true),
   entry("executive", "management", "management.title", "/reports/executive", "education.view"),
   entry("channels", "management", "channelAnalytics.title", "/reports/channels", "education.view"),
-  { ...entry("performance", "management", "nav.performance", "/sales/performance"), matches: [{ pathname: "/sales/performance" }, { pathname: "/sales/allocation" }] },
+  { ...entry("performance", "management", "nav.performance", "/sales/performance", "performance.view"), matches: [{ pathname: "/sales/performance" }, { pathname: "/sales/allocation" }] },
   entry("reports", "management", "nav.reportCenter", "/reports", undefined, true),
   entry("consumption", "management", "nav.consumption", "/analytics/consumption", undefined, true),
   entry("exports", "management", "nav.exports", "/reports/exports", "exports.request", true),

@@ -13,6 +13,14 @@ export function validMailbox(value) {
     && EMAIL.test(address);
 }
 
+export function validEmailBrand(value) {
+  return value === "ewaya" || value === "ewaya CRM";
+}
+
+export function validBrandedSender(value) {
+  return validMailbox(value) && /^ewaya(?: CRM)?\s*<[^<>]+>$/.test(value);
+}
+
 export function parseHttpsUrl(value, { originOnly = false } = {}) {
   if (typeof value !== "string" || !value || value !== value.trim() || value.length > 2_048) {
     return null;
@@ -84,10 +92,9 @@ export function validatedRuntimeConfiguration(env) {
   if (!validKey
     || !webhookToken
     || !applicationUrl
-    || !validMailbox(from)
+    || !validBrandedSender(from)
     || (replyTo && !validMailbox(replyTo))
-    || !brandName
-    || brandName.length > 120
+    || !validEmailBrand(brandName)
     || !validRoutePath(deliveryPath)
     || !validRoutePath(healthPath)
     || deliveryPath === healthPath) {

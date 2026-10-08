@@ -10,6 +10,13 @@ await runManagementIntegration(async({client,context,ws,otherWs,stranger,admin})
   await client.query('insert into app_auth.accounts(id,email,username) values($1,$2,$3)',[user,`${label}@role-policy.example.test`,`role-policy-${label}`]);
   await client.query('insert into public.workspace_memberships(workspace_id,user_id,role) values($1,$2,$3)',[ws,user,role]);
  }
+ // Current-schema role changes to SALES require a real active team. Keep the
+ // original authority/race assertions and provision that prerequisite explicitly.
+ const team=(await get("insert into public.sales_teams(workspace_id,code,name_zh,name_en,active) values($1,'ROLE-TEST','示例团队','Fictional role team',true) returning id",[ws])).id;
+ for(const [id,role] of [[root,'SUPER_ADMIN'],[employee,'SALES_SPECIALIST'],[peerAdmin,'ADMIN'],[admin,'ADMIN']]){
+  await client.query("insert into public.sales_team_members(workspace_id,auth_user_id,name_zh,name_en,role,team) values($1,$2,'示例员工','Fictional employee',$3,'Fictional role team') on conflict do nothing",[ws,id,role]);
+  await client.query("insert into public.sales_team_memberships(workspace_id,team_id,member_id,status,requested_by,reviewed_by) select $1,$2,id,'ACTIVE',$3,$3 from public.sales_team_members where workspace_id=$1 and auth_user_id=$4 on conflict do nothing",[ws,team,root,id]);
+ }
  const session=(await get("insert into app_auth.sessions(user_id,token_hash,csrf_hash,password_version,idle_expires_at,absolute_expires_at) values($1,$2,$3,1,now()+interval '1 hour',now()+interval '2 hours') returning id",[employee,randomBytes(32).toString('hex'),randomBytes(32).toString('hex')])).id;
  const change=async(target,role,expected,key=randomUUID(),db=client)=>(await db.query('select public.change_staff_role($1,$2,$3,$4) item',[target,role,expected,key])).rows[0].item;
  await context(employee);await assert.rejects(change(employee,'SALES_MANAGER','SALES_SPECIALIST'),/ROLE_ASSIGNMENT_FORBIDDEN/);

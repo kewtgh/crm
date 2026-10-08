@@ -172,6 +172,7 @@ export async function createAccount({
   managerMemberId,
   teamAssignmentActorId,
   afterCreate,
+  beforeCreate,
 }: {
   email: string;
   username: string;
@@ -186,6 +187,7 @@ export async function createAccount({
   teamId?: string | null;
   managerMemberId?: string | null;
   teamAssignmentActorId?: string;
+  beforeCreate?: (client: PoolClient) => Promise<void>;
   afterCreate?: (client: PoolClient, userId: string) => Promise<void>;
 }) {
   const id = crypto.randomUUID();
@@ -193,6 +195,7 @@ export async function createAccount({
   return withPoolClient("system", async (client) => {
     await client.query("begin");
     try {
+      await beforeCreate?.(client);
       await client.query(
         `insert into app_auth.accounts(
           id, email, username, status, email_confirmed_at, must_change_password
