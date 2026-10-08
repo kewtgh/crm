@@ -1,3 +1,4 @@
+import {z} from "zod";
 import { NextResponse } from "next/server";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { searchRelatedRecords } from "@/lib/related-search-repository";
@@ -10,8 +11,9 @@ async function get(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
     const query = params.get("q") ?? "";
+    const organizationId=params.get("organizationId")??undefined;if(organizationId&&!z.uuid().safeParse(organizationId).success)return NextResponse.json({code:"INVALID_REFERENCE"},{status:400});
     const types=(params.get("types")?.split(",")??Object.keys(typeCapabilities)).filter(type=>type in typeCapabilities&&(!typeCapabilities[type]||hasCapability(user.role,typeCapabilities[type]!)));
-    return NextResponse.json({ items:types.length?await searchRelatedRecords(query,types):[] }, {headers:{"cache-control":"private, no-store"}});
+    return NextResponse.json({ items:types.length?await searchRelatedRecords(query,types,organizationId):[] }, {headers:{"cache-control":"private, no-store"}});
   } catch (error) {
     if (error instanceof DatabaseRequestError) return NextResponse.json({ code:error.code }, { status:error.status });
     return NextResponse.json({ code:"RELATED_SEARCH_FAILED" }, { status:500 });

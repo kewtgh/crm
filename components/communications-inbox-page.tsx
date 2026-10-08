@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import { useCallback,useEffect,useRef,useState } from "react";
 import { Mail,Plus,RotateCcw,Send } from "lucide-react";
@@ -267,7 +269,7 @@ export function CommunicationsInboxPage({
   const messagePages=Math.max(1,Math.ceil((thread?.messageTotal??0)/(thread?.messagePageSize??20)));
   return <div className="page-stack communications-page">
     <section className="page-heading-row">
-      <div><p className="eyebrow">{t("communications.eyebrow")}</p><h1>{t("communications.title")}</h1><p>{t("communications.help")}</p></div>
+      <div><p className="eyebrow">{t("communications.eyebrow")}</p><WorkspaceHeading>{t("communications.title")}</WorkspaceHeading><p>{t("communications.help")}</p></div>
       <button className="primary-button" type="button" disabled={pending} onClick={()=>setOpen(true)}><Plus size={17}/>{t("communications.new")}</button>
     </section>
     <InlineMessage type="info">{t("communications.governance")}</InlineMessage>

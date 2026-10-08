@@ -315,9 +315,9 @@ async function selectRows(
   if (reportFilter) {
     // A read-only predicate shared by row and exact-count queries. Values are
     // bound parameters; the SQL function still reads through domain RLS.
-    const allowed = new Set(["lead_pool_records", "opportunities", "student_enrollment_records", "student_success_records", "payments", "finance_filtered_payments", "student_success_outcome_records"]);
+    const allowed = new Set(["lead_pool_records", "opportunities", "student_enrollment_records", "student_success_records", "payments", "finance_customer_payments", "finance_filtered_payments", "student_success_outcome_records"]);
     if (!allowed.has(table) || reportFilter.length > 1000) throw new DatabaseRequestError(400, "INVALID_DATABASE_FILTER", "Unsupported report filter");
-    parts.values.push(table, reportFilter);
+    parts.values.push(table === "finance_customer_payments" ? "payments" : table, reportFilter);
     parts.where += `${parts.where ? " and" : " where"} public.domain_report_record_matches($${parts.values.length - 1},id,$${parts.values.length}::jsonb)`;
   }
   const { values, where } = parts;

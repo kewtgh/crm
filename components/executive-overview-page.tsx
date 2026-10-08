@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import Link from "next/link";
 import {ReadFailureDetail} from "./read-failure-detail";
 import { useState } from "react";
@@ -21,7 +23,7 @@ export function ExecutiveOverviewPage({ initialFilters = {} }: { initialFilters?
   const period = data?.period ?? trends.data?.period;
   const title = (module: ManagementModule) => t(`management.section.${module}`);
   return <div className="page-stack executive-overview ux-management" data-testid="executive-overview">
-    <header className="page-heading-row"><div><h1>{t("management.title")}</h1><p>{t("ux.management.purpose")}</p></div><button className="secondary-button" disabled={overview.loading || trends.loading} onClick={() => setRefresh(value => value + 1)}>{t("ux.management.refresh")}</button></header>
+    <header className="page-heading-row"><div><WorkspaceHeading>{t("management.title")}</WorkspaceHeading><p>{t("ux.management.purpose")}</p></div><button className="secondary-button" disabled={overview.loading || trends.loading} onClick={() => setRefresh(value => value + 1)}>{t("ux.management.refresh")}</button></header>
     <ManagementScope applied={filters} onApply={setFilters} period={period} asOf={data?.asOf ?? trends.data?.asOf}/>
     {overview.failure && <InlineMessage type="error"><ReadFailureDetail failure={overview.diagnostic}/>{t(overview.failure === "restricted" ? "ux.management.restricted" : "management.failed")} <button className="secondary-button" onClick={overview.retry}>{t("common.retry")}</button>{data && <p>{t("ux.management.retainedAsOf")} {data.asOf}</p>}</InlineMessage>}
     {!data && overview.loading && <p role="status">{t("common.loading")}</p>}

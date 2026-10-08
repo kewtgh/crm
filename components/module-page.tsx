@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { BilingualNameHint } from "@/components/structured-inputs";
 import { OptionInput, TagsInput, YearInput, DateInput } from "@/components/structured-inputs";
 import { CURRICULUM_OPTIONS, LANGUAGE_OPTIONS, SOURCE_OPTIONS } from "@/lib/structured-inputs";
@@ -240,7 +242,7 @@ export function ModulePage({
     {resource==="schools"?<RecordHeader nameZh={t(`${prefix}.title`)} context={<p>{t(`${prefix}.description`)}</p>}
       secondaryActions={<button className="secondary-button" type="button" onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>}
       primaryAction={<button className="primary-button" type="button" onClick={()=>setDrawer(true)}><Plus size={17}/>{t(`${prefix}.add`)}</button>}/>:<><section className="page-heading-row">
-      <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.description`)}</p></div>
+      <div><p className="eyebrow">{t(`${prefix}.eyebrow`)}</p><WorkspaceHeading>{t(`${prefix}.title`)}</WorkspaceHeading><p>{t(`${prefix}.description`)}</p></div>
       <div className="page-actions">
         <button className="secondary-button" type="button" disabled={!resource} onClick={()=>setExportOpen(true)}><Download size={16}/>{t("export.request")}</button>
         <button className="primary-button" type="button" onClick={() => setDrawer(true)} disabled={!resource}><Plus size={17}/>{t(`${prefix}.add`)}</button>

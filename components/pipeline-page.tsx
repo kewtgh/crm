@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import {RecordDeleteAction} from "./record-delete-action";
 import {ReportScopeNotice} from "./report-scope-notice";
 import type {ReportFilter} from "@/lib/management-trend-contract";
@@ -300,7 +302,7 @@ export function PipelinePage({
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t("eyebrow.revenueMomentum")}</p>
-        <h1>{t("pipeline.title")}</h1>
+        <WorkspaceHeading>{t("pipeline.title")}</WorkspaceHeading>
         <p>{t("pipeline.description")}</p>
       </div>
       <div className="page-actions">

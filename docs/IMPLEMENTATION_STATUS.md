@@ -1,4 +1,15 @@
-# Implementation status — v3.34.0 release candidate
+# Implementation status — v3.35.0 release candidate
+
+## v3.35.0 — Unified workspaces and purchaser clarity
+
+Every authenticated navigation destination has a semantic icon. Workspace headings,
+section markers, tabs and summaries share a responsive, domain-colored visual system.
+Student support adds accessible trend/distribution charts; finance separates personal
+purchasers from institutions and their representatives, with per-currency settlement charts.
+Personal purchases use quote-to-contract conversion; student filters remain student-only.
+Financial recognition and commission accounting semantics are unchanged.
+
+See [release notes](RELEASE_V3.35.0.md).
 
 ## v3.34.0 — Workspace density, workflows and Contact access
 

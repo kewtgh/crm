@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import Link from "next/link";
 import {useEffect,useState} from "react";
 import {apiFetch} from "@/lib/api-client";
@@ -22,7 +24,7 @@ export function ManagementAttentionWorkspace({initialFilters={}}:{initialFilters
   if(key==="status"){const prefix=item.context.kind==="RISK"?"successOps.riskStatus":item.context.kind==="CASE"?"success.status":item.context.kind==="MILESTONE"?"milestones.status":item.context.kind==="WORKFLOW"?"workflow.status":item.context.kind==="QUALITY"?"management.queue.qualityStatus":"management.status";return t(`${prefix}.${v}`);}
   return String(v);
  };
- return <div className="page-stack"><header className="page-heading-row"><div><h1>{t("management.queue.title")}</h1><p>{t("management.queue.help")}</p></div><Link href="/reports/executive">{t("management.queue.overview")}</Link></header>
+ return <div className="page-stack"><header className="page-heading-row"><div><WorkspaceHeading>{t("management.queue.title")}</WorkspaceHeading><p>{t("management.queue.help")}</p></div><Link href="/reports/executive">{t("management.queue.overview")}</Link></header>
  <section className="surface page-stack"><div className="detail-actions" style={{display:"flex",flexWrap:"wrap",gap:8}}>{[undefined,...attentionDomains].map(domain=><button className={filters.domain===domain?"primary-button":"secondary-button"} key={domain??"ALL"} onClick={()=>change({domain,reason:undefined})}>{domain?t(`management.section.${domainKey(domain)}`):t("common.all")}</button>)}</div><div className="form-grid two-column">
  <label className="field"><span>{t("management.queue.reason")}</span><select value={filters.reason??""} onChange={e=>change({reason:e.target.value?e.target.value as typeof filters.reason:undefined})}><option value="">{t("common.all")}</option>{attentionReasons.map(reason=><option key={reason} value={reason}>{t(`management.reason.${reason}`)}</option>)}</select></label>
  <label className="field"><span>{t("management.queue.severity")}</span><select value={filters.presentationSeverity??""} onChange={e=>change({presentationSeverity:e.target.value?e.target.value as typeof filters.presentationSeverity:undefined})}><option value="">{t("common.all")}</option>{["ATTENTION","CRITICAL"].map(v=><option key={v} value={v}>{t(`management.severity.${v}`)}</option>)}</select></label>

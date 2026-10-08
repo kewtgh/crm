@@ -1,28 +1,28 @@
 "use client";
 
+import {WorkspaceIconContext} from "./workspace-heading";
+import {destinationIcon} from "@/lib/workspace-visuals";
+import {uiIcons} from "./ui-icon";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
+  Sparkles,
   Building2,
-  CalendarRange,
   ChevronDown,
   ChevronRight,
   DatabaseZap,
   FileBarChart,
   HelpCircle,
   LayoutDashboard,
-  ListChecks,
   LogOut,
   Menu,
-  MessageSquareText,
   PanelLeftClose,
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
   Target,
   Users,
   X,
@@ -50,14 +50,13 @@ type GlobalSearchResult = { title: string; detail: string; href: string; source:
 const SIDEBAR_SCROLL_STORAGE_KEY = "lumina.sidebar.scroll-top";
 
 const spaceIcons = { work: LayoutDashboard, relationships: Building2, students: Users, commercial: Target, management: FileBarChart, governance: DatabaseZap, admin: ShieldCheck, account: Settings };
-const destinationIcons: Record<string, React.ElementType> = { tasks: ListChecks, calendar: CalendarRange, messages: MessageSquareText, ai: Sparkles };
 function navigationFor(role: AppUser["role"]): NavigationGroup[] {
   const visible = visibleDestinations(role);
   return (Object.keys(spaceIcons) as NavigationSpace[]).map(space => ({
     titleKey: space === "account" ? "nav.account" : "ux.space." + space,
     items: visible.filter(d => d.space === space && (!d.parentId || !visible.some(parent => parent.id === d.parentId))).map(d => {
       const children = visible.filter(child => child.parentId === d.id);
-      return { labelKey: d.labelKey, href: d.href, icon: destinationIcons[d.id] ?? spaceIcons[space], documentChildNavigation: d.documentNavigation,
+      return { labelKey: d.labelKey, href: d.href, icon: uiIcons[destinationIcon(d.id)], documentChildNavigation: d.documentNavigation,
         ...(children.length ? { children: [{ labelKey: "nav.messages", href: d.href }, ...children.map(child => ({ labelKey: child.labelKey, href: child.href }))] } : {}) };
     }),
   })).filter(group => group.items.length);
@@ -317,7 +316,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
             </div>
           </div>
         </header>
-        <main id="main-content" tabIndex={-1} className="app-content">{children}</main>
+        <main id="main-content" tabIndex={-1} className="app-content" data-workspace-space={currentDestination?.space??"work"} data-workspace-destination={currentDestination?.id??"other"}><WorkspaceIconContext.Provider value={destinationIcon(currentDestination?.id)}>{children}</WorkspaceIconContext.Provider></main>
       </div>
     </div>
     {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={activeResult>=0?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<GlobalSearchResults className="mobile-global-results" id="mobile-global-search-results" itemIdPrefix="mobile-global-result" results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>{setMobileSearchOpen(false);changeSearch("");}}/>}</div></AccessibleDrawer>}

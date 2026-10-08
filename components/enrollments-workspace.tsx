@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { FilterBar } from "./filter-bar";
 import { RecordDeleteAction } from "./record-delete-action";
 import {ReportScopeNotice} from "./report-scope-notice";
@@ -42,7 +44,7 @@ export function EnrollmentsWorkspace({initial, initialDetail = null, initialStud
   };
   const label = (zh?: string | null, en?: string | null) => (locale === "en" ? en : zh) || zh || en || "—";
   return <div className="page-stack"><ReportScopeNotice filter={initialReportFilter}/>
-    <section className="page-heading-row"><div><p className="eyebrow">{t("education.eyebrow")}</p><h1>{t("enrollments.title")}</h1><p>{t("enrollments.description")}</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setEditor({});setNotice("");}}>{t("enrollments.create")}</button>}</section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("education.eyebrow")}</p><WorkspaceHeading>{t("enrollments.title")}</WorkspaceHeading><p>{t("enrollments.description")}</p></div>{canManage && <button className="primary-button" type="button" onClick={() => {setEditor({});setNotice("");}}>{t("enrollments.create")}</button>}</section>
     {notice && <InlineMessage type="success">{notice}</InlineMessage>}
     <section className="surface">
       <FilterBar search={query} onSearchChange={setQuery} onSearch={()=>{setSearch(query);setPage(1);}} placeholder={t("enrollments.search")} applied={{cohortId,ownerId}} defaults={{cohortId:"",ownerId:""}} advancedCount={Number(Boolean(cohortId))+Number(Boolean(ownerId))} activeCount={Number(Boolean(search))+Number(Boolean(studentId))+Number(Boolean(status))+Number(Boolean(cohortId))+Number(Boolean(ownerId))} onReset={()=>{setQuery("");setSearch("");setStatus("");setStudentId(initialStudentId);setCohortId("");setOwnerId("");setPage(1);}} onApply={next=>{setCohortId(next.cohortId);setOwnerId(next.ownerId);setPage(1);}} primaryFilters={<><EnrollmentRelation type="STUDENT" label={t("enrollments.student")} value={studentId} onChange={value=>{setStudentId(value);setPage(1);}}/><label className="field"><span>{t("common.status")}</span><select name="statusFilter" value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}><option value="">{t("common.all")}</option>{enrollmentStatuses.map(value=><option key={value} value={value}>{t(`enrollments.status.${value}`)}</option>)}</select></label></>} renderAdvanced={(draft,onChange)=><div className="form-grid two-column"><EnrollmentRelation type="COHORT" label={t("enrollments.cohort")} value={draft.cohortId} onChange={value=>onChange({...draft,cohortId:value})}/><EnrollmentRelation type="USER" label={t("enrollments.owner")} value={draft.ownerId} onChange={value=>onChange({...draft,ownerId:value})}/></div>}/>

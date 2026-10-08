@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import { useState } from "react";
 import {
@@ -316,7 +318,7 @@ export function OperationsCenterPage({
 
   return <div className="page-stack operations-center">
     <section className="page-heading-row">
-      <div><p className="eyebrow">{t("operations.eyebrow")}</p><h1>{t("operations.title")}</h1><p>{t("operations.description")}</p></div>
+      <div><p className="eyebrow">{t("operations.eyebrow")}</p><WorkspaceHeading>{t("operations.title")}</WorkspaceHeading><p>{t("operations.description")}</p></div>
       <button className="secondary-button" type="button" disabled={loading} onClick={() => void refresh()}><RefreshCw className={loading ? "spin" : ""} size={17}/>{t("operations.refresh")}</button>
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}

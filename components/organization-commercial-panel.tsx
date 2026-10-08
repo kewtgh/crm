@@ -1,4 +1,5 @@
 "use client";
+import {ContactCommercialOverview} from "./contact-commercial-overview";
 import type {ReactNode} from "react";
 import { Building2, Layers, Users, Network, GraduationCap } from "lucide-react";
 import {RecordIdentity} from "./record-header";
@@ -54,6 +55,7 @@ export function OrganizationCommercialPanel({organizationId,contactId,embedded=f
    </div></ResponsiveDetailLayout>
    {snapshot.limited&&<InlineMessage type="warning">{t("channel.limited")}</InlineMessage>}{editor&&<CommercialEditor key={`${editor.kind}:${editor.record.id??editor.record.contact_id??"new"}`} editor={editor} snapshot={snapshot} onClose={()=>setEditor(null)} onSaved={saved}/>}
  </div>;
+ if(contactId)return <div className="page-stack channel-commercial-panel">{error&&<InlineMessage type="error">{error}</InlineMessage>}{notice&&<InlineMessage type="info">{notice}</InlineMessage>}{contactRows.map(c=><ContactCommercialOverview key={c.id} contact={c} intelligence={intelligence.find(i=>i.contact_id===c.id)} relationships={relationships.filter(r=>r.source_contact_id===c.id||r.target_contact_id===c.id)} canEdit={canWrite&&snapshot.canManage&&c.can_edit} onEdit={()=>edit("intelligence",intelligence.find(i=>i.contact_id===c.id)??{contact_id:c.id})} onSaved={load}/>)}{!contactRows.length&&<p className="detail-empty">{t("common.noData")}</p>}{snapshot.limited&&<InlineMessage type="warning">{t("channel.limited")}</InlineMessage>}{editor&&<CommercialEditor key={`${editor.kind}:${editor.record.id??editor.record.contact_id??"new"}`} editor={editor} snapshot={snapshot} onClose={()=>setEditor(null)} onSaved={saved}/>}</div>;
  return <div className="page-stack channel-commercial-panel">{!contactId&&!embedded&&<nav className="commercial-section-picker" aria-label={t("channel.commercial")}>{["overview","agreements","contacts","performance"].map(key=><button type="button" key={key} aria-pressed={section===key} className={section===key?"primary-button":"secondary-button"} onClick={()=>setSection(key)}>{t("experience."+key)}</button>)}</nav>}
  {!contactId&&embedded&&<details><summary>{t("experience.agreements")}</summary><ChannelAgreementsPanel organizationId={organizationId}/></details>}{!contactId&&!embedded&&section==="agreements"&&<ChannelAgreementsPanel organizationId={organizationId}/>}
  {!contactId&&embedded&&<details><summary>{t("experience.performance")}</summary><ChannelPerformanceSection organizationId={organizationId}/></details>}{!contactId&&!embedded&&section==="performance"&&<ChannelPerformanceSection organizationId={organizationId}/>}

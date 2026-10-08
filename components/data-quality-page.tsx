@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import {SafeDiagnostics} from "./safe-diagnostics";
 import { useState } from "react";
@@ -95,7 +97,7 @@ export function DataQualityPage({ initialItems, initialTotal,initialTrend,initia
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return <div className="page-stack quality-page">
     <section className="page-heading-row">
-      <div><p className="eyebrow">{t("quality.eyebrow")}</p><h1>{t("quality.title")}</h1><p>{t("quality.description")}</p></div>
+      <div><p className="eyebrow">{t("quality.eyebrow")}</p><WorkspaceHeading>{t("quality.title")}</WorkspaceHeading><p>{t("quality.description")}</p></div>
       <button className="primary-button" disabled={pending} onClick={() => void runRules()}><RefreshCw size={16} />{t("quality.run")}</button>
     </section>
     {error && <InlineMessage type="error">{error}</InlineMessage>}

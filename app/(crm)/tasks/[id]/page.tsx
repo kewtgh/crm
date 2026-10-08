@@ -1,3 +1,4 @@
+import {WorkspaceHeading} from "@/components/workspace-heading";
 import Link from "next/link";
 import { DataLoadError } from "@/components/data-state";
 import { CrmRecordEditor } from "@/components/crm-record-editor";
@@ -15,7 +16,7 @@ export default async function Page({params}:{params:Promise<{id:string}>}){
   if(!record)return <DataLoadError/>;
   return <div className="page-stack">
     <section className="page-heading-row">
-      <div><p className="eyebrow">{translate(locale,"modules.tasks.eyebrow")}</p><h1>{record.nameZh} / {record.nameEn}</h1><p>{translate(locale,"crm.taskDetails")}</p></div>
+      <div><p className="eyebrow">{translate(locale,"modules.tasks.eyebrow")}</p><WorkspaceHeading>{record.nameZh} / {record.nameEn}</WorkspaceHeading><p>{translate(locale,"crm.taskDetails")}</p></div>
       <div className="page-actions"><Link className="secondary-button" href="/tasks">{translate(locale,"crm.backToTasks")}</Link><CrmRecordEditor resource="tasks" id={id} initial={record}/></div>
     </section>
     <section className="quick-summary">

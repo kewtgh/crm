@@ -1,11 +1,13 @@
 "use client";
+import {UiIcon} from "./ui-icon";
+import {workspaceLinkIcon} from "@/lib/workspace-visuals";
 import Link from "next/link";
 import { useI18n } from "./i18n-provider";
 import { useAppUser } from "./app-user-context";
 import { hasCapability,type Capability } from "@/lib/capabilities";
 export function WorkspaceNav({items,active}:{items:Array<{href:string;label:string;capability?:Capability}>;active:string}){
   const {t}=useI18n(),user=useAppUser();
-  return <nav className="page-tabs" aria-label={t("customerOps.sections")}>{items.filter(item=>!item.capability||hasCapability(user.role,item.capability)).map(item=><Link href={item.href} key={item.href} aria-current={active===item.href?"page":undefined}>{t(item.label)}</Link>)}</nav>;
+  return <nav className="page-tabs" aria-label={t("customerOps.sections")}>{items.filter(item=>!item.capability||hasCapability(user.role,item.capability)).map(item=><Link href={item.href} key={item.href} aria-current={active===item.href?"page":undefined}><UiIcon name={workspaceLinkIcon(item.href)} size={16}/>{t(item.label)}</Link>)}</nav>;
 }
 // Compatibility for unaffected workspaces: route links retain their semantics.
 export const WorkspaceTabs = WorkspaceNav;

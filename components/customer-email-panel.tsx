@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import Link from "next/link";
 import { useEffect,useRef,useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -53,7 +55,7 @@ export function CustomerEmailPanel(){
     }catch(caught){setArchiveError(presentApiError(caught,t,"ux.templateArchiveFailed").message);}finally{busy.current=false;setPending(false);}
   };
   return <section className="page-stack customer-email-panel">
-    <header className="email-compose-heading"><h1>{t("customerOps.templates")}</h1><p>{t("customerOps.bulkHelp")}</p></header>
+    <header className="email-compose-heading"><WorkspaceHeading>{t("customerOps.templates")}</WorkspaceHeading><p>{t("customerOps.bulkHelp")}</p></header>
     <div className="detail-metrics" aria-live="polite"><span><b>{ids.length} / 50</b><small>{t("audit.recipients")}</small></span><span><b>{preview?.items.filter(item=>item.blocked).length??"—"}</b><small>{t("audit.blocked")}</small></span><span><b>{result?.queued??0}</b><small>{t("audit.queued")}</small></span></div>
     {preview&&preview.locale!==locale&&<InlineMessage type="info">{t("audit.previewLanguage",{language:preview.locale==="en"?"English":"中文"})}</InlineMessage>}
     <div className="email-compose-grid">

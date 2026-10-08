@@ -25,9 +25,9 @@ export async function loadContactPrivacy(id:string):Promise<ContactPrivacy>{
 export async function saveContactConsent(input:{contactId:string;channel:string;purpose:string;status:string;source:string;evidence?:string;retentionUntil?:string|null;quietStart?:string|null;quietEnd?:string|null}){return databaseJson("/db/rpc/save_contact_consent",{method:"POST",body:JSON.stringify({target_contact:input.contactId,target_channel:input.channel,target_purpose:input.purpose,target_status:input.status,consent_source:input.source,evidence:input.evidence??"",retained_until:input.retentionUntil||null,quiet_start:input.quietStart||null,quiet_end:input.quietEnd||null})});}
 export async function setContactDoNotContact(id:string,enabled:boolean,reason:string){return databaseJson(`/db/table/contacts?id=eq.${id}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({do_not_contact:enabled,do_not_contact_reason:enabled?reason:"",updated_at:new Date().toISOString()})});}
 
-type QuoteRow={id:string;product_id:string|null;cohort_id:string|null;revision:number;quote_number:string;organization_id:string|null;household_id:string|null;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
+type QuoteRow={id:string;product_id:string|null;cohort_id:string|null;revision:number;quote_number:string;organization_id:string|null;household_id:string|null;buyer_contact_id:string|null;representative_contact_id:string|null;currency:string;valid_until:string;status:string;current_version:number;created_at:string};
 type QuoteVersionRow={quote_id:string;version:number;subtotal:number;discount_amount:number;total_amount:number;terms_zh:string;terms_en:string;bundle_id:string|null;bundle_version:number|null;base_currency:string|null;base_total_amount:number|null};
-export type QuoteRecord={id:string;productId?:string|null;cohortId?:string|null;revision?:number;cohortZh?:string;cohortEn?:string;number:string;organizationId:string|null;householdId?:string|null;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
+export type QuoteRecord={id:string;productId?:string|null;cohortId?:string|null;revision?:number;cohortZh?:string;cohortEn?:string;number:string;organizationId:string|null;householdId?:string|null;buyerContactId?:string|null;representativeName?:string;organizationZh:string;organizationEn:string;currency:string;validUntil:string;status:string;version:number;subtotal:number;discount:number;total:number;termsZh:string;termsEn:string;bundleId:string|null;bundleVersion:number|null;baseCurrency:string|null;baseTotal:number|null;createdAt:string};
 export type ReceivableRecord={id:string;contractId:string;contractNumber:string;installment:number;dueDate:string;amount:number;paidAmount:number;status:string;currency:string};
 export type RefundRecord={id:string;number:string;paymentId:string;amount:number;reason:string;status:string;receipt:string;createdAt:string};
 export type PaymentRecord={id:string;contractId:string;scheduleId:string|null;amount:number;refundedAmount:number;currency:string;status:string;reference:string;paidAt:string|null};
@@ -40,6 +40,7 @@ export type FinanceRiskSummary={
   reconciliationExceptions:number;
 };
 export type FinanceOverview={
+  collectionSeries?:Array<{currency:string;month:string;scheduled:string;settled:string}>;
   quotes:QuoteRecord[];
   quoteTotal:number;
   contracts:ContractFinanceRecord[];
@@ -84,23 +85,25 @@ async function countFinanceRows(path:string){
   return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);
 }
 
-export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string;reportFilter?:ReportFilter}={}):Promise<FinanceOverview>{
+export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string;buyerType?:string;buyerId?:string;reportFilter?:ReportFilter}={}):Promise<FinanceOverview>{
   const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
   const page=(value:number|undefined)=>Math.max(1,value??1);
   const quotePage=page(options.quotePage??options.page);
-  const quoteParams=new URLSearchParams({select:"id,product_id,cohort_id,revision,quote_number,organization_id,household_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
+  const quoteParams=new URLSearchParams({select:"id,product_id,cohort_id,revision,quote_number,organization_id,household_id,buyer_contact_id,representative_contact_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
   const query=(options.query??"").replace(/[*,()]/g," ").trim();
   if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
   const context=Object.fromEntries((["studentId","productId","cohortId","enrollmentId"] as const).flatMap(key=>options[key]?[[key,options[key]]]:[]));
   const financePath=(path:string)=>{
-    if(!Object.keys(context).length&&!options.reportFilter)return path;
+    if(!Object.keys(context).length&&!options.reportFilter&&!options.buyerType)return path;
     const url=new URL(path,"http://database.local");
     const table=url.pathname.split("/").pop()!;
-    url.pathname="/db/table/"+({contracts:"finance_filtered_contracts",receivable_schedules:"finance_filtered_receivables",payments:"finance_filtered_payments",refunds:"finance_filtered_refunds",reconciliation_items:"finance_filtered_reconciliations"}[table]??table);
+    url.pathname="/db/table/finance_customer_"+table;
+    if(options.buyerType){url.searchParams.set("buyer_type","eq."+options.buyerType);if(options.buyerId)url.searchParams.set("buyer_id","eq."+options.buyerId);}
     if(Object.keys(context).length)url.searchParams.set("enrollment_contexts","cs."+JSON.stringify([context]));
     if(options.reportFilter&&table==="payments")applyReportFilter(url.searchParams,options.reportFilter);
     return url.pathname+"?"+url.searchParams;
   };
+  if(options.buyerType){const key=options.buyerType==="CONTACT"?"buyer_contact_id":options.buyerType==="HOUSEHOLD"?"household_id":"organization_id";quoteParams.set(key,options.buyerId?"eq."+options.buyerId:"not.is.null");}
   if(options.studentId||options.enrollmentId)quoteParams.set("id","eq.00000000-0000-0000-0000-000000000000");
   if(options.productId)quoteParams.set("product_id","eq."+options.productId);
   if(options.cohortId)quoteParams.set("cohort_id","eq."+options.cohortId);
@@ -133,6 +136,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     databaseJson<Array<{id:string;code:string;name_zh:string;name_en:string;version:number}>>("/db/table/product_bundles?select=id,code,name_zh,name_en,version&active=eq.true&effective_to=is.null&order=code"),
     databaseJson<Array<{id:string;base_currency:string;quote_currency:string;rate:number;source:string;effective_at:string}>>("/db/table/exchange_rate_snapshots?select=id,base_currency,quote_currency,rate,source,effective_at&order=effective_at.desc&limit=100"),
   ]);
+  const collectionSeries=await databaseJson<NonNullable<FinanceOverview["collectionSeries"]>>("/db/rpc/finance_collection_series",{method:"POST",body:JSON.stringify({filters:{...(options.buyerType?{buyerType:options.buyerType}:{}),...(options.buyerId?{buyerId:options.buyerId}:{}),enrollment:context}})});
   const quoteRows=quoteResult.items;
   const cohortIds=[...new Set(quoteRows.map(row=>row.cohort_id).filter(Boolean))];
   const cohortRows=cohortIds.length?await databaseJson<Array<{id:string;name_zh:string;name_en:string}>>('/db/table/product_cohorts?select=id,name_zh,name_en&id=in.('+cohortIds.join(',')+')'):[];
@@ -151,12 +155,14 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     ...reconciliationRows.map(item=>item.contract_id),
   ])];
   const householdIds=[...new Set(quoteRows.map(item=>item.household_id).filter(Boolean))];
-  const [versions,organizations,relatedContracts,scheduleRows,households]=await Promise.all([
+  const personIds=[...new Set(quoteRows.flatMap(row=>[row.buyer_contact_id,row.representative_contact_id]).filter(Boolean))];
+  const [versions,organizations,relatedContracts,scheduleRows,households,people]=await Promise.all([
     quoteIds.length?databaseJson<QuoteVersionRow[]>(`/db/table/quote_versions?select=quote_id,version,subtotal,discount_amount,total_amount,terms_zh,terms_en,bundle_id,bundle_version,base_currency,base_total_amount&quote_id=in.(${quoteIds.join(",")})&order=version.desc`):Promise.resolve([]),
     organizationIds.length?databaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/db/table/organizations?select=id,name_zh,name_en&id=in.(${organizationIds.join(",")})`):Promise.resolve([]),
     relatedContractIds.length?databaseJson<ContractRow[]>(`/db/table/contracts?select=id,contract_number,currency,contract_value,status&id=in.(${relatedContractIds.join(",")})`):Promise.resolve([]),
     contractRows.length?databaseJson<Array<{contract_id:string}>>(`/db/table/receivable_schedules?select=contract_id&contract_id=in.(${contractRows.map(item=>item.id).join(",")})`):Promise.resolve([]),
     householdIds.length?databaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/db/table/households?select=id,name_zh,name_en&id=in.(${householdIds.join(",")})`):Promise.resolve([]),
+    personIds.length?databaseJson<Array<{id:string;name_zh:string;name_en:string}>>(`/db/table/contacts?select=id,name_zh,name_en&id=in.(${personIds.join(",")})`):Promise.resolve([]),
   ]);
   const householdMap=new Map(households.map(item=>[item.id,item]));
   const versionMap=new Map<string,QuoteVersionRow>();
@@ -165,7 +171,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
   const contractMap=new Map(relatedContracts.map(item=>[item.id,item]));
   const scheduled=new Set(scheduleRows.map(item=>item.contract_id));
   return{
-    quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=item.household_id?householdMap.get(item.household_id):orgMap.get(item.organization_id!);return{id:item.id,productId:item.product_id,cohortId:item.cohort_id,revision:item.revision,cohortZh:cohortMap.get(item.cohort_id??"")?.name_zh,cohortEn:cohortMap.get(item.cohort_id??"")?.name_en,number:item.quote_number,organizationId:item.organization_id,householdId:item.household_id,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
+    collectionSeries,quotes:quoteRows.map(item=>{const version=versionMap.get(item.id);const org=item.buyer_contact_id?people.find(p=>p.id===item.buyer_contact_id):item.household_id?householdMap.get(item.household_id):orgMap.get(item.organization_id!);return{id:item.id,productId:item.product_id,cohortId:item.cohort_id,revision:item.revision,cohortZh:cohortMap.get(item.cohort_id??"")?.name_zh,cohortEn:cohortMap.get(item.cohort_id??"")?.name_en,number:item.quote_number,organizationId:item.organization_id,householdId:item.household_id,buyerContactId:item.buyer_contact_id,representativeName:people.find(p=>p.id===item.representative_contact_id)?.name_zh||people.find(p=>p.id===item.representative_contact_id)?.name_en,organizationZh:org?.name_zh??"",organizationEn:org?.name_en??"",currency:item.currency,validUntil:item.valid_until,status:item.status,version:item.current_version,subtotal:Number(version?.subtotal??0),discount:Number(version?.discount_amount??0),total:Number(version?.total_amount??0),termsZh:version?.terms_zh??"",termsEn:version?.terms_en??"",bundleId:version?.bundle_id??null,bundleVersion:version?.bundle_version??null,baseCurrency:version?.base_currency??null,baseTotal:version?.base_total_amount===null||version?.base_total_amount===undefined?null:Number(version.base_total_amount),createdAt:item.created_at};}),
     quoteTotal:quoteResult.total,
     contracts:contractRows.map(item=>({id:item.id,number:item.contract_number,currency:item.currency,value:Number(item.contract_value),status:item.status,hasSchedule:scheduled.has(item.id)})),
     contractTotal:contractResult.total,
@@ -184,7 +190,7 @@ export async function loadFinanceOverview(options:{query?:string;page?:number;pa
     exchangeRates:rateRows.map(item=>({id:item.id,base:item.base_currency,quote:item.quote_currency,rate:Number(item.rate),source:item.source,effectiveAt:item.effective_at})),
   };
 }
-export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="updateQuoteCohort"?"update_quote_cohort":operation==="createQuote"?"create_buyer_quote":operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="createQuote"){body.target_organization??=null;body.target_household??=null;}if(operation==="acceptQuote"||operation==="updateQuoteCohort")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
+export async function financeOperation(input:Record<string,unknown>){const operation=String(input.operation);const rpc=operation==="updateQuoteCohort"?"update_quote_cohort":operation==="createQuote"?(input.requestKey?"create_customer_quote":"create_buyer_quote"):operation==="submitQuote"?"submit_quote":operation==="acceptQuote"?"idempotent_accept_quote":operation==="convertQuote"?"convert_quote_to_contract":operation==="saveReceivables"?"save_receivable_schedule":operation==="recordPayment"?"record_payment":operation==="requestRefund"?"request_refund":operation==="completeRefund"?"complete_refund":"";if(!rpc)throw new Error("INVALID_FINANCE_OPERATION");const {operation:_,requestKey,...body}=input;void _;if(operation==="createQuote"){body.target_organization??=null;body.target_household??=null;if(requestKey)body.p_request_key=requestKey;}if(operation==="acceptQuote"||operation==="updateQuoteCohort")body.p_request_key=requestKey;return databaseJson(`/db/rpc/${rpc}`,{method:"POST",body:JSON.stringify(body)});}
 
 export type ImportBatchRecord={id:string;resourceType:string;filename:string;status:string;total:number;valid:number;invalid:number;duplicates:number;applied:number;failed:number;createdAt:string;templateVersion?:string;executionContract?:string};
 export type ImportRowRecord={id:string;batchId:string;rowNumber:number;normalized:Record<string,string>;status:string;errors:Array<{code:string;field?:string;reason?:string;row?:number;sheet?:string;column?:string}>;decision:string|null;duplicateId:string|null;score:number|null;reasons:string[];lastError:string|null;reviewRevision?:number;targetRevision?:string|null;templateVersion?:string;executionContract?:string};

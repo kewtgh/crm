@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { DateInput, OptionInput } from "@/components/structured-inputs";
 import { CHANNEL_OPTIONS } from "@/lib/structured-inputs";
 
@@ -146,7 +148,7 @@ export function CalendarPage({ initialCalendarEvents = [], initialCalendarTotal,
 
   return <div className="page-stack calendar-page">
     <section className="page-heading-row">
-      <div><p className="eyebrow">{t("calendar.eyebrow")}</p><h1>{t("calendar.title")}</h1><p>{t("calendar.description")}</p></div>
+      <div><p className="eyebrow">{t("calendar.eyebrow")}</p><WorkspaceHeading>{t("calendar.title")}</WorkspaceHeading><p>{t("calendar.description")}</p></div>
       <div className="page-actions"><button className="secondary-button" type="button" onClick={() => {setMonth(new Date(todayYear,todayMonth-1,1));setSelectedDate(todayKey);}}>{t("calendar.today")}</button><button className="primary-button" type="button" onClick={() => openSchedule()}><Plus size={17} />{t("calendar.new")}</button></div>
     </section>
     {calendarTruncated&&<InlineMessage type="warning">{t("calendar.truncated",{shown:events.length,total:calendarTotal})}</InlineMessage>}

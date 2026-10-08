@@ -1,4 +1,7 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
+import {UiIcon} from "./ui-icon";
 import Link from 'next/link';
 import {useAppUser} from './app-user-context';
 import {RevenueAdministration} from './revenue-administration';
@@ -71,7 +74,7 @@ export function RevenueWorkspaceView({initial,contractId}:{initial:RevenueWorksp
  const enumSelect=(name:string,options:string[])=>select(name,options.map(id=>({id,label:l(id)})));
  const table=(items:RevenueRow[],fields:string[],title:string,renderActions?:(r:RevenueRow)=>React.ReactNode)=><div className={styles.records}>{items.length===0?<p className="empty-state">{l('noRows')}</p>:items.map((r,i)=><article className={styles.record} key={text(r,'id')||i}><div className={styles.recordFields}>{fields.map(k=><div key={k}><span>{l(k)}</span><strong>{value(r[k])}</strong></div>)}</div><div className={styles.actions}><button type="button" className="secondary-button" onClick={()=>peek(r,title==='candidate'?[...candidateFields,'amount_basis_snapshot','evidence_references','source_fact_references','revised_entitlement_snapshot']:title==='services'?(r.policy_version_id||r.policy_key?bindingFields:serviceFields):title==='evidence'?evidenceFields:title==='history'?factFields:title==='configuration'?policyFields:Object.keys(r).filter(k=>!k.startsWith('can_')&&!['actions','source_options','workspace_id','targets'].includes(k)),title)}>{l('details')}</button>{renderActions?.(r)}</div></article>)}</div>;
  return <section className={styles.workspace}>
-  <header className="page-heading-row"><div><p className="eyebrow">{l('title')}</p><h1>{contractId?l('contracts'):l('title')}</h1><p>{l('subtitle')}</p></div><div className={styles.actions}>{["ADMIN","SUPER_ADMIN"].includes(actor.role)&&<button className="primary-button" type="button" onClick={()=>setAdministration(true)}>{locale==="en"?"Revenue configuration":"收入配置"}</button>}<button className="secondary-button" type="button" onClick={refresh}>{l('refresh')}</button></div></header>{administration&&<RevenueAdministration onClose={()=>{setAdministration(false);refresh();}}/>}
+  <header className="page-heading-row"><div><p className="eyebrow">{l('title')}</p><WorkspaceHeading><UiIcon name="finance" size={24}/> {contractId?l('contracts'):l('title')}</WorkspaceHeading><p>{l('subtitle')}</p></div><div className={styles.actions}>{["ADMIN","SUPER_ADMIN"].includes(actor.role)&&<button className="primary-button" type="button" onClick={()=>setAdministration(true)}><UiIcon name="settings" size={16}/>{locale==="en"?"Revenue configuration":"收入配置"}</button>}<button className="secondary-button" type="button" onClick={refresh}>{l('refresh')}</button></div></header>{administration&&<RevenueAdministration onClose={()=>{setAdministration(false);refresh();}}/>}
   {error&&<div role="alert" className="inline-message error">{error}{error===l('aal')&&<Link href="/mfa-challenge" target="_blank" rel="noreferrer">{l('security')}</Link>}</div>}
   {notice&&<p role="status">{notice}</p>}
   {retry&&<button className="primary-button" type="button" disabled={pending} onClick={()=>void execute(retry)}>{l('retry')}</button>}

@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { RecordDeleteAction } from "./record-delete-action";
 import {commercialFields} from "@/lib/channel-commercial-input";
 import {ApplicationSelector} from "./application-selector";
@@ -74,7 +76,7 @@ export function EducationBusinessWorkspace({context,initialResource,embedded=fal
     return String(value);
   };
   return <div className="page-stack education-business-workspace">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("business.eyebrow")}</p>{embedded?<h2>{t(`business.resource.${resource}`)}</h2>:<h1>{t("business.title")}</h1>}<p>{t("business.description")}</p></div><div className="page-actions"><button className="secondary-button" disabled={loading||pending} onClick={()=>void load(data?.page??1)}>{t("common.refresh")}</button>{canManage&&<button className="primary-button" disabled={pending} onClick={()=>{setError("");setEditor({record:null,token:crypto.randomUUID()});}}>{t(`business.add.${resource}`)}</button>}</div></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("business.eyebrow")}</p>{embedded?<h2>{t(`business.resource.${resource}`)}</h2>:<WorkspaceHeading>{t("business.title")}</WorkspaceHeading>}<p>{t("business.description")}</p></div><div className="page-actions"><button className="secondary-button" disabled={loading||pending} onClick={()=>void load(data?.page??1)}>{t("common.refresh")}</button>{canManage&&<button className="primary-button" disabled={pending} onClick={()=>{setError("");setEditor({record:null,token:crypto.randomUUID()});}}>{t(`business.add.${resource}`)}</button>}</div></section>
     {context&&!embedded&&<InlineMessage type="info"><b>{data?.labels[`${context.type}:${context.id}`]??t("common.loading")}</b> · {t("business.contextHelp")} <Link href="/education-business">{t("business.allRecords")}</Link></InlineMessage>}
     <InlineMessage type="info">{t(`business.help.${resource}`)}</InlineMessage>
     {error&&<InlineMessage type="error">{error}<button className="text-button" disabled={loading} onClick={()=>void load(data?.page??1)}>{t("common.retry")}</button></InlineMessage>}

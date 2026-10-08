@@ -1,10 +1,16 @@
-import { Activity, BookOpen, Building2, CalendarDays, ChartNoAxesColumn, CircleAlert, CircleDollarSign, FileText, GraduationCap, HeartPulse, House, Layers, ListTodo, MapPin, Network, Package, ShieldCheck, Target, Upload, UserRound, Users, Zap } from "lucide-react";
+import { Archive, Copy, Download, GitBranch, Sparkles, Pencil, Plus, MessageCircle, Handshake, Lightbulb, History, Settings2, ArrowUpRight, Activity, BookOpen, Building2, CalendarDays, ChartNoAxesColumn, CircleAlert, CircleDollarSign, FileText, GraduationCap, HeartPulse, House, Layers, ListTodo, MapPin, Network, Package, ShieldCheck, Target, Upload, UserRound, Users, Zap } from "lucide-react";
 
-/** Decorative semantic vocabulary. Labels and business state remain supplied by the owner. */
+/** Shared semantic icon vocabulary for workspace headers, record facts and actions.
+ * Use names by meaning, not by SVG shape; keep text labels on actions.
+ * Icons are decorative (hidden from assistive technology), never a permission/state signal.
+ * 16px actions, 18–20px sections, 24px summaries; use the existing tone tokens.
+ * Extend this registry for new concepts instead of adding emoji or local SVG copies.
+ */
 export const uiIcons = {
+  archive: Archive, copy: Copy, export: Download, workflow: GitBranch, automation: Sparkles, edit: Pencil, add: Plus, message: MessageCircle, partnership: Handshake, potential: Lightbulb, history: History, settings: Settings2, open: ArrowUpRight,
   section: Layers, organization: Building2, person: UserRound, people: Users,
   student: GraduationCap, family: House, program: BookOpen, application: FileText,
-  support: HeartPulse, activity: Activity, metric: ChartNoAxesColumn,
+  target: Target, outcome: GraduationCap, support: HeartPulse, activity: Activity, metric: ChartNoAxesColumn,
   attention: CircleAlert, finance: CircleDollarSign, governance: ShieldCheck,
   channel: Network, product: Package, opportunity: Target, queue: ListTodo,
   calendar: CalendarDays, import: Upload, action: Zap, location: MapPin,

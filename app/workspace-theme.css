@@ -1,0 +1,31 @@
+/* One workspace palette. Domain status/danger colors retain their meaning. */
+.app-content{--workspace-accent:#087e8b;--workspace-soft:#edf8f9}
+.app-content[data-workspace-space=relationships]{--workspace-accent:#2463ad;--workspace-soft:#edf4ff}
+.app-content[data-workspace-space=students]{--workspace-accent:#13806b;--workspace-soft:#eaf8f1}
+.app-content[data-workspace-space=commercial]{--workspace-accent:#5264b5;--workspace-soft:#f0f2ff}
+.app-content[data-workspace-space=management]{--workspace-accent:#7850ad;--workspace-soft:#f5effc}
+.app-content[data-workspace-space=governance]{--workspace-accent:#a56a16;--workspace-soft:#fff6e7}
+.app-content[data-workspace-space=admin]{--workspace-accent:#4c6489;--workspace-soft:#edf2fa}
+.app-content[data-workspace-space=account]{--workspace-accent:#147e92;--workspace-soft:#edf8fb}
+.app-content[data-workspace-destination=finance],.app-content[data-workspace-destination=revenue]{--workspace-accent:#11796b;--workspace-soft:#edf8f3}
+.app-content[data-workspace-destination=commissions]{--workspace-accent:#a56816;--workspace-soft:#fff5e6}
+.workspace-heading{display:flex;align-items:center;gap:12px;min-width:0}
+.workspace-heading>span:last-child{min-width:0;overflow-wrap:anywhere}
+.workspace-heading-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;border-radius:12px;background:var(--workspace-soft,var(--green-soft));color:var(--workspace-accent,var(--brand));border:1px solid color-mix(in srgb,var(--workspace-accent,var(--brand)) 18%,transparent)}
+.workspace-heading-icon .ux-icon{color:inherit}
+.app-content .ux-section-icon,.app-content .ux-record-avatar{background:var(--workspace-soft);color:var(--workspace-accent)}
+.app-content .ux-section-icon .ux-icon-context{color:inherit}
+.app-content .page-tabs a{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.app-content .page-tabs [aria-current=page],.app-content [role=tab][aria-selected=true]{background:var(--workspace-soft);border-color:color-mix(in srgb,var(--workspace-accent) 25%,var(--line));color:var(--workspace-accent);box-shadow:inset 0 -2px var(--workspace-accent)}
+.app-content .surface-heading>svg{color:var(--workspace-accent);background:var(--workspace-soft);padding:6px;box-sizing:content-box;border-radius:9px;flex-shrink:0}
+.app-content :is(.surface,.detail-section)>.surface-heading{border-bottom:1px solid color-mix(in srgb,var(--workspace-accent) 14%,var(--line));padding-bottom:12px}
+.app-content .quick-summary:not(.finance-risk-center){background:linear-gradient(115deg,var(--workspace-soft),var(--surface));border:1px solid color-mix(in srgb,var(--workspace-accent) 22%,var(--line));border-left:3px solid var(--workspace-accent)}
+.app-content .ux-metric-strip article{box-shadow:inset 0 3px var(--workspace-accent)}
+.app-content .ux-metric-strip article:nth-child(2){box-shadow:inset 0 3px var(--accent-amber)}
+.app-content .ux-metric-strip article:nth-child(3){box-shadow:inset 0 3px var(--accent-violet)}
+.app-content .ux-metric-strip article:is([data-metric=atRiskCases],[data-metric=highOpenRisks]){box-shadow:inset 0 3px var(--accent-risk)}
+.app-content :is(.ux-secondary-summary,.analytics-chart-card){border-top-color:var(--workspace-accent)}
+.app-content :is(.table-toolbar,.filter-bar){border-radius:9px;background:color-mix(in srgb,var(--workspace-soft) 55%,var(--surface))}
+.app-content .ux-record-avatar>svg{color:inherit}
+@media(max-width:600px){.workspace-heading{gap:9px}.workspace-heading-icon{width:34px;height:34px;flex-basis:34px;border-radius:10px}.workspace-heading-icon .ux-icon{width:20px;height:20px}.app-content .page-tabs a{gap:5px}}
+@media(prefers-reduced-motion:reduce){.workspace-heading-icon{transition:none}}

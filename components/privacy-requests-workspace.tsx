@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import { useCallback, useState } from "react";
 import { ShieldCheck } from "lucide-react";
@@ -77,7 +79,7 @@ export function PrivacyRequestsWorkspace({ initial }: { initial: PageResult<Priv
     } catch (caught) { setError(presentApiError(caught, t, "privacyRequests.manageFailed").message); } finally { setPending(false); }
   };
   return <div className="page-stack v200-workspace">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("privacyRequests.eyebrow")}</p><h1>{t("privacyRequests.title")}</h1><p>{t("privacyRequests.help")}</p></div></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("privacyRequests.eyebrow")}</p><WorkspaceHeading>{t("privacyRequests.title")}</WorkspaceHeading><p>{t("privacyRequests.help")}</p></div></section>
     <InlineMessage type="info">{t("privacyRequests.identityHelp")}</InlineMessage>
     <form className="surface v200-action-form" onSubmit={submit}>
       <SearchableSelect label={t("privacyRequests.contact")} required value={contact} options={contactOptions} onChange={setContact} onSearch={searchContacts}/>

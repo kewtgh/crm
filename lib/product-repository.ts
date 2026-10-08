@@ -2,7 +2,7 @@ import { databaseJson } from "./db/gateway";
 
 export type ProductPrice={currency:string;amount:number;effectiveFrom:string};
 export type ProductCurrencyMetric={revenue:number;customers:number};
-export type ProductPurchaser={organizationId:string;buyerType?:"ORGANIZATION"|"HOUSEHOLD";nameZh:string;nameEn:string;contractId:string;contractNumber:string;contractStatus:string;relationshipLevel:number;currency:string;contractValue:number;confirmedSpend:number};
+export type ProductPurchaser={organizationId:string;buyerType?:"ORGANIZATION"|"HOUSEHOLD"|"CONTACT";nameZh:string;nameEn:string;contractId:string;contractNumber:string;contractStatus:string;relationshipLevel:number;currency:string;contractValue:number;confirmedSpend:number};
 export type ProductLifecycleStatus="DRAFT"|"ACTIVE"|"PAUSED";
 export type ProductRecord={id:string;nameZh:string;nameEn:string;code:string;descriptionZhMarkdown:string;descriptionEnMarkdown:string;price:number;prices:ProductPrice[];metrics:Record<string,ProductCurrencyMetric>;purchasers:ProductPurchaser[];billing:string;billingCode:"PROJECT"|"TERM"|"MONTH"|"YEAR"|"SCHOOL_YEAR"|"SEASON";duration:string;durationEn:string;customers:number;revenue:number;active:boolean;lifecycleStatus:ProductLifecycleStatus;isDefault:boolean;currency:string;updatedAt:string};
 
@@ -12,7 +12,7 @@ export async function listProducts():Promise<ProductRecord[]>{
     const prices=(item.prices as ProductPrice[]|undefined)??[];
     const metrics=(item.metrics as Record<string,ProductCurrencyMetric>|undefined)??{};
     const purchasers=((item.purchasers as Array<Record<string,unknown>>|undefined)??[]).map((buyer):ProductPurchaser=>({
-      organizationId:String(buyer.organizationId),buyerType:buyer.buyerType==="HOUSEHOLD"?"HOUSEHOLD":"ORGANIZATION",nameZh:String(buyer.nameZh),nameEn:String(buyer.nameEn),
+      organizationId:String(buyer.organizationId),buyerType:buyer.buyerType==="CONTACT"?"CONTACT":buyer.buyerType==="HOUSEHOLD"?"HOUSEHOLD":"ORGANIZATION",nameZh:String(buyer.nameZh),nameEn:String(buyer.nameEn),
       contractId:String(buyer.contractId),contractNumber:String(buyer.contractNumber),contractStatus:String(buyer.contractStatus),
       relationshipLevel:Number(buyer.relationshipLevel),currency:String(buyer.currency),contractValue:Number(buyer.contractValue),confirmedSpend:Number(buyer.confirmedSpend),
     }));

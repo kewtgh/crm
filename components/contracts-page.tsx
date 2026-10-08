@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import {AutomaticRecordNumber} from "./automatic-record-number";
 import {RecordDeleteAction} from "./record-delete-action";
 import { DateInput, MoneyInput, CurrencySelect } from "@/components/structured-inputs";
@@ -98,7 +100,7 @@ export function ContractsPage({ initialContracts = [], initialTotal = 0, initial
   const quarter=Number(quarterDate.slice(5,7));
 
   return <div className="page-stack contracts-page">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("contracts.eyebrow")}</p><h1>{t("contracts.title")}</h1><p>{t("contracts.description")}</p></div><div className="page-actions">{canManage&&<button className="secondary-button" type="button" onClick={()=>{setCreateOpen(true);setFormError("");}}><Plus size={17}/>{t("contracts.new")}</button>}{canManage&&<button className="secondary-button" type="button" disabled={!selectedId||playbookLoading} onClick={()=>void openPlaybook()}><RefreshCcw className={playbookLoading?"spin":""} size={17}/>{t("contracts.playbook")}</button>}{canRequestExport&&<button className="secondary-button" type="button" disabled={approvalPending} onClick={() => requestApproval("CONTRACT_EXPORT")}><FileDown size={17} />{t(user.role==="SUPER_ADMIN"?"flow.executeExport":"flow.requestExportApproval")}</button>}{canManage&&<button className="primary-button" type="button" disabled={approvalPending} onClick={() => requestApproval("CONTRACT_SIGN")}><Signature size={17} />{t(user.role==="SUPER_ADMIN"?"flow.executeSign":"flow.requestSignApproval")}</button>}</div></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("contracts.eyebrow")}</p><WorkspaceHeading>{t("contracts.title")}</WorkspaceHeading><p>{t("contracts.description")}</p></div><div className="page-actions">{canManage&&<button className="secondary-button" type="button" onClick={()=>{setCreateOpen(true);setFormError("");}}><Plus size={17}/>{t("contracts.new")}</button>}{canManage&&<button className="secondary-button" type="button" disabled={!selectedId||playbookLoading} onClick={()=>void openPlaybook()}><RefreshCcw className={playbookLoading?"spin":""} size={17}/>{t("contracts.playbook")}</button>}{canRequestExport&&<button className="secondary-button" type="button" disabled={approvalPending} onClick={() => requestApproval("CONTRACT_EXPORT")}><FileDown size={17} />{t(user.role==="SUPER_ADMIN"?"flow.executeExport":"flow.requestExportApproval")}</button>}{canManage&&<button className="primary-button" type="button" disabled={approvalPending} onClick={() => requestApproval("CONTRACT_SIGN")}><Signature size={17} />{t(user.role==="SUPER_ADMIN"?"flow.executeSign":"flow.requestSignApproval")}</button>}</div></section>
     {flowError&&<InlineMessage type="error">{flowError}</InlineMessage>}
     {loading&&<InlineMessage type="warning">{t("contracts.loading")}</InlineMessage>}
 

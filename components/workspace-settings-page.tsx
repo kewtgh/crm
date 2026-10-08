@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import { useMemo, useState } from "react";
 import { Building2, CalendarDays, Clock3, Save, ShieldCheck } from "lucide-react";
@@ -70,7 +72,7 @@ export function WorkspaceSettingsPage({ initial }: { initial: WorkspaceSettings 
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t("workspaceSettings.eyebrow")}</p>
-        <h1>{t("workspaceSettings.title")}</h1>
+        <WorkspaceHeading>{t("workspaceSettings.title")}</WorkspaceHeading>
         <p>{t("workspaceSettings.description")}</p>
       </div>
       <StatusBadge tone="purple">{t("workspaceSettings.adminOnly")}</StatusBadge>

@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -41,7 +43,7 @@ export function CustomerEmailHistoryPage({ initial }: { initial: EmailHistoryRes
   }, [q, purpose, status, page, pageSize, refresh, runLatest, t]);
 
   return <div className="page-stack email-history-page">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("nav.messages")}</p><h1>{t("emailHistory.title")}</h1><p>{t("emailHistory.help")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>{t("emailHistory.refresh")}</button></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("nav.messages")}</p><WorkspaceHeading>{t("emailHistory.title")}</WorkspaceHeading><p>{t("emailHistory.help")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>{t("emailHistory.refresh")}</button></section>
     <section className="surface" aria-busy={loading}>
       <div className="email-history-filters">
         <SearchField value={q} onChange={value => { setQuery(value); setPage(1); }} placeholder={t("emailHistory.search")}/>

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {runManagementIntegration} from './test-management-intelligence-postgres.mjs';
+
+await runManagementIntegration(async({client,context,ws,otherWs,admin,sales,stranger,school,p})=>{
+ const raw=client.query.bind(client);let n=0;client.query=async(...args)=>{const text=typeof args[0]==='string'?args[0]:args[0].text;if(/^(begin|rollback|commit)$/i.test(text))return raw(...args);const name='buyer_test_'+(++n);await raw('savepoint '+name);try{const result=await raw(...args);await raw('release savepoint '+name);return result;}catch(error){await raw('rollback to savepoint '+name);await raw('release savepoint '+name);throw error;}};
+ const one=async(sql,args=[])=>(await client.query(sql,args)).rows[0];
+ await client.query('begin');
+ await client.query('reset role');
+ const person=(await one("insert into public.contacts(workspace_id,name_zh,name_en,owner_id,created_by,organization_id) values($1,'示例教师甲','Fictional Teacher A',$2,$2,$3) returning id",[ws,admin,school])).id;
+ const outsider=(await one("insert into public.contacts(workspace_id,name_zh,name_en,owner_id,created_by) values($1,'示例教师乙','Fictional Teacher B',$2,$2) returning id",[ws,sales])).id;
+ const foreign=(await one("insert into public.contacts(workspace_id,name_zh,name_en,owner_id,created_by) values($1,'外部示例','Foreign fictional person',$2,$2) returning id",[otherWs,stranger])).id;
+ await context();
+ const create=async({organization=null,buyer=null,rep=null,key=randomUUID(),number='BUYER-'+randomUUID(),amount=100}={})=>one("select * from public.create_customer_quote(quote_no=>$1,target_organization=>$2,target_household=>null,target_opportunity=>null,target_product=>$3,target_bundle=>null,target_exchange_rate=>null,quote_currency=>'CNY',quote_subtotal=>$4,quote_discount=>0,valid_through=>current_date+30,target_person=>$5,representative_contact=>$6,p_request_key=>$7)",[number,organization,p,amount,buyer,rep,key]);
+ const input={buyer:person,key:randomUUID(),number:'PERSON-'+randomUUID()};
+ const personal=await create(input);assert.equal(personal.buyer_contact_id,person);assert.equal(personal.organization_id,null);assert.equal(personal.household_id,null);
+ assert.equal((await create(input)).id,personal.id);
+ await assert.rejects(create({...input,amount:101}),/conflict/i);
+ const institutional=await create({organization:school,rep:person});assert.equal(institutional.buyer_contact_id,null);assert.equal(institutional.representative_contact_id,person);
+ await assert.rejects(create({organization:school,rep:outsider}),/REPRESENTATIVE_MISMATCH/);
+ await assert.rejects(create({buyer:foreign}),/not_authorized|NOT_ACCESSIBLE/);
+ await assert.rejects(create({buyer:person,organization:school}),/not_authorized/);
+ await assert.rejects(create({buyer:person,rep:person}),/representative_scope|REPRESENTATIVE_MISMATCH/);
+ // A Contact without a Student record must never appear in the Student picker RPC.
+ assert.equal((await client.query("select * from public.list_students_page('Fictional Teacher',1,10,'all')")).rowCount,0);
+ const convert=async(q)=>{await one("select * from public.submit_quote($1,'Fictional approved terms')",[q.id]);await one('select * from public.idempotent_accept_quote($1,$2)',[q.id,randomUUID()]);return one("select * from public.convert_quote_to_contract($1,$2,current_date,current_date+365)",[q.id,'CONTRACT-'+randomUUID()]);};
+ const c=await convert(personal),org=await convert(institutional);assert.equal(c.buyer_contact_id,person);assert.equal(c.contract_value,'100.00');assert.equal(org.organization_id,school);assert.equal(org.representative_contact_id,person);assert.equal(org.buyer_contact_id,null);
+ await assert.rejects(client.query('update public.quotes set buyer_contact_id=$2 where id=$1',[personal.id,outsider]),/BUYER_BASIS_IMMUTABLE|policy|permission denied/);
+ await client.query('reset role');await client.query("update public.contracts set status='ACTIVE' where id in($1,$2)",[c.id,org.id]);await context();
+ const renewal=await one('select * from public.create_contract_renewal($1)',[c.id]);assert.equal(renewal.buyer_contact_id,person);
+ const schedule=await one('select * from public.save_receivable_schedule($1,$2)',[c.id,JSON.stringify([{dueDate:new Date().toISOString().slice(0,10),amount:100}])]);
+ await one("select * from public.record_payment($1,$2,40,'CNY','Fictional personal receipt',now())",[c.id,schedule.id]);
+ assert.equal((await one("select count(*) n from public.finance_customer_contracts where buyer_type='CONTACT' and buyer_id=$1",[person])).n,'2');
+ assert.equal((await one('select count(*) n from public.finance_customer_contracts where id=$1 and enrollment_contexts @> $2::jsonb',[c.id,JSON.stringify([{productId:p}])])).n,'1');
+ const series=(await one("select public.finance_collection_series($1) item",[{buyerType:'CONTACT',buyerId:person}])).item;assert.equal(series.length,1);assert.equal(series[0].currency,'CNY');assert.equal(series[0].scheduled,'100.00');assert.equal(series[0].settled,'40.00');
+ const catalog=(await one('select public.product_catalog_snapshot() item')).item;assert.ok(catalog.find(row=>row.id===p).purchasers.some(row=>row.buyerType==='CONTACT'&&row.organizationId===person));
+ await context(sales);assert.equal((await client.query('select id from public.quotes where id=$1',[personal.id])).rowCount,0);assert.equal((await client.query('select id from public.finance_customer_contracts where id=$1',[c.id])).rowCount,0);await assert.rejects(create({buyer:person}),/not_authorized/);
+ await context(stranger,otherWs);assert.equal((await client.query('select id from public.finance_customer_contracts where id=$1',[c.id])).rowCount,0);assert.deepEqual((await one('select public.finance_collection_series($1) item',[{buyerType:'CONTACT',buyerId:person}])).item,[]);
+ await context();assert.equal((await one('select count(*) n from public.revenue_recognition_candidates')).n,'0');assert.equal((await one('select count(*) n from public.recognized_revenue_facts')).n,'0');
+ await raw('rollback');client.query=raw;
+ console.log('PASS personal vs institutional purchaser, scoped representative, receipt retry/conflict, canonical Student search, conversion/renewal, settlement/chart, RLS, canonical catalog and no Revenue side effects.');
+});

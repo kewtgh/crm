@@ -2,14 +2,14 @@ import { databaseJson } from "./db/gateway";
 
 export type RelatedSearchRecord = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" };
 
-export async function searchRelatedRecords(query: string, types?: string[]): Promise<RelatedSearchRecord[]> {
+export async function searchRelatedRecords(query: string, types?: string[], organizationId?:string): Promise<RelatedSearchRecord[]> {
   const clean = query.trim().replace(/[,*()]/g, "").slice(0, 80);
   const wants=(type:string)=>!types?.length||types.includes(type);
   const table = <T>(type:string, url:string, init?:RequestInit):Promise<T[]>=>wants(type)?databaseJson<T[]>(url,init):Promise.resolve([]);
   const pattern = encodeURIComponent(`*${clean}*`);
   const [organizations, contacts, users,opportunities,tasks,contracts,quotes,products,students,households,leads] = await Promise.all([
     table<{ id:string; name_zh:string; name_en:string;short_name:string }>("ORGANIZATION",`/db/table/organizations?select=id,name_zh,name_en,short_name&archived_at=is.null&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern},short_name.ilike.${pattern})&order=updated_at.desc&limit=8`),
-    table<{ id:string; name_zh:string; name_en:string }>("CONTACT",`/db/table/contacts?select=id,name_zh,name_en&archived_at=is.null&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=8`),
+    table<{ id:string; name_zh:string; name_en:string }>("CONTACT",`/db/table/contacts?select=id,name_zh,name_en&archived_at=is.null${organizationId?`&organization_id=eq.${encodeURIComponent(organizationId)}`:""}&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=8`),
     table<{ user_id:string; display_name_zh:string; display_name_en:string }>("USER","/db/rpc/list_assignable_crm_users",{
       method:"POST",body:JSON.stringify({search_query:clean}),
     }),

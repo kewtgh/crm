@@ -14,6 +14,7 @@ import "./ui-system.css";
 import "./workflow-experience.css";
 import "./operations-usability.css";
 import "./workspace-density.css";
+import "./workspace-theme.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();

@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import {SafeDiagnostics} from "./safe-diagnostics";
 import {DetailTabs} from "./detail-tabs";
 import {ImportSetsPage} from "./import-sets-page";
@@ -410,7 +412,7 @@ export function ImportsPage({
     <section className="page-heading-row">
       <div>
         <p className="eyebrow">{t(duplicatesOnly ? "duplicates.eyebrow" : "imports.eyebrow")}</p>
-        <h1>{t(duplicatesOnly ? "duplicates.title" : "imports.title")}</h1>
+        <WorkspaceHeading>{t(duplicatesOnly ? "duplicates.title" : "imports.title")}</WorkspaceHeading>
         <p>{t(duplicatesOnly ? "duplicates.description" : "imports.description")}</p>
       </div>
     </section>

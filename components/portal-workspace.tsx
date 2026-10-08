@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { useRef,useState } from "react";
 import { Copy,Link2,Plus,ShieldCheck,Trash2 } from "lucide-react";
 import { AccessibleDrawer,ConfirmDialog,InlineMessage,StatusBadge,Toast } from "./ui";
@@ -48,7 +50,7 @@ export function PortalWorkspace({initial}:{initial:Workspace}){
   const familyOptions=[...new Map(data.invitations.map(item=>[item.householdId,locale==="en"?item.householdEn||item.householdZh:item.householdZh||item.householdEn])).entries()];
   const invitations=data.invitations.filter(item=>(!status||item.status===status)&&(!family||item.householdId===family)&&(!query.trim()||`${item.householdZh} ${item.householdEn} ${item.email}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())));
   return <div className="page-stack v220-workspace portal-workspace">
-    <section className="page-heading-row"><div><p className="eyebrow">{t("portal.eyebrow")}</p><h1>{t("portal.title")}</h1><p>{t("portal.help")}</p></div><button className="primary-button" type="button" disabled={pending} onClick={()=>{setError("");setOpen(true);}}><Plus size={17}/>{t(canInvite?"portal.invite":"portalTemplates.openTemplates")}</button></section>
+    <section className="page-heading-row"><div><p className="eyebrow">{t("portal.eyebrow")}</p><WorkspaceHeading>{t("portal.title")}</WorkspaceHeading><p>{t("portal.help")}</p></div><button className="primary-button" type="button" disabled={pending} onClick={()=>{setError("");setOpen(true);}}><Plus size={17}/>{t(canInvite?"portal.invite":"portalTemplates.openTemplates")}</button></section>
     <InlineMessage type="warning">{t("portal.security")}</InlineMessage>
     {!canInvite&&<InlineMessage type="info">{t("portalTemplates.roleHelp")}</InlineMessage>}
     {link&&<section className="surface page-stack portal-invitation-result"><InlineMessage type="success">{t("portal.linkOnce")}</InlineMessage><code className="one-time-link">{link}</code><div className="email-filter-actions"><button className="secondary-button" type="button" onClick={()=>void copy(link)}><Copy size={14}/>{t("common.copy")}</button></div>{message&&<><p>{t("portalTemplates.deliveryHelp")}</p><h3>{message.subject}</h3><pre className="email-preview">{message.body}</pre><button type="button" className="primary-button" onClick={()=>void copy(`${message.subject}\n\n${message.body}`)}><Copy size={16}/>{t("portalTemplates.copyMessage")}</button></>}</section>}

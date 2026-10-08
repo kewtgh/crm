@@ -1,4 +1,6 @@
 "use client";
+import {WorkspaceHeading} from "./workspace-heading";
+
 import { DateInput } from "@/components/structured-inputs";
 
 import Link from "next/link";
@@ -68,7 +70,7 @@ export function ContactConsentPage({ initial, embedded=false, onDataChange }: { 
 
   return <div className="page-stack consent-page">
     {!embedded&&<section className="page-heading-row">
-      <div><p className="eyebrow">{t("consent.eyebrow")}</p><h1>{data.nameZh} / {data.nameEn}</h1><p>{t("consent.description")}</p></div>
+      <div><p className="eyebrow">{t("consent.eyebrow")}</p><WorkspaceHeading>{data.nameZh} / {data.nameEn}</WorkspaceHeading><p>{t("consent.description")}</p></div>
       <div className="page-actions"><Link className="secondary-button" href="/people">{t("consent.back")}</Link>{data.canManageConsent&&<CrmRecordEditor resource="people" id={initial.id} onSaved={item=>setData(current=>({...current,nameZh:item.nameZh,nameEn:item.nameEn,email:item.email??"",phone:item.phone??"",title:item.title??"",contactType:item.contactType??"CONTACT",recordStatus:item.status,contactStatus:item.contactStatus??"NEW",communicationLevel:item.communicationLevel??1,notesMarkdown:item.notesMarkdown??"",ownerId:item.ownerId??null,ownerName:item.ownerName,preferredContactMethod:item.preferredContactMethod??"EMAIL",preferredLanguage:item.preferredLanguage??"",acquisitionSource:item.acquisitionSource??"",decisionRole:item.decisionRole??"UNKNOWN",tags:item.tags??[],nextFollowUpAt:item.nextFollowUpAt??null,households:item.households??current.households}))}/>} {data.canManageConsent&&<button className={data.doNotContact ? "secondary-button" : "danger-button"} type="button" disabled={pending} onClick={handleDnc}><Ban size={16} />{t(data.doNotContact ? "consent.removeDnc" : "consent.enableDnc")}</button>}</div>
     </section>}
     {embedded&&data.canManageConsent&&<div className="ux-section-actions"><button className="secondary-button" type="button" disabled={pending} onClick={handleDnc}>{t(data.doNotContact?"consent.removeDnc":"consent.enableDnc")}</button></div>}
