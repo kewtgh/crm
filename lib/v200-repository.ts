@@ -182,10 +182,10 @@ export function addStudentAcademicRecord(input: {
 }
 
 export async function createStudent(input: {
-  personId: string; householdId?: string | null; studentNumber?: string;birthDate?:string|null; grade: string;currentClass:string; academicYear: string;
+  personId?: string; nameZh?:string;nameEn?:string;requestKey?:string; householdId?: string | null; studentNumber?: string;birthDate?:string|null; grade: string;currentClass:string; academicYear: string;
   personalityMarkdown:string;learningExpectationsMarkdown:string;strengthsMarkdown:string;supportNeedsMarkdown:string;interests:string[];preferredLearningStyle:string;
 }) {
-  return databaseJson<StudentRow>("/db/rpc/save_customer_record",{method:"POST",body:JSON.stringify({resource:"STUDENTS",record_id:crypto.randomUUID(),expected_updated_at:null,data:{...input,currentGrade:input.grade,status:"ACTIVE",householdId:input.householdId||null,birthDate:input.birthDate||null}})});
+  return databaseJson<StudentRow>("/db/rpc/create_education_identity",{method:"POST",body:JSON.stringify({kind:"STUDENT",p_request_key:input.requestKey??crypto.randomUUID(),data:{...input,householdId:input.householdId||null,birthDate:input.birthDate||null}})});
 }
 
 export type HouseholdDetail = HouseholdRecord & {
@@ -234,15 +234,12 @@ export function updateHousehold(input: {
 }
 
 export function saveHouseholdMember(input: {
-  householdId: string; contactId: string; role: string; primary: boolean;
+  householdId: string; contactId?: string;nameZh?:string;nameEn?:string;email?:string;phone?:string;requestKey?:string; role: string; primary: boolean;
 }) {
-  return databaseJson("/db/rpc/save_household_member", {
+  return databaseJson("/db/rpc/create_education_identity", {
     method: "POST",
     body: JSON.stringify({
-      target_household: input.householdId,
-      target_contact: input.contactId,
-      member_role_value: input.role,
-      is_primary: input.primary,
+      kind:"FAMILY_MEMBER",p_request_key:input.requestKey??crypto.randomUUID(),data:{...input,personId:input.contactId},
     }),
   });
 }

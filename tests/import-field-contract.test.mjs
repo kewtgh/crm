@@ -95,7 +95,8 @@ test("reverse coverage includes Household form, Organization core and Student pr
   const organization=crm.split("schools:baseRecordSchema.extend({")[1].split("people:baseRecordSchema")[0];
   for(const m of organization.matchAll(/\b([a-zA-Z]+):z\./g)) assert.ok(importFieldContract.some(f=>f.resource==="ORGANIZATIONS"&&f.key===m[1]),m[1]);
   const student=education.split('operation: z.literal("createStudent")')[1].split("z.object({ operation:")[0];
-  for(const m of student.matchAll(/\b([a-zA-Z]+):\s*z\./g)) assert.ok(importFieldContract.some(f=>f.resource==="STUDENTS"&&f.key===(m[1]==="grade"?"currentGrade":m[1])),m[1]);
+  // Native identity creation names belong to Contact; retry identity is not an import field.
+  for(const m of student.matchAll(/\b([a-zA-Z]+):\s*z\./g)) if(!["requestKey","nameZh","nameEn"].includes(m[1])) assert.ok(importFieldContract.some(f=>f.resource==="STUDENTS"&&f.key===(m[1]==="grade"?"currentGrade":m[1])),m[1]);
 });
 test("enum labels are documentation; only explicitly contracted codes normalize",()=>{
   assert.equal(normalizeContractEnum("contactType"," PARENT "),"PARENT");

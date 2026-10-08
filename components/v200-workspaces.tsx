@@ -1,4 +1,6 @@
 "use client";
+import {useReceiptMutation} from "@/hooks/use-receipt-mutation";
+import {AutomaticRecordNumber} from "./automatic-record-number";
 import {useRemoteSearch} from "@/hooks/use-remote-search";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -106,19 +108,21 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
     } catch (caught) { setError(presentApiError(caught, t, "education.loadFailed").message); return false; } finally { setPending(false); }
   },[locale,t]);
   useEffect(()=>{const timer=window.setTimeout(()=>{if(!recordFocus){setDetail(null);setEditing(false);}else if(recordFocus!==detail?.id)void openDetail({id:recordFocus} as StudentRecord,false);},0);return()=>window.clearTimeout(timer);},[recordFocus,detail?.id,openDetail]);
+  const studentMutation=useReceiptMutation("/api/education");
   const create = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!person) { setError(t("education.personRequired")); return; }
+
     const form = new FormData(event.currentTarget);
     setPending(true); setError("");
     try {
-      await apiFetch("/api/education", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-        operation: "createStudent", personId: person, householdId: household || null,
+      const accepted=await studentMutation.send({
+        operation: "createStudent",...(person?{personId:person}:{nameZh:form.get("nameZh"),nameEn:form.get("nameEn")}), householdId: household || null,
         studentNumber: (form.get("studentNumber")??""),birthDate:form.get("birthDate")||null, grade: form.get("grade"),currentClass:(form.get("currentClass")??""), academicYear: form.get("academicYear"),
         personalityMarkdown:(form.get("personalityMarkdown")??""),learningExpectationsMarkdown:(form.get("learningExpectationsMarkdown")??""),
         strengthsMarkdown:(form.get("strengthsMarkdown")??""),supportNeedsMarkdown:(form.get("supportNeedsMarkdown")??""),
         interests:String(form.get("interests")??"").split(/[,，]/).map(value=>value.trim()).filter(Boolean),preferredLearningStyle:(form.get("preferredLearningStyle")??"UNSPECIFIED"),
-      }) });
+      });
+      if(!accepted)return;
       setOpen(false); setPerson(""); setHousehold(""); const refreshed=await load(1); setToast(t(refreshed?"education.studentCreated":"audit.savedRefreshFailed"));
     } catch (caught) { setError(presentApiError(caught, t, "education.saveFailed").message); } finally { setPending(false); setConfirmation(null); }
   };
@@ -185,15 +189,15 @@ export function StudentsWorkspace({ initial, initialDetail = null }: { initial: 
       <Pagination page={data.page} totalPages={pages} total={data.total} pageSize={data.pageSize} onPage={(page) => void load(page)} onPageSize={(pageSize) => void load(1, pageSize)}/>
     </section>
     </>}
-    {open && <AccessibleDrawer guardChanges pending={pending} title={t("education.newStudent")} onClose={() => setOpen(false)}><form onSubmit={create}>
-      <SearchableSelect label={t("education.person")} required value={person} options={people} onChange={setPerson} onSearch={searchPeople}/><SearchableSelect label={t("education.householdOptional")} value={household} options={households} onChange={setHousehold} onSearch={searchHouseholds}/>
-      <div className="form-grid two-column"><label className="field"><span>{t("education.grade")}</span><OptionInput name="grade" required maxLength={40} options={GRADE_OPTIONS}/></label><label className="field"><span>{t("education.academicYear")}</span><AcademicYearInput name="academicYear" placeholder="2026-2027" required/></label></div><details className="ux-enrichment"><summary>{t("ux.record.enrich")}</summary><div className="form-grid two-column"><label className="field"><span>{t("education.studentNumber")}</span><input name="studentNumber" maxLength={60}/></label><label className="field"><span>{t("education.birthDate")}</span><DateInput name="birthDate" type="date"/></label></div>
+    {open && <AccessibleDrawer guardChanges pending={pending||studentMutation.pending||studentMutation.uncertain} title={t("education.newStudent")} onClose={() => setOpen(false)}><form onSubmit={create}><fieldset className="follow-up-fields" disabled={pending||studentMutation.pending||studentMutation.uncertain}>
+      {!person&&<div className="form-grid two-column"><label className="field"><span>{t("education.nameZh")}</span><input name="nameZh" maxLength={120}/></label><label className="field"><span>{t("education.nameEn")}</span><input name="nameEn" maxLength={160}/></label><BilingualNameHint/></div>}<details><summary>{locale==="en"?"Link an existing person (optional)":"关联已有人员（可选）"}</summary><SearchableSelect label={t("education.person")} value={person} options={people} onChange={setPerson} onSearch={searchPeople}/></details><SearchableSelect label={t("education.householdOptional")} value={household} options={households} onChange={setHousehold} onSearch={searchHouseholds}/>
+      <div className="form-grid two-column"><label className="field"><span>{t("education.grade")}</span><OptionInput name="grade" required maxLength={40} options={GRADE_OPTIONS}/></label><label className="field"><span>{t("education.academicYear")}</span><AcademicYearInput name="academicYear" placeholder="2026-2027" required/></label></div><details className="ux-enrichment"><summary>{t("ux.record.enrich")}</summary><div className="form-grid two-column"><label className="field"><span>{t("education.studentNumber")}</span><AutomaticRecordNumber name="studentNumber"/></label><label className="field"><span>{t("education.birthDate")}</span><DateInput name="birthDate" type="date"/></label></div>
       <div className="form-grid two-column"><label className="field"><span>{t("education.currentClass")}</span><input name="currentClass" maxLength={80}/></label></div>
       <div className="form-grid two-column"><label className="field"><span>{t("education.learningStyle")}</span><select name="preferredLearningStyle" defaultValue="UNSPECIFIED" required>{["UNSPECIFIED","VISUAL","AUDITORY","READ_WRITE","KINESTHETIC","MIXED"].map(value=><option value={value} key={value}>{t(`education.learningStyle.${value.toLowerCase()}`)}</option>)}</select></label></div>
       <label className="field"><span>{t("education.interests")}</span><TagsInput name="interests" placeholder={t("education.interestsHelp")}/></label>
       <MarkdownField name="personalityMarkdown" label={t("education.personality")}/><MarkdownField name="learningExpectationsMarkdown" label={t("education.learningExpectations")}/><MarkdownField name="strengthsMarkdown" label={t("education.strengths")}/><MarkdownField name="supportNeedsMarkdown" label={t("education.supportNeeds")}/>
 </details>
-      {error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending} data-drawer-dismiss onClick={() => setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.saving") : t("common.create")}</button></div>
+      </fieldset>{studentMutation.error&&<InlineMessage type="error">{studentMutation.error}</InlineMessage>}{error && <InlineMessage type="error">{error}</InlineMessage>}<div className="drawer-actions"><button className="secondary-button" type="button" disabled={pending||studentMutation.uncertain} data-drawer-dismiss onClick={() => setOpen(false)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending}>{pending ? t("common.saving") : t(studentMutation.uncertain?"enrollments.retry":"common.create")}</button></div>
     </form></AccessibleDrawer>}
     {detail&&<section className="ux-record-workspace" data-testid="student-workspace"><RecordHeader nameZh={detail.nameZh} nameEn={detail.nameEn} avatar={<GraduationCap size={28}/>} breadcrumb={<><button className="text-button" onClick={returnToDirectory}>{t("ux.record.backStudents")}</button><span>›</span><span>{t("workspace.studentOverview")}</span>{recordReturn&&<Link href={recordReturn}>{t("ux.record.openFamily")}</Link>}</>}
       context={<><span className="ux-icon-label"><UiIcon name="student" size={16}/>{t("education.grade")}: {detail.grade}</span><span className="ux-icon-label"><UiIcon name="calendar" size={16}/>{t("education.academicYear")}: {detail.academicYear}</span></>} status={<StatusBadge tone={statusTone(detail.status)}>{enumLabel(`education.status.${detail.status.toLowerCase()}`).label}</StatusBadge>}
@@ -287,15 +291,17 @@ export function HouseholdsWorkspace({ initial, initialDetail = null }: { initial
     const result=await apiFetch<{items:Array<{value:string;labelZh:string;labelEn:string;type:string}>}>(`/api/search/related?q=${encodeURIComponent(q)}`).catch(()=>({items:[]}));
     setMemberOptions(result.items.filter(item=>item.type==="CONTACT").map(item=>({value:item.value.split(":")[1]??"",label:locale==="zh-CN"?item.labelZh:item.labelEn,detail:t("nav.people")})));
   },[locale,t]);
+  const memberMutation=useReceiptMutation("/api/education");
   const saveMember=async(event:React.FormEvent<HTMLFormElement>)=>{
-    event.preventDefault();if(!detail||!memberContact){setError(t("education.memberRequired"));return;}
-    const form=new FormData(event.currentTarget);setPending(true);setError("");
+    event.preventDefault();if(!detail){setError(t("education.memberRequired"));return;}
+    const formElement=event.currentTarget;const form=new FormData(formElement);setPending(true);setError("");
     try{
-      await apiFetch("/api/education",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
-        operation:"saveHouseholdMember",householdId:detail.id,contactId:memberContact,
+      const accepted=await memberMutation.send({
+        operation:"saveHouseholdMember",householdId:detail.id,...(memberContact?{contactId:memberContact}:{nameZh:form.get("nameZh"),nameEn:form.get("nameEn"),email:form.get("email"),phone:form.get("phone")}),
         role:form.get("role"),primary:form.get("primary")==="on",
-      })});
-      setMemberContact("");const refreshed=await openDetail(detail,false);setToast(t(refreshed?"education.memberSaved":"audit.savedRefreshFailed"));
+      });
+      if(!accepted)return;
+      formElement.reset();setMemberContact("");const refreshed=await openDetail(detail,false);setToast(t(refreshed?"education.memberSaved":"audit.savedRefreshFailed"));
     }catch(caught){setError(presentApiError(caught,t,"education.saveFailed").message);}finally{setPending(false);}
   };
   const removeMember=async(id:string)=>{
@@ -322,7 +328,7 @@ export function HouseholdsWorkspace({ initial, initialDetail = null }: { initial
       {error&&<InlineMessage type="error">{error}</InlineMessage>}
       <DetailTabs items={[{key:"overview",label:"ux.record.overview"},{key:"members",label:"detail.familyMembers"},{key:"students",label:"ux.record.students"},{key:"needs",label:"ux.record.needs"},{key:"activity",label:"ux.record.activity"}]} active={recordTab} onChange={setRecordTab} label={t("education.households")} disabled={pending}><ResponsiveDetailLayout><div data-testid="household-current-panel">
       {recordTab==="overview"&&<section className="detail-section"><SectionHeader title={t("customerOps.tab.overview")}/><dl className="customer-profile">{[["education.address",detail.address],["education.primaryParentOccupation",detail.primaryParentOccupation],["education.secondaryParentOccupation",detail.secondaryParentOccupation],["education.preferredLanguage",detail.preferredLanguage],["education.annualIncome",detail.annualIncomeAmount===null?t("ux.record.notRecorded"):`${detail.annualIncomeAmount} ${detail.incomeCurrency}`]].map(([label,value])=><div key={label}><dt>{t(label)}</dt><dd>{value||t("ux.record.notRecorded")}</dd></div>)}</dl><h3>{t("education.familyExpectations")}</h3><MarkdownContent value={detail.educationExpectationsMarkdown} empty={t("ux.record.notRecorded")}/><h3>{t("education.familyBackground")}</h3><MarkdownContent value={detail.familyBackgroundMarkdown} empty={t("ux.record.notRecorded")}/></section>}
-      {recordTab==="members"&&<section className="settings-subform"><h3>{t("education.householdMembers")}</h3><div className="v200-list">{detail.members.map((item) => <article key={item.id}><div><RecordIdentity nameZh={item.nameZh} nameEn={item.nameEn}/><small>{t(`education.memberRole.${item.role.toLowerCase()}`)}{item.primary ? ` · ${t("education.primaryContact")}` : ""}</small></div>{canManage&&<button className="icon-button danger" type="button" disabled={pending} aria-label={t("education.removeMember")} onClick={()=>setConfirmation({kind:"member",id:item.id})}><Trash2 size={16}/></button>}</article>)}</div>{!detail.members.length && <p className="select-empty">{t("education.noHouseholdMembers")}</p>}{canManage&&<form className="relationship-form" onSubmit={saveMember}><SearchableSelect label={t("education.memberContact")} required value={memberContact} options={memberOptions} onChange={setMemberContact} onSearch={searchMembers}/><label className="field"><span>{t("education.memberRole")}</span><select name="role" required>{["PARENT","GUARDIAN","STUDENT","PAYER","OTHER"].map(value=><option key={value} value={value}>{t(`education.memberRole.${value.toLowerCase()}`)}</option>)}</select></label><label className="checkbox-row"><input name="primary" type="checkbox"/><span>{t("education.primaryContact")}</span></label><button className="secondary-button" disabled={pending||!memberContact}><Plus size={16}/>{t("education.saveMember")}</button></form>}</section>
+      {recordTab==="members"&&<section className="settings-subform"><h3>{t("education.householdMembers")}</h3><div className="v200-list">{detail.members.map((item) => <article key={item.id}><div><RecordIdentity nameZh={item.nameZh} nameEn={item.nameEn}/><small>{t(`education.memberRole.${item.role.toLowerCase()}`)}{item.primary ? ` · ${t("education.primaryContact")}` : ""}</small></div>{canManage&&<button className="icon-button danger" type="button" disabled={pending} aria-label={t("education.removeMember")} onClick={()=>setConfirmation({kind:"member",id:item.id})}><Trash2 size={16}/></button>}</article>)}</div>{!detail.members.length && <p className="select-empty">{t("education.noHouseholdMembers")}</p>}{canManage&&<form className="relationship-form" onSubmit={saveMember}><fieldset className="follow-up-fields" disabled={pending||memberMutation.pending||memberMutation.uncertain}>{!memberContact&&<><div className="form-grid two-column"><label className="field"><span>{t("education.nameZh")}</span><input name="nameZh" maxLength={120}/></label><label className="field"><span>{t("education.nameEn")}</span><input name="nameEn" maxLength={160}/></label><BilingualNameHint/></div><div className="form-grid two-column"><label className="field"><span>{t("modules.email")}</span><input name="email" type="email" maxLength={320}/></label><label className="field"><span>{t("modules.phone")}</span><input name="phone" maxLength={40}/></label></div></>}<SearchableSelect label={locale==="en"?"Existing person (optional)":"关联已有人员（可选）"} value={memberContact} options={memberOptions} onChange={setMemberContact} onSearch={searchMembers}/><label className="field"><span>{t("education.memberRole")}</span><select name="role" required>{["PARENT","GUARDIAN","STUDENT","PAYER","OTHER"].map(value=><option key={value} value={value}>{t(`education.memberRole.${value.toLowerCase()}`)}</option>)}</select></label><label className="checkbox-row"><input name="primary" type="checkbox"/><span>{t("education.primaryContact")}</span></label></fieldset>{memberMutation.error&&<InlineMessage type="error">{memberMutation.error}</InlineMessage>}<button className="secondary-button" disabled={pending||memberMutation.pending}><Plus size={16}/>{t(memberMutation.uncertain?"enrollments.retry":"education.saveMember")}</button></form>}</section>
     }
       {recordTab==="students"&&<HouseholdContext id={detail.id}/>}
       {recordTab==="needs"&&<EducationBusinessWorkspace embedded context={householdContext} initialResource="needs"/>}

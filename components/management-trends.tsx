@@ -1,4 +1,5 @@
 "use client";
+import { ManagementTrendChart } from "./management-trend-chart";
 import Link from "next/link";
 import { metricDefinitions, managementModules } from "@/lib/management-metric-contract";
 import { metricDrillHref, type TrendFilters, type ManagementTrends, type ManagementTrendSeries } from "@/lib/management-trend-contract";
@@ -17,7 +18,7 @@ function ChangeCard({ series, filters, data }: { series: ManagementTrendSeries; 
   return <article className="ux-change-card" data-series={series.key} data-currency={series.currency ?? undefined}>
     <h3>{t(managementMetricLabelKey(series.key))}</h3><strong>{display(comparison.current)}</strong>
     <p>{t(`ux.management.${direction}`)} {display(comparison.absoluteChange)} · {comparison.percentChange === null ? t("ux.management.notComparable") : `${Number(comparison.percentChange).toLocaleString(locale, { maximumFractionDigits: 2 })}%`}</p>
-    <small>{t("management.previousPeriod")}: {display(comparison.previous)}</small>{href && <Link href={href}>{t("management.drilldown")}</Link>}
+    <ManagementTrendChart series={series}/><small>{t("management.previousPeriod")}: {display(comparison.previous)}</small>{href && <Link href={href}>{t("management.drilldown")}</Link>}
   </article>;
 }
 export function PeriodChanges({ data, filters }: { data: ManagementTrends; filters: TrendFilters }) {
@@ -26,8 +27,8 @@ export function PeriodChanges({ data, filters }: { data: ManagementTrends; filte
 }
 /** Reuses supplied canonical data; opening detail performs no second fetch. */
 export function ManagementTrendsView({ data, filters }: { data: ManagementTrends; filters: TrendFilters }) {
-  const { t, locale } = useI18n();
-  return <section className="page-stack" data-testid="management-trends"><p>{t("management.trendHelp")} · {t(`management.granularity.${data.granularity}`)}</p>{managementModules.map(module => <section key={module} data-trend-module={module}><h3>{t(`management.section.${module}`)}</h3>{!data.permissions[module] ? <InlineMessage type="info">{t("ux.management.restricted")}</InlineMessage> : <div className="ux-domain-grid">{data.series.filter(series => series.module === module && metricDefinitions[series.key][1] === "PERIOD" && (!series.key.startsWith("commission") || data.permissions.commissionMoney)).map(series => <div className="ux-trend-detail" key={`${series.key}:${series.currency ?? ""}`}><ChangeCard series={series} filters={filters} data={data}/><dl className="ux-detail-rows">{series.points.map(point => <div key={point.bucketStart}><dt>{point.bucketStart}–{point.bucketEnd}</dt><dd>{series.unit === "MONEY" ? `${series.currency} ${formatChannelCommissionAmount(String(point.value), locale)}` : String(point.value)}</dd></div>)}</dl></div>)}</div>}</section>)}</section>;
+  const { t } = useI18n();
+  return <section className="page-stack" data-testid="management-trends"><p>{t("management.trendHelp")} · {t(`management.granularity.${data.granularity}`)}</p>{managementModules.map(module => <section key={module} data-trend-module={module}><h3>{t(`management.section.${module}`)}</h3>{!data.permissions[module] ? <InlineMessage type="info">{t("ux.management.restricted")}</InlineMessage> : <div className="ux-domain-grid">{data.series.filter(series => series.module === module && metricDefinitions[series.key][1] === "PERIOD" && (!series.key.startsWith("commission") || data.permissions.commissionMoney)).map(series => <div className="ux-trend-detail" key={`${series.key}:${series.currency ?? ""}`}><ChangeCard series={series} filters={filters} data={data}/></div>)}</div>}</section>)}</section>;
 }
 export function ManagementTrendsPanel({ filters, refreshKey = 0 }: { filters: TrendFilters; refreshKey?: number }) {
   const { t } = useI18n(), request = useScopeQuery("/api/management/trends", scopeQuery(filters), validateTrends, refreshKey);

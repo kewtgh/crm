@@ -34,14 +34,12 @@ test("product deletion stays behind a disclosure and retains guarded confirmatio
   assert.match(disclosure, /pointerdown/); assert.match(disclosure, /event.key === "Escape"/);
   assert.match(await source("components/more-actions.tsx"), /<ActionDisclosure label=\{label\} menu/);
 });
-test("suggestion review and automation have separate governance destinations and canonical guards", async () => {
+test("suggestion review and automation share navigation while retaining independent canonical guards", async () => {
   const {navigationDestinations,visibleDestinations}=await import('../lib/navigation-destinations.ts');
-  for(const [id,capability] of [['ai','ai.review'],['automation','automation.manage']]){
-    const entry=navigationDestinations.find(item=>item.id===id);
-    assert.equal(entry.space,'governance');assert.equal(entry.capability,capability);
-    assert.ok(visibleDestinations('ADMIN').some(item=>item.id===id));
-  }
-  assert.ok(!visibleDestinations('SALES_SUPPORT').some(item=>item.id==='automation'));
+  const entry=navigationDestinations.find(item=>item.id==='assistance');
+  assert.equal(entry.space,'governance');assert.deepEqual(entry.anyCapabilities,['ai.review','automation.manage']);
+  assert.equal(visibleDestinations('ADMIN').filter(item=>item.id==='assistance').length,1);
+  assert.ok(!navigationDestinations.some(item=>['ai','automation'].includes(item.id)));
   assert.match(await source("app/(crm)/ai/page.tsx"), /requireCapability\("ai.review"\)/);
   assert.match(await source("app/(crm)/automation/page.tsx"), /requireCapability\("automation.manage"\)/);
   const header = await source("components/assistance-workspace-header.tsx");

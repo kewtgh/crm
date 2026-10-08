@@ -1,3 +1,4 @@
+import {localizedImportHeader} from "./import-localized-headers";
 import { importFields,importFieldsByResource } from "./import-fields";
 export type ImportResource=keyof typeof importFieldsByResource;
 export const importExamples:Record<string,string>={
@@ -41,8 +42,9 @@ export function importFieldFormat(field:string,zh:boolean){
   if(field.endsWith("Markdown"))return zh?"Markdown 文本；多行 CSV 单元格使用引号":"Markdown text; quote multiline CSV cells";
   return zh?"文本；UTF-8 编码":"Text; UTF-8 encoding";
 }
-export function buildImportTemplate(resource:ImportResource,kind:"blank"|"example"|"guide",locale:"zh-CN"|"en",label:(key:string)=>string){
+export function buildImportTemplate(resource:ImportResource,kind:"blank"|"example"|"guide",locale:"zh-CN"|"en",label:(key:string)=>string,localized=false){
   const fields=[...importFields(resource)],zh=locale==="zh-CN";
   if(kind==="guide")return csv([["field",zh?"字段":"label",zh?"必填要求":"requirement",zh?"格式":"format",zh?"示例":"example"],...fields.map(field=>[field,label(`imports.field.${field}`),importFieldRequirement(resource,field,zh),importFieldFormat(field,zh),importExamples[field]??""])]);
-  return csv(kind==="example"?[fields,fields.map(field=>importExamples[field]??"")]:[fields]);
+  const headers=fields.map(field=>localized?localizedImportHeader(field,locale):field);
+  return csv(kind==="example"?[headers,fields.map(field=>importExamples[field]??"")]:[headers]);
 }

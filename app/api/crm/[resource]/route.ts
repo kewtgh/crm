@@ -6,7 +6,7 @@ import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
 
-const commercialFilters=z.object({city:z.string().trim().min(1).max(80).optional(),curriculum:z.string().trim().min(1).max(120).optional(),organizationType:z.enum(["SCHOOL","PARTNER","OTHER"]).optional(),organizationId:z.uuid().optional(),contactType:z.enum(["CONTACT","SCHOOL_STAFF","PARENT","STUDENT","PAYER"]).optional(),commercialTier:z.enum(["S","A","B","C","D","UNKNOWN"]).optional(),keyContact:z.enum(["KEY","MISSING"]).optional(),ownerId:z.uuid().optional(),potentialMin:z.coerce.number().int().min(10).max(100).optional()});
+const commercialFilters=z.object({city:z.string().trim().min(1).max(80).optional(),curriculum:z.string().trim().min(1).max(120).optional(),organizationType:z.enum(["SCHOOL","PARTNER","OTHER"]).optional(),organizationId:z.uuid().optional(),contactType:z.enum(["CONTACT","SCHOOL_STAFF","INSTITUTION_HEAD","PARENT","STUDENT","PAYER"]).optional(),commercialTier:z.enum(["S","A","B","C","D","UNKNOWN"]).optional(),keyContact:z.enum(["KEY","MISSING"]).optional(),ownerId:z.uuid().optional(),potentialMin:z.coerce.number().int().min(10).max(100).optional()});
 const resources = new Set<PersistentResource>(["schools", "people", "tasks"]);
 const baseRecordSchema = z.object({
   operation: z.enum(["check", "create"]).default("create"),
@@ -29,7 +29,7 @@ const resourceSchemas={
   people:baseRecordSchema.extend({
     title:z.string().trim().max(120).default(""),
     organizationId:z.uuid().nullable().optional(),
-    contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"]).default("CONTACT"),
+    contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","INSTITUTION_HEAD","PAYER"]).default("CONTACT"),
     contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).default("NEW"),
     communicationLevel:z.number().int().min(1).max(4).default(1),
     notesMarkdown:z.string().max(20000).default(""),

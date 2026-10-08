@@ -37,7 +37,7 @@ test('Account owns a single RecordHeader and retains canonical contextual editor
 });
 test('minimum create keeps mandatory identity/classification and duplicate review; enrichment defaults are canonical',async()=>{
  const ui=await source('components/module-page.tsx'),student=await source('components/v200-workspaces.tsx');assert.match(ui,/ux-enrichment/);assert.match(ui,/name="city" required/);assert.match(ui,/name="organizationType" required/);assert.match(ui,/!duplicateChecked \|\| duplicates.length > 0/);assert.match(ui,/modules.contactMethodRequired/);
- assert.match(student,/operation: "createStudent", personId: person/);assert.match(student,/preferredLearningStyle.*UNSPECIFIED/);assert.match(student,/studentUpdateInput\(detail,form,household\)/);assert.match(student,/setEditing\(false\);const refreshed=await openDetail\(detail,false\);setToast/);
+ assert.match(student,/const accepted=await studentMutation.send/);assert.ok(student.includes("person?{personId:person}:{nameZh:form.get"));assert.match(student,/preferredLearningStyle.*UNSPECIFIED/);assert.match(student,/studentUpdateInput\(detail,form,household\)/);assert.match(student,/setEditing\(false\);const refreshed=await openDetail\(detail,false\);setToast/);
 });
 test('new terminology has identical locale coverage and stays public-safe',()=>{
  assert.deepEqual(Object.keys(recordWorkspaceZh).sort(),Object.keys(recordWorkspaceEn).sort());for(const messages of [recordWorkspaceZh,recordWorkspaceEn])for(const value of Object.values(messages))assert.doesNotMatch(value,/undefined|\[object Object\]/);

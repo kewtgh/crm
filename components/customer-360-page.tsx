@@ -153,7 +153,7 @@ export function TimelineItem({
     : `crm.status.${item.summary}`;
   const translatedSummary = enumLabel(summaryKey);
   const summary = item.type === "CONTACT" ? item.summary || t("ux.record.notRecorded") : translatedSummary.label;
-  return <article className="timeline-item">
+  return <article className="timeline-item" data-kind={item.type}>
     <span className={`timeline-icon ${item.type.toLowerCase()}`}><Icon size={17}/></span>
     <div><div><StatusBadge tone="blue">{t(`timeline.type.${item.type.toLowerCase()}`)}</StatusBadge><time>{formatDate(item.occurredAt, { includeTime: true })}</time></div><b>{title}</b><p>{summary}{amount ? ` · ${amount}` : ""}</p></div>
     {href && <Link href={href} aria-label={t("customer360.openSource", { title })}><ChevronRight size={17}/></Link>}

@@ -1,8 +1,7 @@
 import { ImportsPage } from "@/components/imports-page";
-import { WorkspaceTabs,governanceTabs } from "@/components/workspace-tabs";
 import { DataLoadError } from "@/components/data-state";
 import { listImportBatches } from "@/lib/phase2-repository";
 import { localizedPageMetadata } from "@/lib/page-metadata";
 import { requireCapability } from "@/lib/auth";
 export async function generateMetadata(){return localizedPageMetadata("meta.duplicates");}
-export default async function Page(){await requireCapability("duplicates.manage");const data=await listImportBatches().catch(()=>null);return <div className="page-stack"><WorkspaceTabs items={governanceTabs} active="/duplicates"/>{data?<ImportsPage initialItems={data.items} initialTotal={data.total} duplicatesOnly/>:<DataLoadError/>}</div>;}
+export default async function Page(){await requireCapability("duplicates.manage");const data=await listImportBatches().catch(()=>null);return <div className="page-stack">{data?<ImportsPage initialItems={data.items} initialTotal={data.total} duplicatesOnly/>:<DataLoadError/>}</div>;}

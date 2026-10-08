@@ -1,4 +1,16 @@
-# Implementation status — v3.32.0 release candidate
+# Implementation status — v3.33.0 release candidate
+
+## v3.33.0 — Operational identity, usability and recovery
+
+Students and family members can be created in their own workspaces. New native business numbers
+are allocated atomically, while historical and explicit imported identifiers remain compatible.
+Bilingual import headers, two editable admissions presets and product draft copying reduce setup.
+Archived institutions no longer inflate the actionable opportunity Pipeline. Management charts and
+empty-channel overview handling, shared navigation/pagination and clearer operational sections
+improve daily work. Exact-request recovery and safe report diagnostics clarify failure recovery.
+No Revenue accounting rules or automatic posting behavior change.
+See [release notes](RELEASE_V3.33.0.md), [audit](FIRST_PRINCIPLES_AUDIT_V333.md),
+[plan](FIRST_PRINCIPLES_PLAN_V333.md) and [verification](V333_VERIFICATION.md).
 
 ## v3.32.0 — Revenue Foundation
 

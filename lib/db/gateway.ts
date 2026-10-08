@@ -27,7 +27,7 @@ const postgresCodeMap: Record<string, string> = {
 };
 
 export function normalizeDatabaseErrorCode(code?: string, message?: string) {
-  if (code === "P0001" && message && /^[a-z][a-z0-9_]{2,80}$/.test(message)) {
+  if (code === "P0001" && message && /^[a-z][a-z0-9_]{2,80}$/i.test(message)) {
     return message.toUpperCase();
   }
   return postgresCodeMap[code ?? ""] ?? code ?? "DATABASE_REQUEST_FAILED";

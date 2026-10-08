@@ -5,7 +5,7 @@ export type NavigationSpace = "work" | "relationships" | "students" | "commercia
 type Match = { pathname: string; descendants?: boolean; query?: Record<string, string>; notQuery?: Record<string, string> };
 export type NavigationDestination = {
   id: string; space: NavigationSpace; labelKey: string; href: string;
-  matches: readonly Match[]; capability?: Capability; roles?: readonly AppRole[];
+  matches: readonly Match[]; capability?: Capability; anyCapabilities?: readonly Capability[]; roles?: readonly AppRole[];
   guard: "AUTH_RLS" | "CAPABILITY" | "ROLE_AND_CAPABILITY";
   secondary?: boolean; documentNavigation?: boolean;
   parentId?: string;
@@ -51,8 +51,7 @@ export const navigationDestinations: readonly NavigationDestination[] = [
   entry("workflows", "governance", "workflow.templates", "/workflow-templates", "education.view"),
   entry("education-business", "governance", "business.title", "/education-business", "education.view", true),
   entry("privacy", "governance", "nav.privacyRequests", "/privacy-requests", "privacyRequests.manage", true),
-  entry("ai", "governance", "ux.nav.ai", "/ai", "ai.review", true),
-  entry("automation", "governance", "ux.nav.automation", "/automation", "automation.manage", true),
+  { ...entry("assistance", "governance", "nav.assistance", "/ai", undefined, true), guard: "CAPABILITY", anyCapabilities: ["ai.review", "automation.manage"], matches: [{pathname:"/ai"}, {pathname:"/automation"}] },
   ...[
     ["admin", "nav.adminOverview", "/admin", "admin.access"],
     ["admin-approvals", "nav.approvals", "/admin/approvals", "admin.access"],
@@ -66,7 +65,8 @@ export const navigationDestinations: readonly NavigationDestination[] = [
 ];
 
 export function visibleDestinations(role: AppRole) {
-  return navigationDestinations.filter(d => (!d.roles || d.roles.includes(role)) && (!d.capability || hasCapability(role, d.capability)));
+  return navigationDestinations.filter(d => (!d.roles || d.roles.includes(role)) && (!d.capability || hasCapability(role, d.capability)) && (!d.anyCapabilities || d.anyCapabilities.some(capability => hasCapability(role, capability))))
+    .map(d => d.id === "assistance" && !hasCapability(role, "ai.review") ? {...d, href:"/automation"} : d);
 }
 export function destinationMatches(destination: NavigationDestination, pathname: string, query: Pick<URLSearchParams, "get">) {
   return destination.matches.some(match => (pathname === match.pathname || Boolean(match.descendants && pathname.startsWith(`${match.pathname}/`)))

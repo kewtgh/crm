@@ -1,3 +1,4 @@
+import {localizedImportHeader} from "./import-localized-headers";
 import writeXlsxFile,{type SheetData} from 'write-excel-file/node';
 import {unzipSync,zipSync,strFromU8,strToU8} from 'fflate';
 import {setHeaders,isEntity,relationFields,entityKind,type SetResource} from './import-set-contract';
@@ -23,8 +24,8 @@ export function setGuide(resource:SetResource):string[][]{
  return [header,['operation','操作','Operation','CREATE default','YES','protocol','CREATE / UPDATE / SKIP','NO','CREATE default','No MERGE or DELETE','CREATE'],...relationFields[resource].map(f=>[f.key,...(relationLabels[f.key]??[f.key,f.key]),f.required?'Required (references required on UPDATE too)':'Optional','YES',f.type,f.values?.join(' | ')??(f.type==='boolean'?'true / false':f.type==='reference'?'selected token / typed alias':'Canonical domain validation'),f.sensitive?'Sensitive; optional unless required':'NO','UPDATE blank = NO_CHANGE; CREATE = declared defaults',f.type==='reference'?'Same Set typed alias or selected ir_ token (24h); never names':'__CLEAR__ not allowed',setExample(resource)[f.key]])];
 }
 function codes(resource:SetResource,key:string){if(key==='operation')return ['CREATE','UPDATE','SKIP'];return isEntity(resource)?v2EnumValues(resource,v2Fields(resource).find(f=>f.key===key)):relationFields[resource].find(f=>f.key===key)?.values??(relationFields[resource].find(f=>f.key===key)?.type==='boolean'?['true','false']:[]);}
-export async function buildSetTemplate(resource:SetResource,kind:'blank'|'example'|'guide',format:'csv'|'xlsx'){
- const headers=setHeaders(resource),rows=[headers,...(kind==='example'?[headers.map(k=>setExample(resource)[k])]:[])];
+export async function buildSetTemplate(resource:SetResource,kind:'blank'|'example'|'guide',format:'csv'|'xlsx',locale?:'zh-CN'|'en'){
+ const headers=setHeaders(resource),rows=[headers.map(key=>locale?localizedImportHeader(key,locale):key),...(kind==='example'?[headers.map(k=>setExample(resource)[k])]:[])];
  if(format==='csv'||kind==='guide')return '\uFEFF'+(kind==='guide'?setGuide(resource):rows).map(row=>row.map(v=>'"'+v.replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
  const data=(values:string[][]):SheetData=>values.map((row,i)=>row.map(value=>({value,type:String,wrap:true,...(i===0?{fontWeight:'bold' as const,backgroundColor:'#DCEEF8'}:{})})));
  const enums=[['Field','Code','中文名称','English Label'],...headers.flatMap(k=>codes(resource,k).map(c=>[k,c,v2EnumLabel(c,'zh-CN'),v2EnumLabel(c,'en')]))];

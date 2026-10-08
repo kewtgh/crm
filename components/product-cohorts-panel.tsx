@@ -1,4 +1,5 @@
 "use client";
+import {AutomaticRecordNumber} from "./automatic-record-number";
 import {RecordDeleteAction} from "./record-delete-action";
 import {CohortParticipants} from "./cohort-participants";
 
@@ -94,7 +95,7 @@ export function ProductCohortsPanel({product, canManage, onPendingChange}: {
         <div className="form-grid two-column">
           <label className="field"><span>{t("products.nameZh")}</span><input name="nameZh" defaultValue={editor.row?.nameZh} maxLength={120}/></label>
           <label className="field"><span>{t("products.nameEn")}</span><input name="nameEn" defaultValue={editor.row?.nameEn} maxLength={120}/></label><BilingualNameHint/>
-          <label className="field"><span>{t("products.code")}</span><input name="code" defaultValue={editor.row?.code} pattern={"[A-Za-z0-9\\-]{2,40}"} maxLength={40} required/></label>
+          <label className="field"><span>{t("products.code")}</span>{editor.row?<input name="code" defaultValue={editor.row.code} maxLength={40} required/>:<AutomaticRecordNumber name="code"/>}</label>
           <label className="field"><span>{t("cohorts.intake")}</span><select name="intakeType" defaultValue={editor.row?.intakeType ?? "CUSTOM"}>{cohortIntakes.map(value => <option key={value} value={value}>{t(`cohorts.intake.${value}`)}</option>)}</select></label>
           <label className="field"><span>{t("cohorts.academicYear")}</span><input name="academicYear" defaultValue={editor.row?.academicYear} maxLength={40}/></label>
           <label className="field"><span>{t("common.status")}</span><select name="status" defaultValue={editor.row?.status ?? "DRAFT"}>{cohortStatuses.map(value => <option key={value} value={value}>{t(`cohorts.status.${value}`)}</option>)}</select></label>

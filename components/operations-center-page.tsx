@@ -332,7 +332,7 @@ export function OperationsCenterPage({
     </nav>
 
     <div className={`operations-mobile-panel ${mobileSection === "overview" ? "mobile-active" : ""}`}>
-    <section className="surface operations-section release-readiness">
+    <section className="surface operations-section operations-tone-readiness release-readiness">
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.releaseEyebrow")}</p><h2>{t("operations.releaseReadiness")}</h2><p>{t("operations.releaseHelp")}</p></div><StatusBadge tone={readiness?.ready?"green":"red"}>{t(readiness?.ready?"operations.releaseReady":"operations.releaseBlocked")}</StatusBadge></div>
       <div className="operations-insight-grid">
         <InsightCard value={`${readiness?.environment.configured??0}/${readiness?.environment.expected??0}`} label={t("operations.environment")} detail={t(readiness?.environment.core?"operations.coreConfigured":"operations.coreMissing")}/>
@@ -353,7 +353,7 @@ export function OperationsCenterPage({
     </div>
 
     <div className={`operations-mobile-panel ${mobileSection === "queues" ? "mobile-active" : ""}`}>
-    <section className="surface operations-section">
+    <section className="surface operations-section operations-tone-queues">
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.queueEyebrow")}</p><h2>{t("operations.queues")}</h2></div><Database size={20}/></div>
       <div className="operations-queue-grid">{snapshot?.queues.map((queue) => <article key={queue.key}>
         <span className={queue.failed || queue.breached || queue.stuck ? "red" : queue.pending ? "amber" : "green"}>{queue.failed || queue.breached || queue.stuck ? <TriangleAlert size={19}/> : <Activity size={19}/>}</span>
@@ -364,7 +364,7 @@ export function OperationsCenterPage({
     </section>
 
     <div className="operations-two-column">
-      <section className="surface operations-section">
+      <section className="surface operations-section operations-tone-workers">
         <div className="surface-heading"><div><p className="eyebrow">{t("operations.workerEyebrow")}</p><h2>{t("operations.workers")}</h2></div><Activity size={20}/></div>
         <div className="worker-list">{snapshot?.workers.map((worker) => <article key={worker.key}>
           <span className={worker.stale || worker.consecutiveFailures ? "red" : "green"}>{worker.stale ? <TriangleAlert size={17}/> : <Check size={17}/>}</span>
@@ -374,7 +374,7 @@ export function OperationsCenterPage({
         {!snapshot?.workers.length && <div className="empty-state"><span>{t("operations.neverRun")}</span></div>}</div>
       </section>
 
-      <section className="surface operations-section">
+      <section className="surface operations-section operations-tone-recovery">
         <div className="surface-heading"><div><p className="eyebrow">{t("operations.recoveryEyebrow")}</p><h2>{t("operations.retryable")}</h2></div><RotateCcw size={20}/></div>
         <div className="retry-list">{retryableJobs.map((job) => <article key={`${job.type}:${job.id}`}>
           <div><b>{job.label}</b><small>{t(`operations.key.${job.type}`)} · {formatDate(job.updatedAt)}</small><small className="error-text">{job.error || t(`operations.jobStatus.${job.status}`)}</small></div>
@@ -393,7 +393,7 @@ export function OperationsCenterPage({
     </div>
     </div>
 
-    <section className={`surface operations-section operations-mobile-panel ${mobileSection === "integrations" ? "mobile-active" : ""}`}>
+    <section className={`surface operations-section operations-tone-integrations operations-mobile-panel ${mobileSection === "integrations" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.providerEyebrow")}</p><h2>{t("operations.integrations")}</h2><p>{t("operations.integrationHelp")}</p></div><CloudCog size={20}/></div>
       <div className="integration-grid">{integrations.map((integration) => {
         const draft = integrationDrafts[integration.provider] ?? {
@@ -414,7 +414,7 @@ export function OperationsCenterPage({
       </article>})}</div>
     </section>
 
-    <section className={`surface operations-section operations-mobile-panel ${mobileSection === "actions" ? "mobile-active" : ""}`}>
+    <section className={`surface operations-section operations-tone-actions operations-mobile-panel ${mobileSection === "actions" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.rulesEyebrow")}</p><h2>{t("operations.nextActions")}</h2><p>{t("operations.nextActionsHelp")}</p></div><button className="secondary-button" type="button" disabled={loading} onClick={() => void generate()}><Lightbulb size={16}/>{t("operations.generate")}</button></div>
       <InlineMessage type="info">{t(aiProviderConfigured?"ai.providerConfigured":"ai.providerDisabled")}</InlineMessage>
       <div className="next-action-grid">{nextActions.map((item) => <article key={item.id}>
@@ -435,7 +435,7 @@ export function OperationsCenterPage({
       />
     </section>
 
-    <section className={`surface operations-section permission-explainer operations-mobile-panel ${mobileSection === "access" ? "mobile-active" : ""}`}>
+    <section className={`surface operations-section operations-tone-access permission-explainer operations-mobile-panel ${mobileSection === "access" ? "mobile-active" : ""}`}>
       <div className="surface-heading"><div><p className="eyebrow">{t("operations.authorizationEyebrow")}</p><h2>{t("operations.permission")}</h2><p>{t("operations.permissionHelp")}</p></div><ShieldQuestion size={20}/></div>
       <form onSubmit={explain}><label className="field"><span>{t("operations.resourceType")}</span><select name="resourceType" required>{["ORGANIZATION","CONTACT","OPPORTUNITY","CONTRACT","APPOINTMENT","TASK","QUOTE"].map((value) => <option key={value} value={value}>{t(`operations.resource.${value}`)}</option>)}</select></label><label className="field"><span>{t("operations.resourceId")}</span><input name="resourceId" type="text" pattern="[0-9a-fA-F-]{36}" required/></label><label className="field"><span>{t("operations.action")}</span><select name="action" required>{["READ","EDIT","DELETE","APPROVE","RETRY"].map((value) => <option key={value} value={value}>{t(`operations.action.${value}`)}</option>)}</select></label><button className="primary-button" type="submit">{t("operations.explain")}</button></form>
       {permission && <InlineMessage type={permission.allowed ? "success" : "warning"}><b>{t(permission.allowed ? "operations.allowed" : "operations.denied")}</b> · {t("operations.reason", { reason: permission.reason ?? "UNKNOWN" })} · {t("operations.mfa", { level: permission.mfaLevel ?? "unknown" })}</InlineMessage>}

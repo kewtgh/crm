@@ -1,7 +1,9 @@
+import {normalizeLocalizedImport} from "./import-localized-headers";
 import {databaseJson} from './db/gateway';
-import {normalizeV2Row,validateV2Headers,v2CreateSchema,type V2Resource} from './import-v2';
+import {v2Headers,normalizeV2Row,validateV2Headers,v2CreateSchema,type V2Resource} from './import-v2';
 import {z} from 'zod';
 export async function createV2Import(input:z.infer<typeof v2CreateSchema>){
+ input=normalizeLocalizedImport(input,v2Headers(input.resource));
  validateV2Headers(input.resource,input.headers);
  if(input.rows.length!==input.rowLocations.length)throw new Error('TEMPLATE_SCHEMA_INVALID');
  return databaseJson('/db/rpc/create_import_batch_v2',{method:'POST',body:JSON.stringify({resource:input.resource,filename:input.filename,content_hash:input.contentHash,request_key:input.requestKey,headers:input.headers,rows:input.rows.map((row,i)=>normalizeV2Row(input.resource,row,input.rowLocations[i],input.sheet))})});

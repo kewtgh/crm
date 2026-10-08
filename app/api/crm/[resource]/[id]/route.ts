@@ -30,7 +30,7 @@ const schemas={
     email:z.string().email().or(z.literal("")).optional(),
     phone:z.string().trim().max(40).optional(),
     title:z.string().trim().max(120).optional(),
-    contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"]).optional(),
+    contactType:z.enum(["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","INSTITUTION_HEAD","PAYER"]).optional(),
     contactStatus:z.enum(["NEW","ATTEMPTING","CONNECTED","FOLLOW_UP","DORMANT"]).optional(),
     communicationLevel:z.number().int().min(1).max(4).optional(),
     notesMarkdown:z.string().max(20000).optional(),

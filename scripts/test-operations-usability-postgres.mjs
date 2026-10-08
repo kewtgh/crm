@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import pg from 'pg';
+import {runManagementIntegration} from './test-management-intelligence-postgres.mjs';
+
+await runManagementIntegration(async({client,context,ws,otherWs,stranger,school})=>{
+ await context();
+ const query=async(sql,parameters=[]) => (await client.query(sql,parameters)).rows[0];
+ const input={nameZh:'示例学生',nameEn:'Fictional learner',grade:'Grade 7',academicYear:'2026-2027',currentClass:'',interests:[],preferredLearningStyle:'UNSPECIFIED'};
+ const key=randomUUID();
+ const student=(await query("select public.create_education_identity('STUDENT',$1,$2) x",[input,key])).x;
+ assert.ok(student.id);assert.ok(student.person_id);
+ assert.match(student.student_number,/^STUDENT-STUDENT-\d{4,}-\d{8}$/);
+ assert.equal((await query('select contact_type from public.contacts where id=$1',[student.person_id])).contact_type,'STUDENT');
+ assert.equal((await query("select public.create_education_identity('STUDENT',$1,$2) x",[input,key])).x.id,student.id);
+ await assert.rejects(query("select public.create_education_identity('STUDENT',$1,$2)",[{...input,grade:'Grade 8'},key]),/PAYLOAD_REUSE/);
+ const family=(await query("select public.save_customer_record('HOUSEHOLDS',$1,null,$2) x",[randomUUID(),{nameZh:'示例家庭',nameEn:'Fictional family',status:'ACTIVE'}])).x;
+ const member=(await query("select public.create_education_identity('FAMILY_MEMBER',$1,$2) x",[{nameZh:'示例家长',nameEn:'Fictional guardian',householdId:family.id,role:'PARENT',primary:true},randomUUID()])).x;
+ assert.ok(member.contact_id);
+ const directory=(await query("select public.contact_directory_metrics('Fictional','all',null,null,null) x")).x;
+ assert.equal(Number(directory.total),0,'Student and parent identities do not leak into institution directory');
+ await context(stranger,otherWs);
+ await assert.rejects(query("select public.create_education_identity('FAMILY_MEMBER',$1,$2)",[{nameEn:'Foreign guardian',householdId:family.id},randomUUID()]),/INVALID_REFERENCE/);
+ await context();
+ const stamp=(await query("select to_char(clock_timestamp() at time zone business_timezone,'YYYYMMDD') x from public.workspaces where id=$1",[ws])).x;
+ const importedCode=`CS-PRODUCT-0001-${stamp}`;
+ const imported=(await query("select * from public.create_product_with_price($1,'示例','Collision Specimen','PROJECT','一年','One year','','','DRAFT','CNY',100)",[importedCode]));
+ const auto=(await query("select * from public.create_product_with_price('AUTO','示例','Collision Specimen','PROJECT','一年','One year','','','DRAFT','CNY',100)"));
+ assert.equal(auto.code,`CS-PRODUCT-0002-${stamp}`);
+ assert.equal((await query('select code from public.products where id=$1',[imported.id])).code,importedCode);
+ const cp=client.connectionParameters;
+ const peers=[0,1].map(()=>new pg.Client({host:cp.host,port:cp.port,user:cp.user,password:cp.password,database:cp.database}));
+ try{
+  await Promise.all(peers.map(peer=>peer.connect()));
+  await Promise.all(peers.map(peer=>context(undefined,ws,peer)));
+  const products=await Promise.all(peers.map(peer=>peer.query("select * from public.create_product_with_price('AUTO','示例课程','Example Learning Program','PROJECT','一年','One year','','','DRAFT','CNY',100)")));
+  const codes=products.map(result=>result.rows[0].code);
+  assert.equal(new Set(codes).size,2);assert.ok(codes.every(code=>/^ELP-PRODUCT-\d{4,}-\d{8}$/.test(code)));
+ }finally{await Promise.all(peers.map(peer=>peer.end()));}
+ const pipeline=async()=>(await query("select public.opportunity_pipeline_summary('CNY') x")).x;
+ const visible=async()=>Number((await query("select count(*) n from public.opportunities where workspace_id=$1 and currency='CNY' and archived_at is null",[ws])).n);
+ assert.equal((await pipeline()).funnel.reduce((n,s)=>n+Number(s.count),0),await visible());
+ await client.query('reset role');
+ await client.query('update public.organizations set archived_at=clock_timestamp() where id=$1',[school]);
+ await context();
+ assert.equal((await pipeline()).funnel.reduce((n,s)=>n+Number(s.count),0),await visible(),'Pipeline uses exactly the list visibility after institution deletion');
+ assert.equal(Number((await query('select count(*) n from public.opportunities where organization_id=$1',[school])).n),0,'Deleted institution opportunities are not actionable');
+ await client.query('reset role');
+ await client.query('update public.organizations set archived_at=null where id=$1',[school]);
+ await context();
+ console.log('PASS direct student/parent creation, identity receipts, directory separation, cross-workspace rejection and archived institution pipeline parity');
+});

@@ -1,3 +1,4 @@
+import {localizedImportHeader} from "./import-localized-headers";
 import {v2FieldLabel} from './import-v2-labels';
 export {v2FieldLabel} from './import-v2-labels';
 import writeXlsxFile,{type SheetData} from "write-excel-file/node";
@@ -30,16 +31,16 @@ export function v2Guide(resource:V2Resource):string[][]{
  }
  return rows;
 }
-export function buildV2Csv(resource:V2Resource,kind:"blank"|"example"|"guide"):string{
- const rows=kind==="guide"?v2Guide(resource):[v2Headers(resource),...(kind==="example"?[v2Headers(resource).map(key=>v2Example(resource)[key])]:[])];
+export function buildV2Csv(resource:V2Resource,kind:"blank"|"example"|"guide",locale?:"zh-CN"|"en"):string{
+ const rows=kind==="guide"?v2Guide(resource):[v2Headers(resource).map(key=>locale?localizedImportHeader(key,locale):key),...(kind==="example"?[v2Headers(resource).map(key=>v2Example(resource)[key])]:[])];
  return "\uFEFF"+rows.map(row=>row.map(value=>`"${value.replaceAll('"','""')}"`).join(",")).join("\r\n")+"\r\n";
 }
 function column(index:number){let s="";for(let n=index+1;n>0;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s;}
-export async function buildV2Xlsx(resource:V2Resource,kind:"blank"|"example"):Promise<Buffer>{
+export async function buildV2Xlsx(resource:V2Resource,kind:"blank"|"example",locale?:"zh-CN"|"en"):Promise<Buffer>{
  const headers=v2Headers(resource),guide=v2Guide(resource);
  const enums=[["Field","Code","中文名称","English Label"],...v2Fields(resource).flatMap(field=>v2EnumValues(resource,field).map(code=>[field.key,code,v2EnumLabel(code,"zh-CN"),v2EnumLabel(code,"en")]))];
  const data=(rows:string[][]):SheetData=>rows.map((r,i)=>r.map(value=>({value,type:String,...(i===0?{fontWeight:"bold" as const,backgroundColor:"#DCEEF8"}:{}),wrap:true})));
- const buf=await writeXlsxFile([{sheet:"Data",data:data([headers,...(kind==="example"?[headers.map(key=>v2Example(resource)[key])]:[])]),stickyRowsCount:1,columns:headers.map(()=>({width:26}))},{sheet:"Guide",data:data(guide),columns:guide[0].map(()=>({width:30})),stickyRowsCount:1},{sheet:"Enums",data:data(enums),columns:[{width:30},{width:28},{width:30},{width:30}]},{sheet:"Metadata",data:data([["resource",resource],["template_version","2"]])}]).toBuffer();
+ const buf=await writeXlsxFile([{sheet:"Data",data:data([headers.map(key=>locale?localizedImportHeader(key,locale):key),...(kind==="example"?[headers.map(key=>v2Example(resource)[key])]:[])]),stickyRowsCount:1,columns:headers.map(()=>({width:26}))},{sheet:"Guide",data:data(guide),columns:guide[0].map(()=>({width:30})),stickyRowsCount:1},{sheet:"Enums",data:data(enums),columns:[{width:30},{width:28},{width:30},{width:30}]},{sheet:"Metadata",data:data([["resource",resource],["template_version","2"]])}]).toBuffer();
  const entries=unzipSync(buf);
  let sheet=strFromU8(entries["xl/worksheets/sheet1.xml"]);
  const validations=headers.flatMap((key,index)=>{

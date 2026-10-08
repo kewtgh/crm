@@ -75,3 +75,8 @@ export async function updateOpportunity(id:string,input:{stage:OpportunityRecord
     }),
   });
 }
+
+export async function loadOpportunityPipeline(currency?:string|null):Promise<{currency:string;currencies:string[];funnel:FunnelMetric[]}>{
+ const raw=await databaseJson<{currency:string;currencies:string[];funnel:FunnelMetric[]}>("/db/rpc/opportunity_pipeline_summary",{method:"POST",body:JSON.stringify({currency_filter:currency??null})});
+ return {...raw,funnel:raw.funnel.map(row=>({...row,count:Number(row.count),amount:Number(row.amount),weighted:Number(row.weighted)}))};
+}

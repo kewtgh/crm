@@ -80,7 +80,7 @@ export const importFieldContract: FieldContract[] = [
     ["email","email","text","email or empty; candidate lookup only","one-of(email,phone)"],
     ["phone","phone","text","max 40; formatting is not identity","one-of(email,phone)"],
     ["title","title","text","max 120"],
-    ["contactType","contact_type","enum","CONTACT|PARENT|STUDENT|SCHOOL_STAFF|PAYER"],
+    ["contactType","contact_type","enum","CONTACT|PARENT|STUDENT|SCHOOL_STAFF|INSTITUTION_HEAD|PAYER"],
     ["contactStatus","contact_status","enum","NEW|ATTEMPTING|CONNECTED|FOLLOW_UP|DORMANT"],
     ["communicationLevel","communication_level","integer","1–4"],
     ["notesMarkdown","notes_markdown","text","max 20000"],
@@ -185,7 +185,7 @@ export const importRelations = [
 ] as const;
 
 export const importEnumContract = {
-  contactType: [["CONTACT","联系人","Contact"],["PARENT","家长","Parent"],["STUDENT","学生","Student"],["SCHOOL_STAFF","学校工作人员","School staff"],["PAYER","付款人","Payer"]],
+  contactType: [["CONTACT","联系人","Contact"],["PARENT","家长","Parent"],["STUDENT","学生","Student"],["SCHOOL_STAFF","学校工作人员","School staff"],["INSTITUTION_HEAD","机构负责人","Institution head"],["PAYER","付款人","Payer"]],
   contactStatus: [["NEW","新建","New"],["ATTEMPTING","尝试联系","Attempting"],["CONNECTED","已联系","Connected"],["FOLLOW_UP","跟进","Follow-up"],["DORMANT","休眠","Dormant"]],
   preferredContactMethod: [["EMAIL","邮件","Email"],["PHONE","电话","Phone"],["SMS","短信","SMS"],["WECHAT","微信","WeChat"],["WHATSAPP","WhatsApp","WhatsApp"],["IN_PERSON","当面","In person"]],
 } as const;

@@ -66,7 +66,7 @@ export function Pagination({
   total: number;
   pageSize: number;
   onPage: (page: number) => void;
-  onPageSize: (pageSize: number) => void;
+  onPageSize?: (pageSize: number) => void;
 }) {
   const { t } = useI18n();
   const pages = [...new Set([1,page-1,page,page+1,totalPages].filter(value=>value>=1&&value<=totalPages))].sort((a,b)=>a-b);
@@ -74,12 +74,12 @@ export function Pagination({
     <nav className="pagination" aria-label={t("common.pagination")}>
       <div className="pagination-summary">
         <span>{t("common.paginationSummary",{total,pageSize})}</span>
-        <label>
+        {onPageSize && <label>
           <span>{t("common.pageSize")}</span>
           <select value={pageSize} onChange={(event) => onPageSize(Number(event.target.value))}>
             {PAGE_SIZE_OPTIONS.map((value) => <option value={value} key={value}>{value}</option>)}
           </select>
-        </label>
+        </label>}
       </div>
       <div className="pagination-pages">
         <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label={t("common.previousPage")}><ChevronLeft size={16} /></button>

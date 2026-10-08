@@ -5,6 +5,7 @@ import {ImportSetsPage} from "./import-sets-page";
 import {v2FieldLabel} from "@/lib/import-v2-labels";
 import {SearchFilterBar} from "./search-filter-bar";
 import {ImportReferencePanel} from "./import-reference-panel";
+import {normalizeLocalizedImport} from "@/lib/import-localized-headers";
 import {v2Headers,v2Resources,validateV2Headers,type V2Resource} from "@/lib/import-v2";
 import { BilingualNameHint } from "./structured-inputs";
 import { ImportRepairField } from "./import-repair-field";
@@ -173,7 +174,7 @@ export function ImportsPage({
       const parsed = file.name.toLowerCase().endsWith(".xlsx")
         ? await parseXlsxDocument(file,10_000,v2?{resource,templateVersion:"2"}:undefined)
         : parseCsvDocument(await file.text(),10_000,v2);
-      if(v2)validateV2Headers(resource as V2Resource,parsed.headers);
+      Object.assign(parsed,normalizeLocalizedImport(parsed,v2?v2Headers(resource as V2Resource):targetFields));if(v2)validateV2Headers(resource as V2Resource,parsed.headers);
       return {parsed,hash:await hashFile(file)};
     });
     if(!request.current)return;

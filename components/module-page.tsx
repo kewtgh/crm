@@ -291,7 +291,7 @@ export function ModulePage({
         {resource === "people" && <>
           {!organizationId&&<SearchableSelect label={t("modules.organization")} options={organizationOptions} value={organization} onChange={(value)=>{setOrganization(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"organization")}/>}
           <div className="form-grid two-column"><label className="field"><span>{t("modules.email")}</span><input name="email" type="email"/></label><label className="field"><span>{t("modules.phone")}</span><input name="phone" type="tel" maxLength={40}/></label></div>
-          <label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT" required>{["CONTACT","PARENT","STUDENT","SCHOOL_STAFF","PAYER"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label>
+          <label className="field"><span>{t("contact.type")}</span><select name="contactType" defaultValue="CONTACT" required>{["CONTACT","SCHOOL_STAFF","INSTITUTION_HEAD"].map(value=><option key={value} value={value}>{t(`contact.type.${value.toLowerCase()}`)}</option>)}</select></label>
           <details className="ux-enrichment"><summary>{t("ux.record.enrich")}</summary>          {canAssignOwner&&<SearchableSelect label={t("crm.owner")} options={ownerOptions} value={owner} onChange={(value)=>{setOwner(value);invalidateDuplicateCheck();}} onSearch={(query)=>searchRelated(query,"owner")}/>}
           <label className="field"><span>{t("modules.title")}</span><input name="title" maxLength={120}/></label>
 
