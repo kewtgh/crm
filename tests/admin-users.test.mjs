@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   staffAccountErrorMessageKey,
+  staffAccountErrorField,
   staffCreationMessageKey,
   submitStaffAccount,
 } from "../components/staff-users-page.tsx";
@@ -11,6 +12,8 @@ import {
   encryptInvitationCredential,
 } from "../lib/invitation-credential-crypto.mjs";
 import { readFile } from "node:fs/promises";
+import { zhWorkspacePages, enWorkspacePages } from "../lib/i18n/locales/workspace-pages.ts";
+import { ApiClientError } from "../lib/api-client.ts";
 
 const item = {
   id:"00000000-0000-4000-8000-000000000099",
@@ -26,6 +29,32 @@ const item = {
   invitationDeliveryStatus:"QUEUED",
   teams:[],
 };
+
+test("every SALES role requires a team before request, independent of native form validation", async () => {
+  for (const role of ["SALES_DIRECTOR", "SALES_MANAGER", "SALES_SPECIALIST", "SALES_SUPPORT"]) {
+    for (const teamId of [undefined, "", "   "]) {
+      let requested = 0;
+      const outcome = await submitStaffAccount({ form:{reset(){assert.fail("invalid form reset");}}, payload:{role,...(teamId===undefined?{}:{teamId})}, request:async()=>{requested++;return {item,emailDeliveryStatus:"UNCONFIRMED"};}, onCreated:()=>assert.fail("invalid account accepted") });
+      assert.equal(outcome.ok,false);assert.equal(requested,0);
+      assert.equal(outcome.cause.code,"TEAM_NOT_FOUND");assert.equal(outcome.cause.details.field,"teamId");
+    }
+  }
+});
+
+test("valid-team SALES and teamless ADMIN requests reach the API; stale teams map to a bilingual field error", async () => {
+  for (const payload of [{role:"SALES_SPECIALIST",teamId:"00000000-0000-4000-8000-000000000010"},{role:"ADMIN"}]) {
+    let requested=0;
+    const outcome=await submitStaffAccount({form:{reset(){}},payload,request:async()=>{requested++;return {item,emailDeliveryStatus:"UNCONFIRMED"};},onCreated(){}});
+    assert.equal(outcome.ok,true);assert.equal(requested,1);
+  }
+  const stale=await submitStaffAccount({form:{reset(){assert.fail();}},payload:{role:"SALES_SPECIALIST",teamId:"stale"},request:async()=>{throw new ApiClientError("TEAM_NOT_FOUND",400);},onCreated(){assert.fail();}});
+  assert.equal(stale.ok,false);
+  assert.equal(staffAccountErrorField(stale.cause.code),"teamId");
+  const key=staffAccountErrorMessageKey(stale.cause.code);
+  assert.equal(zhWorkspacePages[key],"请选择有效的团队 / 区域。");
+  assert.equal(enWorkspacePages[key],"Select an active team / region.");
+  assert.equal(staffAccountErrorField("INVALID_INPUT","email"),"email");
+});
 
 test("staff action trigger only opens a controlled menu and status changes require confirmation", async () => {
   const source = await readFile(new URL("../components/staff-users-page.tsx", import.meta.url), "utf8");

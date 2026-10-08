@@ -43,12 +43,12 @@ try {
   );
   await client.query(
     `insert into app_auth.accounts(id,email,username,must_change_password)
-     values($1,$2,$3,true),($4,$5,$6,true)`,
+     values($1,$2,$3,false),($4,$5,$6,true)`,
     [actorId, `actor-${actorId}@example.test`, `actor-${actorId.slice(0, 8)}`, userId, `user-${userId}@example.test`, `user-${userId.slice(0, 8)}`],
   );
   await client.query(
     `insert into public.workspace_memberships(workspace_id,user_id,role,status,must_change_password)
-     values($1,$2,'ADMIN','ACTIVE',true),($1,$3,'SALES_SPECIALIST','ACTIVE',true)`,
+     values($1,$2,'ADMIN','ACTIVE',false),($1,$3,'SALES_SPECIALIST','ACTIVE',true)`,
     [workspaceId, actorId, userId],
   );
 
@@ -74,7 +74,7 @@ try {
   await denied("crm_worker", "delete from public.staff_invitation_deliveries where id=$1", [deliveryId]);
 
   await asRole("crm_app", async () => {
-    await client.query("select set_config('app.user_id',$1,true),set_config('app.workspace_id',$2,true),set_config('app.role','ADMIN',true)", [actorId, workspaceId]);
+    await client.query("select set_config('app.user_id',$1,true),set_config('app.workspace_id',$2,true),set_config('app.role','ADMIN',true),set_config('app.aal','aal2',true)", [actorId, workspaceId]);
     assert.equal((await client.query("select id from public.staff_invitation_deliveries where id=$1", [deliveryId])).rowCount, 1);
   });
   await denied("crm_app", `insert into public.staff_invitation_deliveries(

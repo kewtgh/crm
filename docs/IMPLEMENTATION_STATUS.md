@@ -1,4 +1,13 @@
-# Implementation status — v3.35.2 release candidate
+# Implementation status — v3.35.3 release candidate
+
+## v3.35.3 — Staff account creation repair
+
+Sales staff must select an active team before submission, with bilingual field errors
+for missing or stale teams. A forward-only migration adds explicit system RLS support
+for queued staff invitations. Accounts and encrypted invitations commit atomically;
+invitation delivery remains asynchronous, and authentication email retains the v3.35.2 contract.
+
+See [release notes](RELEASE_V3.35.3.md).
 
 ## v3.35.2 — Authentication email runtime contract
 

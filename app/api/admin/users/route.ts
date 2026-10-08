@@ -21,7 +21,7 @@ const directoryStatusSchema = z.enum(["ALL", "ACTIVE", "PENDING", "SUSPENDED"]);
 const directoryRoleSchema = z.enum(["ALL", ...APP_ROLES]);
 
 function failure(error: unknown) {
-  if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code }, { status: error.status });
+  if (error instanceof DatabaseRequestError) return NextResponse.json({ code: error.code, ...(error.code === "TEAM_NOT_FOUND" ? { field: "teamId" } : {}) }, { status: error.status });
   return NextResponse.json({ code: "STAFF_USERS_FAILED" }, { status: 500 });
 }
 
@@ -57,7 +57,9 @@ async function post(request: Request) {
     return NextResponse.json(result, { status });
   } catch (error) {
     const response = failure(error);
-    const code = error instanceof DatabaseRequestError ? error.code : "STAFF_USERS_FAILED";
+    const code = error instanceof DatabaseRequestError ? error.code
+      : typeof error === "object" && error !== null && "code" in error && error.code === "42501"
+        ? "DATABASE_POLICY_DENIED" : "STAFF_USERS_FAILED";
     await emitObservabilityEvent({
       name:"admin.staff_account.create",requestId:apiRequestId(request),status:response.status,
       result:response.status<500?"rejected":"failed",errorCode:code,

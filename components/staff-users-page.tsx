@@ -26,7 +26,12 @@ export function staffCreationMessageKey(status: StaffInvitationDeliveryStatus) {
 }
 
 export function staffAccountErrorMessageKey(code: string) {
+  if (code === "TEAM_NOT_FOUND") return "admin.users.error.TEAM_NOT_FOUND";
   return createErrorKeys[code] ?? "admin.users.error.UNKNOWN";
+}
+
+export function staffAccountErrorField(code: string, field = "") {
+  return code === "TEAM_NOT_FOUND" ? "teamId" : field;
 }
 
 type CreateStaffResult = { item: StaffUserRecord; emailDeliveryStatus: StaffInvitationDeliveryStatus };
@@ -42,6 +47,9 @@ export async function submitStaffAccount({
   request: (payload: Record<string, FormDataEntryValue>) => Promise<CreateStaffResult>;
   onCreated: (item: StaffUserRecord, deliveryStatus: StaffInvitationDeliveryStatus) => void;
 }) {
+  if (String(payload.role ?? "").startsWith("SALES_") && !String(payload.teamId ?? "").trim()) {
+    return { ok: false as const, cause: new ApiClientError("TEAM_NOT_FOUND", 400, undefined, { field: "teamId" }) };
+  }
   let result: CreateStaffResult;
   try {
     result = await request(payload);
@@ -249,7 +257,7 @@ function CreateStaffDialog({ open, teams, canCreateAdmin, close, onCreated }: { 
     if (!outcome.ok) {
       const cause = outcome.cause;
       const code = cause instanceof ApiClientError ? cause.code : "";
-      const field = cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "";
+      const field = staffAccountErrorField(code, cause instanceof ApiClientError && typeof cause.details?.field === "string" ? cause.details.field : "");
       const message = t(staffAccountErrorMessageKey(code));
       if (field) setFieldError({ [field]: message }); else setError(message);
     }
@@ -264,7 +272,7 @@ function CreateStaffDialog({ open, teams, canCreateAdmin, close, onCreated }: { 
       <div className="form-grid two-column"><Field name="displayNameZh" label={t("settings.nameZh")} error={fieldError.displayNameZh}/><Field name="displayNameEn" label={t("settings.nameEn")} error={fieldError.displayNameEn}/><BilingualNameHint/></div>
       <Field name="username" label={t("admin.users.username")} help={t("admin.users.usernameHelp")} error={fieldError.username}/>
       <Field name="email" label={t("common.email")} type="email" error={fieldError.email}/>
-      <div className="form-grid two-column"><label className="field"><span>{t("settings.role")}</span><select name="role" value={selectedRole} onChange={event=>setSelectedRole(event.target.value as AppRole)} required>{roles.map((role) => <option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select>{fieldError.role && <small className="field-error">{fieldError.role}</small>}</label><label className="field"><span>{t("admin.users.team")}</span><select name="teamId" required={selectedRole.startsWith("SALES_")} defaultValue=""><option value="">{t("admin.teams.unassigned")}</option>{teams.map(team=><option key={team.id} value={team.id}>{team.nameZh} / {team.nameEn}</option>)}</select>{fieldError.teamId&&<small className="field-error">{fieldError.teamId}</small>}</label></div>
+      <div className="form-grid two-column"><label className="field"><span>{t("settings.role")}</span><select name="role" value={selectedRole} onChange={event=>setSelectedRole(event.target.value as AppRole)} required>{roles.map((role) => <option value={role} key={role}>{t(roleMessageKey[role])}</option>)}</select>{fieldError.role && <small className="field-error">{fieldError.role}</small>}</label><label className="field"><span>{t("admin.users.team")}</span><select name="teamId" required={selectedRole.startsWith("SALES_")} aria-invalid={Boolean(fieldError.teamId)} aria-describedby={fieldError.teamId ? "create-staff-team-error" : undefined} defaultValue=""><option value="">{t("admin.teams.unassigned")}</option>{teams.map(team=><option key={team.id} value={team.id}>{team.nameZh} / {team.nameEn}</option>)}</select>{fieldError.teamId&&<small id="create-staff-team-error" className="field-error" role="alert">{fieldError.teamId}</small>}</label></div>
       {selectedRole.startsWith("SALES_")&&!teams.length&&<InlineMessage type="warning">{t("admin.teams.createFirst")}</InlineMessage>}
       {error && <InlineMessage type="error">{error}</InlineMessage>}
       <InlineMessage type="warning"><ShieldCheck size={16}/>{t("admin.users.createBoundary")}</InlineMessage>
