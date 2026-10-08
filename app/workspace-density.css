@@ -21,7 +21,7 @@
 .ux-lead-items .ux-queue-context { grid-column:1; grid-row:2; }
 .ux-lead-items .ux-queue-next { grid-column:2; grid-row:1; }
 .ux-lead-items .ux-queue-next p { margin:3px 0; }
-.ux-lead-items .ux-queue-actions { grid-column:2; grid-row:2; flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:10px; }
+.ux-lead-items .ux-queue-actions { grid-column:2; grid-row:2; flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; }
 .ux-lead-items .ux-queue-actions .action-disclosure { margin-left:0; }
 .ux-lead-items .ux-queue-signal { grid-column:1/-1; grid-row:3; border-top:1px solid var(--line); padding-top:5px; }
 .ux-lead-items .lead-qualification-panel { padding:0; background:transparent; border:0; }
@@ -59,3 +59,20 @@
 .follow-up-workspace>details { padding:10px 14px; background:var(--surface); border:1px solid var(--line); border-radius:6px; }
 .contact-access p { font-size:13px; color:var(--muted); }
 .contact-access h2,.consent-history h2,.consent-form h2 { font-size:18px; }
+
+/* Follow-up: actual global outcomes route and explicit per-person grouping. */
+.success-outcome-workspace { gap:16px; padding:20px; }
+.success-outcome-workspace>h2 { font-size:22px; line-height:1.3; font-weight:700; margin:0; }
+.success-outcome-workspace .outcome-empty { padding:12px 0; margin:0; color:var(--muted); }
+.household-person-card { border:1px solid var(--line); border-left:4px solid var(--brand); padding:16px; border-radius:10px; margin-top:16px; background:var(--surface); }
+.household-person-card:nth-of-type(even) { border-left-color:var(--warning,#ad720d); }
+.household-person-card>h3 { font-size:17px; padding-bottom:10px; margin:0 0 12px; border-bottom:1px solid var(--line); }
+.contact-communication-grid { display:grid; grid-template-columns:minmax(160px,.65fr) minmax(0,1.35fr); gap:20px; align-items:start; }
+.contact-business-note h4 { font-size:15px; margin:0 0 8px; }
+.contact-commercial-summary .contact-intelligence { border:0; padding:0; }
+@media(max-width:700px) { .contact-communication-grid { grid-template-columns:1fr; } .ux-lead-items .ux-queue-actions { justify-content:flex-start; } }
+
+.document-generation-panel,.document-evidence-panel { border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:12px 0; }
+.document-generation-panel>summary,.document-evidence-panel>summary { font-size:15px; font-weight:650; cursor:pointer; }
+.document-generation-panel[open]>summary,.document-evidence-panel[open]>summary { margin-bottom:16px; }
+.agreement-overview-facts { display:flex; flex-wrap:wrap; gap:12px 24px; }

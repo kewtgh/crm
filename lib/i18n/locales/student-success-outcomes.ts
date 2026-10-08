@@ -1,6 +1,7 @@
 export const enSuccessOutcomes={
  "successOutcome.recordTitle":"Outcome title","successOutcome.voidReason":"Reason for voiding","successOutcome.alreadyVoided":"This outcome has been voided. Reload to view it.",
   "successOutcome.title": "Outcomes",
+  "successOutcome.noOutcomes": "No outcome records yet.",
   "successOutcome.create": "Record Outcome",
   "successOutcome.edit": "Edit Outcome",
   "successOutcome.void": "Void Outcome",
@@ -86,6 +87,7 @@ export const enSuccessOutcomes={
 export const zhSuccessOutcomes={
  "successOutcome.recordTitle":"成果标题","successOutcome.voidReason":"作废原因","successOutcome.alreadyVoided":"此成果已作废，请重新加载查看。",
   "successOutcome.title": "成果",
+  "successOutcome.noOutcomes": "暂无成果记录",
   "successOutcome.create": "记录成果",
   "successOutcome.edit": "编辑成果",
   "successOutcome.void": "作废成果",

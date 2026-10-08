@@ -4,8 +4,8 @@ import {apiRoute,requireApiCapability} from "@/lib/api";
 import {databaseJson} from "@/lib/db/gateway";
 import {mutationIsTrusted} from "@/lib/request-security";
 const text=z.string().trim().max(160).default("");
-const person=z.object({nameZh:text,nameEn:text,email:z.union([z.email(),z.literal("")]).default(""),phone:z.string().max(40).default(""),occupation:text,employer:text,title:text,role:z.enum(["PARENT","GUARDIAN","PAYER","OTHER"]),primary:z.boolean()}).strict().refine(v=>!!(v.nameZh||v.nameEn));
-const schema=z.object({requestKey:z.string().min(8).max(160),household:z.object({nameZh:text,nameEn:text,address:z.string().max(1000).default(""),preferredLanguage:text,educationExpectationsMarkdown:z.string().max(10000).default(""),familyBackgroundMarkdown:z.string().max(10000).default("")}).strict().refine(v=>!!(v.nameZh||v.nameEn)),people:z.array(person).min(1).max(10)}).strict();
+const person=z.object({nameZh:text,nameEn:text,email:z.union([z.email(),z.literal("")]).default(""),phone:z.string().max(40).default(""),occupation:text,employer:text,title:text,role:z.enum(["PARENT","GUARDIAN","PAYER","OTHER"]),relationship:z.enum(["UNSPECIFIED","FATHER","MOTHER","GUARDIAN","OTHER"]).default("UNSPECIFIED"),primary:z.boolean()}).strict().refine(v=>!!(v.nameZh||v.nameEn));
+const schema=z.object({requestKey:z.string().min(8).max(160),household:z.object({nameZh:text,nameEn:text,address:z.string().max(1000).default(""),preferredLanguage:z.enum(["","zh-CN","zh-TW","en"]).default(""),educationExpectationsMarkdown:z.string().max(10000).default(""),familyBackgroundMarkdown:z.string().max(10000).default("")}).strict().refine(v=>!!(v.nameZh||v.nameEn)),people:z.array(person).min(1).max(10)}).strict();
 async function post(request:Request){
  if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});
  await requireApiCapability("education.manage");const parsed=schema.safeParse(await request.json());

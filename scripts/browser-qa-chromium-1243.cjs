@@ -366,6 +366,7 @@ async function main(){
     else     if(["frontline-leads","frontline-dashboard"].includes(env.QA_SCOPE)){await require("./qa-frontline-experience.cjs")({browser,base,output,report,observe});}
     else if(["record-students","record-accounts"].includes(env.QA_SCOPE)){await require("./qa-record-workspaces.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="management-experience"){await require("./qa-management-experience.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="workspace-followup"){await require("./qa-workspace-density.cjs")({browser,base,output,report,observe,followupOnly:true});}
     else if(env.QA_SCOPE==="workspace-density"){await require("./qa-workspace-density.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="operations-usability"){await require("./qa-operations-usability.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="operations-repair"){await require("./qa-operations-repair.cjs")({browser,base,output,report,observe});}

@@ -45,7 +45,7 @@ export function ContractDocumentsSection({sourceKind,sourceId,canManage=true}:{s
   <h3>{t("documents.title")}</h3><p>{t("documents.notSigned")}</p>
   {message&&<InlineMessage type={message===t("documents.queued")?"success":"error"}>{message}</InlineMessage>}
   {data&&<><p>{t("documents.sourceRevision")}: {data.options.sourceRevision}</p>
-   {canManage&&<fieldset disabled={busy||uncertain} style={{border:0,padding:0,minWidth:0}}>
+   {canManage&&<details className="document-generation-panel"><summary>{t("documents.generate")}</summary><fieldset disabled={busy||uncertain} style={{border:0,padding:0,minWidth:0}}>
     {data.canPreviewDraft&&<label className="field"><span><input type="checkbox" style={{width:16,height:16,minHeight:16,margin:0,verticalAlign:"middle"}} checked={draftPreview} onChange={e=>{setDraftPreview(e.target.checked);setTemplate("");setConfirmed({});resetReview();}}/> {t("documents.draftPreview")}</span></label>}
     <div className="form-grid"><label className="field"><span>{t("documents.template")}</span><select value={template} onChange={e=>{setTemplate(e.target.value);setConfirmed({});resetReview();}}><option value="">{t("documents.selectTemplate")}</option>{data.templates.filter(v=>draftPreview?v.status==="DRAFT":v.status==="APPROVED"&&v.active).map(v=><option key={`${v.key}:${v.version}`} value={`${v.key}:${v.version}`}>{v.key} v{v.version} · {t(`documents.status.${v.status}`)}</option>)}</select></label>
     <label className="field"><span>{t("documents.context")}</span><select value={context} onChange={e=>{setContext(e.target.value);resetReview();}}><option value="">—</option>{data.options.contexts.map(v=><option key={v.enrollmentId??v.cohortId} value={v.enrollmentId??v.cohortId}>{v.label} · {(v.enrollmentId??v.cohortId).slice(0,8)}</option>)}</select></label></div>
@@ -56,13 +56,13 @@ export function ContractDocumentsSection({sourceKind,sourceId,canManage=true}:{s
     <div className="page-actions"><button className="secondary-button" onClick={()=>void run("validate")}>{t("documents.validate")}</button><button className="secondary-button" onClick={()=>void run("preview")}>{t("documents.preview")}</button><button className="primary-button" disabled={!selected.active||selected.status!=="APPROVED"||!review||review.issues.length>0} onClick={()=>void run("generate")}>{t("documents.generate")}</button></div>
     {!data.templates.some(v=>v.status==="APPROVED"&&v.active)&&<p>{t("documents.noApproved")}</p>}
     </>}
-   </fieldset>}
+   </fieldset></details>}
    {uncertain&&<button disabled={busy} className="secondary-button" onClick={()=>void run("generate",true)}>{t("documents.retry")}</button>}
    {review&&<div data-document-review><h4>{t("documents.canonical")}</h4>{review.fields.map(f=><p key={f.key} style={{overflowWrap:"anywhere"}}><b>{f.key}</b> · {f.source} · {f.value}</p>)}{review.issues.map(i=><InlineMessage type="error" key={i.key}>{t(i.code==="UNSUPPORTED_FIELD"?"documents.unsupported":"documents.missing")}: {i.key}</InlineMessage>)}</div>}
    <div className="surface-heading"><h4>{t("documents.history")}</h4><button className="secondary-button" disabled={busy} onClick={()=>void load().catch(()=>setMessage(t("documents.loadFailed")))}>{t("documents.refresh")}</button></div>
    {!data.items.length&&<p>{t("documents.empty")}</p>}
    <div className="detail-record-list">{data.items.map(d=><article key={d.id} data-document-id={d.id} style={{overflowWrap:"anywhere"}}><b>{t("uploads.generated")} · {t("documents.version")} {d.documentVersion} · {t(`documents.status.${d.status}`)}</b><p>{d.templateKey} v{d.templateVersion} · {t("documents.sourceRevision")} {d.sourceRevision}</p><p>{d.generatedAt??"—"} · {d.generatedBy}</p><p>SHA256: {d.artifactSHA256??"—"}</p>{d.status==="GENERATED"&&<a className="secondary-button" style={{whiteSpace:"nowrap",flexShrink:0}} href={`/api/contract-documents/${d.id}/download`}>{t("documents.download")}</a>}</article>)}</div>
-   <ContractUploadEvidence sourceKind={sourceKind} sourceId={sourceId} sourceRevision={data.options.sourceRevision} canManage={canManage} context={sourceKind==="CUSTOMER_CONTRACT"&&context?{enrollmentId:context}:sourceKind==="CHANNEL_AGREEMENT_VERSION"&&context&&rule?{cohortId:context,productId:data.options.contexts.find(v=>v.cohortId===context)?.productId,commissionRuleId:rule}:{}}/>
+   <details className="document-evidence-panel"><summary>{locale==="en"?"Upload signed document / evidence":"上传已签署文件／证据"}</summary><ContractUploadEvidence sourceKind={sourceKind} sourceId={sourceId} sourceRevision={data.options.sourceRevision} canManage={canManage} context={sourceKind==="CUSTOMER_CONTRACT"&&context?{enrollmentId:context}:sourceKind==="CHANNEL_AGREEMENT_VERSION"&&context&&rule?{cohortId:context,productId:data.options.contexts.find(v=>v.cohortId===context)?.productId,commissionRuleId:rule}:{}}/></details>
   </>}
  </section>;
 }
