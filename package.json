@@ -151,6 +151,7 @@
     "test:revenue:current:postgres": "node scripts/test-revenue-current-postgres.mjs",
     "test:operations:postgres": "node scripts/run-bounded.mjs --label operations-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-operations-usability-postgres.mjs",
     "test:management:projection:postgres": "node scripts/run-bounded.mjs --label management-projection-postgres --timeout-seconds 55 --idle-seconds 25 -- node --import tsx scripts/test-v333-report-postgres.mjs",
+    "test:schema:auth:postgres": "node scripts/run-bounded.mjs --label schema-auth-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-schema-auth-rls-postgres.mjs",
     "test:staff:lifecycle:postgres": "node scripts/run-bounded.mjs --label staff-lifecycle-postgres --timeout-seconds 55 --idle-seconds 25 -- node --import tsx scripts/test-staff-lifecycle-postgres.mjs",
     "test:email:design": "node --test infrastructure/email-delivery-worker/test/email-design.test.js",
     "qa:email:design": "node scripts/run-bounded.mjs --label email-design --timeout-seconds 55 --idle-seconds 25 -- node scripts/qa-email-design.mjs"

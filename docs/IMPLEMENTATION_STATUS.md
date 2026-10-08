@@ -10,6 +10,9 @@ historical scopes and company financial facts remain intact.
 
 See [release notes](RELEASE_V3.36.0.md).
 
+The schema/auth CI follow-up adds forward migration 131 and a disposable reproduction
+of the exact schema and auth/RLS checks. See [repair verification](SCHEMA_AUTH_RLS_CI_REPAIR.md).
+
 ## v3.35.3 — Staff account creation repair
 
 Sales staff must select an active team before submission, with bilingual field errors
