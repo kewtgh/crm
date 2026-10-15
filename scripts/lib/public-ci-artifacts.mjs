@@ -6,7 +6,7 @@ export const privateStageNames = Object.freeze(["configure", "release", "cleanup
 
 // Fail closed on redirected evidence/output directories. No operator-supplied publication paths.
 export function evidenceDirectory(root, name) {
-  if (!["ci-private", "public-artifacts", "browser-qa-chromium-1243"].includes(name)) {
+  if (!["ci-private", "public-artifacts", "browser-qa-chromium-1248"].includes(name)) {
     throw new Error("CI_EVIDENCE_DIRECTORY_INVALID");
   }
   let directory = path.resolve(root);
@@ -43,7 +43,7 @@ export function publicQaSummary(report, stage, currentRun = {}) {
     || stage?.runAttempt !== currentRun.runAttempt)) stage = null;
   const result = stage?.stage === "release" && ["PASS", "FAIL"].includes(stage.result)
     ? stage.result : "NOT_RUN";
-  const summary = { schemaVersion: 1, browserRevision: 1243, releaseGate: result,
+  const summary = { schemaVersion: 1, browserRevision: 1248, releaseGate: result,
     browserQa: { result: "UNAVAILABLE", checks: 0, errors: 0, warnings: 0 },
     screenshotPublication: "DISABLED" };
   if (result === "NOT_RUN") return summary;
@@ -52,7 +52,7 @@ export function publicQaSummary(report, stage, currentRun = {}) {
   const runAt = Date.parse(report?.runAt);
   if (!Number.isFinite(started) || !Number.isFinite(ended) || !Number.isFinite(runAt)
     || runAt < started || runAt > ended || ended < started
-    || report?.browser !== "ms-playwright/chromium-1243"
+    || report?.browser !== "ms-playwright/chromium-1248"
     || typeof report?.browserVersion !== "string"
     || !/^\d{1,3}(?:\.\d{1,6}){3}$/.test(report?.browserVersion ?? "")
     || ![report?.pages, report?.errors, report?.warnings].every(value => Array.isArray(value)

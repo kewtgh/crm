@@ -1,5 +1,10 @@
 # Repository agent instructions
 
+## Node runtime
+
+- Use the Node.js 24 LTS version pinned in `.nvmrc` for development and verification.
+  Keep package engines, Docker images and CI aligned with that LTS version.
+
 ## Public repository privacy gate
 
 - Conversation content and local operational files are not automatically Git-safe.
@@ -38,14 +43,16 @@
 
 ## Browser QA is available locally
 
-- This development environment has the pinned `ms-playwright/chromium-1243` runtime installed.
+- This development environment has the pinned revision 1248 Headless Shell runtime installed.
+  The shared resolver accepts `ms-playwright/chromium-1248` or `ms-playwright/chromium_headless_shell-1248`,
+  with an explicit `PLAYWRIGHT_CHROMIUM_1248_PATH` override; both builds must use revision 1248.
 - For this repository's browser, responsive, accessibility, authentication, and release QA, use
-  `npm run qa:chromium-1243` and the existing `scripts/browser-qa-chromium-1243.cjs` workflow.
+  `npm run qa:chromium-1248` and the existing `scripts/browser-qa-chromium-1248.cjs` workflow.
 - The absence of an in-app Browser session is **not** a blocker and must not be reported as proof
   that browser QA is unavailable.
 - Do not download or install another browser and do not silently substitute a different Chromium
   revision. Keep the exact Chromium revision and executable evidence in the generated report.
 - Start the validated production build on the repository's configured local URL before QA, and
-  retain the report under the existing Git-ignored `work/browser-qa-chromium-1243/` evidence path.
+  retain the report under the existing Git-ignored `work/browser-qa-chromium-1248/` evidence path.
 - If a higher-priority runtime policy prevents executing the pinned browser, state that exact policy
   conflict; do not claim that no browser is installed or available in the development environment.

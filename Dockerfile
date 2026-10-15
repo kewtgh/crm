@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.27.1
 
-ARG NODE_IMAGE=node:26.10.0-trixie-slim
+ARG NODE_IMAGE=node:24.22.0-trixie-slim
 ARG POSTGRES_IMAGE=postgres:18.6-trixie
 
 FROM ${NODE_IMAGE} AS node-toolchain

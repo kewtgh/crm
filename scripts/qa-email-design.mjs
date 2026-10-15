@@ -6,11 +6,11 @@ import {chromium} from "playwright-core";
 import {renderTemplate} from "../infrastructure/email-delivery-worker/src/templates.js";
 import {designFixtures,applicationUrl} from "../infrastructure/email-delivery-worker/test/design-fixtures.js";
 const require=createRequire(import.meta.url);
-const {chromium1243Path}=require("./lib/chromium-runtime-path.cjs");
-const executable=chromium1243Path(),output=path.resolve("work/browser-qa-chromium-1243/email-v336");
+const {chromium1248Path}=require("./lib/chromium-runtime-path.cjs");
+const executable=chromium1248Path(),output=path.resolve("work/browser-qa-chromium-1248/email-v336");
 await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:executable});
-const report={browser:"ms-playwright/chromium-1243",executable,browserVersion:browser.version(),boundary:"final Worker renderer; local HTML only, no provider request; Chromium is not Outlook/Gmail validation",checks:[]};
+const report={browser:"ms-playwright/chromium-1248",executable,browserVersion:browser.version(),boundary:"final Worker renderer; local HTML only, no provider request; Chromium is not Outlook/Gmail validation",checks:[]};
 try {
  for(const [template,payload] of Object.entries(designFixtures))for(const locale of ["en","zh-CN"]){
   const rendered=renderTemplate(template,{...payload,locale},{brandName:"ewaya CRM",applicationUrl});

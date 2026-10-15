@@ -10,7 +10,7 @@ try {
   // Remove stale summary before any parse, including failed-run publication.
   try { unlinkSync(path.join(output, filename)); }
   catch (error) { if (error.code !== "ENOENT") throw new Error("CI_PUBLIC_ARTIFACT_RESET_FAILED"); }
-  const report = readPrivateJson(evidenceDirectory(root, "browser-qa-chromium-1243"), "report.json");
+  const report = readPrivateJson(evidenceDirectory(root, "browser-qa-chromium-1248"), "report.json");
   const stage = readPrivateJson(evidenceDirectory(root, "ci-private"), "release-status.json");
   writeEvidenceJson(output, filename, publicQaSummary(report, stage,
     { runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT }));

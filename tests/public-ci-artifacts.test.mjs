@@ -12,7 +12,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const stage = { stage: "release", result: "FAIL", startedAt: "2026-01-01T00:00:00Z",
   completedAt: "2026-01-01T00:10:00Z", runId: "synthetic-run", runAttempt: "1" };
 const privateMarker = "INVENTED-PRIVATE-MARKER";
-const report = { runAt: "2026-01-01T00:01:00Z", browser: "ms-playwright/chromium-1243",
+const report = { runAt: "2026-01-01T00:01:00Z", browser: "ms-playwright/chromium-1248",
   browserVersion: "148.0.7759.0", pages: [{ url: privateMarker }], errors: [{ message: privateMarker }],
   warnings: [], executable: privateMarker, env: { token: privateMarker }, screenshot: privateMarker };
 
@@ -22,6 +22,7 @@ test("public schema excludes private fields on both successful and failed runs",
     assert.deepEqual(Object.keys(summary), ["schemaVersion", "browserRevision", "releaseGate",
       "browserQa", "screenshotPublication", "browserVersion"]);
     assert.equal(summary.releaseGate, result);
+    assert.equal(summary.browserRevision, 1248);
     assert.equal(summary.browserQa.result, "FAIL");
     assert.equal(summary.screenshotPublication, "DISABLED");
     assert.doesNotMatch(JSON.stringify(summary), /INVENTED-PRIVATE-MARKER/);
@@ -32,7 +33,8 @@ test("stale, missing and malformed evidence never supplies a successful QA resul
   for (const candidate of [null, { ...report, runAt: "2025-01-01" },
     { ...report, browserVersion: privateMarker }, { ...report, errors: {} },
     { ...report, browserVersion: ["148.0.7759.0"] },
-    { ...report, browser: "unknown-browser" }]) {
+    { ...report, browser: "unknown-browser" },
+    { ...report, browser: "ms-playwright/chromium-1243" }]) {
     assert.equal(publicQaSummary(candidate, stage).browserQa.result, "UNAVAILABLE");
   }
   assert.equal(publicQaSummary(report, stage, { runId: "another-run", runAttempt: "1" }).releaseGate, "NOT_RUN");
@@ -64,7 +66,7 @@ test("CI stage failure keeps complete child diagnostics private and preserves th
 test("publisher copies only its fixed allowlisted summary, including on failure", () => {
   const temporary = mkdtempSync(path.join(os.tmpdir(), "public-ci-fixture-"));
   try {
-    const raw = path.join(temporary, "work/browser-qa-chromium-1243");
+    const raw = path.join(temporary, "work/browser-qa-chromium-1248");
     const privateDir = path.join(temporary, "work/ci-private");
     const output = path.join(temporary, "work/public-artifacts");
     for (const directory of [raw, privateDir, output]) mkdirSync(directory, { recursive: true });

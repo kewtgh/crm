@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   release:
-    name: Business, authentication, and Chromium 1243 release QA
-    runs-on: [self-hosted, windows, chromium-1243]
+    name: Business, authentication, and Chromium 1248 release QA
+    runs-on: [self-hosted, windows, chromium-1248]
     timeout-minutes: 35
     env:
       CI: true
@@ -53,11 +53,11 @@ jobs:
       - name: Verify pinned browser runtime is already installed
         shell: powershell
         run: |
-          $browserPath = Join-Path $env:LOCALAPPDATA "ms-playwright\chromium-1243\chrome-win64\chrome.exe"
-          if (-not (Test-Path $browserPath)) {
-            throw "Pinned ms-playwright/chromium-1243 is required on this runner"
+          $browserPath = node -e "process.stdout.write(require('./scripts/lib/chromium-runtime-path.cjs').chromium1248Path())"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $browserPath)) {
+            throw "Pinned ms-playwright/chromium-1248 is required on this runner"
           }
-          "PLAYWRIGHT_CHROMIUM_1243_PATH=$browserPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PLAYWRIGHT_CHROMIUM_1248_PATH=$browserPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure isolated local PostgreSQL release environment
         timeout-minutes: 10

@@ -218,7 +218,7 @@ test("keeps the retired platform source only as a read-only migration archive", 
 test("keeps cold admin submenu navigation on a same-tab document boundary", async () => {
   const [shell, browserQa] = await Promise.all([
     readFile(repositoryFile("components/app-shell.tsx"), "utf8"),
-    readFile(repositoryFile("scripts/browser-qa-chromium-1243.cjs"), "utf8"),
+    readFile(repositoryFile("scripts/browser-qa-chromium-1248.cjs"), "utf8"),
   ]);
   const {navigationDestinations}=await import('../lib/navigation-destinations.ts');
   assert.ok(navigationDestinations.filter(item=>item.space==='admin').every(item=>item.documentNavigation&&item.roles));

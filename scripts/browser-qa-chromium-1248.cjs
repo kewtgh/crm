@@ -6,12 +6,12 @@ const {spawnSync}=require("node:child_process");
 const pg=require("pg");
 const argon2=require("argon2");
 
-const { chromium1243Path } = require("./lib/chromium-runtime-path.cjs");
-const executable = chromium1243Path();
+const { chromium1248Path } = require("./lib/chromium-runtime-path.cjs");
+const executable = chromium1248Path();
 const playwrightPath=process.env.PLAYWRIGHT_CORE_PATH||"playwright-core";
 const {chromium}=require(playwrightPath);
 const base=(process.env.QA_BASE_URL||process.env.APP_URL||"http://localhost:3200").replace(/\/$/,"");
-const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1243");
+const output=path.resolve(process.env.QA_OUTPUT_DIR||"work/browser-qa-chromium-1248");
 fs.mkdirSync(output,{recursive:true});
 
 function commandValue(command,args){const result=spawnSync(command,args,{encoding:"utf8",timeout:10_000});return result.status===0?result.stdout.trim():"unavailable";}
@@ -52,7 +52,7 @@ async function qaQuery(text,values=[]){
 }
 const playwrightCoreVersion=require(`${playwrightPath}/package.json`).version;
 const actionTimeoutMs=12_000;
-const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1243",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
+const report={runAt:new Date().toISOString(),browser:"ms-playwright/chromium-1248",executable,browserVersion:"",evidence:{baseUrl:base,appVersion,playwrightCoreVersion,actionTimeoutMs,gitSha:commandValue("git",["rev-parse","HEAD"]),gitState,gitStatusDigest:gitStatus==="unavailable"?"unavailable":crypto.createHash("sha256").update(gitStatus).digest("hex"),sourceFingerprint:sourceFingerprint(),migrationHead,buildHash:buildHash()},pages:[],errors:[],warnings:[],identity:{created:0,cleaned:0}};
 
 function observe(page){
   page.on("pageerror",error=>report.errors.push({kind:"pageerror",url:page.url(),message:error.message.slice(0,300)}));
@@ -160,7 +160,7 @@ async function inspect(page,label,route,viewport){
 async function createIdentity(role,label){
   if(!env.SYSTEM_DATABASE_URL)throw new Error("Local PostgreSQL QA variables are missing");
   const suffix=Date.now().toString(36);
-  const email=`chromium-1243-${label}-${suffix}@example.invalid`;
+  const email=`chromium-1248-${label}-${suffix}@example.invalid`;
   const password=`Qa!${crypto.randomBytes(18).toString("base64url")}A1`;
   const created={id:crypto.randomUUID()};
   const username=`qa.${label}.${suffix}`;
@@ -354,7 +354,7 @@ async function exerciseV210Workflows(page,scenario){
   process.stdout.write("Chromium v2.1 workflow interactions passed.\n");
 }
 async function main(){
-  if(!fs.existsSync(executable))throw new Error(`Required ms-playwright/chromium-1243 executable is missing: ${executable}`);
+  if(!fs.existsSync(executable))throw new Error(`Required ms-playwright/chromium-1248 executable is missing: ${executable}`);
   const browser=await chromium.launch({headless:true,executablePath:executable,args:["--disable-gpu"]});
   report.browserVersion=browser.version();
   const identities=[];
@@ -823,7 +823,7 @@ async function main(){
     report.durationMs=Date.now()-Date.parse(report.runAt);
     fs.writeFileSync(path.join(output,"report.json"),JSON.stringify(report,null,2));
   }
-  if(report.errors.length)throw new Error(`Chromium 1243 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);
-  process.stdout.write(`Chromium 1243 QA passed ${report.pages.length} page/viewport checks with ${report.browserVersion}.\n`);
+  if(report.errors.length)throw new Error(`Chromium 1248 QA failed with ${report.errors.length} issue(s); see ${path.join(output,"report.json")}`);
+  process.stdout.write(`Chromium 1248 QA passed ${report.pages.length} page/viewport checks with ${report.browserVersion}.\n`);
 }
 main().catch(error=>{console.error(error.stack||error.message);process.exitCode=1;});

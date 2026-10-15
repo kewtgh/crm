@@ -72,16 +72,16 @@ container, network, or volume.
 ## Host provisioning
 
 Provision Ubuntu with Docker Engine, the rootless extras, Compose, Buildx, `uidmap`, Caddy,
-`cloudflared`, Git, and Node 26.10.0 for the deployment controller. Do not install/run PostgreSQL
+`cloudflared`, Git, and Node 24.22.0 LTS for the deployment controller. Do not install/run PostgreSQL
 or CRM Web/Worker with host systemd. Rootless mode requires cgroup v2 + systemd so Compose
 memory/CPU/PID limits are actually enforced, plus at least 65,536 subordinate UIDs and GIDs for
 `lumina-crm`.
 
-Dependency baseline refreshed on 2026-10-03:
+Dependency baseline refreshed on 2026-10-03; Node LTS and browser QA pins updated on 2026-10-15:
 
 | Component | Stable version | Source |
 | --- | --- | --- |
-| Node.js / npm | 26.10.0 / 12.2.0 | `.nvmrc`, package manifests, CI and Dockerfile |
+| Node.js / npm | 24.22.0 LTS / 12.2.0 | `.nvmrc`, package manifests, CI and Dockerfile |
 | PostgreSQL | 18.6, Debian trixie | Both Compose files and Dockerfile |
 | Docker Engine | 29.8.2 | [Official releases](https://github.com/moby/moby/releases) |
 | Docker Compose | 5.6.0 | [Official releases](https://github.com/docker/compose/releases) |
@@ -98,7 +98,7 @@ upgrades it. Both prepare and deployment reject a builder with a missing or diff
 upgrade an existing builder through the reviewed host provisioning process before deployment.
 PostgreSQL remains on major version 18, so the existing 18 data directory layout
 is unchanged. Prisma in the planning reference stays on stable 7.10.0 rather than the registry's
-8.0 release candidate. Browser QA retains the repository-required Chromium revision 1243.
+8.0 release candidate. Browser QA now uses Playwright Core 1.64.0 and Chromium revision 1248.
 
 Type checking uses the stable TypeScript 7 compiler. ESLint uses the official
 [`@typescript/typescript6` API compatibility package](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0)

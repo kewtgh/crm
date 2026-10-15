@@ -8,7 +8,7 @@ import { unzipSync } from "fflate";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { chromium1243Path } = require("../scripts/lib/chromium-runtime-path.cjs");
+const { chromium1248Path } = require("../scripts/lib/chromium-runtime-path.cjs");
 const root = path.resolve(import.meta.dirname, "..");
 const currentFiles = () => execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
@@ -19,11 +19,24 @@ function readPublicJson(relative) {
 }
 
 test("pinned Chromium resolves from operator environment without a committed home path", () => {
-  assert.equal(chromium1243Path({ PLAYWRIGHT_CHROMIUM_1243_PATH: "selected-browser" }), "selected-browser");
-  assert.equal(chromium1243Path({ LOCALAPPDATA: "test-local-data" }),
-    path.join("test-local-data", "ms-playwright", "chromium-1243", "chrome-win64", "chrome.exe"));
-  assert.equal(chromium1243Path({ USERPROFILE: "synthetic-home" }),
-    path.join("synthetic-home", "AppData", "Local", "ms-playwright", "chromium-1243", "chrome-win64", "chrome.exe"));
+  assert.equal(chromium1248Path({ PLAYWRIGHT_CHROMIUM_1248_PATH: "selected-browser" }), "selected-browser");
+  assert.equal(chromium1248Path({ LOCALAPPDATA: "test-local-data" }),
+    path.join("test-local-data", "ms-playwright", "chromium-1248", "chrome-win64", "chrome.exe"));
+  assert.equal(chromium1248Path({ USERPROFILE: "synthetic-home" }),
+    path.join("synthetic-home", "AppData", "Local", "ms-playwright", "chromium-1248", "chrome-win64", "chrome.exe"));
+  assert.equal(chromium1248Path({ PLAYWRIGHT_BROWSERS_PATH: "synthetic-browser-cache" }),
+    path.join("synthetic-browser-cache", "chromium-1248", "chrome-win64", "chrome.exe"));
+});
+
+test("pinned Chromium discovery supports full and headless builds without selecting another revision", () => {
+  const environment = { LOCALAPPDATA: "synthetic-cache" };
+  const full = path.join("synthetic-cache", "ms-playwright", "chromium-1248", "chrome-win64", "chrome.exe");
+  const shell = path.join("synthetic-cache", "ms-playwright", "chromium_headless_shell-1248", "chrome-headless-shell-win64", "chrome-headless-shell.exe");
+  assert.equal(chromium1248Path(environment, "unused", () => true), full);
+  assert.equal(chromium1248Path(environment, "unused", candidate => candidate === shell), shell);
+  assert.equal(chromium1248Path(environment, "unused", () => false), full);
+  assert.equal(chromium1248Path({ ...environment, PLAYWRIGHT_CHROMIUM_1248_PATH: "selected-browser" },
+    "unused", () => true), "selected-browser");
 });
 
 test("contract reference guards contain digests and neutral source aliases", () => {

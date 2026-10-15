@@ -281,7 +281,7 @@ Version 3.10 adds a dedicated notification center with same-page synchronization
 and task-detail links, plus priority-task filters and row-specific import diagnostics. It hardens
 notification mutations, asynchronous forms, user-isolated saved views, CSV/XLSX validation,
 historical import repair, pagination failure handling, and API cancellation/session-refresh behavior.
-QA now pins Playwright Core 1.63.0 and Chromium 1243; CI uses the repository PostgreSQL workflow,
+That release pinned Playwright Core 1.63.0 and Chromium 1243; CI uses the repository PostgreSQL workflow,
 and a forward migration validates the nine communication-delivery constraints. The two audit
 reports and implementation records are in [round one](docs/AUDIT_2026-09-26.md) and
 [round two](docs/AUDIT_2026-09-26_ROUND2.md). Their local QA evidence predates this version-only bump;
@@ -388,7 +388,7 @@ monthly restore verification creates and destroys only a uniquely named temporar
 
 Requirements:
 
-- Node.js 26.x (`26.10.0` is pinned in `.nvmrc`);
+- Node.js 24 LTS (`24.22.0` is pinned in `.nvmrc`);
 - npm 12.x (`12.2.0` is pinned in `package.json`);
 - Docker Desktop.
 
@@ -455,8 +455,13 @@ npm run test:deploy
 npm run build
 ```
 
-The repository also includes the pinned `ms-playwright/chromium-1243` browser workflow. Run only the
-phase relevant to a scoped change, or the staged matrix when preparing an authorized release.
+The repository pins Playwright Core 1.64.0 and `ms-playwright/chromium-1248` for browser QA.
+The resolver honors `PLAYWRIGHT_BROWSERS_PATH` and accepts the full Chromium or Headless Shell
+build of revision 1248; an explicit
+`PLAYWRIGHT_CHROMIUM_1248_PATH` overrides discovery. Run a relevant phase with
+`$env:QA_PHASE="01-public"; npm run qa:chromium-1248` (PowerShell), or omit `QA_PHASE` for an
+authorized full staged matrix. Private evidence stays under `work/browser-qa-chromium-1248/`.
+CI runners must carry the `chromium-1248` label and have the pinned runtime installed.
 
 On a new Linux VPS, first run the explicit persistent initialization mode. It adds repeat-safe
 database role/extension and initial-admin bootstrap around the forward-only migration, then records

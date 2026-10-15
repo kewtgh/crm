@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
-    "node": ">=26.10.0 <27",
+    "node": ">=24.22.0 <25",
     "npm": ">=12.2.0 <13"
   },
   "allowScripts": {
@@ -106,9 +106,9 @@
     "qa:server:start": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs start",
     "qa:server:status": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs status",
     "qa:server:stop": "node --env-file-if-exists=.env.local scripts/qa-production-server.mjs stop",
-    "qa:chromium-1243": "node scripts/run-bounded.mjs --label chromium-1243-staged --timeout-seconds 480 --idle-seconds 45 -- npm run qa:chromium-1243:staged",
-    "qa:chromium-1243:staged": "node scripts/browser-qa-chromium-1243.mjs",
-    "qa:chromium-1243:raw": "node scripts/browser-qa-chromium-1243.cjs",
+    "qa:chromium-1248": "node scripts/run-bounded.mjs --label chromium-1248-staged --timeout-seconds 480 --idle-seconds 45 -- npm run qa:chromium-1248:staged",
+    "qa:chromium-1248:staged": "node scripts/browser-qa-chromium-1248.mjs",
+    "qa:chromium-1248:raw": "node scripts/browser-qa-chromium-1248.cjs",
     "qa:captcha-fallback": "node scripts/run-bounded.mjs --label captcha-fallback --timeout-seconds 60 --idle-seconds 30 -- node scripts/smoke-captcha-fallback.cjs",
     "release:gate": "node --env-file-if-exists=.env.local scripts/release-gate.mjs",
     "deploy:production": "node scripts/deploy-production.mjs start",
@@ -183,7 +183,7 @@
   "devDependencies": {
     "@eslint/compat": "2.1.1",
     "@tailwindcss/postcss": "4.3.3",
-    "@types/node": "26.6.4",
+    "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -193,7 +193,7 @@
     "brace-expansion-secure": "npm:brace-expansion@5.0.12",
     "eslint": "10.12.0",
     "eslint-config-next": "16.3.8",
-    "playwright-core": "1.63.0",
+    "playwright-core": "1.64.0",
     "react-server-dom-webpack": "19.3.0",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
