@@ -29,17 +29,18 @@ export async function generateMetadata(): Promise<Metadata> {
         { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
         { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
         { url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" },
+        { url: "/brand/ewaya-social.png", sizes: "512x512", type: "image/png" },
       ],
       shortcut: "/favicon-32x32.png",
-      apple: [{ url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" }],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     },
     openGraph: {
       title: "ewaya CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/brand/ewaya-social.png", baseUrl).toString(), width: 1726, height: 911, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/brand/ewaya-social.png", baseUrl).toString(), width: 512, height: 512, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary_large_image", title: "ewaya CRM", description, images: [new URL("/brand/ewaya-social.png", baseUrl).toString()] },
+    twitter: { card: "summary", title: "ewaya CRM", description, images: [new URL("/brand/ewaya-social.png", baseUrl).toString()] },
   };
 }
 

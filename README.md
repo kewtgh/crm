@@ -1,6 +1,13 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.0**
+Current release candidate: **v3.37.1**
+
+## v3.37.1 — Application brand icons
+
+Browser favicons, the Apple touch icon and link-sharing previews use the supplied
+text-free brand symbol. The existing upper-left education wordmark is preserved.
+
+See [release notes](docs/RELEASE_V3.37.1.md).
 
 ## v3.37.0 — Reliable task queues and complete saved views
 
