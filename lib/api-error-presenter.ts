@@ -3,6 +3,8 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  TASK_STATE_CHANGED: "taskQueue.stateChanged",
+  TASK_BULK_SCOPE_CONFLICT: "taskQueue.stateChanged",
   CONTRACT_VERSION_CONFLICT: "experience.contractConflict",
   CONTRACT_FINANCE_LOCKED: "experience.contractDraftOnly",
   CONTRACT_DRAFT_REQUIRED: "experience.contractDraftOnly",

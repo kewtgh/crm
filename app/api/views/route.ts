@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiRoute, requireApiUser } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
 import { deleteSharedView, listSharedViews, saveSharedView } from "@/lib/saved-views";
-import { viewConfigSchema } from "@/lib/saved-view-schema";
+import { viewConfigSchema, viewMatchesResource } from "@/lib/saved-view-schema";
 
 const resource=z.enum(["schools","people","tasks","opportunities","contracts","finance","data-quality"]);
 const mutation=z.discriminatedUnion("operation",[
@@ -23,6 +23,7 @@ async function post(request:Request){
   const parsed=mutation.safeParse(await request.json().catch(()=>({})));
   if(!parsed.success)return NextResponse.json({code:"INVALID_VIEW_INPUT"},{status:400});
   if(parsed.data.operation==="delete"){await deleteSharedView(parsed.data.id);return NextResponse.json({ok:true});}
+  if(!viewMatchesResource(parsed.data.config,parsed.data.resource))return NextResponse.json({code:"INVALID_VIEW_INPUT"},{status:400});
   return NextResponse.json({item:await saveSharedView(parsed.data.resource,parsed.data.name,parsed.data.visibility,parsed.data.config)});
 }
 export const GET=apiRoute(get,"VIEW_LOAD_FAILED");

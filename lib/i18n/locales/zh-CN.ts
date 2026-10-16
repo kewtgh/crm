@@ -1,3 +1,4 @@
+import {taskQueueZh} from "./task-queue";
 import {revenueNavigationZh} from "../../revenue-workspace-labels";
 import {reliabilityZh} from "./reliability";
 import {uxClosureZh} from "./ux-closure";
@@ -527,5 +528,6 @@ export const zhCN: Messages = {
   ...frontlineZh,
   ...operationsRepairZh,
   ...revenueNavigationZh,
+  ...taskQueueZh,
 };
 import {operationsRepairZh} from "./operations-repair";

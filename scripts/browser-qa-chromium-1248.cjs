@@ -360,7 +360,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="staff-lifecycle"){await require("./qa-staff-lifecycle.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="workflow-quality"){await require("./qa-workflow-quality.cjs")({browser,base,output,report,observe});}
+    else if(env.QA_SCOPE==="staff-lifecycle"){await require("./qa-staff-lifecycle.cjs")({browser,base,output,report,observe});}
     else if(["interaction-mutations","interaction-directories"].includes(env.QA_SCOPE)){await require("./qa-interaction-reliability.cjs")({browser,base,output,report,observe});}
     else if(["workspace-redesign-records","workspace-redesign-tools"].includes(env.QA_SCOPE)){await require("./qa-workspace-redesign.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="revenue-workspace"){await require(env.QA_REVENUE_CURRENT==="1"?"./qa-revenue-current.cjs":"./qa-revenue-workspace.cjs")({browser,base,output,report,observe});}

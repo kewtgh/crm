@@ -1,3 +1,4 @@
+import {taskQueueEn} from "./task-queue";
 import {revenueNavigationEn} from "../../revenue-workspace-labels";
 import {reliabilityEn} from "./reliability";
 import {uxClosureEn} from "./ux-closure";
@@ -529,4 +530,5 @@ export const en: Messages = {
   ...frontlineEn,
   ...operationsRepairEn,
   ...revenueNavigationEn,
+  ...taskQueueEn,
 };

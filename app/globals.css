@@ -479,6 +479,8 @@ body { overflow-x:hidden; }
 .record-history article>span:last-child { display:grid; }
 .record-history article small { color:var(--muted); }
 .task-workspace { display:grid; gap:14px; }
+.task-queue-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); overflow:visible; }
+.task-queue-summary > span { min-width:0; white-space:normal; }
 .task-queue-scope { margin:0; color:var(--muted); font-size:13px; }
 .task-queue-filters { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
 .task-queue-filters .secondary-button { padding:6px 10px; min-height:32px; }

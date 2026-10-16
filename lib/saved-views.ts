@@ -1,5 +1,5 @@
 import { databaseJson } from "./db/gateway";
-import { viewConfigSchema, type ViewConfig } from "./saved-view-schema";
+import { viewConfigSchema, viewMatchesResource, type ViewConfig } from "./saved-view-schema";
 
 export { viewConfigSchema } from "./saved-view-schema";
 
@@ -11,7 +11,7 @@ export async function listSharedViews(resource:string,currentUserId:string){
   const rows=await databaseJson<SharedViewRow[]>(`/db/table/shared_views?select=id,name,visibility,config,owner_id&resource_key=eq.${encodeURIComponent(resource)}&order=updated_at.desc`);
   return rows.flatMap(row=>{
     const parsed=viewConfigSchema.safeParse(row.config);
-    return parsed.success?[{...parsed.data,id:row.id,name:row.name,visibility:row.visibility,source:"SERVER" as const,owned:row.owner_id===currentUserId}]:[];
+    return parsed.success&&viewMatchesResource(parsed.data,resource)?[{...parsed.data,id:row.id,name:row.name,visibility:row.visibility,source:"SERVER" as const,owned:row.owner_id===currentUserId}]:[];
   });
 }
 

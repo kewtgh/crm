@@ -1,4 +1,14 @@
-# Implementation status — v3.36.0 release candidate
+# Implementation status — v3.37.0 release candidate
+
+## v3.37.0 — Reliable task queues and complete saved views
+
+Task completion now requires returned-row evidence. A searchable, paginated priority queue offers
+reporting-timezone due-today filters, action-center deep links and cancellable refresh recovery.
+New saved views restore detailed filters while legacy views retain their documented behavior.
+Students and Performance launchers follow canonical navigation and role capabilities.
+
+See [audit](FIRST_PRINCIPLES_AUDIT_V337.md), [plan](FIRST_PRINCIPLES_PLAN_V337.md)
+and [release notes](RELEASE_V3.37.0.md).
 
 ## v3.36.0 — Email, staff lifecycle and sales scope
 
