@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.1**
+Current release candidate: **v3.37.2**
+
+## v3.37.2 — White-background website and shortcut icons
+
+Active brand images have opaque white backgrounds. A real multi-size favicon,
+192/512-pixel website icons and a site manifest support bookmarks and homepage
+shortcuts. Versioned icon URLs help refresh cached artwork; the upper-left
+education wordmark is retained.
+
+See [release notes](docs/RELEASE_V3.37.2.md).
 
 ## v3.37.1 — Application brand icons
 

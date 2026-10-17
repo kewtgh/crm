@@ -35,7 +35,9 @@ const expectedImages=[
   {path:"/favicon-16x16.png",width:16,height:16},
   {path:"/favicon-32x32.png",width:32,height:32},
   {path:"/favicon-192x192.png",width:192,height:192},
-  {path:"/og-v280.png",width:1726,height:911},
+  {path:"/brand/ewaya-social.png",width:512,height:512},
+  {path:"/apple-touch-icon.png",width:180,height:180},
+  {path:"/icon-512x512.png",width:512,height:512},
 ];
 const combinedHtml=[...htmlByRoute.values()].join("\n");
 for(const asset of expectedImages){
@@ -53,8 +55,11 @@ for(const asset of expectedImages){
     throw new Error(`Invalid brand asset ${asset.path}: status=${response.status} contentType=${contentType} png=${png} dimensions=${width}x${height}`);
   }
 }
-const legacy=await fetch(`${base}/favicon.ico`,{redirect:"manual",signal:AbortSignal.timeout(10_000)});
-if(legacy.status!==308||new URL(legacy.headers.get("location")??"",base).pathname!=="/favicon-32x32.png"){
-  throw new Error(`Legacy favicon redirect is invalid: status=${legacy.status} location=${legacy.headers.get("location")??""}`);
-}
-process.stdout.write(`Validated ${references.size} production CSS/JS assets, ${expectedImages.length} PNG brand assets, metadata references, and the legacy favicon redirect.\n`);
+const favicon=await fetch(base+"/favicon.ico",{redirect:"manual",signal:AbortSignal.timeout(10_000)});
+const ico=Buffer.from(await favicon.arrayBuffer());
+if(!favicon.ok||ico.length<6||ico.readUInt16LE(0)!==0||ico.readUInt16LE(2)!==1||ico.readUInt16LE(4)!==3)throw new Error("Default favicon is not a valid three-size ICO");
+const manifestResponse=await fetch(base+"/site.webmanifest",{redirect:"manual",signal:AbortSignal.timeout(10_000)});
+if(!manifestResponse.ok)throw new Error("Site manifest is not publicly accessible");
+const manifest=await manifestResponse.json();
+if(manifest.start_url!=="/dashboard"||manifest.icons?.length!==2)throw new Error("Site manifest shortcuts are invalid");
+process.stdout.write(`Validated ${references.size} production CSS/JS assets, ${expectedImages.length} PNG brand assets, metadata references, default ICO and site manifest.\n`);

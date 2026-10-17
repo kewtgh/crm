@@ -1,0 +1,14 @@
+{
+  "id": "/",
+  "name": "ewaya CRM",
+  "short_name": "ewaya CRM",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/favicon-192x192.png?v=white-1", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512x512.png?v=white-1", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

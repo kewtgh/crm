@@ -24,23 +24,25 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: baseUrl,
     title: { default: "ewaya CRM", template: "%s · ewaya CRM" },
     description,
+    manifest: "/site.webmanifest?v=white-1",
     icons: {
       icon: [
-        { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-        { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-        { url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" },
-        { url: "/brand/ewaya-social.png", sizes: "512x512", type: "image/png" },
+        { url: "/favicon.ico?v=white-1", sizes: "16x16 32x32 48x48", type: "image/x-icon" },
+        { url: "/favicon-16x16.png?v=white-1", sizes: "16x16", type: "image/png" },
+        { url: "/favicon-32x32.png?v=white-1", sizes: "32x32", type: "image/png" },
+        { url: "/favicon-192x192.png?v=white-1", sizes: "192x192", type: "image/png" },
+        { url: "/icon-512x512.png?v=white-1", sizes: "512x512", type: "image/png" },
       ],
-      shortcut: "/favicon-32x32.png",
-      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+      shortcut: "/favicon.ico?v=white-1",
+      apple: [{ url: "/apple-touch-icon.png?v=white-1", sizes: "180x180", type: "image/png" }],
     },
     openGraph: {
       title: "ewaya CRM",
       description,
       type: "website",
-      images: [{ url: new URL("/brand/ewaya-social.png", baseUrl).toString(), width: 512, height: 512, alt: translate(locale, "meta.ogAlt") }],
+      images: [{ url: new URL("/brand/ewaya-social.png?v=white-1", baseUrl).toString(), width: 512, height: 512, alt: translate(locale, "meta.ogAlt") }],
     },
-    twitter: { card: "summary", title: "ewaya CRM", description, images: [new URL("/brand/ewaya-social.png", baseUrl).toString()] },
+    twitter: { card: "summary", title: "ewaya CRM", description, images: [new URL("/brand/ewaya-social.png?v=white-1", baseUrl).toString()] },
   };
 }
 

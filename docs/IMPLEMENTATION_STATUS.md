@@ -1,4 +1,13 @@
-# Implementation status — v3.37.1 release candidate
+# Implementation status — v3.37.2 release candidate
+
+## v3.37.2 — White-background website and shortcut icons
+
+Active brand images have opaque white backgrounds. A real multi-size favicon,
+192/512-pixel website icons and a site manifest support bookmarks and homepage
+shortcuts. Versioned icon URLs help refresh cached artwork; the upper-left
+education wordmark is retained.
+
+See [release notes](RELEASE_V3.37.2.md).
 
 ## v3.37.1 — Application brand icons
 
