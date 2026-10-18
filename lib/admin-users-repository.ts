@@ -599,7 +599,7 @@ export async function updateStaffUser(
   });
 }
 
-export type StaffRemovalEligibility = {retentionMode?:"NONE"|"AUDIT_IDENTITY";status:"DEACTIVATION_REQUIRED"|"DELETE_ELIGIBLE"|"PROTECTED_ACCOUNT"|"MULTI_WORKSPACE_ACCOUNT"|"EXTERNALLY_MANAGED_ACCOUNT"|"INVITATION_IN_FLIGHT"|"BUSINESS_REFERENCES_EXIST"};
+export type StaffRemovalEligibility = {retentionMode?:"NONE"|"AUDIT_IDENTITY";retainedReportingIdentity?:boolean;status:"DEACTIVATION_REQUIRED"|"DELETE_ELIGIBLE"|"PROTECTED_ACCOUNT"|"MULTI_WORKSPACE_ACCOUNT"|"EXTERNALLY_MANAGED_ACCOUNT"|"INVITATION_IN_FLIGHT"|"BUSINESS_REFERENCES_EXIST"};
 export function staffRemovalEligibility(userId:string) {
   return databaseJson<StaffRemovalEligibility>("/db/rpc/staff_lifecycle_eligibility",{method:"POST",body:JSON.stringify({target_user:userId})});
 }

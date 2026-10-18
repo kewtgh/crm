@@ -6,9 +6,12 @@ import {designFixtures,applicationUrl} from "./design-fixtures.js";
 
 for (const key of TEMPLATE_KEYS) for (const locale of ["en","zh-CN"]) {
   test(`${key}: ${locale} uses the final table renderer and matching plain text`,()=>{
-    const output=renderTemplate(key,{...designFixtures[key],locale},{brandName:"ewaya CRM",applicationUrl});
+    const output=renderTemplate(key,{...designFixtures[key],locale},{brandName:"Ewaya CRM",applicationUrl});
     assert.match(output.html,/role="presentation"/);
     assert.match(output.html,/max-width:600px/);
+    assert.match(output.html,/<img src="https:\/\/crm\.example\.test\/icon-512x512\.png\?v=white-1" alt="Ewaya" width="56" height="56"/);
+    assert.match(output.html,/background:#ffffff/);
+    assert.ok(output.text.includes("Ewaya CRM"));
     assert.match(output.html,/if mso/);
     assert.match(output.html,/prefers-color-scheme:dark/);
     assert.match(output.html,new RegExp(`lang="${locale}"`));
@@ -21,15 +24,25 @@ for (const key of TEMPLATE_KEYS) for (const locale of ["en","zh-CN"]) {
   });
 }
 test("unknown locale falls back to English; injected content is escaped and external links rejected",()=>{
-  const output=renderTemplate("communication-message",{subject:"<img src=x>",body:'<script>"&</script>',locale:"xx"},{brandName:"ewaya CRM",applicationUrl});
+  const output=renderTemplate("communication-message",{subject:"<img src=x>",body:'<script>"&</script>',locale:"xx"},{brandName:"Ewaya CRM",applicationUrl});
   assert.match(output.html,/lang="en"/);assert.ok(!output.html.includes("<script>"));assert.match(output.html,/&lt;script&gt;/);assert.ok(output.text.includes('<script>"&</script>'));
-  assert.throws(()=>renderTemplate("password-reset",{url:"https://external.example.test/",expiresInSeconds:600},{brandName:"ewaya CRM",applicationUrl}),{code:"TEMPLATE_URL_INVALID"});
+  assert.throws(()=>renderTemplate("password-reset",{url:"https://external.example.test/",expiresInSeconds:600},{brandName:"Ewaya CRM",applicationUrl}),{code:"TEMPLATE_URL_INVALID"});
+});
+
+test("legacy configuration casing renders the canonical sender and brand",()=>{
+  const env={EMAIL_FROM:"ewaya <sender@example.test>",EMAIL_BRAND_NAME:"ewaya",RESEND_API_KEY:"re_fictional",LUMINA_WEBHOOK_TOKEN:"fictional",CRM_APP_URL:applicationUrl,DELIVERY_PATH:"/delivery",HEALTH_PATH:"/health"};
+  const configuration=validatedRuntimeConfiguration(env);
+  assert.equal(configuration.from,"Ewaya CRM <sender@example.test>");
+  assert.equal(configuration.brandName,"Ewaya CRM");
+  const output=renderTemplate("device-verification",designFixtures["device-verification"],{brandName:"Lumina",applicationUrl});
+  assert.doesNotMatch(output.html+output.text+output.subject,/lumina/i);
+  assert.match(output.subject,/Ewaya CRM/);
 });
 test("runtime requires both an ewaya brand and an ewaya sender display name",()=>{
-  assert.ok(validEmailBrand("ewaya"));assert.ok(validEmailBrand("ewaya CRM"));
-  assert.ok(validBrandedSender("ewaya CRM <sender@example.test>"));
-  for(const brand of ["Legacy Brand","ewaya Education CRM","ewaya CRM\nInjected"])assert.equal(validEmailBrand(brand),false);
+  assert.ok(validEmailBrand("ewaya"));assert.ok(validEmailBrand("Ewaya CRM"));
+  assert.ok(validBrandedSender("Ewaya CRM <sender@example.test>"));
+  for(const brand of ["Legacy Brand","ewaya Education CRM","Ewaya CRM\nInjected"])assert.equal(validEmailBrand(brand),false);
   for(const sender of ["sender@example.test","Legacy Brand <sender@example.test>"])assert.equal(validBrandedSender(sender),false);
-  const env={EMAIL_FROM:"ewaya CRM <sender@example.test>",EMAIL_BRAND_NAME:"ewaya CRM",RESEND_API_KEY:"re_fictional",LUMINA_WEBHOOK_TOKEN:"fictional",CRM_APP_URL:applicationUrl,DELIVERY_PATH:"/delivery",HEALTH_PATH:"/health"};
+  const env={EMAIL_FROM:"Ewaya CRM <sender@example.test>",EMAIL_BRAND_NAME:"Ewaya CRM",RESEND_API_KEY:"re_fictional",LUMINA_WEBHOOK_TOKEN:"fictional",CRM_APP_URL:applicationUrl,DELIVERY_PATH:"/delivery",HEALTH_PATH:"/health"};
   assert.ok(validatedRuntimeConfiguration(env));assert.equal(validatedRuntimeConfiguration({...env,EMAIL_BRAND_NAME:"Legacy Brand"}),null);assert.equal(validatedRuntimeConfiguration({...env,EMAIL_FROM:"Legacy Brand <sender@example.test>"}),null);
 });

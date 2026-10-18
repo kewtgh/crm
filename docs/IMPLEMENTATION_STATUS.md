@@ -1,4 +1,14 @@
-# Implementation status — v3.37.2 release candidate
+# Implementation status — v3.37.3 release candidate
+
+## v3.37.3 — Staff removal and branded authentication email
+
+Staff with reporting configuration but no business references can be removed
+without deleting immutable history. Removed identities stay outside reporting and
+cannot acquire new assignments. Staff editor cards regain internal spacing.
+Email templates include the white-background logo and canonical Ewaya branding,
+with provider timing and aligned delivery timeouts.
+
+See [release notes](RELEASE_V3.37.3.md).
 
 ## v3.37.2 — White-background website and shortcut icons
 

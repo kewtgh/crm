@@ -352,6 +352,11 @@ async function deliver(request, {
   }
   const outboundProviderRequest = providerRequestResult.request;
 
+  const providerStartedAt = performance.now();
+  const deliveryLogger = logger;
+  logger = {info: value => {
+    if (typeof deliveryLogger?.info === "function") deliveryLogger.info(JSON.stringify({...JSON.parse(value), providerDurationMs: Math.max(0, Math.round(performance.now() - providerStartedAt))}));
+  }};
   let providerResponse;
   try {
     providerResponse = await fetchImplementation(outboundProviderRequest);
@@ -430,7 +435,7 @@ export function createEmailDeliveryWorker({
   fetchImplementation = globalThis.fetch,
   HeadersImplementation = globalThis.Headers,
   logger = console,
-  providerTimeoutMs = 15_000,
+  providerTimeoutMs = 8_000,
   RequestImplementation = globalThis.Request,
   timeoutSignalImplementation = (timeoutMs) => AbortSignal.timeout(timeoutMs),
 } = {}) {

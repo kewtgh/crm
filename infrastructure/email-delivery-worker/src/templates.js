@@ -194,27 +194,27 @@ export function renderTemplate(template, payload, {brandName, applicationUrl: co
   const duration=seconds=>zh?(seconds%3600===0?`${seconds/3600} 小时`:seconds%60===0?`${seconds/60} 分钟`:`${seconds} 秒`):durationLabel(seconds);
   if(template==="reminder") {
     const id=requiredString(payload,"reminderId",{maximum:200});
-    heading=tr("Reminder","工作提醒");subject=tr("ewaya CRM reminder","ewaya CRM 工作提醒");
-    paragraph(tr("You have a reminder waiting in ewaya CRM.","您在 ewaya CRM 中有一项待处理提醒。"));details([[tr("Reference","参考编号"),id]]);action(appUrl,tr("Open ewaya CRM","打开 ewaya CRM"));
+    heading=tr("Reminder","工作提醒");subject=tr("Ewaya CRM reminder","Ewaya CRM 工作提醒");
+    paragraph(tr("You have a reminder waiting in Ewaya CRM.","您在 Ewaya CRM 中有一项待处理提醒。"));details([[tr("Reference","参考编号"),id]]);action(appUrl,tr("Open Ewaya CRM","打开 Ewaya CRM"));
   } else if(template==="password-reset"||template==="email-verification") {
     const url=internalUrl(requiredString(payload,"url",{maximum:2000}),appUrl),expires=duration(requiredPositiveInteger(payload,"expiresInSeconds")),reset=template==="password-reset";
-    heading=reset?tr("Reset your password","重置密码"):tr("Verify your email","验证邮箱");subject=reset?tr("Reset your ewaya CRM password","重置您的 ewaya CRM 密码"):tr("Verify your ewaya CRM email","验证您的 ewaya CRM 邮箱");
+    heading=reset?tr("Reset your password","重置密码"):tr("Verify your email","验证邮箱");subject=reset?tr("Reset your Ewaya CRM password","重置您的 Ewaya CRM 密码"):tr("Verify your Ewaya CRM email","验证您的 Ewaya CRM 邮箱");
     paragraph(tr(`This secure link expires in ${expires}.`,`此安全链接将在 ${expires} 后失效。`));action(url,reset?tr("Reset password","重置密码"):tr("Verify email","验证邮箱"));notice(security);
   } else if(template==="device-verification") {
     const code=requiredString(payload,"code",{maximum:32}),expires=duration(requiredPositiveInteger(payload,"expiresInSeconds"));
-    heading=tr("Device verification","设备验证");subject=tr("Your ewaya CRM verification code","您的 ewaya CRM 验证码");
+    heading=tr("Device verification","设备验证");subject=tr("Your Ewaya CRM verification code","您的 Ewaya CRM 验证码");
     paragraph(tr(`Enter this code to continue. It expires in ${expires}.`,`请填写以下验证码继续登录。验证码将在 ${expires} 后失效。`));html+=emailCodeBlock(code);text+=code+"\n\n";notice(security);
   } else if(template==="staff-account-created") {
     const username=requiredString(payload,"username",{maximum:160}),temporary=requiredString(payload,"temporaryPassword",{maximum:500}),url=internalUrl(requiredString(payload,"loginUrl",{maximum:2000}),appUrl);
     const nameZh=requiredString(payload,"displayNameZh",{maximum:200,allowEmpty:true}),nameEn=requiredString(payload,"displayNameEn",{maximum:200,allowEmpty:true});
     const mustChange=requiredBoolean(payload,"mustChangePassword"),mfa=requiredBoolean(payload,"mfaRequired");
-    heading=tr("Welcome to ewaya CRM","欢迎使用 ewaya CRM");subject=tr("Your ewaya CRM account is ready","您的 ewaya CRM 账号已创建");
+    heading=tr("Welcome to Ewaya CRM","欢迎使用 Ewaya CRM");subject=tr("Your Ewaya CRM account is ready","您的 Ewaya CRM 账号已创建");
     paragraph(greeting((zh?nameZh||nameEn:nameEn||nameZh)||username));details([[tr("Username","账户名"),username],[tr("Temporary password","临时密码"),temporary]]);
     if(mustChange)paragraph(tr("You must change the temporary password after signing in.","首次登录后必须立即更换临时密码。"));
     if(mfa)paragraph(tr("Multi-factor authentication setup is required for this account.","此账号必须配置多因素验证。"));action(url,tr("Sign in","登录"));notice(tr("Keep this invitation private. Do not forward your temporary credentials.","请妥善保管此邀请，不要转发临时凭据。"));
   } else if(template==="communication-message") {
     const title=requiredString(payload,"subject",{maximum:200}),message=requiredString(payload,"body",{maximum:10000}),name=optionalString(payload,"recipientName",{maximum:200}).trim();
-    heading=singleLine(title,200);subject=singleLine(tr(`New ewaya CRM message: ${title}`,`ewaya CRM 新消息：${title}`));paragraph(greeting(name));paragraph(message);action(appUrl,tr("Open ewaya CRM","打开 ewaya CRM"));
+    heading=singleLine(title,200);subject=singleLine(tr(`New Ewaya CRM message: ${title}`,`Ewaya CRM 新消息：${title}`));paragraph(greeting(name));paragraph(message);action(appUrl,tr("Open Ewaya CRM","打开 Ewaya CRM"));
   } else {
     const appointment=validateAppointment(payload.appointment),version=requiredPositiveInteger(payload,"eventVersion",1000000),name=optionalString(payload,"attendeeName",{maximum:200}).trim();
     heading=({"calendar-invite":tr("Calendar invitation","日程邀请"),"calendar-update":tr("Calendar appointment updated","日程已更新"),"calendar-cancel":tr("Calendar appointment cancelled","日程已取消")})[template];

@@ -14,11 +14,11 @@ export function validMailbox(value) {
 }
 
 export function validEmailBrand(value) {
-  return value === "ewaya" || value === "ewaya CRM";
+  return typeof value === "string" && /^(?:ewaya|ewaya CRM)$/i.test(value);
 }
 
 export function validBrandedSender(value) {
-  return validMailbox(value) && /^ewaya(?: CRM)?\s*<[^<>]+>$/.test(value);
+  return validMailbox(value) && /^ewaya(?: CRM)?\s*<[^<>]+>$/i.test(value);
 }
 
 export function parseHttpsUrl(value, { originOnly = false } = {}) {
@@ -106,9 +106,9 @@ export function validatedRuntimeConfiguration(env) {
     providerEndpoint: relay?.toString() ?? "https://api.resend.com/emails",
     apiKey,
     applicationUrl: applicationUrl.toString(),
-    brandName,
+    brandName: "Ewaya CRM",
     deliveryPath,
-    from,
+    from: from.replace(/^ewaya(?: CRM)?/i, "Ewaya CRM"),
     healthPath,
     replyTo,
     webhookToken,

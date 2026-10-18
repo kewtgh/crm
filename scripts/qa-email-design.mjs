@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {mkdir,writeFile} from "node:fs/promises";
+import {mkdir,readFile,writeFile} from "node:fs/promises";
 import path from "node:path";
 import {createRequire} from "node:module";
 import {chromium} from "playwright-core";
@@ -7,19 +7,23 @@ import {renderTemplate} from "../infrastructure/email-delivery-worker/src/templa
 import {designFixtures,applicationUrl} from "../infrastructure/email-delivery-worker/test/design-fixtures.js";
 const require=createRequire(import.meta.url);
 const {chromium1248Path}=require("./lib/chromium-runtime-path.cjs");
-const executable=chromium1248Path(),output=path.resolve("work/browser-qa-chromium-1248/email-v336");
+const executable=chromium1248Path(),output=path.resolve("work/browser-qa-chromium-1248/email-brand-fix");
+const selected=process.env.QA_EMAIL_TEMPLATES?.split(",");
+if(selected?.some(key=>!Object.hasOwn(designFixtures,key)))throw new Error("UNKNOWN_EMAIL_QA_TEMPLATE");
+const logo=await readFile("public/icon-512x512.png");
 await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:executable});
 const report={browser:"ms-playwright/chromium-1248",executable,browserVersion:browser.version(),boundary:"final Worker renderer; local HTML only, no provider request; Chromium is not Outlook/Gmail validation",checks:[]};
 try {
- for(const [template,payload] of Object.entries(designFixtures))for(const locale of ["en","zh-CN"]){
+ for(const [template,payload] of Object.entries(designFixtures).filter(([key])=>!selected||selected.includes(key)))for(const locale of ["en","zh-CN"]){
   const rendered=renderTemplate(template,{...payload,locale},{brandName:"ewaya CRM",applicationUrl});
   await writeFile(path.join(output,`${template}-${locale}.html`),rendered.html);
   for(const width of [390,768,1280]){
    const page=await browser.newPage({viewport:{width,height:950}});
    try {
-    await page.route("**/*",route=>route.abort());
+    await page.route("**/*",route=>new URL(route.request().url()).pathname==="/icon-512x512.png"?route.fulfill({contentType:"image/png",body:logo}):route.abort());
     await page.setContent(rendered.html);
+    assert.equal(await page.locator('img[alt="Ewaya"]').evaluate(el=>el.complete&&el.naturalWidth===512),true);
     assert.equal(await page.locator("h1").count(),1);
     assert.ok(await page.locator(".email-card").evaluate(el=>el.getBoundingClientRect().width)<=600);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${template} overflow ${width}`);

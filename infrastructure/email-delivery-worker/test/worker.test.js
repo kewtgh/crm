@@ -20,13 +20,37 @@ const HEALTH_PATH = "/test-health";
 const workerRoot = fileURLToPath(new URL("..", import.meta.url));
 const repositoryRoot = path.resolve(workerRoot, "..", "..");
 
+test("verification dispatch is immediate, within the Web deadline, and safely timed", async()=>{
+  const provider=providerDouble();
+  const lines=[];
+  let timeout;
+  const worker=createEmailDeliveryWorker({
+    fetchImplementation:provider.fetchImplementation,
+    timeoutSignalImplementation:milliseconds=>{timeout=milliseconds;return AbortSignal.timeout(milliseconds);},
+    logger:{info:line=>lines.push(line)},
+  });
+  const response=await worker.fetch(deliveryRequest(),environment());
+  assert.equal(response.status,200);
+  assert.equal(timeout,8000);
+  assert.ok(timeout<10000,"provider timeout must leave time for the Web response");
+  assert.equal(provider.calls.length,1);
+  const body=JSON.parse(provider.calls[0].init.body);
+  assert.equal(body.scheduled_at,undefined);
+  assert.match(body.subject,/Ewaya CRM/);
+  assert.match(body.html,/<img src="https:\/\/crm\.example\.test\/icon-512x512\.png/);
+  const entry=JSON.parse(lines.at(-1));
+  assert.equal(entry.providerResult,"accepted");
+  assert.ok(Number.isInteger(entry.providerDurationMs)&&entry.providerDurationMs>=0);
+  assert.ok(!lines.join('').includes(RECIPIENT));
+});
+
 function environment(overrides = {}) {
   return {
     LUMINA_WEBHOOK_TOKEN: CRM_TOKEN,
     RESEND_API_KEY: RESEND_KEY,
-    EMAIL_FROM: "ewaya CRM <sender@example.test>",
+    EMAIL_FROM: "Ewaya CRM <sender@example.test>",
     CRM_APP_URL: APPLICATION_URL,
-    EMAIL_BRAND_NAME: "ewaya CRM",
+    EMAIL_BRAND_NAME: "Ewaya CRM",
     DELIVERY_PATH,
     HEALTH_PATH,
     ...overrides,
@@ -556,10 +580,10 @@ test("CRM cannot override Resend from, subject, html, or reply-to", async () => 
     EMAIL_REPLY_TO: "reply@example.test",
   }));
   const providerBody = JSON.parse(provider.calls[0].init.body);
-  assert.equal(providerBody.from, "ewaya CRM <sender@example.test>");
+  assert.equal(providerBody.from, "Ewaya CRM <sender@example.test>");
   assert.equal(providerBody.reply_to, "reply@example.test");
-  assert.equal(providerBody.subject, "Your ewaya CRM verification code");
-  assert.match(providerBody.html, /ewaya CRM/);
+  assert.equal(providerBody.subject, "Your Ewaya CRM verification code");
+  assert.match(providerBody.html, /Ewaya CRM/);
 });
 
 test("successful Resend response returns its message id", async () => {
@@ -598,7 +622,11 @@ test("provider redirects are rejected without following or leaking Location", as
       });
       assert.equal(provider.calls.length, 1);
       assert.equal(provider.calls[0].request.redirect, "manual");
-      assert.deepEqual(JSON.parse(lines.at(-1)), {
+      const entry=JSON.parse(lines.at(-1));
+      assert.ok(Number.isInteger(entry.providerDurationMs) && entry.providerDurationMs >= 0);
+      const outcome={...entry};
+      delete outcome.providerDurationMs;
+      assert.deepEqual(outcome, {
         event: "email_delivery",
         providerResult: "redirect_rejected",
         providerStatus: status,
@@ -1128,9 +1156,9 @@ test("email footer contains only the configured brand and exact application orig
   const body = JSON.parse(provider.calls[0].init.body);
   assert.match(
     body.html,
-    /ewaya CRM[\s\S]*https:\/\/crm\.example\.test/,
+    /Ewaya CRM[\s\S]*https:\/\/crm\.example\.test/,
   );
-  assert.match(body.text, /ewaya CRM[\s\S]*https:\/\/crm\.example\.test$/);
+  assert.match(body.text, /Ewaya CRM[\s\S]*https:\/\/crm\.example\.test$/);
   assert.doesNotMatch(body.html, /Shanghai|address|telephone|phone/i);
 });
 
