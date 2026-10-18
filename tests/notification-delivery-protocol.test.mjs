@@ -122,7 +122,7 @@ test("keeps the CRM producer and Email Worker staff template contracts identical
     brandName:"ewaya CRM",
     applicationUrl:"https://crm.example.net",
   });
-  assert.match(rendered.subject, /ewaya CRM account/);
+  assert.equal(rendered.subject, "Your Ewaya CRM account is ready");
 });
 
 test("maps only bounded allow-listed Email Worker 4xx error codes", async () => {
