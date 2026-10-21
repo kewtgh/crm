@@ -1,4 +1,11 @@
-# Implementation status — v3.37.5 release candidate
+# Implementation status — v3.37.6 release candidate
+
+## v3.37.6 — Onboarding, history and personal governance
+
+Migrations 134–135 separate historical audit references from live deletion
+dependencies, exclude pending onboarding from reporting and new assignments,
+and add scoped personal recycle/approval boundaries. See
+[release notes](RELEASE_V3.37.6.md).
 
 ## v3.37.5 — Toolchain security
 

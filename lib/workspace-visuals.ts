@@ -2,7 +2,7 @@ import type {UiIconName} from "../components/ui-icon";
 import {navigationDestinations} from "./navigation-destinations";
 /** Presentation only. Never used to decide visibility, capability or financial state. */
 export const destinationIconNames:Record<string,UiIconName>={
- dashboard:"metric","action-center":"action",tasks:"queue",calendar:"calendar",approvals:"governance",messages:"message",
+ dashboard:"metric","action-center":"action",tasks:"queue",calendar:"calendar",approvals:"governance","personal-recycle":"archive",messages:"message",
  organizations:"organization",contacts:"person",students:"student",families:"family",enrollments:"program",applications:"application",support:"support",progression:"outcome",
  leads:"potential",opportunities:"opportunity",products:"product",contracts:"application",finance:"finance",revenue:"finance",commissions:"partnership",growth:"target",
  executive:"metric",channels:"channel",performance:"target",reports:"metric",consumption:"finance",exports:"export",

@@ -528,6 +528,9 @@ body { overflow-x:hidden; }
 /* Keep the six-column approval heading aligned with the icon-plus-type body columns. */
 .governance-table-head{grid-template-columns:minmax(190px,1.45fr) 1.2fr 1.55fr 1fr 1fr auto}
 .governance-table-head span{white-space:nowrap}
+.governance-page .page-heading-row .status-badge,
+.governance-row > .status-badge { white-space:normal; overflow-wrap:anywhere; }
+.governance-row > .status-badge { max-width:100%; }
 
 /* Mobile card layouts use normal cascade order and component-scoped selectors. */
 @media (max-width:680px){

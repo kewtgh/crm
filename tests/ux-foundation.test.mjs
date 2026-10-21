@@ -23,7 +23,8 @@ test('all access roles use canonical capabilities and admin role restrictions wi
   assert.equal(navigationDestinations.find(d=>d.id==='performance').capability,'performance.view');
   for(const role of APP_ROLES.filter(role=>!role.startsWith('SALES_')&&!['ADMIN','SUPER_ADMIN'].includes(role)))assert.ok(!visibleDestinations(role).some(d=>d.id==='performance'));
   const support=visibleDestinations('SALES_SUPPORT');
-  for(const id of ['approvals','progression','imports','quality','admin','admin-users'])assert.ok(!support.some(d=>d.id===id));
+  for(const id of ['progression','imports','quality','admin','admin-users'])assert.ok(!support.some(d=>d.id===id));
+  assert.ok(support.some(d=>d.id==='approvals'),'personal requests are visible without approval decision authority');
   assert.ok(support.some(d=>d.id==='commissions'),'finance-view entry remains available without settlement authority');
   for(const id of ['products','reports'])assert.equal(navigationDestinations.find(d=>d.id===id).capability,undefined);
 });

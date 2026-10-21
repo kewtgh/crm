@@ -1,5 +1,5 @@
 import { hasCapability, type Capability } from "./capabilities";
-import type { AppRole } from "./roles";
+import { APP_ROLES, type AppRole } from "./roles";
 
 export type NavigationSpace = "work" | "relationships" | "students" | "commercial" | "management" | "governance" | "admin" | "account";
 type Match = { pathname: string; descendants?: boolean; query?: Record<string, string>; notQuery?: Record<string, string> };
@@ -15,12 +15,14 @@ const entry = (id: string, space: NavigationSpace, labelKey: string, href: strin
   matches: [{ pathname: href.split("?")[0], descendants: true }],
 });
 const adminRoles: readonly AppRole[] = ["ADMIN", "SUPER_ADMIN"];
+const personalRoles=APP_ROLES.filter(role=>!adminRoles.includes(role));
 export const navigationDestinations: readonly NavigationDestination[] = [
   entry("dashboard", "work", "nav.dashboard", "/dashboard"),
   entry("action-center", "work", "nav.actionCenter", "/action-center"),
   entry("tasks", "work", "ux.nav.tasks", "/tasks", "tasks.view"),
   entry("calendar", "work", "nav.calendar", "/calendar", "calendar.view"),
-  entry("approvals", "work", "ux.nav.approvals", "/approvals", "approvals.decide"),
+  {...entry("approvals", "admin", "nav.personalApprovals", "/approvals"),roles:personalRoles},
+  {...entry("personal-recycle", "admin", "nav.personalRecycle", "/recycle-bin"),roles:personalRoles},
   { ...entry("messages", "work", "workspace.communications", "/messages", "messages.view"), matches: [{ pathname: "/messages" }, { pathname: "/notifications" }, { pathname: "/guardian-portal", descendants: true }] },
   entry("organizations", "relationships", "nav.schools", "/schools"),
   entry("contacts", "relationships", "ux.nav.contacts", "/people"),

@@ -48,6 +48,14 @@ try {
  const create=async(name,extra={})=>(await createStaffUser(input(name,extra),actor)).item;
  const pause=async(staff)=>{await updateStaffUser(staff,{status:"SUSPENDED"},actor);return staff;};
  const paused=async(name,extra={})=>pause(await create(name,extra));
+ const historicalDirector=await create("historical.pending.director",{role:"SALES_DIRECTOR"});
+ const historicalMember=(await admin.query("select id from public.sales_team_members where auth_user_id=$1",[historicalDirector.id])).rows[0].id;
+ await admin.query("insert into public.audit_events(workspace_id,actor_id,entity_type,entity_id,action) values($1,$2,'sales_team_members',$3,'UPDATE')",[workspace,superId,historicalMember]);
+ await pause(historicalDirector);
+ assert.equal((await eligibility(historicalDirector.id)).status,"DELETE_ELIGIBLE","historical member audit alone must not block an unused pending account");
+ const historicalAudit=(await admin.query("select * from public.audit_events where entity_type='sales_team_members' and entity_id=$1::text",[historicalMember])).rows;
+ assert.equal((await remove(historicalDirector.id)).status,"REMOVED");
+ assert.deepEqual((await admin.query("select * from public.audit_events where entity_type='sales_team_members' and entity_id=$1::text",[historicalMember])).rows,historicalAudit);
  // Existing installations can retain the previous identity-sync protocol's
  // completed role-change rows even though new changes use the direct RPC.
  const legacyPending=await create("legacy.pending.director",{role:"ADMIN"});
@@ -100,6 +108,15 @@ try {
  assert.equal(pendingDirector.lastSignInAt,null);
  await execute(superId,"select public.staff_profile_command($1,1,'SALES','{}',true,current_date,'Fictional pending staff configuration',$2) item",[pendingDirector.id,randomUUID()]);
  const retainedMember=(await admin.query("select id from public.sales_team_members where auth_user_id=$1",[pendingDirector.id])).rows[0].id;
+ assert.equal(await execute(superId,"select public.staff_reporting_current($1) item",[retainedMember]),false,"configuration does not enroll a pending account into reporting");
+ assert.equal(await execute(superId,"select public.staff_reporting_at($1,current_date) item",[retainedMember]),false);
+ assert.equal(await execute(superId,"select public.staff_reporting_in_period($1,current_date,current_date+1) item",[retainedMember]),false);
+ assert.ok(!(await execute(superId,"select coalesce(jsonb_agg(id),'[]') item from public.staff_sales_roster()")).includes(retainedMember));
+ await assert.rejects(execute(superId,"select to_jsonb(public.save_performance_plan(null,$1,current_date,current_date+30,'CNY',100,'[]')) item",[pendingDirector.id]),e=>e.message==="STAFF_ONBOARDING_REQUIRED");
+ // An onboarded administrator need not acquire a sales-member record to manage a plan.
+ await admin.query("update app_auth.accounts set last_sign_in_at=now(),must_change_password=false where id=$1",[adminId]);
+ await admin.query("update public.workspace_memberships set must_change_password=false where user_id=$1",[adminId]);
+ assert.ok((await execute(superId,"select to_jsonb(public.save_performance_plan(null,$1,current_date,current_date+30,'CNY',100,'[]')) item",[adminId])).id);
  const retainedEligibility=(await admin.query("select * from public.staff_sales_eligibility_events where member_id=$1",[retainedMember])).rows;
  await pause(pendingDirector);
  assert.equal((await eligibility(pendingDirector.id)).status,"DELETE_ELIGIBLE","unaccepted administrator invitation changed to sales director must remain removable");
@@ -183,6 +200,8 @@ try {
  assert.equal((await eligibility(allocatedStaff.id)).status,"BUSINESS_REFERENCES_EXIST");
  await assert.rejects(remove(allocatedStaff.id),e=>e.message==="BUSINESS_REFERENCES_EXIST");
  console.log("PASS approved performance scope and financial contribution still prohibit account removal.");
+ const {verifyPersonalGovernance}=await import('./lib/test-personal-governance.mjs');
+ await verifyPersonalGovernance({admin,execute,create,workspace,otherWorkspace,superId,team});
  console.log(`PASS disposable lifecycle on ${image}; no application environment or Production.`);
 } finally {
  await closePools?.();await admin?.end().catch(()=>{});

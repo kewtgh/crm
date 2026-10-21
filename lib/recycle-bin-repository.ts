@@ -34,3 +34,7 @@ export async function listRecycleBin():Promise<RecycleBinItem[]>{
     ...map("LEAD",leads),
   ].sort((a,b)=>b.deletedAt.localeCompare(a.deletedAt));
 }
+
+export function listPersonalRecycleBin():Promise<RecycleBinItem[]>{
+  return databaseJson("/db/rpc/list_personal_recycle_bin",{method:"POST",body:"{}"});
+}

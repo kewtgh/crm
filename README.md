@@ -1,6 +1,14 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.5**
+Current release candidate: **v3.37.6**
+
+## v3.37.6 — Pending staff and personal governance
+
+Historical member audit events no longer prevent removal of an unused identity.
+First sign-in and initial password setup are required before staff enter sales
+reporting or receive new performance assignments. Non-administrators have personal
+approval and recycle-bin entries, with database-enforced access boundaries.
+See [release notes](docs/RELEASE_V3.37.6.md).
 
 ## v3.37.5 — Development toolchain security update
 

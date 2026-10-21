@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 
-export async function verifyStaffRolesAndPerformance({admin,execute,create,workspace,otherWorkspace,superId,adminId,team}) {
+export async function verifyStaffRolesAndPerformance({admin,execute,create:createPending,workspace,otherWorkspace,superId,adminId,team}) {
  const {authenticateAccount}=await import("../../lib/auth/accounts.ts");
  const {decryptInvitationCredential}=await import("../../lib/invitation-credential-crypto.mjs");
  const {getStaffUser}=await import("../../lib/admin-users-repository.ts");
  const q=async(sql,args=[])=>(await admin.query(sql,args)).rows[0];
+ const onboard=async user=>{await admin.query("update app_auth.accounts set last_sign_in_at=now(),must_change_password=false where id=$1",[user.id]);await admin.query("update public.workspace_memberships set must_change_password=false where user_id=$1",[user.id]);return user;};
+ const create=async(...args)=>onboard(await createPending(...args));
+ await onboard({id:superId});await onboard({id:adminId});
  await admin.query("select set_config('app.workspace_id',$1,false),set_config('app.user_id',$2,false),set_config('app.aal','aal2',false)",[workspace,superId]);
  const member=async user=>(await q("select id from public.sales_team_members where auth_user_id=$1 and workspace_id=$2",[user.id,workspace])).id;
  const dates=await q("select current_date::text today,(current_date+1)::text tomorrow,date_trunc('quarter',current_date)::date::text start,(date_trunc('quarter',current_date)+interval '3 months')::date::text finish");
@@ -19,7 +22,7 @@ export async function verifyStaffRolesAndPerformance({admin,execute,create,works
   const outbox=await q("select payload from public.notification_outbox where recipient_id=$1",[staff.id]);
   const temporary=decryptInvitationCredential(outbox.payload.encryptedTemporaryPassword);
   const identity=await authenticateAccount(staff.username,temporary);
-  assert.equal(identity?.id,staff.id);assert.equal(identity?.role,staff.role);assert.equal(identity.mustChangePassword,true);
+  assert.equal(identity?.id,staff.id);assert.equal(identity?.role,staff.role);assert.equal(identity.mustChangePassword,false,"reporting fixtures explicitly completed onboarding");
   const record=await getStaffUser(staff.id);assert.equal(record.businessProfile.salesEligible,false);assert.equal(record.teams.length,0);
  }
  for(const staff of [operations,academic]){
