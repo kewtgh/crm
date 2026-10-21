@@ -72,6 +72,7 @@ test("dependency policy pins patched advisories without weakening CI", async () 
   assert.equal(manifest.devDependencies["brace-expansion-secure"], "npm:brace-expansion@5.0.12");
   assert.equal(manifest.dependencies.next, "16.3.8");
   assert.equal(manifest.devDependencies["eslint-config-next"], manifest.dependencies.next);
+  assert.equal(manifest.devDependencies.vite, "8.3.5");
   assert.equal(manifest.overrides["baseline-browser-mapping"], "2.11.27");
   assert.equal(manifest.overrides.browserslist, "4.29.3");
   assert.equal(manifest.overrides["fast-uri"], "4.2.1");
@@ -81,10 +82,13 @@ test("dependency policy pins patched advisories without weakening CI", async () 
   assert.equal(manifest.overrides.braces, "file:vendor/braces-safe");
   assert.equal(manifest.overrides["js-yaml"], "5.4.2");
   assert.equal(manifest.overrides.nanoid, "6.0.1");
+  assert.equal(manifest.overrides.postcss, "8.5.30");
   assert.equal(manifest.overrides.sharp, "0.35.5");
   assert.equal(lock.packages["node_modules/brace-expansion-secure"].version, "5.0.12");
   for (const [name, versions] of Object.entries({
     next: ["16.3.8"],
+    vite: ["8.3.5"],
+    postcss: ["8.5.30"],
     "baseline-browser-mapping": ["2.11.27"],
     browserslist: ["4.29.3"],
     "fast-uri": ["4.2.1"],
@@ -94,7 +98,7 @@ test("dependency policy pins patched advisories without weakening CI", async () 
     sharp: ["0.35.5"],
   })) {
     const entries = Object.entries(lock.packages).filter(([path]) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`));
-    if (["next", "browserslist", "fflate", "sharp"].includes(name)) assert.ok(entries.length, `${name} must be present in the lockfile`);
+    if (["next", "vite", "browserslist", "fflate", "sharp"].includes(name)) assert.ok(entries.length, `${name} must be present in the lockfile`);
     for (const [path, metadata] of entries) assert.ok(versions.includes(metadata.version), `${path} must use a patched version, got ${metadata.version}`);
   }
   assert.equal(safePackage.version, "3.0.4-lumina.1");

@@ -1,6 +1,6 @@
 {
   "name": "lumina-crm",
-  "version": "3.37.4",
+  "version": "3.37.5",
   "private": true,
   "packageManager": "npm@12.2.0",
   "engines": {
@@ -199,7 +199,7 @@
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vite": "8.3.2",
+    "vite": "8.3.5",
     "vite-tsconfig-paths": "6.1.1"
   },
   "overrides": {
@@ -210,7 +210,7 @@
     "fast-uri": "4.2.1",
     "js-yaml": "5.4.2",
     "nanoid": "6.0.1",
-    "postcss": "8.5.28",
+    "postcss": "8.5.30",
     "sharp": "0.35.5",
     "tsx": {
       "esbuild": "0.28.2"

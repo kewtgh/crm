@@ -1,4 +1,11 @@
-# Implementation status — v3.37.4 release candidate
+# Implementation status — v3.37.5 release candidate
+
+## v3.37.5 — Toolchain security
+
+Vite 8.3.5 replaces the vulnerable 8.3.2 build dependency. PostCSS is pinned to
+8.5.30, matching Vite's declared minimum. Security regression checks cover the
+manifest and every corresponding lockfile entry; CI still audits all three
+projects at the moderate threshold. See [release notes](RELEASE_V3.37.5.md).
 
 ## v3.37.4 — Legacy identity history and removal diagnostics
 

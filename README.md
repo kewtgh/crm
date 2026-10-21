@@ -1,6 +1,12 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.4**
+Current release candidate: **v3.37.5**
+
+## v3.37.5 — Development toolchain security update
+
+Vite is pinned to 8.3.5 to resolve the launch-editor security advisories flagged
+by CI. PostCSS is aligned with that release's requirements. Dependency audit
+thresholds remain unchanged. See [release notes](docs/RELEASE_V3.37.5.md).
 
 ## v3.37.4 — Removal of accounts with legacy identity history
 
