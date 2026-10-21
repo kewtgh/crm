@@ -221,7 +221,15 @@ test("keeps cold admin submenu navigation on a same-tab document boundary", asyn
     readFile(repositoryFile("scripts/browser-qa-chromium-1248.cjs"), "utf8"),
   ]);
   const {navigationDestinations}=await import('../lib/navigation-destinations.ts');
-  assert.ok(navigationDestinations.filter(item=>item.space==='admin').every(item=>item.documentNavigation&&item.roles));
+  // Personal governance shares the Administration group but lives outside the
+  // protected /admin route tree and uses regular client navigation.
+  const administrativeRoutes=navigationDestinations.filter(item=>item.href==='/admin'||item.href.startsWith('/admin/'));
+  assert.ok(administrativeRoutes.length>0);
+  for(const item of administrativeRoutes){
+    assert.equal(item.documentNavigation,true,item.href);
+    assert.ok(item.roles?.length,item.href);
+    assert.ok(item.roles.every(role=>role==='ADMIN'||role==='SUPER_ADMIN'),item.href);
+  }
   assert.match(shell, /item\.documentChildNavigation\s*\?\s*<a[^>]+data-navigation="document"/);
   assert.match(browserQa, /__LUMINA_QA_DOCUMENT_MARKER__/);
   assert.match(browserQa, /context\.pages\(\)\.length!==1/);
