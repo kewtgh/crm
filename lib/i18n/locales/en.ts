@@ -58,6 +58,7 @@ export const en: Messages = {
   "staff.removal.protected": "This account is protected by the administrator or self-removal rules.",
   "staff.removal.multiWorkspace": "This identity belongs to multiple workspaces and needs controlled identity review.",
   "staff.removal.external": "This account is managed by an external directory. Use its offboarding process.",
+  "staff.removal.identityRepair": "An unfinished identity change or repair remains. Ask an administrator to resolve it, then check removal eligibility again.",
   "role.finance_manager": "Finance manager",
   "role.FINANCE_MANAGER": "Finance manager",
   "role.finance_specialist": "Finance specialist",

@@ -19,6 +19,16 @@ export function StaffRemovalDialog({user,onClose,onSaved}:{user:StaffUserRecord;
   EXTERNALLY_MANAGED_ACCOUNT:["This account is managed by an external directory. Use its governed offboarding process.","该账户由外部目录管理，请使用对应的受控离职流程。"],
   INVITATION_IN_FLIGHT:["An invitation is being delivered. Retry the eligibility check after delivery settles.","邀请正在投递，请等待投递状态确定后重新检查。"],
   BUSINESS_REFERENCES_EXIST:["Current business links still require this identity. Clear or reassign them, then check again; past activity alone does not permanently prevent deletion.","当前仍有业务关联。清理或转交后可重新检查删除资格；曾经有业务记录不代表永久禁止删除。"],
+  IDENTITY_REPAIR_REQUIRED:["An unfinished identity change or repair remains. Ask an administrator to resolve it, then check again.","该账户仍有未完成的身份变更或修复任务，请管理员处理后重新检查。"],
+ };
+ const areas:Record<NonNullable<StaffRemovalEligibility["blockingArea"]>,[string,string]>={
+  CUSTOMER_RECORDS:["Customer records or collaboration access","客户记录或协作权限"],
+  PERFORMANCE_RECORDS:["Performance allocations or financial contributions","业绩分配或财务贡献"],
+  TEAM_RESPONSIBILITIES:["Team leadership or reporting relationships","团队负责人或上下级关系"],
+  IDENTITY_CONFIGURATION:["Identity administration records","身份管理记录"],
+  HISTORICAL_RECORDS:["Historical record references requiring review","需要审查的历史记录引用"],
+  NOTIFICATION_RECORDS:["Business notifications","业务通知记录"],
+  OTHER_REFERENCES:["Other references requiring administrator review","需要管理员审查的其他关联"],
  };
  const refresh=async()=>{try{await onSaved();}catch{setNotice(t("audit.savedRefreshFailed"));}};
  const submit=async(e:React.FormEvent)=>{e.preventDefault();if(accepted){await refresh();return;}if(await mutation.send({confirmation:"REMOVE_UNUSED_ACCOUNT"})){setAccepted(true);setNotice(en?"Account removed. Refresh the directory.":"账户已删除，请刷新员工目录。");await refresh();}};
@@ -27,6 +37,7 @@ export function StaffRemovalDialog({user,onClose,onSaved}:{user:StaffUserRecord;
  <p>{en?"Suspension stops login while preserving business attribution. Removal permanently clears a cleared identity, credentials, sessions and its invitation queue. The server checks dependencies again on confirmation.":"停用会阻止登录并保留业务归属。删除会永久清理无业务引用的身份、凭据、会话和邀请队列。确认时服务器将再次检查依赖。"}</p>
  {loadError?<InlineMessage type="error">{en?"Eligibility check unavailable.":"暂时无法检查删除资格。"}<button type="button" className="secondary-button compact" onClick={()=>void load()}>{t("ux.management.refresh")}</button></InlineMessage>:!eligibility?<p role="status">{t("common.loading")}</p>:eligibility.status!=="DELETE_ELIGIBLE"?<InlineMessage type="info">{blockers[eligibility.status]?.[en?0:1]}</InlineMessage>:<fieldset disabled={mutation.pending||mutation.uncertain||accepted}><label className="checkbox-field"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{en?"I confirm permanent removal of this cleared account.":"我确认永久删除该无业务引用的账户。"}</span></label></fieldset>}
  {eligibility?.retainedReportingIdentity&&<InlineMessage type="info">{en?"Login access and personal staff details will be removed. Immutable reporting configuration history keeps only a disabled, de-identified reference; it grants no access or reporting participation.":"登录权限和用户资料将被清除。不可改写的统计配置历史仅保留已禁用、去标识的占位记录，不再具有登录权限或参与统计。"}</InlineMessage>}
+ {eligibility?.status==="BUSINESS_REFERENCES_EXIST"&&eligibility.blockingArea&&areas[eligibility.blockingArea]&&<p role="status">{en?"Blocking category: ":"阻塞类别："}{areas[eligibility.blockingArea][en?0:1]}</p>}
  {mutation.error&&<InlineMessage type="error">{mutation.error}</InlineMessage>}{notice&&<InlineMessage type="info">{notice}</InlineMessage>}
  <div className="drawer-actions"><button type="button" className="secondary-button" disabled={mutation.pending||mutation.uncertain} onClick={onClose}>{t("common.cancel")}</button><button className="primary-button" disabled={mutation.pending||(!accepted&&!mutation.uncertain&&(!confirmed||eligibility?.status!=="DELETE_ELIGIBLE"))}>{accepted?t("ux.management.refresh"):mutation.uncertain?t("enrollments.retry"):en?"Remove account":"删除账户"}</button></div>
  </form></AccessibleDrawer>;

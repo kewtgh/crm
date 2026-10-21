@@ -1,6 +1,12 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.3**
+Current release candidate: **v3.37.4**
+
+## v3.37.4 — Removal of accounts with legacy identity history
+
+Completed legacy role-change and identity-repair history no longer blocks account
+removal. Unfinished repairs remain protected, and removal identifies the category
+of remaining business references. See [release notes](docs/RELEASE_V3.37.4.md).
 
 ## v3.37.3 — Staff removal and branded authentication email
 

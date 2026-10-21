@@ -1,4 +1,11 @@
-# Implementation status — v3.37.3 release candidate
+# Implementation status — v3.37.4 release candidate
+
+## v3.37.4 — Legacy identity history and removal diagnostics
+
+Forward migration 133 retains de-identified account references for completed
+legacy identity changes and repairs. Unresolved operations still block removal;
+retained operations cannot be replayed after removal. Business-reference blockers
+have categorized explanations. See [release notes](RELEASE_V3.37.4.md).
 
 ## v3.37.3 — Staff removal and branded authentication email
 

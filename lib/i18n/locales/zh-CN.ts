@@ -57,6 +57,7 @@ export const zhCN: Messages = {
   "staff.removal.protected": "该账户受管理员或禁止删除自身规则保护。",
   "staff.removal.multiWorkspace": "该身份属于多个工作区，需要受控身份审查。",
   "staff.removal.external": "该账户由外部目录管理，请使用对应离职流程。",
+  "staff.removal.identityRepair": "该账户仍有未完成的身份变更或修复任务，请管理员处理后重新检查删除资格。",
   "role.finance_manager": "财务经理",
   "role.FINANCE_MANAGER": "财务经理",
   "role.finance_specialist": "财务专员",

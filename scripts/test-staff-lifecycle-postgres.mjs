@@ -48,6 +48,51 @@ try {
  const create=async(name,extra={})=>(await createStaffUser(input(name,extra),actor)).item;
  const pause=async(staff)=>{await updateStaffUser(staff,{status:"SUSPENDED"},actor);return staff;};
  const paused=async(name,extra={})=>pause(await create(name,extra));
+ // Existing installations can retain the previous identity-sync protocol's
+ // completed role-change rows even though new changes use the direct RPC.
+ const legacyPending=await create("legacy.pending.director",{role:"ADMIN"});
+ const legacyChange=(await admin.query("select (public.prepare_staff_identity_change($1,'SALES_DIRECTOR','ACTIVE',$2)).id",[legacyPending.id,superId])).rows[0].id;
+ await admin.query("select public.complete_staff_identity_change($1)",[legacyChange]);
+ const legacyDirector=await getStaffUser(legacyPending.id);
+ assert.equal(legacyDirector.lastSignInAt,null);
+ await pause(legacyDirector);
+ assert.equal((await eligibility(legacyDirector.id)).status,"DELETE_ELIGIBLE","completed legacy role changes are account configuration, not business references");
+ assert.equal((await eligibility(legacyDirector.id)).retentionMode,"AUDIT_IDENTITY");
+ assert.equal((await remove(legacyDirector.id)).status,"REMOVED");
+ const legacyHistory=(await admin.query("select state,before_role,after_role,before_team,error_message from public.staff_identity_changes where id=$1",[legacyChange])).rows[0];
+ assert.equal(legacyHistory.state,"SYNCED");assert.equal(legacyHistory.before_role,"ADMIN");assert.equal(legacyHistory.after_role,"SALES_DIRECTOR");
+ assert.equal(legacyHistory.before_team.name_en,undefined);assert.equal(legacyHistory.before_team.name_zh,undefined);assert.equal(legacyHistory.before_team.team,undefined);
+ assert.equal((await admin.query("select status,purged_at from app_auth.accounts where id=$1",[legacyDirector.id])).rows[0].status,"DISABLED");
+ assert.equal((await admin.query("select count(*) n from public.workspace_memberships where user_id=$1",[legacyDirector.id])).rows[0].n,"0");
+ await assert.rejects(admin.query("update public.staff_identity_changes set state='PENDING' where id=$1",[legacyChange]),e=>e.message==="STAFF_IDENTITY_REMOVED");
+ const legacyRepair=await create("legacy.repair.director",{role:"ADMIN"});
+ const repairChange=(await admin.query("select (public.prepare_staff_identity_change($1,'SALES_DIRECTOR','ACTIVE',$2)).id",[legacyRepair.id,superId])).rows[0].id;
+ await pause(await getStaffUser(legacyRepair.id));
+ assert.equal((await eligibility(legacyRepair.id)).status,"IDENTITY_REPAIR_REQUIRED");
+ await assert.rejects(remove(legacyRepair.id),e=>e.message==="IDENTITY_REPAIR_REQUIRED");
+ // Seed the historical compensation outcome; do not invoke the retired
+ // rollback implementation against today's expanded member schema.
+ await admin.query("update public.staff_identity_changes set state='FAILED',error_message='FICTIONAL',completed_at=now() where id=$1",[repairChange]);
+ const repairJob=(await admin.query("select id from public.staff_identity_repair_jobs where identity_change_id=$1",[repairChange])).rows[0].id;
+ // A failed legacy change remains FAILED after its separate repair completes.
+ await pause(await getStaffUser(legacyRepair.id));
+ for(const status of ['PENDING','PROCESSING','FAILED','DEAD']){
+  await admin.query("update public.staff_identity_repair_jobs set status=$2 where id=$1",[repairJob,status]);
+  assert.equal((await eligibility(legacyRepair.id)).status,"IDENTITY_REPAIR_REQUIRED",status);
+ }
+ await admin.query("select public.complete_identity_repair($1,true)",[repairJob]);
+ assert.equal((await eligibility(legacyRepair.id)).status,"DELETE_ELIGIBLE");
+ assert.equal((await remove(legacyRepair.id)).status,"REMOVED");
+ assert.equal((await admin.query("select status from public.staff_identity_repair_jobs where id=$1",[repairJob])).rows[0].status,"COMPLETED");
+ await assert.rejects(admin.query("update public.staff_identity_repair_jobs set status='PENDING' where id=$1",[repairJob]),e=>e.message==="STAFF_IDENTITY_REMOVED");
+ const legacyRollback=await create("legacy.rollback.director",{role:"ADMIN"});
+ const rollbackChange=(await admin.query("select (public.prepare_staff_identity_change($1,'SALES_DIRECTOR','ACTIVE',$2)).id",[legacyRollback.id,superId])).rows[0].id;
+ await admin.query("update public.staff_identity_changes set state='ROLLED_BACK',completed_at=now() where id=$1",[rollbackChange]);
+ await admin.query("insert into public.audit_events(workspace_id,actor_id,entity_type,entity_id,action) values($1,$2,'staff_user',$3,'IDENTITY_CHANGE_ROLLED_BACK')",[workspace,superId,legacyRollback.id]);
+ await pause(await getStaffUser(legacyRollback.id));
+ assert.equal((await eligibility(legacyRollback.id)).status,"DELETE_ELIGIBLE");
+ assert.equal((await remove(legacyRollback.id)).status,"REMOVED");
+ console.log("PASS legacy synced/rolled-back/repaired role history is removable; unresolved work and operation replay remain blocked.");
  const pendingRoleChange=await create("pending.role.change",{role:"ADMIN"});
  await execute(superId,"select public.change_staff_role($1,'SALES_DIRECTOR','ADMIN',$2) item",[pendingRoleChange.id,randomUUID()]);
  const pendingDirector=await getStaffUser(pendingRoleChange.id);
@@ -91,6 +136,8 @@ try {
  const ownedOrganization=(await admin.query("insert into public.organizations(workspace_id,name_zh,name_en,owner_id,created_by) values($1,'示例归属机构','Fictional Owned Organization',$2,$3) returning id",[workspace,business.id,superId])).rows[0].id;
  await admin.query("insert into public.audit_events(workspace_id,actor_id,entity_type,entity_id,action) values($1,$2,'fictional_business',$3,'BUSINESS_ACTION')",[workspace,business.id,randomUUID()]);
  assert.equal((await eligibility(business.id)).status,"BUSINESS_REFERENCES_EXIST");await assert.rejects(remove(business.id),e=>e.message==="BUSINESS_REFERENCES_EXIST");
+ assert.equal((await eligibility(business.id)).blockingArea,"CUSTOMER_RECORDS");
+ assert.equal((await getStaffUser(business.id)).lastSignInAt,null,"never signing in does not bypass actual customer ownership");
  assert.equal((await admin.query("select count(*) n from app_auth.accounts where id=$1",[business.id])).rows[0].n,"1");
  const sending=await paused("sending.staff");await admin.query("update public.notification_outbox set status='SENDING' where recipient_id=$1",[sending.id]);assert.equal((await eligibility(sending.id)).status,"INVITATION_IN_FLIGHT");await assert.rejects(remove(sending.id),e=>e.message==="INVITATION_IN_FLIGHT");
  const multi=await paused("multi.staff");await admin.query("insert into public.workspace_memberships(workspace_id,user_id,role) values($1,$2,'SALES_SUPPORT')",[otherWorkspace,multi.id]);assert.equal((await eligibility(multi.id)).status,"MULTI_WORKSPACE_ACCOUNT");

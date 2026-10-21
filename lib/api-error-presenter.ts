@@ -124,6 +124,7 @@ const codeKeys: Record<string, string> = {
   STAFF_REPORTING_INELIGIBLE: "staff.reporting.requiresTeam",
   DEACTIVATION_REQUIRED: "staff.removal.deactivateFirst",
   BUSINESS_REFERENCES_EXIST: "staff.removal.references",
+  IDENTITY_REPAIR_REQUIRED: "staff.removal.identityRepair",
   INVITATION_IN_FLIGHT: "staff.removal.inFlight",
   PROTECTED_ACCOUNT: "staff.removal.protected",
   MULTI_WORKSPACE_ACCOUNT: "staff.removal.multiWorkspace",
