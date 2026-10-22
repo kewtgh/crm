@@ -2,6 +2,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import { EMAIL_DELIVERY_RUNTIME_KEYS } from "../lib/email-delivery-runtime.mjs";
+import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
+
+assertDeploymentRuntime();
 
 const proxyKeys = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
@@ -130,6 +133,11 @@ async function startWeb() {
 }
 
 const commands = {
+  "schema-evidence": async () => {
+    requireDatabaseRole("MIGRATION_DATABASE_URL", "crm_migrator");
+    rejectPresent(["DATABASE_ADMIN_URL", "BACKUP_DATABASE_URL", "ADMIN_PASSWORD"], "MIGRATION");
+    await runModule("./deployment-schema-evidence.mjs");
+  },
   web: startWeb,
   "web-health": async () => {
     const response = await fetch("http://127.0.0.1:3200/api/health", {

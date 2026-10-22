@@ -1,4 +1,5 @@
 import path from "node:path";
+import { assertEarlyRequestRecoverable } from "./deployment-recovery.mjs";
 
 export const PRODUCTION_DEPLOY_LOCK_PATH = "/var/lib/lumina-crm/deploy.lock";
 export const FINALIZED_DEPLOYMENT_RESULTS = Object.freeze([
@@ -66,32 +67,23 @@ export function classifyPersistedDeployment({ serviceActive, request, latest }) 
   if (latest?.result === "CONTROL_PLANE_FINALIZATION_FAILED") {
     return { state: latest.result, deploymentId: latest.deploymentId ?? null };
   }
-  if (request) return { state: "PENDING_RECOVERABLE", requestId: request.requestId };
+  if (["BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest?.result)) {
+    return { state: latest.result, requestId: request?.requestId ?? null };
+  }
+  if (request) {
+    try {
+      assertEarlyRequestRecoverable({ request, latest, mode: request.mode, serviceActive });
+      return { state: "PENDING_RECOVERABLE", requestId: request.requestId };
+    } catch { return { state: "PENDING_RECONCILIATION_REQUIRED", requestId: request.requestId }; }
+  }
   if (latest?.result) {
     return { state: latest.result, deploymentId: latest.deploymentId ?? null };
   }
   return { state: "IDLE", deploymentId: null };
 }
 
-export function validatePendingRequestForRecovery({
-  request,
-  mode,
-  nowMs = Date.now(),
-  minimumAgeMs = 5_000,
-}) {
-  if (request.mode !== mode) {
-    throw new Error(
-      `Pending ${request.mode} request ${request.requestId} must be recovered before starting ${mode}`,
-    );
-  }
-  const requestedAt = Date.parse(request.requestedAt ?? "");
-  if (!Number.isFinite(requestedAt)) {
-    throw new Error(`Pending request ${request.requestId} has an invalid timestamp`);
-  }
-  if (nowMs - requestedAt < minimumAgeMs) {
-    throw new Error(`A production deployment request is already pending (${request.requestId})`);
-  }
-  return request;
+export function validatePendingRequestForRecovery(options) {
+  return assertEarlyRequestRecoverable(options);
 }
 
 export function isSystemdServiceInProgress(activeState) {

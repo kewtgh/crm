@@ -167,8 +167,9 @@ test("3.8.24 bootstrap reloads the 3.8.25 target controller and bypasses both ol
   }
 });
 
-test("a target controller start failure records a control-plane failure before build or migration", async () => {
+test("a target controller exit failure is distinct from finalization and cannot be blindly replayed", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "lumina-controller-failure-"));
+  t.after(() => rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 }));
   const scripts = path.join(directory, "scripts");
   const state = path.join(directory, "state");
   const requestPath = path.join(state, "request.json");
@@ -180,7 +181,7 @@ test("a target controller start failure records a control-plane failure before b
     requestId: "12345678-1234-1234-1234-123456789abc", mode: "deploy", sourceRoot: directory,
   })}\n`);
   await writeFile(path.join(state, "latest.json"), `${JSON.stringify({
-    requestId: "12345678-1234-1234-1234-123456789abc",
+    requestId: "22345678-1234-1234-1234-123456789abc",
     result: "RUNNING",
     stage: "stale-old-controller",
   })}\n`);
@@ -193,12 +194,13 @@ test("a target controller start failure records a control-plane failure before b
     });
     assert.equal(code, 1);
     const latest = JSON.parse(await readFile(path.join(state, "latest.json"), "utf8"));
-    assert.equal(latest.result, "CONTROL_PLANE_FINALIZATION_FAILED");
+    assert.equal(latest.result, "BOOTSTRAP_FAILED");
+    assert.equal(latest.recoverySafe, false);
     assert.equal(latest.applicationResult, "NOT_STARTED");
     assert.equal(latest.error, "TARGET_CONTROLLER_EXIT_FAILED");
     assert.equal(await readFile(requestPath, "utf8").then(Boolean), true);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
   }
 });
 

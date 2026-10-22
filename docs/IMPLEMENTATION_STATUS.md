@@ -1,4 +1,12 @@
-# Implementation status — v3.37.6 release candidate
+# Implementation status — v3.37.7 release candidate
+
+## v3.37.7 — Deployment control-plane recovery
+
+Bootstrap classifications and request attempts, conservative schema compatibility guards,
+bounded public readiness, explicit candidate acceptance continuation, terminal archive
+reconciliation, Node preflights and read-only Tunnel diagnostics are implemented.
+No application schema migration or production service change is included.
+See [release notes](RELEASE_V3.37.7.md) and [repair plan](DEPLOYMENT_RELIABILITY_PLAN.md).
 
 ## v3.37.6 — Onboarding, history and personal governance
 

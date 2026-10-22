@@ -1,6 +1,12 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.6**
+Current release candidate: **v3.37.7**
+
+## v3.37.7 — Deployment recovery safety
+
+Evidence-based bootstrap retries, schema-guarded application restoration, and resumable
+public acceptance protect forward-migrated releases during network failures.
+See [release notes](docs/RELEASE_V3.37.7.md) and [operator recovery guidance](docs/DEPLOYMENT_RELIABILITY_OPERATIONS.md).
 
 ## v3.37.6 — Pending staff and personal governance
 

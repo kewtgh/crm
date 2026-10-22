@@ -74,7 +74,8 @@ export function redactDeploymentSecrets(value, secretValues) {
       // The literal replacement remains in effect.
     }
   }
-  return safe;
+  return safe.replace(/(?:https?|postgres(?:ql)?|socks5h?):\/\/[^\s"'<>]+/gi, "[REDACTED_URL]")
+    .replace(/\b(?:authorization|password|token|secret|credential)\s*[:=]\s*[^\s,;]+/gi, "[REDACTED_CREDENTIAL]");
 }
 
 export function createAcceptedRelease({
@@ -109,12 +110,13 @@ export function createAcceptedRelease({
   };
 }
 
-export function releaseFailureRollbackPlan({ switched, previousAccepted }) {
+export function releaseFailureRollbackPlan({ switched, previousAccepted, compatibility }) {
   if (!switched) return null;
   if (!previousAccepted?.currentImage || !previousAccepted?.operationsImage) {
     return { status: "UNAVAILABLE", reason: "No accepted application image exists" };
   }
-  return { status: "REQUIRED" };
+  return compatibility?.status === "REQUIRED" ? compatibility
+    : { status: "UNSAFE", reason: compatibility?.reason ?? "SCHEMA_COMPATIBILITY_UNPROVEN" };
 }
 
 export async function runProductionReleaseWorkflow({
@@ -141,15 +143,15 @@ export async function runProductionReleaseWorkflow({
       await operations.bootstrapDatabase(candidateEnvironment);
     }
     await operations.verifyMigrations(candidateEnvironment);
+    await operations.captureSchemaBefore?.(candidateEnvironment);
+    const releaseHealthBaseline = await operations.captureReleaseHealthBaseline(candidateEnvironment);
     migrationMayHaveChanged = true;
     await operations.markMigrationMayHaveChanged?.();
     await operations.migrate(candidateEnvironment);
+    await operations.captureSchemaAfter?.(candidateEnvironment);
     if (mode === "initialize") {
       await operations.bootstrapAdmin(candidateEnvironment);
     }
-    const releaseHealthBaseline = await operations.captureReleaseHealthBaseline(
-      candidateEnvironment,
-    );
     switched = true;
     await operations.switchApplication(candidateEnvironment);
     const releaseHealth = await operations.acceptRuntime(candidateEnvironment, {

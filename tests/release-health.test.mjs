@@ -155,7 +155,7 @@ test("pre-existing degradation completes the release workflow without rollback",
   assert.deepEqual(result.releaseHealth.warnings, [PREEXISTING_QUEUE_DEGRADATION]);
 });
 
-test("a target-created failure rejects acceptance and requires rollback", async () => {
+test("a target-created failure rejects acceptance and requires schema proof before rollback", async () => {
   let failure;
   try {
     await runProductionReleaseWorkflow({
@@ -171,7 +171,7 @@ test("a target-created failure rejects acceptance and requires rollback", async 
   assert.deepEqual(releaseFailureRollbackPlan({
     switched:failure.switched,
     previousAccepted:{currentImage:"previous",operationsImage:"previous-ops"},
-  }), {status:"REQUIRED"});
+  }), {status:"UNSAFE",reason:"SCHEMA_COMPATIBILITY_UNPROVEN"});
 });
 
 test("recovery accepts failed jobs when the unavailable baseline cannot be reconstructed", () => {

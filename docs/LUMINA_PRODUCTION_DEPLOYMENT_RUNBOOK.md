@@ -1,5 +1,9 @@
 # Lumina CRM 生产部署运行手册
 
+> v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
+> supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
+> Forward migrations require proven image/schema compatibility; public-edge failure can leave a healthy candidate pending acceptance.
+
 > 适用场景：在一台已运行其他生产系统的 Ubuntu 服务器上，以独立、可回滚、最小权限方式部署 Lumina CRM。  
 > 本文基于 2026 年 7 月实际部署过程整理，只保留服务器与基础设施部署经验，不包含任何因代码缺陷而进行的仓库修改。
 

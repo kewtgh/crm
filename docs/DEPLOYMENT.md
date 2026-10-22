@@ -1,5 +1,9 @@
 # Lumina CRM v3.8 production deployment
 
+> v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
+> supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
+> Forward migrations require proven image/schema compatibility; public-edge failure can leave a healthy candidate pending acceptance.
+
 This is the only current production runbook. Documents describing host-installed PostgreSQL,
 host Node Web/Worker processes, immutable npm release directories, or Caddy as the user-facing
 endpoint are historical v3.6-and-earlier records.
@@ -605,14 +609,14 @@ Target runtime validation is executed from the target checkout before image buil
 Compose persistence, or container replacement. It validates both runtime schemas, the exact
 32-byte invitation encryption key encoding, Web/Worker equality, and secret independence without
 logging values. Pre-switch failure leaves Web/Worker, compose.env and last-success unchanged.
-Post-switch failure force-recreates both Web and Worker at last-success and rechecks locally; a first
+Post-switch failure may recreate both Web and Worker at last-success only after exact schema compatibility proof; a first
 initialization has no prior image and records rollback as unavailable. Neither path reverses a
 migration, and application rollback reports: “Application rolled back; database remains on the
-forward schema.” Each migration must remain compatible with the rollback application until
-acceptance. Release health requires PostgreSQL and exact target Web/Worker images, healthy containers,
+forward schema.” Compatibility is never inferred from migration ordering. An incompatible old image is not restored;
+a healthy forward candidate with public failure remains pending explicit acceptance. Release health requires PostgreSQL and exact target Web/Worker images, healthy containers,
 the exact target version/commit, valid environment/auth/database/Worker checks, zero missing/stale
 Workers, and zero stuck jobs. Failed jobs must not increase: `0 -> 1` and `1 -> 2` fail and trigger
-rollback; `0 -> 0` is healthy; `1 -> 0` is healthy; `1 -> 1` and `2 -> 1` are accepted with only
+compatible rollback or guarded manual recovery; `0 -> 0` is healthy; `1 -> 0` is healthy; `1 -> 1` and `2 -> 1` are accepted with only
 `PREEXISTING_QUEUE_DEGRADATION`. The persisted `releaseHealth` evidence contains aggregate counts and
 stable warnings only—never queue rows, errors, recipients, payloads, URLs, or credentials. Normal
 loopback readiness remains HTTP 503 while any failed/stuck job exists. Only after release health and

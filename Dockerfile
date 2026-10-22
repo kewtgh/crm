@@ -70,6 +70,7 @@ COPY --chown=lumina:lumina \
     scripts/db-backup.mjs \
     scripts/db-bootstrap.mjs \
     scripts/db-migrate.mjs \
+    scripts/deployment-schema-evidence.mjs \
     scripts/db-restore-test.mjs \
     scripts/db-verify-migrations.mjs \
     scripts/process-calendar-deliveries.mjs \
@@ -91,6 +92,8 @@ COPY --chown=lumina:lumina \
     scripts/lib/backup-policy.mjs \
     scripts/lib/bounded-concurrency.mjs \
     scripts/lib/delivery-webhook.mjs \
+    scripts/lib/deployment-runtime.mjs \
+    scripts/lib/deployment-schema.mjs \
     scripts/lib/notification-delivery-protocol.mjs \
     scripts/lib/worker-process-diagnostics.mjs \
     scripts/lib/worker-container-health.mjs \

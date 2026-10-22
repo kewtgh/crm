@@ -72,7 +72,7 @@ test("deploy runner requires public Tunnel liveness without any origin secret", 
   assert.match(acceptance, /`https:\/\/\$\{publicHostname\(\)\}\/api\/health`/);
   assert.match(
     runner,
-    /try \{[\s\S]+verifyTargetControllerSource[\s\S]+publicHostname\(\);\s*persist\(\);[\s\S]+runProductionReleaseWorkflow/,
+    /try \{[\s\S]+verifyTargetControllerSource[\s\S]+publicHostname\(\);\s*if \(!resumeAcceptance\) persist\(\);[\s\S]+runProductionReleaseWorkflow/,
   );
   assert.match(
     runner,

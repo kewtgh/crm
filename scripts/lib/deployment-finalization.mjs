@@ -10,12 +10,46 @@ export class ControlPlaneFinalizationError extends Error {
 
 const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
+export function terminalReconciliationEvidence({ state, accepted, requestArchivePath }) {
+  if (["finalizing", "finished", "control-plane-finalization-failed"].includes(state?.stage)) return state;
+  if (!state || state.finalReleaseAcceptance !== "VERIFIED" || state.internalReleaseHealth !== "HEALTHY"
+    || accepted?.requestId !== state.requestId || accepted.mode !== state.mode
+    || accepted.commit !== state.targetCommit || accepted.currentImage !== state.targetImage
+    || accepted.version !== state.applicationVersion) throw new Error("FINALIZATION_RECONCILIATION_UNSAFE");
+  return { ...state, result: CONTROL_PLANE_FINALIZATION_FAILED, applicationResult: "SUCCESS",
+    applicationAccepted: true, stage: "control-plane-finalization-failed", requestArchivePath };
+}
+
 export function terminalRequestIsArchived({ latest, requestExists, archivedRequest }) {
   return latest?.finalizationComplete === true
     && latest.requestArchived === true
     && requestExists === false
     && archivedRequest?.requestId === latest.requestId
     && archivedRequest?.mode === latest.mode;
+}
+
+// Reconcile filesystem finalization only. Never invoke application operations here.
+export function reconcileTerminalDeployment({ state, latest, requestPath, requestArchivePath,
+  statusPath, latestPath, readJson, exists, rename, atomicWrite }) {
+  const results = new Set(["SUCCESS", "RECOVERED", "FAILED", "FAILED_ROLLED_BACK",
+    "FAILED_ROLLBACK_REQUIRED", "ROLLBACK_OK", "ROLLBACK_FAILED"]);
+  const result = state?.result === CONTROL_PLANE_FINALIZATION_FAILED ? state.applicationResult : state?.result;
+  if (!results.has(result) || !["finalizing", "finished", "control-plane-finalization-failed"].includes(state?.stage)
+    || state.deploymentId !== latest?.deploymentId || state.requestId !== latest?.requestId
+    || state.requestArchivePath !== requestArchivePath) throw new Error("FINALIZATION_RECONCILIATION_UNSAFE");
+  const request = readJson(requestPath);
+  const archived = readJson(requestArchivePath);
+  if ((request && archived) || (!request && !archived)
+    || (request ?? archived).requestId !== state.requestId || (request ?? archived).mode !== state.mode
+    || (exists(requestPath) && !request) || (exists(requestArchivePath) && !archived)) {
+    throw new Error("FINALIZATION_IDENTITY_CONFLICT");
+  }
+  // Repeatable after a crash at any subsequent write; rename is performed at most once.
+  if (request) rename(requestPath, requestArchivePath);
+  const finalized = { ...state, result, stage: "finished", finalizationComplete: true, requestArchived: true };
+  atomicWrite(statusPath, serialized(finalized));
+  atomicWrite(latestPath, serialized(finalized));
+  return finalized;
 }
 
 export function finalizeTerminalDeployment({

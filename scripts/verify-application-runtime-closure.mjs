@@ -9,6 +9,7 @@ export const APPLICATION_RUNTIME_ENTRYPOINTS = [
   "scripts/db-backup.mjs",
   "scripts/db-bootstrap.mjs",
   "scripts/db-migrate.mjs",
+  "scripts/deployment-schema-evidence.mjs",
   "scripts/db-restore-test.mjs",
   "scripts/db-verify-migrations.mjs",
   "scripts/process-calendar-deliveries.mjs",

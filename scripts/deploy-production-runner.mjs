@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
+import { schemaEvidence, schemasMatch, applicationRollbackDecision } from "./lib/deployment-schema.mjs";
+import { waitForPublicEdge } from "./lib/public-edge-health.mjs";
+import { assertPendingAcceptance, deploymentFailureDisposition, resumeCandidateAcceptance } from "./lib/deployment-recovery.mjs";
+import { durableDeploymentWrite } from "./lib/deployment-state-write.mjs";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
@@ -55,6 +60,7 @@ import {
 } from "./lib/production-release-health.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+assertDeploymentRuntime();
 const expectedSourceRoot = "/opt/lumina-crm/source";
 const stateRoot = "/var/lib/lumina-crm/deployments";
 const logRoot = "/var/log/lumina-crm/deployments";
@@ -102,11 +108,16 @@ if (!/^[0-9a-f-]{36}$/i.test(request.requestId ?? "")
 }
 
 const startedAt = new Date();
-const deploymentId = `${startedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${request.requestId.slice(0, 8)}`;
+const priorLatest = readJson(latestPath);
+const resumeAcceptance = request.resumePublicAcceptance === true;
+if (resumeAcceptance) assertPendingAcceptance({ request, latest: priorLatest });
+const deploymentId = resumeAcceptance ? priorLatest.deploymentId
+  : `${startedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${request.requestId.slice(0, 8)}`;
+if (!/^[0-9TZ-]+[0-9a-f-]*$/.test(deploymentId)) throw new Error("DEPLOYMENT_ID_INVALID");
 const logPath = path.join(logRoot, `${deploymentId}.log`);
 const statusPath = path.join(stateRoot, `${deploymentId}.json`);
 const requestArchivePath = path.join(stateRoot, `request-${deploymentId}.json`);
-writeFileSync(logPath, "", { flag: "wx", mode: 0o640 });
+writeFileSync(logPath, "", { flag: resumeAcceptance ? "a" : "wx", mode: 0o640 });
 
 const configuredGitProxy = process.env.LUMINA_GIT_PROXY?.trim() ?? "";
 const configuredDockerProxy = parseDockerBuildProxy(process.env.LUMINA_DOCKER_PROXY);
@@ -117,7 +128,6 @@ const secretValues = [
 ];
 let switched = false;
 let migrationMayHaveChanged = false;
-const priorLatest = readJson(latestPath);
 const acceptedStateExists = existsSync(acceptedPath);
 let previousAccepted = readJson(acceptedPath);
 const previousComposeEnvironment = existsSync(composeEnvPath)
@@ -151,7 +161,17 @@ let persisted = {
   releaseHealth: null,
   logPath,
   error: null,
+  bootstrapAttempts: priorLatest?.attempts ?? [],
+  migrationState: "NOT_STARTED",
+  launchId: request.launchId,
+  finalizationComplete: false,
+  requestArchived: false,
 };
+if (resumeAcceptance) {
+  persisted = { ...priorLatest, launchId: request.launchId };
+  migrationMayHaveChanged = true;
+  switched = true;
+}
 
 function readJson(file) {
   try {
@@ -162,9 +182,7 @@ function readJson(file) {
 }
 
 function atomicWrite(file, content, mode = 0o640) {
-  const temporary = `${file}.next-${process.pid}`;
-  writeFileSync(temporary, content, { mode });
-  renameSync(temporary, file);
+  durableDeploymentWrite(file, content, mode);
 }
 
 function persist(update = {}) {
@@ -251,15 +269,21 @@ function run(label, command, args, {
     const append = (value, chunk) => `${value}${chunk}`.slice(-4 * 1024 * 1024);
     child.stdout.on("data", (chunk) => { stdout = append(stdout, chunk); });
     child.stderr.on("data", (chunk) => { stderr = append(stderr, chunk); });
-    const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
+    let killTimer;
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      killTimer = setTimeout(() => child.kill("SIGKILL"), 5_000);
+    }, timeoutMs);
     const heartbeat = setInterval(() => log("INFO", `${label} is still running`), 20_000);
     child.once("error", (error) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       clearInterval(heartbeat);
       reject(error);
     });
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       clearInterval(heartbeat);
       const result = { code, stdout: stdout.trim(), stderr: stderr.trim() };
       if (code !== 0 && !allowFailure) {
@@ -307,10 +331,10 @@ async function serviceRuntime(envFile, service) {
   const id = located.stdout.trim();
   if (!id) return { image:null, state:"missing", health:"missing" };
   const inspected = await run(`inspect ${service} runtime`, "docker", [
-    "inspect", "--format", "{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", id,
+    "inspect", "--format", "{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}|{{.Image}}", id,
   ], { timeoutMs:15_000,quiet:true,allowFailure:true });
-  const [image, state, health] = inspected.stdout.trim().split("|");
-  return { image:image || null,state:state || "unknown",health:health || "unknown" };
+  const [image, state, health, imageId] = inspected.stdout.trim().split("|");
+  return { image:image || null,state:state || "unknown",health:health || "unknown",imageId:imageId || null };
 }
 
 async function runtimeSnapshot(envFile = composeEnvPath) {
@@ -377,30 +401,18 @@ async function waitForContainerHealth(envFile, service, timeoutMs) {
       ], { timeoutMs: 15_000, quiet: true });
       if (health.stdout.trim() === "healthy") return;
       if (health.stdout.trim() === "unhealthy") {
+        if (service === "worker") {
+          const evidence = await run("inspect Worker schema health failure", "docker", [
+            "inspect", "--format", "{{json .State.Health.Log}}", id,
+          ], { timeoutMs: 10_000, quiet: true });
+          if (/WORKER_SCHEMA_NOT_CURRENT/.test(evidence.stdout)) throw new Error("WORKER_SCHEMA_NOT_CURRENT");
+        }
         log("WARN", `${service} is unhealthy; waiting for its bounded recovery window`);
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 5_000));
   }
   throw new Error(`${service} did not become healthy`);
-}
-
-async function fetchHealth(label, url, { headers } = {}) {
-  stage(label);
-  const response = await fetch(url, {
-    headers,
-    redirect: "manual",
-    signal: AbortSignal.timeout(15_000),
-  });
-  const text = await response.text();
-  let body;
-  try { body = JSON.parse(text); } catch { body = null; }
-  if (!response.ok || body?.status !== "ok") {
-    throw new Error(`${label} failed with HTTP ${response.status}`);
-  }
-  if (target?.version && body?.version !== target.version) {
-    throw new Error("PUBLIC_LIVENESS_VERSION_MISMATCH");
-  }
 }
 
 async function fetchReleaseReadiness(label, { expectedVersion } = {}) {
@@ -467,6 +479,12 @@ async function acceptRuntime(envFile, {
   if (runtime.web.image !== target?.currentImage || runtime.worker.image !== target?.currentImage) {
     throw new Error("TARGET_RELEASE_IMAGE_MISMATCH");
   }
+  const immutable = await immutableImageIdentity(target.currentImage, target.commit);
+  if (runtime.web.imageId !== immutable.id || runtime.worker.imageId !== immutable.id
+    || (resumeAcceptance && persisted.targetImageId !== immutable.id)) {
+    throw new Error("TARGET_RELEASE_IMAGE_DIGEST_MISMATCH");
+  }
+  persist({ targetImageId: immutable.id });
   const readiness = await fetchReleaseReadiness("loopback release acceptance", {
     expectedVersion:target?.version,
   });
@@ -477,11 +495,17 @@ async function acceptRuntime(envFile, {
   });
   persist({ releaseHealth });
   for (const warning of releaseHealth.warnings) log("WARN", warning);
+  const database = await databaseSchema(envFile);
+  const imageSchema = await imageSchemaEvidence(target.currentImage);
+  if (!schemasMatch(database, imageSchema)) throw new Error("TARGET_SCHEMA_INCOMPATIBLE");
+  persist({ internalReleaseHealth: "HEALTHY", applicationRuntimeState: "TARGET_HEALTHY",
+    databaseSchemaState: database, targetSchema: imageSchema });
   if (!publicChecks) return releaseHealth;
-  await fetchHealth(
-    "Cloudflare Tunnel public liveness",
-    `https://${publicHostname()}/api/health`,
-  );
+  stage("Cloudflare Tunnel public liveness");
+  const edge = await waitForPublicEdge({ url: `https://${publicHostname()}/api/health`,
+    expectedVersion: target.version,
+    onAttempt: attempt => { persist({ publicEdgeHealth: attempt.category }); log("INFO", attempt.category); } });
+  persist({ publicEdgeHealth: edge.status, finalReleaseAcceptance: "VERIFIED" });
   return releaseHealth;
 }
 
@@ -595,6 +619,48 @@ async function applyMigrations(candidateEnv) {
   ]);
 }
 
+async function databaseSchema(envFile) {
+  const output = await compose("read authoritative database schema", envFile, [
+    "--profile", "ops", "run", "--rm", "--no-deps", "migrate", "schema-evidence",
+  ], { quiet: true, timeoutMs: 30_000 });
+  const marker = output.stdout.split("\n").find(line => line.startsWith("SCHEMA_EVIDENCE="));
+  if (!marker) throw new Error("DATABASE_SCHEMA_EVIDENCE_UNAVAILABLE");
+  return JSON.parse(marker.slice("SCHEMA_EVIDENCE=".length));
+}
+
+async function imageSchemaEvidence(image) {
+  // Execute only an existing immutable image, without network, secrets, or writable mounts.
+  const script = `const fs=require('node:fs'),crypto=require('node:crypto');console.log(JSON.stringify(fs.readdirSync('/app/db/migrations').filter(n=>n.endsWith('.sql')).sort().map(name=>({name,checksum:crypto.createHash('sha256').update(fs.readFileSync('/app/db/migrations/'+name)).digest('hex')}))))`;
+  const output = await run("read immutable image migration manifest", "docker", [
+    "run", "--rm", "--pull=never", "--network", "none", "--read-only", "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges", "--entrypoint", "node", image, "-e", script,
+  ], { quiet: true, timeoutMs: 20_000 });
+  return schemaEvidence(JSON.parse(output.stdout));
+}
+
+async function immutableImageIdentity(image, commit) {
+  if (!/^[0-9a-f]{40}$/.test(commit ?? "") || !image.endsWith(`:${commit}`)) throw new Error("IMAGE_IDENTITY_INVALID");
+  const inspected = await run("verify immutable image revision", "docker", [
+    "image", "inspect", "--format", '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}', image,
+  ], { quiet: true, timeoutMs: 15_000 });
+  const [id, revision] = inspected.stdout.trim().split("|");
+  if (!/^sha256:[0-9a-f]{64}$/.test(id ?? "") || revision !== commit) throw new Error("IMAGE_REVISION_MISMATCH");
+  return { id, revision };
+}
+
+async function rollbackCompatibility(envFile, release = previousAccepted) {
+  try {
+    await immutableImageIdentity(release.currentImage, release.commit);
+    return applicationRollbackDecision({ migrationState: persisted.migrationState,
+      database: await databaseSchema(envFile), previousImageSchema: await imageSchemaEvidence(release.currentImage) });
+  } catch { return { status: "UNSAFE", reason: "SCHEMA_COMPATIBILITY_UNPROVEN" }; }
+}
+
+async function assertCompatibleRestore(envFile, release) {
+  const decision = await rollbackCompatibility(envFile, release);
+  if (decision.status !== "REQUIRED") throw new Error("APPLICATION_ROLLBACK_UNSAFE");
+}
+
 async function bootstrapAdmin(candidateEnv) {
   await compose("bootstrap first CRM administrator", candidateEnv, [
     "--profile", "ops", "run", "--rm", "--no-deps", "bootstrap-admin",
@@ -603,6 +669,7 @@ async function bootstrapAdmin(candidateEnv) {
 
 async function switchApplication(candidateEnv) {
   switched = true;
+  persist({ webSwitch: "SWITCH_STARTED", workerSwitch: "SWITCH_STARTED", internalReleaseHealth: "UNVERIFIED" });
   await compose("recreate Web and Worker for the target release", candidateEnv, [
     "up", "-d", "--no-deps", "--force-recreate", "web", "worker",
   ], { timeoutMs: 300_000 });
@@ -613,6 +680,7 @@ async function rollbackApplication(reason) {
   if (!previousAccepted?.currentImage || !previousAccepted?.operationsImage) {
     return { status: "UNAVAILABLE", reason: "No accepted application image exists" };
   }
+  await assertCompatibleRestore(path.join(stateRoot, `${deploymentId}.candidate.env`), previousAccepted);
   const previous = {
     commit: previousAccepted.commit,
     currentImage: previousAccepted.currentImage,
@@ -710,9 +778,9 @@ try {
   log("INFO", `TARGET_APPLICATION_VERSION=${controllerSource.version}`);
   log("INFO", "TARGET_CONTROLLER_REEXEC_OK");
   publicHostname();
-  persist();
+  if (!resumeAcceptance) persist();
   const initialRuntime = await runtimeSnapshot();
-  if (request.mode === "deploy" && (
+  if (!resumeAcceptance && request.mode === "deploy" && (
     initialRuntime.web.image !== previousAccepted?.currentImage
     || initialRuntime.worker.image !== previousAccepted?.currentImage
   )) {
@@ -725,7 +793,29 @@ try {
     initialWorkerHealth:initialRuntime.worker.health,
   });
   log("INFO", `Accepted persistent request mode=${request.mode}`);
-  if (request.mode === "recover") {
+  if (resumeAcceptance) {
+    await resumeCandidateAcceptance({ request, latest: priorLatest, operations: {
+    validateIdentity: async () => {
+    target = { ...imageReferences(priorLatest.targetCommit), version: priorLatest.applicationVersion };
+    if (target.currentImage !== priorLatest.targetImage || controllerLaunch.expectedTarget !== target.commit) {
+      throw new Error("PENDING_TARGET_IDENTITY_MISMATCH");
+    }
+    const candidateEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
+    if (readFileSync(candidateEnv, "utf8") !== composeEnvironment(target)) throw new Error("PENDING_ENVIRONMENT_MISMATCH");
+    return { target, candidateEnv };
+    },
+    acceptRuntime: async candidate => acceptRuntime(candidate.candidateEnv, { acceptanceMode: "recovery" }),
+    finalize: async ({ candidateEnv }, releaseHealth) => {
+    const acceptedAt = new Date().toISOString();
+    const accepted = createAcceptedRelease({ deploymentId, request, target, previousAccepted, acceptedAt, releaseHealth });
+    atomicWrite(composeEnvPath, readFileSync(candidateEnv, "utf8"));
+    atomicWrite(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
+    persist({ applicationAccepted: true, acceptedAt });
+    finish(finalizationContext, persisted, "SUCCESS", { applicationAccepted: true, acceptedAt, releaseHealth });
+    rmSync(candidateEnv, { force: true });
+    },
+    } });
+  } else if (request.mode === "recover") {
     if (!previousAccepted?.currentImage || !previousAccepted?.operationsImage || !previousAccepted?.commit) {
       throw new Error("LAST_SUCCESS_INCOMPLETE");
     }
@@ -735,6 +825,7 @@ try {
       operationsImage:previousAccepted.operationsImage,
       version:previousAccepted.version,
     };
+    await assertCompatibleRestore(composeEnvPath, target);
     const recoveryHealthBaseline = await captureRecoveryHealthBaseline();
     const alreadyHealthy = initialRuntime.web.image === target.currentImage
       && initialRuntime.worker.image === target.currentImage
@@ -780,6 +871,8 @@ try {
     };
     const rollbackEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
     atomicWrite(rollbackEnv, composeEnvironment(target));
+    // Read the database with the currently accepted tooling, not the old image's commands.
+    await assertCompatibleRestore(composeEnvPath, target);
     const rollbackHealthBaseline = await captureRecoveryHealthBaseline();
     await switchApplication(rollbackEnv);
     const releaseHealth = await acceptRuntime(rollbackEnv, {
@@ -883,9 +976,18 @@ try {
           startPostgres,
           bootstrapDatabase,
           verifyMigrations,
+          captureSchemaBefore: async envFile => {
+            persist({ schemaBefore: await databaseSchema(envFile), migrationState: "NOT_STARTED" });
+          },
+          captureSchemaAfter: async envFile => {
+            const schemaAfter = await databaseSchema(envFile);
+            const targetSchema = await imageSchemaEvidence(target.currentImage);
+            if (!schemasMatch(schemaAfter, targetSchema)) throw new Error("TARGET_SCHEMA_INCOMPATIBLE");
+            persist({ schemaAfter, targetSchema, migrationState: "COMPLETED" });
+          },
           markMigrationMayHaveChanged: async () => {
             migrationMayHaveChanged = true;
-            persist({ migrationMayHaveChanged });
+            persist({ migrationMayHaveChanged, migrationState: "STARTED_OR_UNKNOWN" });
           },
           migrate: applyMigrations,
           bootstrapAdmin,
@@ -938,7 +1040,37 @@ try {
       switched = error.switched;
     }
     log("ERROR", error instanceof Error ? error.message : String(error));
-    let rollback = releaseFailureRollbackPlan({ switched, previousAccepted });
+    const candidateEnv = path.join(stateRoot, `${deploymentId}.candidate.env`);
+    const compatibility = switched ? await rollbackCompatibility(candidateEnv) : null;
+    let rollback = releaseFailureRollbackPlan({ switched, previousAccepted, compatibility });
+    const edgeFailure = error.publicEdgeFailure || error.cause?.publicEdgeFailure;
+    const acceptedOnDisk = readJson(acceptedPath);
+    const disposition = deploymentFailureDisposition({ ...persisted, migrationMayHaveChanged,
+      applicationAccepted: persisted.applicationAccepted || acceptedOnDisk?.requestId === request.requestId,
+      publicEdgeFailure: edgeFailure, rollback });
+    if (disposition === "FINALIZATION_RECONCILIATION_REQUIRED") {
+      // An accepted release must never be undone because bookkeeping failed.
+      const terminal = { ...persisted, applicationAccepted: true,
+        result: "CONTROL_PLANE_FINALIZATION_FAILED", applicationResult: "SUCCESS",
+        stage: "control-plane-finalization-failed", requestArchivePath,
+        finalizationComplete: false, requestArchived: false };
+      try { persist(terminal); } catch { /* Storage failure must never trigger rollback. */ }
+      log("ERROR", "CONTROL_PLANE_FINALIZATION_FAILED: reconcile the original request");
+      process.exitCode = 1;
+    } else if (disposition === "PUBLIC_EDGE_RECOVERY_REQUIRED") {
+      persist({ result: "PUBLIC_EDGE_RECOVERY_REQUIRED", stage: "public-edge-recovery-required",
+        applicationResult: "APPLICATION_HEALTHY_PUBLIC_EDGE_UNAVAILABLE", rollback,
+        applicationAccepted: false, finalizationComplete: false, requestArchived: false,
+        finalReleaseAcceptance: "PENDING", error: error.code ?? error.cause?.code ?? "PUBLIC_EDGE_UNAVAILABLE" });
+      log("ERROR", "PUBLIC_EDGE_RECOVERY_REQUIRED: use the accept command after connectivity recovers");
+      process.exitCode = 1;
+    } else if (disposition === "APPLICATION_RECOVERY_REQUIRED") {
+      persist({ result: "APPLICATION_RECOVERY_REQUIRED", stage: "application-recovery-required",
+        rollback, applicationAccepted: false, finalizationComplete: false, requestArchived: false,
+        manualRecoveryRequired: true, error: "APPLICATION_RECOVERY_REQUIRED" });
+      log("ERROR", "APPLICATION_RECOVERY_REQUIRED: no automatic replay or incompatible image restoration");
+      process.exitCode = 1;
+    } else {
     if (rollback?.status === "REQUIRED") {
       try {
         rollback = await rollbackApplication("POST_SWITCH_ACCEPTANCE_FAILED");
@@ -984,5 +1116,6 @@ try {
       log("ERROR", "CONTROL_PLANE_FINALIZATION_FAILED");
     }
     process.exitCode = 1;
+    }
   }
 }

@@ -194,7 +194,7 @@ test("keeps controller paths and request state inside exact deployment roots", a
         request,
         latest: { requestId: request.requestId, deploymentId: "finished", result: "FAILED" },
       }),
-      { state: "PENDING_RECOVERABLE", requestId: request.requestId },
+      { state: "PENDING_RECONCILIATION_REQUIRED", requestId: request.requestId },
     );
     assert.deepEqual(
       classifyPersistedDeployment({
@@ -211,7 +211,7 @@ test("keeps controller paths and request state inside exact deployment roots", a
     );
     assert.deepEqual(
       classifyPersistedDeployment({ serviceActive: false, request, latest: null }),
-      { state: "PENDING_RECOVERABLE", requestId: request.requestId },
+      { state: "PENDING_RECONCILIATION_REQUIRED", requestId: request.requestId },
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -425,8 +425,10 @@ test("release metadata, runtime APP_VERSION, README, health responses, and verif
   assert.doesNotMatch(healthRoute, /version:\s*["'`]\d+\.\d+\.\d+/);
   assert.match(runner, /expectedVersion && body\?\.version !== expectedVersion/);
   assert.match(runner, /RELEASE_HEALTH_VERSION_MISMATCH/);
-  assert.match(runner, /target\?\.version && body\?\.version !== target\.version/);
-  assert.match(runner, /PUBLIC_LIVENESS_VERSION_MISMATCH/);
+  assert.match(runner, /waitForPublicEdge/);
+  const publicEdge = await source("scripts/lib/public-edge-health.mjs");
+  assert.match(publicEdge, /body\.version !== expectedVersion/);
+  assert.match(publicEdge, /PUBLIC_EDGE_VERSION_MISMATCH/);
   assert.match(runner, /TARGET_RELEASE_COMMIT_EVIDENCE_MISSING/);
   assert.match(dockerfile, /npm run test:deploy:raw/);
 });
@@ -459,10 +461,10 @@ test("initialize follows the explicit first-install order", async () => {
     "postgres",
     "db-bootstrap",
     "migration-verify",
+    "release-health-baseline",
     "migration-may-have-changed",
     "migrate",
     "bootstrap-admin",
-    "release-health-baseline",
     "switch",
     "acceptance",
   ]);
@@ -685,29 +687,26 @@ test("initialize failures retain forward-only migration and rollback semantics",
         operationsImage: "lumina-crm-ops:previous",
       },
     }),
-    { status: "REQUIRED" },
+    { status: "UNSAFE", reason: "SCHEMA_COMPATIBILITY_UNPROVEN" },
   );
 });
 
-test("an interrupted initialize recovers the same request and safely repeats its steps", async () => {
+test("an interrupted initialize cannot replay based on age; accepted release identity permits finalization only", async () => {
   const request = {
     requestId: "12345678-1234-1234-1234-123456789abc",
     mode: "initialize",
     requestedAt: "2026-07-30T11:00:00.000Z",
   };
-  assert.strictEqual(
-    validatePendingRequestForRecovery({
+  assert.throws(
+    () => validatePendingRequestForRecovery({
       request,
       mode: "initialize",
       nowMs: Date.parse("2026-07-30T12:00:00.000Z"),
     }),
-    request,
+    /REQUEST_RECONCILIATION_REQUIRED/,
   );
   const first = releaseWorkflowDouble();
-  const second = releaseWorkflowDouble();
   await runProductionReleaseWorkflow({ mode: "initialize", operations: first.operations });
-  await runProductionReleaseWorkflow({ mode: "initialize", operations: second.operations });
-  assert.deepEqual(second.calls, first.calls);
 
   const acceptedRelease = createAcceptedRelease({
     deploymentId: "accepted-before-interruption",

@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
 } from "node:fs";
+import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
+import { assertEarlyRequestRecoverable, assertPendingAcceptance } from "./lib/deployment-recovery.mjs";
+import { durableDeploymentWrite } from "./lib/deployment-state-write.mjs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -20,7 +24,6 @@ import {
   FINALIZED_DEPLOYMENT_RESULTS,
   isSystemdServiceInProgress,
   PRODUCTION_DEPLOY_LOCK_PATH,
-  validatePendingRequestForRecovery,
   validateDirectoryMetadata,
   writeExclusiveRequest,
 } from "./lib/production-deploy-core.mjs";
@@ -28,6 +31,8 @@ import { assertReleaseModeAllowed } from "./lib/production-deploy-workflow.mjs";
 import {
   CONTROL_PLANE_FINALIZATION_FAILED,
   terminalRequestIsArchived,
+  reconcileTerminalDeployment,
+  terminalReconciliationEvidence,
 } from "./lib/deployment-finalization.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,7 +43,7 @@ const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const deployService = "lumina-crm-deploy.service";
-const terminalResults = new Set([...FINALIZED_DEPLOYMENT_RESULTS, CONTROL_PLANE_FINALIZATION_FAILED]);
+const terminalResults = new Set([...FINALIZED_DEPLOYMENT_RESULTS, CONTROL_PLANE_FINALIZATION_FAILED, "BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"]);
 const terminalMarkers = {
   SUCCESS: "LUMINA_PRODUCTION_DEPLOY_OK",
   FAILED: "LUMINA_PRODUCTION_DEPLOY_FAILED",
@@ -48,6 +53,8 @@ const terminalMarkers = {
   ROLLBACK_OK: "LUMINA_PRODUCTION_ROLLBACK_OK",
   ROLLBACK_FAILED: "LUMINA_PRODUCTION_ROLLBACK_FAILED",
   CONTROL_PLANE_FINALIZATION_FAILED,
+  BOOTSTRAP_FAILED: "BOOTSTRAP_FAILED",
+  PUBLIC_EDGE_RECOVERY_REQUIRED: "PUBLIC_EDGE_RECOVERY_REQUIRED",
 };
 
 function help() {
@@ -63,6 +70,8 @@ Usage:
   npm run deploy:production:logs         Print the latest deployment log
   npm run deploy:production:rollback     Restore the recorded immutable application images
   npm run deploy:production:recover      Reconcile Web and Worker to last-success without migration
+  npm run deploy:production:accept       Resume the original pending candidate's public acceptance
+  npm run deploy:production:reconcile    Reconcile terminal journal/archive only; never replay deployment
   npm run deploy:production:dry-run      Validate repository deployment assets without side effects
 
 The systemd runner continues if SSH disconnects. Re-run the status or logs command
@@ -135,12 +144,12 @@ function assertProductionController() {
   if (realpathSync(stateRoot) !== stateRoot) throw new Error(`Deployment state directory must resolve exactly to ${stateRoot}`);
 }
 
-async function waitForAccepted(requestId, timeoutMs = 30_000) {
+async function waitForAccepted(requestId, { launchId, timeoutMs = 30_000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   const startedAt = Date.now();
   while (Date.now() < deadline) {
     const latest = readJson(latestPath);
-    if (latest?.requestId === requestId) return latest;
+    if (latest?.requestId === requestId && latest.launchId === launchId) return latest;
     if (!isServiceActive() && Date.now() - startedAt >= 2_000) {
       const outcome = deploymentServiceOutcome();
       if (outcome.ExecMainStatus === "73") {
@@ -232,6 +241,12 @@ async function followRequest(requestId, initial) {
       }
     }
     if (terminalResults.has(latest?.result)) {
+      if (["BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest.result)) {
+        printSummary(latest);
+        process.stdout.write(`${latest.result}\n`);
+        process.exitCode = 1;
+        return;
+      }
       if (latest.result === CONTROL_PLANE_FINALIZATION_FAILED) {
         printSummary(latest);
         process.stdout.write(`${CONTROL_PLANE_FINALIZATION_FAILED}\n`);
@@ -254,7 +269,8 @@ async function followRequest(requestId, initial) {
   throw new Error("Timed out waiting for the persistent deployment runner; query status and logs");
 }
 
-async function start(mode, { detached = false } = {}) {
+async function start(mode, { detached = false, resume = false } = {}) {
+  assertDeploymentRuntime();
   assertProductionController();
   if (isServiceActive()) {
     const current = readJson(latestPath);
@@ -265,12 +281,17 @@ async function start(mode, { detached = false } = {}) {
   let created = false;
   if (request) {
     const latest = readJson(latestPath);
-    if (latest?.requestId === request.requestId && terminalResults.has(latest.result)) {
+    if (resume) {
+      assertPendingAcceptance({ request, latest });
+      mode = request.mode;
+      request.resumePublicAcceptance = true;
+    } else if (latest?.requestId === request.requestId && latest.result !== "BOOTSTRAP_FAILED"
+      && terminalResults.has(latest.result)) {
       throw new Error(`Completed request ${request.requestId} could not be archived; inspect ${requestPath} before starting another deployment`);
-    }
-    validatePendingRequestForRecovery({ request, mode });
+    } else assertEarlyRequestRecoverable({ request, latest, mode });
     process.stdout.write(`Recovering pending request ${request.requestId}\n`);
   } else {
+    if (resume) throw new Error("No pending public acceptance exists");
     if (mode === "deploy" || mode === "initialize") {
       assertReleaseModeAllowed({
         mode,
@@ -289,6 +310,9 @@ async function start(mode, { detached = false } = {}) {
     created = true;
   }
 
+  request.launchId = randomUUID();
+  durableDeploymentWrite(requestPath, `${JSON.stringify(request)}\n`);
+
   const started = command("systemctl", ["start", "--no-block", deployService], { allowFailure: true });
   if (started.status !== 0) {
     if (created) {
@@ -298,10 +322,9 @@ async function start(mode, { detached = false } = {}) {
       }
       renameSync(requestPath, startFailureArchive);
     }
-    const detail = String(started.stderr || started.stdout || `exit ${started.status}`).trim().slice(0, 500);
-    throw new Error(`Could not start ${deployService}: ${detail}`);
+    throw new Error(`TARGET_CONTROLLER_START_FAILED: systemctl exit ${started.status}; inspect the service locally`);
   }
-  const accepted = await waitForAccepted(request.requestId);
+  const accepted = await waitForAccepted(request.requestId, { launchId: request.launchId });
   printSummary(accepted);
   if (detached) {
     process.stdout.write("Deployment is persistent; use npm run deploy:production:status and npm run deploy:production:logs.\n");
@@ -424,11 +447,59 @@ function assertOptions(allowed) {
 }
 
 const [action = "start", ...options] = process.argv.slice(2);
+// Serialize request admission separately from the existing systemd execution lock.
+// Holding the execution lock here would deadlock the service we are starting.
+if (["start", "initialize", "rollback", "recover", "accept", "reconcile"].includes(action)
+  && !options.some(option => ["--help", "-h"].includes(option))
+  && process.env.LUMINA_DEPLOY_CLI_LOCKED !== "1") {
+  assertDeploymentRuntime();
+  assertProductionController();
+  const exitCode = await new Promise((resolve, reject) => {
+    const child = spawn("/usr/bin/flock", ["--nonblock", "--exclusive", "--conflict-exit-code=73",
+      path.join(stateRoot, "request-admission.lock"), process.execPath, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    { cwd: sourceRoot, stdio: "inherit", env: { ...process.env, LUMINA_DEPLOY_CLI_LOCKED: "1" } });
+    child.once("error", reject);
+    child.once("exit", code => resolve(code ?? 1));
+  });
+  if (exitCode === 73) process.stderr.write("REQUEST_ADMISSION_BUSY\n");
+  process.exit(exitCode);
+}
 if (action === "--help" || action === "-h" || action === "help" || options.includes("--help") || options.includes("-h")) {
   help();
 } else {
   try {
-    if (action === "start") {
+    if (action === "accept") {
+      assertOptions(["--detach"]);
+      await start("deploy", { detached: options.includes("--detach"), resume: true });
+    } else if (action === "reconcile") {
+      assertOptions([]);
+      assertProductionController();
+      if (isServiceActive()) throw new Error("DEPLOYMENT_RUNNING");
+      const latest = readJson(latestPath);
+      const pending = readJson(requestPath);
+      const records = readdirSync(stateRoot).filter(name => /^\d{8}T\d{6}Z-[0-9a-f]{8}\.json$/.test(name))
+        .map(name => ({ file: path.join(stateRoot, name), state: readJson(path.join(stateRoot, name)) }))
+        .filter(record => record.state?.requestId === (pending?.requestId ?? latest?.requestId));
+      if (records.length !== 1 || (latest?.requestId && latest.requestId !== records[0].state.requestId)) {
+        throw new Error("FINALIZATION_JOURNAL_IDENTITY_CONFLICT");
+      }
+      const { file: journalPath, state } = records[0];
+      if (["PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(state.result)) {
+        // The journal is written before latest; repair only that interrupted pointer write.
+        if (pending?.mode !== state.mode || pending.requestId !== state.requestId) throw new Error("REQUEST_IDENTITY_CONFLICT");
+        if (readJson(acceptedPath)?.requestId === state.requestId) throw new Error("ACCEPTED_STATE_RECONCILIATION_REQUIRED");
+        durableDeploymentWrite(latestPath, `${JSON.stringify(state, null, 2)}\n`);
+        process.stdout.write("PENDING_STATE_RECONCILED\n");
+        process.exit(0);
+      }
+      const archivePath = assertPathWithin(stateRoot,
+        state.requestArchivePath ?? path.join(stateRoot, `request-${state.deploymentId}.json`), { directChild: true });
+      const terminal = terminalReconciliationEvidence({ state, accepted: readJson(acceptedPath), requestArchivePath: archivePath });
+      reconcileTerminalDeployment({ state: terminal, latest: state, requestPath,
+        requestArchivePath: archivePath, statusPath: journalPath, latestPath, readJson,
+        exists: existsSync, rename: renameSync, atomicWrite: durableDeploymentWrite });
+      process.stdout.write("TERMINAL_STATE_RECONCILED\n");
+    } else if (action === "start") {
       assertOptions(["--detach"]);
       await start("deploy", { detached: options.includes("--detach") });
     } else if (action === "initialize") {
