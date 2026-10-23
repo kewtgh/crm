@@ -2,10 +2,10 @@ import { databaseJson } from "./db/gateway";
 
 export type RelatedSearchRecord = { value: string; labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" };
 
-export async function searchRelatedRecords(query: string, types?: string[], organizationId?:string): Promise<RelatedSearchRecord[]> {
+export async function searchRelatedRecords(query: string, types?: string[], organizationId?:string, request=databaseJson): Promise<RelatedSearchRecord[]> {
   const clean = query.trim().replace(/[,*()]/g, "").slice(0, 80);
   const wants=(type:string)=>!types?.length||types.includes(type);
-  const table = <T>(type:string, url:string, init?:RequestInit):Promise<T[]>=>wants(type)?databaseJson<T[]>(url,init):Promise.resolve([]);
+  const table = <T>(type:string, url:string, init?:RequestInit):Promise<T[]>=>wants(type)?request<T[]>(url,init):Promise.resolve([]);
   const pattern = encodeURIComponent(`*${clean}*`);
   const [organizations, contacts, users,opportunities,tasks,contracts,quotes,products,students,households,leads] = await Promise.all([
     table<{ id:string; name_zh:string; name_en:string;short_name:string }>("ORGANIZATION",`/db/table/organizations?select=id,name_zh,name_en,short_name&archived_at=is.null&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern},short_name.ilike.${pattern})&order=updated_at.desc&limit=8`),
@@ -13,16 +13,16 @@ export async function searchRelatedRecords(query: string, types?: string[], orga
     table<{ user_id:string; display_name_zh:string; display_name_en:string }>("USER","/db/rpc/list_assignable_crm_users",{
       method:"POST",body:JSON.stringify({search_query:clean}),
     }),
-    table<{id:string;title_zh:string;title_en:string}>("OPPORTUNITY",`/db/table/opportunities?select=id,title_zh,title_en&or=(title_zh.ilike.${pattern},title_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
+    table<{id:string;title_zh:string;title_en:string}>("OPPORTUNITY",`/db/table/opportunities?select=id,title_zh,title_en&archived_at=is.null&or=(title_zh.ilike.${pattern},title_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
     table<{id:string;title_zh:string;title_en:string;related_label:string}>("TASK",`/db/table/crm_tasks?select=id,title_zh,title_en,related_label&archived_at=is.null&or=(title_zh.ilike.${pattern},title_en.ilike.${pattern},related_label.ilike.${pattern})&order=updated_at.desc&limit=5`),
-    table<{id:string;contract_number:string}>("CONTRACT",`/db/table/contracts?select=id,contract_number&contract_number=ilike.${pattern}&order=updated_at.desc&limit=5`),
-    table<{id:string;quote_number:string}>("QUOTE",`/db/table/quotes?select=id,quote_number&quote_number=ilike.${pattern}&order=updated_at.desc&limit=5`),
+    table<{id:string;contract_number:string}>("CONTRACT",`/db/table/contracts?select=id,contract_number&archived_at=is.null&contract_number=ilike.${pattern}&order=updated_at.desc&limit=5`),
+    table<{id:string;quote_number:string}>("QUOTE",`/db/table/quotes?select=id,quote_number&archived_at=is.null&quote_number=ilike.${pattern}&order=updated_at.desc&limit=5`),
     table<{id:string;code:string;name_zh:string;name_en:string}>("PRODUCT",`/db/table/products?select=id,code,name_zh,name_en&archived_at=is.null&lifecycle_status=eq.ACTIVE&or=(code.ilike.${pattern},name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
     table<{id:string;name_zh:string;name_en:string;student_number:string|null;current_grade:string}>("STUDENT","/db/rpc/list_students_page",{
       method:"POST",body:JSON.stringify({search_query:clean,page_number:1,page_size:5,status_filter:"all"}),
     }),
-    table<{id:string;name_zh:string;name_en:string;address:string}>("HOUSEHOLD",`/db/table/households?select=id,name_zh,name_en,address&status=neq.ARCHIVED&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
-    table<{id:string;name_zh:string;name_en:string;source:string}>("LEAD",`/db/table/leads?select=id,name_zh,name_en,source&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
+    table<{id:string;name_zh:string;name_en:string;address:string}>("HOUSEHOLD",`/db/table/households?select=id,name_zh,name_en,address&archived_at=is.null&status=neq.ARCHIVED&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
+    table<{id:string;name_zh:string;name_en:string;source:string}>("LEAD",`/db/table/leads?select=id,name_zh,name_en,source&archived_at=is.null&or=(name_zh.ilike.${pattern},name_en.ilike.${pattern})&order=updated_at.desc&limit=5`),
   ]);
   return [
     ...organizations.map((item) => ({ value:`ORGANIZATION:${item.id}`,labelZh:item.short_name?`${item.name_zh} · ${item.short_name}`:item.name_zh,labelEn:item.short_name?`${item.name_en} · ${item.short_name}`:item.name_en,type:"ORGANIZATION" as const })),

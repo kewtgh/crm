@@ -1,3 +1,4 @@
+import {actionReviewEn} from "./action-review";
 import {taskQueueEn} from "./task-queue";
 import {revenueNavigationEn} from "../../revenue-workspace-labels";
 import {reliabilityEn} from "./reliability";
@@ -537,4 +538,5 @@ export const en: Messages = {
   ...operationsRepairEn,
   ...revenueNavigationEn,
   ...taskQueueEn,
+  ...actionReviewEn,
 };

@@ -1,4 +1,12 @@
-# Implementation status — v3.37.7 release candidate
+# Implementation status — v3.38.0 release candidate
+
+## v3.38.0 — Reliable work discovery
+
+Action-center source isolation, incomplete-data states, category/priority URL filters, RLS-scoped
+approval counts and personal routes, permission-aligned dashboard entries and archived lookup
+predicates are implemented. No schema migration or automatic business mutation is introduced.
+See [audit](FIRST_PRINCIPLES_AUDIT_V338.md), [plan](FIRST_PRINCIPLES_PLAN_V338.md)
+and [verification](V338_VERIFICATION.md).
 
 ## v3.37.7 — Deployment control-plane recovery
 

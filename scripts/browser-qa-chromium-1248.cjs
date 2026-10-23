@@ -25,7 +25,7 @@ if(process.env.CI==="true"&&gitState!=="clean")throw new Error(`CI browser evide
 
 function envFile(){
   const values={};
-  if(["staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
+  if(["action-review","staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
   const filename=path.resolve(".env.local");
   if(!fs.existsSync(filename))return values;
   for(const raw of fs.readFileSync(filename,"utf8").split(/\r?\n/)){
@@ -360,7 +360,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="workflow-quality"){await require("./qa-workflow-quality.cjs")({browser,base,output,report,observe});}
+    if(env.QA_SCOPE==="action-review"){await require("./qa-action-review.cjs")({browser,base,output,report});}
+    else if(env.QA_SCOPE==="workflow-quality"){await require("./qa-workflow-quality.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="personal-governance"){await require("./qa-personal-governance.cjs")({browser,base,output,report,observe});}
     else if(env.QA_SCOPE==="staff-lifecycle"){await require("./qa-staff-lifecycle.cjs")({browser,base,output,report,observe});}
     else if(["interaction-mutations","interaction-directories"].includes(env.QA_SCOPE)){await require("./qa-interaction-reliability.cjs")({browser,base,output,report,observe});}

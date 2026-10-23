@@ -100,7 +100,7 @@ test('all role launchers agree with canonical Students and Performance navigatio
 test('action-center task signals retain the matching queue intention',async()=>{
  const user={id,role:'SALES_SPECIALIST'};
  const data={overdueTasks:2,todayTasks:3,pendingApprovals:0,renewalsDue:0,riskContracts:0,newLeads:0,pendingProgression:0,pendingAdmissions:0,unreadNotifications:0};
- const result=await loadActionCenter(user,{dashboard:async()=>data,privacy:async()=>{throw new Error('should not load');},readiness:async()=>{throw new Error('should not load');}});
+ const result=await loadActionCenter(user,{approvals:async()=>0,dashboard:async()=>data,privacy:async()=>{throw new Error('should not load');},readiness:async()=>{throw new Error('should not load');}});
  assert.equal(result.items.find(item=>item.id==='overdue-tasks').href,'/tasks?queue=overdue');
  assert.equal(result.items.find(item=>item.id==='today-tasks').href,'/tasks?queue=today');
  assert.equal(result.total,5);

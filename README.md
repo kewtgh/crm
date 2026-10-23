@@ -1,6 +1,14 @@
 # ewaya CRM
 
-Current release candidate: **v3.37.7**
+Current release candidate: **v3.38.0**
+
+## v3.38.0 — Actionable and reliable work overview
+
+Independent action-center sources preserve known work during partial failures. Shareable category
+and priority views, RLS-scoped personal approval reminders, permission-aligned dashboard links and
+direct task context improve daily work. Relation lookups explicitly exclude archived records.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V338.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V338.md),
+[release notes](docs/RELEASE_V3.38.0.md) and [verification](docs/V338_VERIFICATION.md).
 
 ## v3.37.7 — Deployment recovery safety
 

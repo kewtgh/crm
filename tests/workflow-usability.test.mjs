@@ -23,9 +23,9 @@ import {loadDashboard} from '../lib/dashboard-repository.ts';
 import {readFile} from 'node:fs/promises';
 test('optional growth failure preserves core work and is explicitly unavailable; core failure still fails',async()=>{
  const raw={todayTasks:2,overdueTasks:1,pendingApprovals:0,renewalsDue:0,riskContracts:0,activeProducts:1,unreadNotifications:0,focusTasks:[],monthRevenueByCurrency:{CNY:100}};
- const partial=await loadDashboard({json:async()=>raw,growth:async()=>{throw new Error('fixture-unavailable');}});
+ const partial=await loadDashboard({approvals:async()=>0,json:async()=>raw,growth:async()=>{throw new Error('fixture-unavailable');}});
  assert.equal(partial.todayTasks,2);assert.equal(partial.growthUnavailable,true);assert.deepEqual(partial.monthRevenueByCurrency,{CNY:100});
- const good=await loadDashboard({json:async()=>raw,growth:async()=>({summary:{activeCampaigns:1,attributedLeads:3,pendingAdmissions:4}})});assert.equal(good.growthUnavailable,false);assert.equal(good.pendingAdmissions,4);
- await assert.rejects(loadDashboard({json:async()=>{throw new Error('core-unavailable');},growth:async()=>({summary:{}})}),/core-unavailable/);
+ const good=await loadDashboard({approvals:async()=>0,json:async()=>raw,growth:async()=>({summary:{activeCampaigns:1,attributedLeads:3,pendingAdmissions:4}})});assert.equal(good.growthUnavailable,false);assert.equal(good.pendingAdmissions,4);
+ await assert.rejects(loadDashboard({approvals:async()=>0,json:async()=>{throw new Error('core-unavailable');},growth:async()=>({summary:{}})}),/core-unavailable/);
 });
 test('campaign presentation cannot derive Revenue or ROI from opportunity amounts and planned budget',async()=>{const source=await readFile(new URL('../components/growth-workspace.tsx',import.meta.url),'utf8');assert.doesNotMatch(source,/won\s*-\s*item\.budget|roi\.toFixed|t\("growth\.roi"\)/);assert.match(source,/flow\.campaignBasisHelp/);assert.match(enWorkflowUsability['growth.won'],/opportunity/);});

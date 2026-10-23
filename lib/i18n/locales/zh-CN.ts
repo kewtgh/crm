@@ -1,3 +1,4 @@
+import {actionReviewZh} from "./action-review";
 import {taskQueueZh} from "./task-queue";
 import {revenueNavigationZh} from "../../revenue-workspace-labels";
 import {reliabilityZh} from "./reliability";
@@ -535,5 +536,6 @@ export const zhCN: Messages = {
   ...operationsRepairZh,
   ...revenueNavigationZh,
   ...taskQueueZh,
+  ...actionReviewZh,
 };
 import {operationsRepairZh} from "./operations-repair";
