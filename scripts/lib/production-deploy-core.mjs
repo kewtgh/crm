@@ -67,7 +67,7 @@ export function classifyPersistedDeployment({ serviceActive, request, latest }) 
   if (latest?.result === "CONTROL_PLANE_FINALIZATION_FAILED") {
     return { state: latest.result, deploymentId: latest.deploymentId ?? null };
   }
-  if (["BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest?.result)) {
+  if (["BOOTSTRAP_FAILED", "CONTROLLER_REJECTED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest?.result)) {
     return { state: latest.result, requestId: request?.requestId ?? null };
   }
   if (request) {

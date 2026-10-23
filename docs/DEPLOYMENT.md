@@ -1,4 +1,9 @@
-# Lumina CRM v3.8 production deployment
+# Lumina CRM v3.40 production deployment and host control plane
+
+The host workflow is **Host Preflight → Operator-approved Host Upgrade → Production Deploy**.
+The versioned [host contract](../deploy/libexec/host-runtime-contract.json) is authoritative.
+See [implementation/verification](HOST_CONTROL_PLANE_PLAN.md) and the
+[Chinese production runbook](LUMINA_PRODUCTION_DEPLOYMENT_RUNBOOK.md).
 
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
@@ -155,25 +160,155 @@ only their fixed Lumina Compose task. The deploy service holds
 rootless Unix socket remains reachable; the application unit retries if the lingering user service
 has not finished starting at boot.
 
-A source fast-forward does not update the root-owned maintenance program installed outside the
-checkout. While both storage maintenance units are inactive, install the audited repository file
-at the fixed target, then verify byte identity before running prepare or a deployment:
+A Git update never installs root-owned maintenance. Use the separately approved atomic installer
+below. Copying only the maintenance .mjs file is unsupported: its reviewed contract and helper
+modules belong to one content-addressed bundle.
+
+## Host preflight and operator upgrade
+
+Run as the lumina-crm account, with the host CLI using the same executable as systemd:
 
 ```sh
-sudo install -o root -g root -m 0755 \
-  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
-  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
-sudo cmp --silent \
-  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
-  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
-sha256sum \
-  /opt/lumina-crm/source/deploy/libexec/lumina-crm-storage-maintenance.mjs \
-  /usr/local/libexec/lumina-crm-storage-maintenance.mjs
+/usr/bin/node --version
+npm run deploy:production:host-check
+npm run deploy:production:host-upgrade-plan
+# Optional: inspect a locally fetched full SHA without merging or executing its code.
+npm run deploy:production:host-check -- --target=FULL_REVIEWED_SHA
 ```
 
-The installed file must remain `root:root`, regular rather than a symlink, and not group/world
-writable. Updating this program does not itself require starting storage prepare or CRM
-initialization.
+Both diagnostic commands work on Node 24.22.0. Host-check exits nonzero when blocked and emits
+JSON rows with component/current/required/status/blocking/remediation. It does not create a
+request, change deployment journals, start Docker, bootstrap a builder, install packages or prune
+anything. An older target without a versioned contract is unsupported, not executable discovery.
+
+Node >=24.22.1 <25 and npm >=12.2.1 <13 match the application manifests. Their recommended pins
+are 24.22.1 and 12.2.1. Docker >=29.8.2 <30, Compose >=5.6.0 <6 and Buildx >=0.37.2 <0.39 retain
+the previous supported component lines and required rootless/cgroup capabilities; recommended
+versions are 29.9.2, 5.6.1 and 0.38.1. A supported older patch is informational, not a blocker.
+Unknown future major/unsupported minor lines fail closed. BuildKit image/driver/network/proxy,
+reviewed configuration fingerprint and installed maintenance content remain exact contracts.
+
+Only an operator may approve system Node/npm/Docker/Compose/Buildx upgrades. The plan command
+never installs them. Record package sources, signed-package/checksum verification, current and
+proposed versions, executable paths and effects on other host services before approval. Select
+vendor-supported packages for the actual OS, verify Node as both operator and lumina-crm and
+verify /usr/bin/node used by systemd. Do not issue an unattended full-system upgrade, restart a
+shared Docker daemon or change another account's runtime/daemon. Supported Docker patches may
+remain installed while recommendations are scheduled independently.
+Execute approved package changes in a separate maintenance window with the same admission,
+deployment and maintenance locks held exclusively and the CRM deploy service inactive. The
+deployment CLI never acquires root privileges or runs a package manager for host upgrades.
+
+The checked-in unit uses /usr/bin/node. Bootstrap now hands off process.execPath, so a CLI-only
+nvm/PATH change cannot repair an old systemd executable. Host-check compares resolved executable
+identity as well as both versions. Existing reviewed unit files must match the loaded units with
+no unreviewed drop-ins; operator installation/daemon-reload is separate from deployment.
+
+Provision locks once as an operator, without replacing existing lock inodes. First ensure the
+fixed paths are regular files, owned by lumina-crm, with no symlink and no group/world write.
+Create only missing files with exclusive creation and mode 0640; never truncate or replace an
+existing lock. The paths are /var/lib/lumina-crm/request-admission.lock, deploy.lock and
+maintenance.lock. Upgrade/install lock order is admission → deployment → maintenance. Other
+maintenance takes maintenance.lock; systemd keeps deploy.lock throughout deployment. Kernel
+/proc/locks ownership is checked; an environment variable cannot substitute for a held lock.
+
+### Atomic maintenance installation
+
+Use an independently reviewed, root-owned, non-writable staging copy of this control-plane
+package for privileged installation. Retain its full commit and reviewed hashes. Do not execute
+an installer with root privileges directly from a deployment-writable working tree. Required
+files are scripts/install-host-maintenance.mjs and all four MAINTENANCE_ASSETS declared in
+[the contract module](../deploy/libexec/lumina-host-contract.mjs), preserving relative paths.
+The operator must independently approve this control-plane code before using it to inspect a
+future application target; fetching application code never authorizes executing it.
+
+```sh
+# As operator; ROOT_REVIEWED_PACKAGE is a reviewed root-owned staging directory.
+/usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs
+# Review previous launcher hash, all source hashes and approvalSha256, then explicitly approve:
+sudo /usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs --approve=PLAN_SHA256
+# On interrupted installation, use the ORIGINAL plan approval and recorded operation ID:
+sudo /usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs --approve=PLAN_SHA256 --resume=OPERATION_UUID
+```
+
+The installer acquires all three locks, rejects stale source/previous-launcher identities,
+installs immutable bundle files below /usr/local/libexec/lumina-crm-host/ and atomically renames
+a regular root-owned launcher at /usr/local/libexec/lumina-crm-storage-maintenance.mjs.
+It retains the previous launcher and phase journal under /var/log/lumina-crm-host-install/.
+A separate root-owned installed.json receipt must match the launcher and complete bundle.
+Incomplete activation/final receipt fails host preflight; resume verifies the active target
+instead of blindly restoring a previous launcher. Normal Git/deploy processes cannot install it.
+
+### Approved CRM builder replacement
+
+Load only reviewed host settings from /etc/lumina-crm/deploy.env as the lumina-crm account.
+Set DOCKER_HOST to that account's exact unix:///run/user/UID/docker.sock, DOCKER_CONFIG to
+/var/lib/lumina-crm/docker-config and BUILDX_CONFIG to its buildx subdirectory. Their private
+ownership and the daemon's /var/lib/lumina-crm/docker data root must pass diagnostics.
+
+```sh
+npm run deploy:production:builder-plan
+# Review the plan, builder-owner.json/config hashes and cache-loss warning before approval.
+npm run deploy:production:builder-replace -- --approve=PLAN_SHA256 --acknowledge-cache-loss
+# Interrupted operation: same original approval and recorded operation ID.
+npm run deploy:production:builder-replace -- --approve=PLAN_SHA256 --acknowledge-cache-loss --resume=OPERATION_UUID
+npm run deploy:production:host-check
+```
+
+Only the marked lumina-crm-buildkit docker-container builder can be replaced. Its prior image,
+root-owned buildkitd.toml hash, private endpoint, marker owner, network=host and proxy hashes
+must match the approved plan. Removal uses [buildx rm --keep-state](https://docs.docker.com/reference/cli/docker/buildx/rm/)
+to retain builder state; cache reuse across an engine change is not guaranteed. No volume,
+PostgreSQL, application image, unrelated builder or other Docker instance is a deletion target.
+No global prune or fallback Docker context is used.
+
+The replacement carries a unique operation nonce in driver options. Its configuration and actual
+daemon image/network are verified before the ownership marker is completed. Every stage intent
+is durable before removal/create/marker updates; phase history and failure notes are retained
+under /var/lib/lumina-crm/storage-maintenance/. A failed create/verify can resume the same operation.
+A still-present builder after an uncertain removal, foreign nonce, unexpected endpoint, changed
+configuration or missing journal requires manual investigation. Never delete a replacement to
+retry an old removal. An incomplete upgrade blocks deployment even after its locks are released.
+
+### Early rejection and normal deployment
+
+The CLI runs host checks before request creation. After fetch, the current trusted controller
+uses bounded git show of fixed data/source paths to validate target requirements and maintenance
+hashes before fast-forward. It never imports or executes the fetched target to discover them.
+The verified full SHA is pinned in the request and rechecked by Bootstrap before source update.
+
+The target entry gate writes an exclusive receipt bound to request ID, launch, bootstrap attempt,
+nonce, target SHA and controller PID before any business operation. A REJECTED receipt proves
+no business work began in that invocation; ADMITTED receipts prohibit early replay. Bootstrap
+also records the child's observed exit/PID in its independent journal. State remains conservative
+when imports crash or receipt persistence/identity is incomplete.
+
+```sh
+npm run deploy:production:status
+# Only for an inactive, positively proven early failure; first command is a plan.
+npm run deploy:production:archive-early -- --request=REQUEST_UUID
+npm run deploy:production:archive-early -- --request=REQUEST_UUID --approve=EVIDENCE_PLAN_SHA256
+# After all mandatory host checks are READY (SUPPORTED recommendations may remain):
+npm run deploy:production:host-check
+npm run deploy:production
+```
+
+Archival uses admission/deployment locks, checks independent bootstrap/entry/history evidence,
+preserves the original request through a named archive and a phase ledger, and leaves latest.json
+unchanged. A crash after rename is resumed by the same archive command/approval; incomplete
+archival blocks new admission. A new request gets a new ID and does not reuse an archived intent.
+No archive is allowed for migration/switch/acceptance, an admitted controller, inconsistent PID,
+missing evidence or control-plane finalization failure. Keep the original accept/recover/reconcile
+procedures for those cases; do not edit latest.json or remove request.json.
+
+For initial adoption on a host running an older control plane, the legacy executable cannot
+retroactively enforce this protocol or manufacture an early-rejection receipt. Separately accept
+and stage the reviewed control-plane repair, approve the required system/runtime and maintenance
+changes, and pass its read-only target check before an operator-approved control-plane source
+transition. Existing ambiguous legacy requests remain blocked pending evidence reconciliation.
+Application version 3.40.0 is unchanged; the repaired commit is newer than baseline 796cc43.
+The last accepted 3.37.7 application is not considered schema-compatible solely because its images
+still exist. This procedure never rolls back a database.
 
 The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, `rollback`, or
 `recover`. Production deployment is always two-stage: the stable bootstrap reads the request while

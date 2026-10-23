@@ -68,7 +68,7 @@ test("bootstrap fetches and fast-forwards a clean allowed production source exac
     if (args[0] === "merge") { merged = true; return ""; }
     return "";
   };
-  const result = await updateSourceAndResolveTarget({ git, environment: { SECRET: "untouched" } });
+  const result = await updateSourceAndResolveTarget({ git, environment: { SECRET: "untouched" }, verifyTarget: async target => { assert.equal(target,commit("b")); assert.equal(merged,false); } });
   assert.deepEqual(result, { bootstrapCommit: commit("a"), targetCommit: commit("b") });
   assert.equal(calls.filter(({ args }) => args[0] === "fetch").length, 1);
   assert.equal(calls.some(({ args }) => args[0] === "merge" && args.at(-1) === commit("b")), true);

@@ -1,5 +1,137 @@
 # Lumina CRM 生产部署运行手册
 
+> 2026-10-23 控制平面修复：本节优先于下方历史手工 merge、运行时安装与重试步骤。
+> 应用版本保持 3.40.0；开发基线为 `796cc43e63784eb8891ca6420572cd563cb2ac80`。
+> [共享宿主机契约](../deploy/libexec/host-runtime-contract.json)、[实现与验证](HOST_CONTROL_PLANE_PLAN.md)、
+> [完整英文操作流程](DEPLOYMENT.md)。本次仓库修改不代表已在生产执行升级或部署。
+
+## 0. Host Preflight → 人工审批升级 → Production Deploy
+
+### 0.1 先诊断，不先改源码或创建请求
+
+以 `lumina-crm` 账户运行。即使当前 Node 为不兼容的 24.22.0，诊断也会输出结构化结果。
+
+```sh
+npm run deploy:production:host-check
+npm run deploy:production:host-upgrade-plan
+# 对已 fetch 到本地的完整目标 SHA，只读检查，不 merge、不执行目标程序：
+npm run deploy:production:host-check -- --target=FULL_REVIEWED_SHA
+```
+
+输出逐项包含 `component/current/required/status/blocking/remediation`。`blocking=true` 必须先解决；
+`SUPPORTED` 表示已满足支持范围，较新的推荐补丁可安排独立升级，不应无条件阻止部署。
+
+| 组件 | 必须满足 | 当前推荐 |
+| --- | --- | --- |
+| Node | `>=24.22.1 <25`，CLI 和 systemd 使用同一解析后的可执行文件 | 24.22.1 LTS |
+| npm | `>=12.2.1 <13` | 12.2.1 |
+| Docker Engine | `>=29.8.2 <30`；必须是 CRM Rootless、systemd cgroup v2 | 29.9.2 |
+| Compose | `>=5.6.0 <6` | 5.6.1 |
+| Buildx | `>=0.37.2 <0.39` | 0.38.1 |
+| BuildKit | 精确的已审核 image/driver/network/proxy、标记与配置哈希 | `moby/buildkit:v0.34.1` |
+
+Docker/Compose/Buildx 保留已支持的前一补丁线；未知的新主版本或未支持次版本仍拒绝。
+Node/npm 范围与应用 engines 一致。维护程序按源码内容哈希和安装完成凭证匹配。
+不能通过放宽版本号、修改 Builder marker 或忽略不匹配来消除故障。
+
+诊断检查 CRM 专属 socket、目录权限、Docker 数据根、Builder endpoint、实际 daemon image/network、
+配置哈希、root-owned 维护 bundle、systemd unit 与未审核 drop-in、锁、未完成升级和磁盘阈值。
+它不启动服务、不引导 Builder、不安装依赖、不执行 prune，也不修改 `request.json/latest.json`。
+部署 CLI 在创建请求前检查宿主机；fetch 后再以固定路径的 `git show` 读取目标静态契约和源码哈希，
+通过后才允许 fast-forward。不能用执行目标脚本来“探测”其要求。已检查的完整 SHA 会绑定请求。
+
+### 0.2 系统依赖升级必须单独批准
+
+升级计划默认只有输出，没有 apply 系统包的入口。操作者必须记录当前版本、目标版本、包来源、
+签名/校验和、可执行路径及其他服务影响，再明确批准 Node/npm/Docker/Compose/Buildx 的系统升级。
+按实际 Ubuntu 版本选取官方稳定包；禁止把一条全系统升级命令当成项目部署步骤。
+Docker 处于支持范围时可以暂缓推荐补丁，避免无必要地重启共享 daemon。
+已批准的系统包动作也必须在独立维护窗口、CRM 部署服务未运行且按固定顺序排他持有三把锁时执行。
+部署 CLI 不会提权或调用宿主机包管理器。
+
+```sh
+/usr/bin/node --version
+npm --version
+sudo -u lumina-crm /usr/bin/node --version
+systemctl cat lumina-crm-deploy.service
+```
+
+只修改交互终端的 nvm/PATH 不够：当前 unit 明确使用 `/usr/bin/node`，Bootstrap 会将自己的
+`process.execPath` 传给目标控制器。三者必须一致并满足目标范围。不要更改其他账户、HunterAI
+或共享 Rootful Docker 的配置/运行状态；任何可能影响共享系统包的动作需额外的宿主机维护审批。
+
+首次采用该协议前，操作者还需预置三个固定锁：`/var/lib/lumina-crm/request-admission.lock`、
+`deploy.lock`、`maintenance.lock`。它们须为 `lumina-crm` 所有、普通文件、无符号链接、无组/全局写权限。
+只以排他创建方式新建缺失文件，不能 truncate、替换或删除现有锁 inode。
+升级与安装的加锁顺序固定为 admission → deployment → maintenance；内核持锁证据必须真实存在。
+
+### 0.3 独立原子安装 root-owned 维护程序
+
+普通 Git 更新不会安装维护程序。先独立审核并接受控制平面修复包，再将安装器及契约声明的四个
+维护资产按原目录布局放入 root 所有、不可由部署账户修改的审核暂存目录。
+不要直接对部署账户可写的工作树执行 root 安装器。操作者替换下列路径/哈希占位值：
+
+```sh
+/usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs
+sudo /usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs --approve=PLAN_SHA256
+# 安装中断后，使用原审批哈希与操作 ID；不能盲目覆盖回旧程序：
+sudo /usr/bin/node ROOT_REVIEWED_PACKAGE/scripts/install-host-maintenance.mjs --approve=PLAN_SHA256 --resume=OPERATION_UUID
+```
+
+安装计划绑定所有源文件和旧 launcher 哈希。程序写入不可变内容寻址 bundle，原子替换固定普通
+launcher，并写 root-owned 完成凭证。旧 launcher 与阶段日志保存在 `/var/log/lumina-crm-host-install/`。
+激活或完成凭证中断时，Host Preflight 会继续阻止部署；通过原操作恢复完成安装审计。
+
+### 0.4 明确审批 CRM Builder 替换及缓存风险
+
+以 `lumina-crm` 身份加载已审核的 `deploy.env` 中宿主机设置，确保 `DOCKER_HOST` 是其本人
+`unix:///run/user/UID/docker.sock`，`DOCKER_CONFIG=/var/lib/lumina-crm/docker-config`，
+`BUILDX_CONFIG=/var/lib/lumina-crm/docker-config/buildx`。不能回退到默认 context 或其他用户 daemon。
+
+```sh
+npm run deploy:production:builder-plan
+npm run deploy:production:builder-replace -- --approve=PLAN_SHA256 --acknowledge-cache-loss
+# 中断后先检查日志，恢复同一操作，不重新删除 Builder：
+npm run deploy:production:builder-replace -- --approve=PLAN_SHA256 --acknowledge-cache-loss --resume=OPERATION_UUID
+npm run deploy:production:host-check
+```
+
+只允许替换所有权已核实的 `lumina-crm-buildkit`。计划验证旧镜像、marker、root-owned BuildKit
+配置 fingerprint、唯一 endpoint、driver/network/proxy，并绑定审批哈希。删除使用
+[`buildx rm --keep-state`](https://docs.docker.com/reference/cli/docker/buildx/rm/) 保留 Builder 状态；
+仍须明确接受跨版本缓存可能不能复用的风险。程序不会删除数据卷、PostgreSQL、应用镜像或其他 Builder。
+
+替换在同一组锁内记录移除/创建/验证/marker 更新的 durable intent。新 Builder 带唯一操作 nonce，
+在验证实际 daemon 镜像和网络后才能完成。创建/验证失败可显式恢复；若旧删除结果仍不确定、出现
+未知 Builder/nonce、配置已变或日志不完整，继续拒绝，不会错误重删新 Builder。阶段与失败记录保留于
+`/var/lib/lumina-crm/storage-maintenance/`。未完成操作会阻止部署，不能通过释放锁绕过。
+
+### 0.5 早期拒绝归档与正常发布
+
+新控制器在业务操作前写入绑定 Request ID、launch、Bootstrap attempt、nonce、目标 SHA 与 PID 的
+入口凭证。只有 `REJECTED + NOT_STARTED`、子进程退出/PID、独立 Bootstrap 日志及历史记录相互一致，
+且没有迁移、切换、接收、其他已准入控制器或最终归档失败，才能归档。`controllerStarted=true` 本身
+既不被忽略，也不再被错误地当成业务副作用的唯一判断。
+
+```sh
+npm run deploy:production:status
+npm run deploy:production:archive-early -- --request=REQUEST_UUID
+npm run deploy:production:archive-early -- --request=REQUEST_UUID --approve=EVIDENCE_PLAN_SHA256
+npm run deploy:production:host-check
+npm run deploy:production
+```
+
+归档默认生成计划，批准后在锁内保留原请求、Request ID 和完整阶段日志，保持 `latest.json` 不变。
+重命名完成但归档日志未完成时，新请求仍被阻止；重复原归档命令/审批完成恢复，再发起新 ID。
+不要修改 latest 状态、手删 request、伪造凭证或绕过锁。已迁移/已切换/已接收或证据不完整的请求
+继续沿用 `accept/recover/reconcile` 的原有规则，不会自动重放初始化或迁移。
+
+旧控制平面不会自动获得新能力。首次采用时须先人工审核接受独立控制平面修复包、完成必要宿主机
+与维护程序升级，用已接受的诊断器读取目标静态要求后，才批准控制平面源码的过渡。
+旧版本留下的无入口凭证请求不能凭空补证，本工具会拒绝归档；必须保留证据并人工对账。
+本轮修复提交将晚于基线 `796cc43`，应用仍为 3.40.0。生产上最后接受的 3.37.7 不能仅凭旧镜像存在
+就当成可回退目标；数据库迁移始终前向，原 schema/image 兼容性保护保持有效。
+
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
 > Forward migrations require proven image/schema compatibility; public-edge failure can leave a healthy candidate pending acceptance.
@@ -325,27 +457,21 @@ sudo -u lumina-crm \
 
 ### 7.2 更新
 
-```bash
-sudo -u lumina-crm \
-  env HOME=/var/lib/lumina-crm \
-  bash -lc '
-    cd /opt/lumina-crm/source
-    git status --short
-    git fetch origin main
-    git merge --ff-only origin/main
-  '
-```
+常规发布由部署 CLI 负责 fetch、目标静态 Host Preflight 与 fast-forward，不再先手工 merge 再探测宿主机。
+以下步骤只读取目标数据，不执行目标程序；完整审批与恢复流程见第 0 节。
 
-发布前必须记录：
-
-```bash
-git rev-parse HEAD
+```sh
+cd /opt/lumina-crm/source
 git status --short
-node --version
-npm --version
+git fetch origin main
+git rev-parse origin/main
+npm run deploy:production:host-check -- --target=FULL_REVIEWED_SHA
+# 通过并完成所有必要的独立升级审批后：
+npm run deploy:production
 ```
 
-生产发布必须绑定明确commit，不要只记录“main最新”。
+CLI 在锁内再次检查并把当次已验证的完整 SHA 写入请求。Bootstrap 重查该 SHA，只有目标宿主机契约
+通过才 fast-forward；分支随后前进不会改变已绑定请求的目标。不要仅记录“main 最新”。
 
 ---
 

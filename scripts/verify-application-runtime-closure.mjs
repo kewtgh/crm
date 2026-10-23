@@ -30,7 +30,7 @@ export const APPLICATION_RUNTIME_ENTRYPOINTS = [
 const localSpecifierPatterns = [
   /\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/g,
   /\bimport\s*\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g,
-  /\bnew\s+URL\s*\(\s*["'](\.{1,2}\/[^"']+\.mjs)["']\s*,\s*import\.meta\.url\s*\)/g,
+  /\bnew\s+URL\s*\(\s*["'](\.{1,2}\/[^"']+\.(?:mjs|json))["']\s*,\s*import\.meta\.url\s*\)/g,
 ];
 
 function localSpecifiers(source) {

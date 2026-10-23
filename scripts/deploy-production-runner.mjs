@@ -2,6 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
+import {productionControllerEntry} from "./lib/controller-entry.mjs";
 import { schemaEvidence, schemasMatch, applicationRollbackDecision } from "./lib/deployment-schema.mjs";
 import { waitForPublicEdge } from "./lib/public-edge-health.mjs";
 import { assertPendingAcceptance, deploymentFailureDisposition, resumeCandidateAcceptance } from "./lib/deployment-recovery.mjs";
@@ -60,6 +61,7 @@ import {
 } from "./lib/production-release-health.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+await productionControllerEntry();
 assertDeploymentRuntime();
 const expectedSourceRoot = "/opt/lumina-crm/source";
 const stateRoot = "/var/lib/lumina-crm/deployments";
@@ -510,6 +512,7 @@ async function acceptRuntime(envFile, {
 }
 
 async function prepareBuilderAndCapacity() {
+  const marker = readJson(builderMarkerPath);
   await run(
     "verify isolated Lumina builder",
     "docker",
@@ -520,10 +523,10 @@ async function prepareBuilderAndCapacity() {
       validateStdout: (output) => validateBuildxInspectContract(output, {
         builderName: builder,
         dockerProxy: configuredDockerProxy,
+        operationId: marker?.hostOperationId,
       }),
     },
   );
-  const marker = readJson(builderMarkerPath);
   const proxySha256 = configuredDockerProxy
     ? createHash("sha256").update(configuredDockerProxy).digest("hex")
     : null;

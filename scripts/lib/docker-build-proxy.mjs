@@ -1,3 +1,4 @@
+import {HOST_CONTRACT} from "../../deploy/libexec/lumina-host-contract.mjs";
 export const DOCKER_BUILD_PROXY_KEYS = [
   "HTTP_PROXY",
   "HTTPS_PROXY",
@@ -5,7 +6,7 @@ export const DOCKER_BUILD_PROXY_KEYS = [
   "https_proxy",
 ];
 
-export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.34.1";
+export const LUMINA_BUILDKIT_IMAGE = HOST_CONTRACT.builder.image;
 
 export function parseDockerBuildProxy(value) {
   const proxy = String(value ?? "").trim();
@@ -47,7 +48,7 @@ export function dockerBuildProxyArguments(proxyValue) {
   return DOCKER_BUILD_PROXY_KEYS.flatMap((key) => ["--build-arg", key]);
 }
 
-export function validateBuildxInspectContract(output, { builderName, dockerProxy }) {
+export function validateBuildxInspectContract(output, { builderName, dockerProxy, operationId }) {
   if (!new RegExp(`^Name:\\s+${builderName}$`, "m").test(output)
     || !/^Driver:\s+docker-container$/m.test(output)) {
     throw new Error("LUMINA_BUILDKIT_DRIVER_CONFIGURATION_MISMATCH");
@@ -72,9 +73,10 @@ export function validateBuildxInspectContract(output, { builderName, dockerProxy
   const expectedKeys = new Set([
     "network",
     "image",
+    ...(operationId ? ["env.LUMINA_HOST_OPERATION_ID"] : []),
     ...(proxy ? DOCKER_BUILD_PROXY_KEYS.map((key) => `env.${key}`) : []),
   ]);
-  if (options.size !== expectedKeys.size
+  if ((operationId && (!/^[0-9a-f-]{36}$/.test(operationId) || options.get("env.LUMINA_HOST_OPERATION_ID") !== operationId)) || options.size !== expectedKeys.size
     || [...options.keys()].some((key) => !expectedKeys.has(key))
     || DOCKER_BUILD_PROXY_KEYS.some((key) => (
       proxy ? options.get(`env.${key}`) !== proxy : options.has(`env.${key}`)

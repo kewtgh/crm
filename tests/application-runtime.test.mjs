@@ -24,8 +24,8 @@ async function applicationRuntimeFixture(context) {
   for (const line of logicalLines.filter((line) => line.startsWith("COPY ") && !line.includes("--from="))) {
     const words = line.split(/\s+/).slice(1).filter((word) => !word.startsWith("--"));
     const destination = words.pop();
-    for (const source of words.filter((word) => /^(?:lib|scripts)\//.test(word))) {
-      assert.match(source, /\.mjs$/);
+    for (const source of words.filter((word) => /^(?:lib|scripts|deploy\/libexec)\//.test(word))) {
+      assert.match(source, /\.(?:mjs|json)$/);
       assert.match(line, /^COPY --chown=lumina:lumina /);
       const relative = path.posix.join(destination, path.posix.basename(source));
       assert.equal(relative, source, "fixture mirrors the actual application COPY destination");
@@ -77,6 +77,13 @@ test("omitting any generated-job privacy import fails the recursive application 
       privacyImports.map((item) => item.module).sort());
     return true;
   });
+});
+
+test("application image retains the same static runtime contract and rejects missing contract data",async context=>{
+ const fixture=await applicationRuntimeFixture(context);
+ assert.equal(await readFile(path.join(fixture,"deploy/libexec/host-runtime-contract.json"),"utf8"),await readFile(path.join(repositoryRoot,"deploy/libexec/host-runtime-contract.json"),"utf8"));
+ await rm(path.join(fixture,"deploy/libexec/host-runtime-contract.json"));
+ await assert.rejects(verifyFixture(fixture),error=>error.code==="APPLICATION_RUNTIME_MODULE_MISSING"&&error.missingModules.some(item=>item.module==="deploy/libexec/host-runtime-contract.json"));
 });
 
 test("application gate checks module URLs used by extraction worker threads", async (context) => {

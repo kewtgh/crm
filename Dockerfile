@@ -112,6 +112,7 @@ COPY --chown=lumina:lumina \
     scripts/lib/workflow-privacy-export.mjs \
     scripts/lib/milestone-privacy-export.mjs \
     ./scripts/lib/
+COPY --chown=lumina:lumina deploy/libexec/lumina-host-contract.mjs deploy/libexec/host-runtime-contract.json ./deploy/libexec/
 COPY --chown=lumina:lumina db ./db
 COPY --chown=lumina:lumina templates/contracts ./templates/contracts
 USER 10001:10001

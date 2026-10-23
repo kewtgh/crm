@@ -12,6 +12,11 @@ import {
   renameSync,
 } from "node:fs";
 import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
+import {hostPreflight,hostUpgradePlan,assertHostPreflight,readStaticHostTarget} from "./lib/host-preflight.mjs";
+import {updateSourceAndResolveTarget} from "./deploy-production-bootstrap.mjs";
+import {HOST_PATHS,sha256} from "../deploy/libexec/lumina-host-contract.mjs";
+import {hostLocksHeld,reexecWithHostLocks} from "../deploy/libexec/lumina-host-upgrade.mjs";
+import {earlyArchivePlan,archiveEarlyRequest,assertNoIncompleteEarlyArchive} from "./lib/early-request-archive.mjs";
 import { assertEarlyRequestRecoverable, assertPendingAcceptance } from "./lib/deployment-recovery.mjs";
 import { durableDeploymentWrite } from "./lib/deployment-state-write.mjs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -43,7 +48,7 @@ const requestPath = path.join(stateRoot, "request.json");
 const latestPath = path.join(stateRoot, "latest.json");
 const acceptedPath = path.join(stateRoot, "last-success.json");
 const deployService = "lumina-crm-deploy.service";
-const terminalResults = new Set([...FINALIZED_DEPLOYMENT_RESULTS, CONTROL_PLANE_FINALIZATION_FAILED, "BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"]);
+const terminalResults = new Set([...FINALIZED_DEPLOYMENT_RESULTS, CONTROL_PLANE_FINALIZATION_FAILED, "BOOTSTRAP_FAILED", "CONTROLLER_REJECTED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"]);
 const terminalMarkers = {
   SUCCESS: "LUMINA_PRODUCTION_DEPLOY_OK",
   FAILED: "LUMINA_PRODUCTION_DEPLOY_FAILED",
@@ -73,6 +78,11 @@ Usage:
   npm run deploy:production:accept       Resume the original pending candidate's public acceptance
   npm run deploy:production:reconcile    Reconcile terminal journal/archive only; never replay deployment
   npm run deploy:production:dry-run      Validate repository deployment assets without side effects
+  npm run deploy:production:host-check   Read-only structured host diagnostics (works on incompatible Node)
+  npm run deploy:production:host-upgrade-plan
+                                        Plan operator host upgrades; never install system packages
+  npm run deploy:production:archive-early -- --request=UUID [--approve=SHA256]
+                                        Plan/approve evidence-bound archival of a rejected request
 
 The systemd runner continues if SSH disconnects. Re-run the status or logs command
 to recover the exact deployment ID and final result. Database migrations are
@@ -87,6 +97,8 @@ function readJson(file) {
     return null;
   }
 }
+
+function readEvidenceJson(file){const meta=lstatSync(file);if(!meta.isFile()||meta.isSymbolicLink()||meta.uid!==process.getuid()||(meta.mode&0o022)!==0||realpathSync(file)!==file)throw new Error("EARLY_ARCHIVE_EVIDENCE_METADATA_INVALID");const value=JSON.parse(readFileSync(file,"utf8"));if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("EARLY_ARCHIVE_EVIDENCE_UNREADABLE");return value;}
 
 function command(commandName, args, { allowFailure = false } = {}) {
   const result = spawnSync(commandName, args, {
@@ -241,7 +253,7 @@ async function followRequest(requestId, initial) {
       }
     }
     if (terminalResults.has(latest?.result)) {
-      if (["BOOTSTRAP_FAILED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest.result)) {
+      if (["BOOTSTRAP_FAILED", "CONTROLLER_REJECTED", "PUBLIC_EDGE_RECOVERY_REQUIRED", "APPLICATION_RECOVERY_REQUIRED"].includes(latest.result)) {
         printSummary(latest);
         process.stdout.write(`${latest.result}\n`);
         process.exitCode = 1;
@@ -270,12 +282,15 @@ async function followRequest(requestId, initial) {
 }
 
 async function start(mode, { detached = false, resume = false } = {}) {
+  assertHostPreflight();
   assertDeploymentRuntime();
   assertProductionController();
   if (isServiceActive()) {
     const current = readJson(latestPath);
     throw new Error(`A production deployment is already running${current?.deploymentId ? ` (${current.deploymentId})` : ""}`);
   }
+  assertNoIncompleteEarlyArchive(readdirSync(stateRoot).filter(name=>/^early-archive-[0-9a-f-]{36}\.json$/.test(name)).map(name=>{const ledger=readEvidenceJson(path.join(stateRoot,name));let archiveVerified=false;try{const id=ledger.plan.requestId;if(!/^[0-9a-f-]{36}$/.test(id)||name!==`early-archive-${id}.json`)throw new Error("INVALID_ARCHIVE_ID");const archived=readEvidenceJson(path.join(stateRoot,`request-early-${id}.json`));archiveVerified=sha256(JSON.stringify(archived))===ledger.plan.requestSha256&&JSON.stringify(archived)===JSON.stringify(ledger.request);}catch{/* Missing archive evidence blocks admission. */}return{...ledger,archiveVerified};}));
+  const hostTarget=!resume&&["deploy","initialize"].includes(mode)?await updateSourceAndResolveTarget({planOnly:true}):null;
 
   let request = readJson(requestPath);
   let created = false;
@@ -305,6 +320,7 @@ async function start(mode, { detached = false, resume = false } = {}) {
       mode,
       requestedAt: new Date().toISOString(),
       sourceRoot,
+      ...(hostTarget?{targetCommit:hostTarget.targetCommit}:{}),
     };
     await writeExclusiveRequest({ writeFile }, requestPath, request);
     created = true;
@@ -449,14 +465,15 @@ function assertOptions(allowed) {
 const [action = "start", ...options] = process.argv.slice(2);
 // Serialize request admission separately from the existing systemd execution lock.
 // Holding the execution lock here would deadlock the service we are starting.
-if (["start", "initialize", "rollback", "recover", "accept", "reconcile"].includes(action)
+if (["start", "initialize", "rollback", "recover", "accept", "reconcile", "archive-early"].includes(action)
   && !options.some(option => ["--help", "-h"].includes(option))
-  && process.env.LUMINA_DEPLOY_CLI_LOCKED !== "1") {
-  assertDeploymentRuntime();
+  && !(process.env.LUMINA_DEPLOY_CLI_LOCKED === "1" && hostLocksHeld([HOST_PATHS.admissionLock]))) {
+  if(!["archive-early","reconcile"].includes(action)){try{assertHostPreflight();}catch(error){if(error.diagnostics)process.stdout.write(`${JSON.stringify(error.diagnostics,null,2)}\n`);process.stderr.write(`${error.code??"HOST_PREFLIGHT_FAILED"}\n`);process.exit(1);}}
+  if(!["archive-early","reconcile"].includes(action))assertDeploymentRuntime();
   assertProductionController();
   const exitCode = await new Promise((resolve, reject) => {
     const child = spawn("/usr/bin/flock", ["--nonblock", "--exclusive", "--conflict-exit-code=73",
-      path.join(stateRoot, "request-admission.lock"), process.execPath, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+      "/var/lib/lumina-crm/request-admission.lock", process.execPath, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
     { cwd: sourceRoot, stdio: "inherit", env: { ...process.env, LUMINA_DEPLOY_CLI_LOCKED: "1" } });
     child.once("error", reject);
     child.once("exit", code => resolve(code ?? 1));
@@ -468,10 +485,26 @@ if (action === "--help" || action === "-h" || action === "help" || options.inclu
   help();
 } else {
   try {
-    if (action === "accept") {
+    if(action==="host-check"||action==="host-upgrade-plan"){
+      if(options.some(value=>!/^--target=[0-9a-f]{40}$/.test(value))||options.length>1)throw new Error("HOST_TARGET_INVALID");
+      let report;if(options.length){try{const target=await readStaticHostTarget(async args=>command("git",args).stdout,options[0].slice(9));report=hostPreflight({target});}catch{report=hostPreflight();report.ready=false;report.diagnostics.push({component:"target.contract",current:options[0].slice(9),required:"versioned static host contract schema 1",status:"UNSUPPORTED",blocking:true,remediation:"Use an operator-reviewed control-plane release with the static contract; never execute a fetched target to discover requirements"});}}else report=hostPreflight();
+      process.stdout.write(`${JSON.stringify(action==="host-check"?report:hostUpgradePlan(report),null,2)}\n`);if(action==="host-check"&&!report.ready)process.exitCode=1;
+    } else if(action==="archive-early"){
+      if(options.some(value=>!value.startsWith("--request=")&&!value.startsWith("--approve=")))throw new Error("EARLY_ARCHIVE_ARGUMENT_INVALID");
+      const id=options.find(value=>value.startsWith("--request="))?.slice(10),approval=options.find(value=>value.startsWith("--approve="))?.slice(10);
+      if(!/^[0-9a-f-]{36}$/i.test(id??""))throw new Error("EARLY_ARCHIVE_REQUEST_REQUIRED");
+      const lockExit=reexecWithHostLocks([HOST_PATHS.deployLock],fileURLToPath(import.meta.url),process.argv.slice(2));if(lockExit!==null){process.exitCode=lockExit;}else{
+       const ledgerPath=path.join(stateRoot,`early-archive-${id}.json`),archivePath=path.join(stateRoot,`request-early-${id}.json`);
+       const evidence=()=>{if(existsSync(requestPath)&&existsSync(archivePath))throw new Error("EARLY_ARCHIVE_DUPLICATE_REQUEST");const request=existsSync(requestPath)?readEvidenceJson(requestPath):readEvidenceJson(archivePath),latest=readEvidenceJson(latestPath);if(request?.requestId!==id)throw new Error("EARLY_ARCHIVE_REQUEST_MISMATCH");const attemptId=latest?.attempts?.at(-1)?.attemptId;if(!/^[0-9a-f-]{36}$/.test(attemptId??""))throw new Error("EARLY_ARCHIVE_BOOTSTRAP_MISSING");const bootstrap=readEvidenceJson(path.join(stateRoot,`bootstrap-${id}-${attemptId}.json`));const entryFile=latest?.earlyRejection?.file;if(entryFile&&(!entryFile.startsWith(`entry-${id}-`)||path.basename(entryFile)!==entryFile))throw new Error("EARLY_ARCHIVE_RECEIPT_INVALID");return{request,latest,bootstrap,receipt:entryFile?readEvidenceJson(path.join(stateRoot,entryFile)):null,records:readdirSync(stateRoot).filter(file=>file.endsWith(".json")&&file!=="request.json"&&!file.startsWith("early-archive-")&&!file.startsWith("request-")).sort().map(file=>readEvidenceJson(path.join(stateRoot,file))).filter(value=>value?.requestId===id),serviceActive:isServiceActive()};};
+       const plan=earlyArchivePlan(evidence());if(!approval)process.stdout.write(`${JSON.stringify(plan,null,2)}\n`);else{
+        await archiveEarlyRequest({plan,approval,operations:{exclusive:async fn=>{if(!hostLocksHeld([HOST_PATHS.deployLock]))throw new Error("EARLY_ARCHIVE_LOCK_REQUIRED");return fn();},evidence:async()=>evidence(),readLedger:async()=>readJson(ledgerPath),persist:async ledger=>durableDeploymentWrite(ledgerPath,`${JSON.stringify(ledger,null,2)}\n`),renameOnce:async request=>{const pending=readJson(requestPath),archived=readJson(archivePath);if(pending&&archived)throw new Error("EARLY_ARCHIVE_DUPLICATE_REQUEST");if(JSON.stringify(pending??archived)!==JSON.stringify(request))throw new Error("EARLY_ARCHIVE_REQUEST_CHANGED");if(pending)renameSync(requestPath,archivePath);}}});process.stdout.write("EARLY_REQUEST_ARCHIVED\n");
+       }
+      }
+    } else if (action === "accept") {
       assertOptions(["--detach"]);
       await start("deploy", { detached: options.includes("--detach"), resume: true });
     } else if (action === "reconcile") {
+      const lockExit=reexecWithHostLocks([HOST_PATHS.deployLock],fileURLToPath(import.meta.url),process.argv.slice(2));if(lockExit!==null){process.exit(lockExit);}
       assertOptions([]);
       assertProductionController();
       if (isServiceActive()) throw new Error("DEPLOYMENT_RUNNING");
@@ -523,6 +556,7 @@ if (action === "--help" || action === "-h" || action === "help" || options.inclu
     }
     else throw new Error(`Unknown deployment action: ${action}`);
   } catch (error) {
+    if(error.diagnostics)process.stdout.write(`${JSON.stringify(error.diagnostics,null,2)}\n`);
     process.stderr.write(`LUMINA_PRODUCTION_DEPLOY_FAILED\n${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   }

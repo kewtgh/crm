@@ -1,9 +1,8 @@
-export const REQUIRED_NODE_VERSION = ">=24.22.1 <25";
+import {HOST_CONTRACT,componentDiagnostic} from "../../deploy/libexec/lumina-host-contract.mjs";
+export const REQUIRED_NODE_VERSION = HOST_CONTRACT.components.node.required;
 
 export function deploymentRuntime(version = process.version) {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  const compatible = Boolean(match && Number(match[1]) === 24
-    && (Number(match[2]) > 22 || (Number(match[2]) === 22 && Number(match[3]) >= 1)));
+  const compatible = !componentDiagnostic("node",version,HOST_CONTRACT.components.node).blocking;
   return { HOST_NODE_VERSION: version, REQUIRED_NODE_VERSION,
     COMPATIBILITY_RESULT: compatible ? "COMPATIBLE" : "INCOMPATIBLE" };
 }

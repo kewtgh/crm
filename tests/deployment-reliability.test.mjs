@@ -48,7 +48,7 @@ test("proxy outage, same-ID recovery, immutable target, exactly-once archive and
     }
   };
   const updateSource = options => updateSourceAndResolveTarget({ ...options, git,
-    configuredProxy: "http://fiction:private@proxy.example.test:9000", delay: async () => {} });
+    verifyTarget: async target => { assert.equal(target,b); assert.equal(head,a); }, configuredProxy: "http://fiction:private@proxy.example.test:9000", delay: async () => {} });
   await assert.rejects(runBootstrap({ requestPath: f.requestPath, sourceRoot: f.root, updateSource,
     spawnController: () => { controllers++; } }), /BOOTSTRAP_GIT_PROXY_UNAVAILABLE/);
   const failed = await f.read(f.latestPath);

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import {HOST_CONTRACT,HOST_PATHS,componentDiagnostic,validateOwnedBuilder as validateHostBuilder} from "./lumina-host-contract.mjs";
+import {builderReplacementPlan,replaceOwnedBuilder,hostLocksHeld,reexecWithHostLocks} from "./lumina-host-upgrade.mjs";
 import {
   appendFileSync,
   existsSync,
@@ -12,6 +14,7 @@ import {
   renameSync,
   statfsSync,
   writeFileSync,
+  openSync,closeSync,fsyncSync,
 } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -27,7 +30,7 @@ export const LUMINA_ROOTLESS_DOCKER_DATA_ROOT = "/var/lib/lumina-crm/docker";
 export const LUMINA_DOCKER_CONFIG_ROOT = "/var/lib/lumina-crm/docker-config";
 export const LUMINA_BUILDX_CONFIG_ROOT = `${LUMINA_DOCKER_CONFIG_ROOT}/buildx`;
 export const LUMINA_BUILDKIT_NETWORK_MODE = "host";
-export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.34.1";
+export const LUMINA_BUILDKIT_IMAGE = HOST_CONTRACT.builder.image;
 
 const PROGRAM_PATH = "/usr/local/libexec/lumina-crm-storage-maintenance.mjs";
 const DOCKER_COMMAND = "/usr/bin/docker";
@@ -161,6 +164,13 @@ function assertRegularRootFile(file, label) {
   if (realpathSync(file) !== file) throw new Error(`${label} must resolve exactly to ${file}`);
 }
 
+function assertInstalledMaintenance(){
+ assertRegularRootFile(PROGRAM_PATH,"Maintenance launcher");assertRegularRootFile(fileURLToPath(import.meta.url),"Maintenance bundle");
+ const actual=fileURLToPath(import.meta.url),match=/^\/usr\/local\/libexec\/lumina-crm-host\/([0-9a-f]{64})\/lumina-crm-storage-maintenance\.mjs$/.exec(actual);
+ const receiptPath=`${HOST_PATHS.bundles}/installed.json`;assertRegularRootFile(receiptPath,"Maintenance installation receipt");const receipt=JSON.parse(readFileSync(receiptPath,"utf8"));
+ if(!match||receipt.schemaVersion!==1||receipt.stage!=="COMPLETE"||receipt.bundleDigest!==match[1]||receipt.launcherSha256!==createHash("sha256").update(readFileSync(PROGRAM_PATH)).digest("hex"))throw new Error("MAINTENANCE_INSTALL_INCOMPLETE");
+}
+
 function assertRealDirectory(directory, label) {
   const metadata = lstatSync(directory);
   if (!metadata.isDirectory() || metadata.isSymbolicLink() || realpathSync(directory) !== directory) {
@@ -292,7 +302,7 @@ function isContainerId(value) {
   return /^[0-9a-f]{12,64}$/.test(String(value));
 }
 
-export function builderCreateArguments(proxyValue) {
+export function builderCreateArguments(proxyValue, operationId = null) {
   const proxy = parseDockerProxy(proxyValue);
   return [
     "buildx",
@@ -302,9 +312,11 @@ export function builderCreateArguments(proxyValue) {
     "--buildkitd-config", BUILDKIT_CONFIG_PATH,
     "--driver-opt", `network=${LUMINA_BUILDKIT_NETWORK_MODE}`,
     "--driver-opt", `image=${LUMINA_BUILDKIT_IMAGE}`,
+    ...(operationId ? ["--driver-opt", `env.LUMINA_HOST_OPERATION_ID=${operationId}`] : []),
     ...(proxy ? DOCKER_PROXY_ENV_KEYS.flatMap((key) => [
       "--driver-opt", `env.${key}=${proxy}`,
     ]) : []),
+    ...(process.env.DOCKER_HOST ? [process.env.DOCKER_HOST] : []),
   ];
 }
 
@@ -335,6 +347,9 @@ export function assertAllowedDockerArguments(args) {
       "{{.CgroupDriver}}",
     ].includes(rest[0])) return true;
   } else if (category === "buildx") {
+    if (action === "inspect" && JSON.stringify(rest)===JSON.stringify(["--bootstrap",LUMINA_BUILDER_NAME])) return true;
+    if (action === "ls" && JSON.stringify(rest) === JSON.stringify(["--format", "{{.Name}}"])) return true;
+    if (action === "rm" && JSON.stringify(rest) === JSON.stringify(["--keep-state", LUMINA_BUILDER_NAME])) return true;
     if (action === "inspect" && rest.length === 1 && rest[0] === LUMINA_BUILDER_NAME) return true;
     if (action === "create") {
       let proxy = "";
@@ -343,7 +358,8 @@ export function assertAllowedDockerArguments(args) {
         proxy = proxyOption.slice("env.HTTP_PROXY=".length);
       }
       try {
-        if (JSON.stringify(args) === JSON.stringify(builderCreateArguments(proxy))) return true;
+        const nonce=args.find(argument=>argument.startsWith("env.LUMINA_HOST_OPERATION_ID="))?.slice("env.LUMINA_HOST_OPERATION_ID=".length)??null;
+        if ((!nonce || /^[0-9a-f-]{36}$/.test(nonce)) && JSON.stringify(args) === JSON.stringify(builderCreateArguments(proxy,nonce))) return true;
       } catch {
         // Invalid proxy-bearing arguments remain outside the allowlist.
       }
@@ -361,7 +377,7 @@ export function assertAllowedDockerArguments(args) {
     if (action === "rm" && rest.length === 1 && isImageId(rest[0])) return true;
   } else if (category === "container") {
     if (action === "ls" && rest.length === 2 && rest.includes("--all") && rest.includes("--quiet")) return true;
-    if (action === "inspect" && rest.length > 0 && rest.every(isContainerId)) return true;
+    if (action === "inspect" && rest.length > 0 && (rest.every(isContainerId)||JSON.stringify(rest)===JSON.stringify(["buildx_buildkit_lumina-crm-buildkit0"]))) return true;
   }
   throw new Error(
     `Docker command is outside the Lumina maintenance allowlist: docker ${safeDockerArguments(args)}`,
@@ -467,9 +483,11 @@ function readJson(file) {
 }
 
 function writeAtomicJson(file, value, mode = 0o640) {
-  const temporary = `${file}.next-${process.pid}`;
-  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode });
+  const temporary = `${file}.next-${randomUUID()}`;
+  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode,flag:"wx" });
+  const descriptor=openSync(temporary,"r");try{fsyncSync(descriptor);}finally{closeSync(descriptor);}
   renameSync(temporary, file);
+  if(process.platform!=="win32"){const directory=openSync(path.dirname(file),"r");try{fsyncSync(directory);}finally{closeSync(directory);}}
 }
 
 function parseBuilderDriverOptions(output) {
@@ -487,7 +505,7 @@ function parseBuilderDriverOptions(output) {
   return options;
 }
 
-export function validateBuilderInspect(output, dockerProxy) {
+export function validateBuilderInspect(output, dockerProxy, operationId = null) {
   if (!new RegExp(`^Name:\\s+${LUMINA_BUILDER_NAME}$`, "m").test(output)
     || !/^Driver:\s+docker-container$/m.test(output)) {
     throw new Error(`Builder ${LUMINA_BUILDER_NAME} is not the expected docker-container builder`);
@@ -503,9 +521,10 @@ export function validateBuilderInspect(output, dockerProxy) {
   const expectedKeys = new Set([
     "network",
     "image",
+    ...(operationId ? ["env.LUMINA_HOST_OPERATION_ID"] : []),
     ...(expectedProxy ? DOCKER_PROXY_ENV_KEYS.map((key) => `env.${key}`) : []),
   ]);
-  if (options.size !== expectedKeys.size
+  if ((operationId && options.get("env.LUMINA_HOST_OPERATION_ID")!==operationId) || options.size !== expectedKeys.size
     || [...options.keys()].some((key) => !expectedKeys.has(key))
     || DOCKER_PROXY_ENV_KEYS.some((key) => (
       expectedProxy
@@ -545,7 +564,7 @@ function ensureBuilder(policy) {
   if (marker) validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   const inspected = runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], {
     allowFailure: true,
-    validateStdout: (output) => validateBuilderInspect(output, policy.dockerProxy),
+    validateStdout: (output) => {validateBuilderInspect(output, policy.dockerProxy, marker?.hostOperationId);if(marker)validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST});},
   });
   if (inspected.ok) {
     if (!marker) throw new Error(`Refusing to adopt unmarked existing builder ${LUMINA_BUILDER_NAME}`);
@@ -685,7 +704,7 @@ function validateOwnedBuilder(policy) {
   const fingerprint = configFingerprint(policy);
   validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], {
-    validateStdout: (output) => validateBuilderInspect(output, policy.dockerProxy),
+    validateStdout: (output) => {validateBuilderInspect(output,policy.dockerProxy,marker?.hostOperationId);validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST});},
   });
 }
 
@@ -818,6 +837,7 @@ async function perform(mode) {
     throw new Error(`Lumina storage maintenance must run from root-owned ${PROGRAM_PATH}`);
   }
   assertRegularRootFile(PROGRAM_PATH, "Lumina storage maintenance program");
+  assertInstalledMaintenance();
   assertRealDirectory(DEPLOY_STATE_ROOT, "Lumina deploy state root");
   mkdirSync(STATE_ROOT, { recursive: true, mode: 0o750 });
   mkdirSync(LOG_ROOT, { recursive: true, mode: 0o750 });
@@ -882,8 +902,51 @@ async function perform(mode) {
   }
 }
 
-async function main() {
+function builderSnapshot(policy,{allowMissing=false}={}) {
+ const metadata=lstatSync(BUILDER_MARKER_PATH);
+ if(!metadata.isFile()||metadata.isSymbolicLink()||metadata.uid!==process.getuid()||(metadata.mode&0o077)!==0||realpathSync(BUILDER_MARKER_PATH)!==BUILDER_MARKER_PATH)throw new Error("BUILDER_MARKER_METADATA_INVALID");
+ const base={marker:readJson(BUILDER_MARKER_PATH),fingerprint:configFingerprint(policy),proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST};
+ const names=runDocker(["buildx","ls","--format","{{.Name}}"] ).stdout.split(/\r?\n/).map(value=>value.trim().replace(/\*$/,""));
+ if(!names.includes(LUMINA_BUILDER_NAME)){if(allowMissing)return{...base,inspect:null};throw new Error("BUILDER_MISSING");}
+ let inspect;runDocker(["buildx","inspect",LUMINA_BUILDER_NAME],{validateStdout:output=>{inspect=output;}});return{...base,inspect};
+}
+async function builderOperation(mode,args) {
+ if(process.platform!=="linux"||process.getuid?.()===0)throw new Error("HOST_UPGRADE_REQUIRES_LUMINA_ACCOUNT");
+ assertInstalledMaintenance();
+ const policy=loadPolicy();assertRootlessDocker(policy);
+ const activePath=`${STATE_ROOT}/host-upgrade-active.json`;
+ if(mode==="builder-plan")return builderReplacementPlan(builderSnapshot(policy));
+ if(!hostLocksHeld([HOST_PATHS.admissionLock,HOST_PATHS.deployLock,HOST_PATHS.maintenanceLock]))throw new Error("HOST_UPGRADE_LOCK_REQUIRED");
+ const approval=args.find(value=>value.startsWith("--approve="))?.slice(10);
+ const resumeId=args.find(value=>value.startsWith("--resume="))?.slice(9)??null;
+ if(args.some(value=>!value.startsWith("--approve=")&&!value.startsWith("--resume=")&&value!=="--acknowledge-cache-loss"))throw new Error("HOST_UPGRADE_ARGUMENT_INVALID");
+ let active=existsSync(activePath)?readJson(activePath):null;
+ if(active?.stage==="COMPLETE"&&!resumeId)active=null;
+ const plan=active?.plan??builderReplacementPlan(builderSnapshot(policy));
+ return replaceOwnedBuilder({plan,approval,resumeId,acknowledgeCacheLoss:args.includes("--acknowledge-cache-loss"),operations:{
+  exclusive:async fn=>{if(!hostLocksHeld([HOST_PATHS.admissionLock,HOST_PATHS.deployLock,HOST_PATHS.maintenanceLock]))throw new Error("HOST_UPGRADE_LOCK_REQUIRED");return fn();},
+  readActive:async()=>active,
+  snapshot:async options=>builderSnapshot(policy,options),
+  persist:async journal=>{writeAtomicJson(`${STATE_ROOT}/host-upgrade-${journal.operationId}.json`,journal,0o600);writeAtomicJson(activePath,journal,0o600);},
+  removeOwned:async observed=>{validateHostBuilder({...observed,image:plan.previousImage});runDocker(["buildx","rm","--keep-state",LUMINA_BUILDER_NAME]);},
+  createOwned:async nonce=>runDocker(builderCreateArguments(policy.dockerProxy,nonce)),
+  verifyReplacement:async journal=>{
+   const snapshot=builderSnapshot(policy);runDocker(["buildx","inspect","--bootstrap",LUMINA_BUILDER_NAME],{validateStdout:inspect=>validateHostBuilder({...snapshot,marker:{...snapshot.marker,hostOperationId:journal.operationId},inspect,image:plan.targetImage,operationId:journal.operationId})});
+   const value=JSON.parse(runDocker(["container","inspect","buildx_buildkit_lumina-crm-buildkit0"]).stdout);if(value.length!==1||value[0].Config?.Image!==plan.targetImage||value[0].HostConfig?.NetworkMode!=="host"||!value[0].Config?.Env?.includes(`LUMINA_HOST_OPERATION_ID=${journal.operationId}`))throw new Error("BUILDER_DAEMON_VERIFICATION_FAILED");
+  },
+  targetMarker:journal=>({owner:LUMINA_REPOSITORY_VALUE,builder:LUMINA_BUILDER_NAME,driver:"docker-container",builderNetworkMode:"host",builderImage:plan.targetImage,configSha256:plan.configSha256,dockerProxyEnabled:Boolean(policy.dockerProxy),dockerProxySha256:dockerProxyMarkerContract(policy.dockerProxy).sha256,hostOperationId:journal.operationId,createdAt:journal.events[0].at}),
+  writeMarker:async marker=>writeAtomicJson(BUILDER_MARKER_PATH,marker,0o600),
+  finish:async journal=>{writeAtomicJson(`${STATE_ROOT}/host-upgrade-${journal.operationId}.json`,journal,0o600);/* Keep COMPLETE active receipt for audit and idempotent resume. */},
+ }});
+}
+export async function main() {
+  const runtime=componentDiagnostic("node",process.version,HOST_CONTRACT.components.node);
+  if(runtime.blocking)throw new Error(`HOST_MAINTENANCE_RUNTIME_INCOMPATIBLE: ${JSON.stringify(runtime)}`);
   const [mode] = process.argv.slice(2);
+  if(mode==="builder-plan"){process.stdout.write(`${JSON.stringify(await builderOperation(mode,[]),null,2)}\n`);return;}
+  const files=mode==="builder-replace"?[HOST_PATHS.admissionLock,HOST_PATHS.deployLock,HOST_PATHS.maintenanceLock]:[HOST_PATHS.maintenanceLock];
+  const lockExit=reexecWithHostLocks(files,PROGRAM_PATH,process.argv.slice(2));if(lockExit!==null){process.exitCode=lockExit;return;}
+  if(mode==="builder-replace"){try{process.stdout.write(`${JSON.stringify(await builderOperation(mode,process.argv.slice(3)),null,2)}\n`);}catch(error){try{const active=readJson(`${STATE_ROOT}/host-upgrade-active.json`);writeAtomicJson(`${STATE_ROOT}/host-upgrade-failure-${Date.now()}-${process.pid}.json`,{operationId:active.operationId,stage:active.stage,at:new Date().toISOString(),error:redactMaintenance(error.message)},0o600);}catch{/* Preserve the durable intent if storage cannot accept a failure note. */}throw error;}return;}
   const startedAt = new Date().toISOString();
   try {
     const result = await perform(mode);

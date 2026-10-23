@@ -1,5 +1,7 @@
 # Deployment recovery operations
 
+The [v3.40 host control-plane workflow](DEPLOYMENT.md#host-preflight-and-operator-upgrade) supersedes older host-runtime installation advice. Host diagnostics, approved upgrades and evidence-bound early archival are separate from application deploy/accept/reconcile.
+
 These procedures describe operator actions for a reviewed installation. Repository validation does not authorize executing them on production. Source permissions remain private to `lumina-crm`; do not run npm from an operator's home, change ownership, or run the deployment as root.
 
 ## Runtime and commands
@@ -12,7 +14,7 @@ sudo -u lumina-crm env HOME=/var/lib/lumina-crm /usr/bin/node --version
 systemctl cat lumina-crm-deploy.service
 ```
 
-The CLI, systemd bootstrap, target controller and application image require Node `>=24.22.0 <25`. A host v26 executable is incompatible even if containers have the correct version. Failure reports `HOST_NODE_VERSION`, `REQUIRED_NODE_VERSION`, and `COMPATIBILITY_RESULT` before source update. Install a separately reviewed Lumina-owned Node 24 toolchain if needed; verify its checksum, ownership, executable version and systemd execution permissions, then review the service's explicit executable and CLI together. Do not replace the server-global Node or paste an unverified alternate executable into the unit. The checked-in unit continues to use `/usr/bin/node`; upgrading repository source alone cannot repair an incompatible host executable.
+The CLI, systemd bootstrap, target controller and application image require Node `>=24.22.1 <25`. A host v26 executable is incompatible even if containers have the correct version. Failure reports `HOST_NODE_VERSION`, `REQUIRED_NODE_VERSION`, and `COMPATIBILITY_RESULT` before source update. Install a separately reviewed Lumina-owned Node 24 toolchain if needed; verify its checksum, ownership, executable version and systemd execution permissions, then review the service's explicit executable and CLI together. Do not replace the server-global Node or paste an unverified alternate executable into the unit. The checked-in unit continues to use `/usr/bin/node`; upgrading repository source alone cannot repair an incompatible host executable.
 
 Copyable commands require no `cd` into the source:
 

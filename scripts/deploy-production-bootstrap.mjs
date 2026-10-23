@@ -15,6 +15,11 @@ import { assertDeploymentRuntime } from "./lib/deployment-runtime.mjs";
 import { classifyGitFailure, fetchWithRetry } from "./lib/deployment-git.mjs";
 import { assertEarlyRequestRecoverable, assertPendingAcceptance } from "./lib/deployment-recovery.mjs";
 import { durableDeploymentWrite } from "./lib/deployment-state-write.mjs";
+import {readStaticHostTarget,assertHostPreflight} from "./lib/host-preflight.mjs";
+import {controllerEntryIdentity,controllerEntryPath,validateEarlyRejection} from "./lib/controller-entry.mjs";
+import {sha256} from "../deploy/libexec/lumina-host-contract.mjs";
+import {hostLocksHeld} from "../deploy/libexec/lumina-host-upgrade.mjs";
+import {HOST_PATHS} from "../deploy/libexec/lumina-host-contract.mjs";
 
 export const PRODUCTION_SOURCE_ROOT = "/opt/lumina-crm/source";
 export const PRODUCTION_STATE_ROOT = "/var/lib/lumina-crm/deployments";
@@ -55,7 +60,7 @@ export function targetControllerArguments(targetCommit, bootstrapCommit) {
   ];
 }
 
-function runGit(args, { environment = process.env, timeoutMs = 20_000 } = {}) {
+function runGit(args, { environment = process.env, timeoutMs = 20_000, raw = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, {
       cwd: PRODUCTION_SOURCE_ROOT,
@@ -73,7 +78,7 @@ function runGit(args, { environment = process.env, timeoutMs = 20_000 } = {}) {
       clearTimeout(timer);
       if (code !== 0) reject(Object.assign(new Error("BOOTSTRAP_GIT_COMMAND_FAILED"),
         { stderr: timedOut ? "connection timed out" : stderr }));
-      else resolve(stdout.trim());
+      else resolve(raw ? stdout : stdout.trim());
     });
   });
 }
@@ -88,6 +93,9 @@ export async function updateSourceAndResolveTarget({
   attempts = Number(process.env.LUMINA_GIT_FETCH_ATTEMPTS ?? 3),
   delay,
   expectedTarget = null,
+  requestedTarget = null,
+  planOnly = false,
+  verifyTarget = async (commit,reader) => assertHostPreflight({target:await readStaticHostTarget(reader,commit),executionLockHeld:!planOnly}),
 } = {}) {
   stage("source-validation");
   const branch = await git(["branch", "--show-current"]);
@@ -110,13 +118,19 @@ export async function updateSourceAndResolveTarget({
   }
   if (expectedTarget) {
     if (bootstrapCommit !== expectedTarget) throw new Error("BOOTSTRAP_SOURCE_INVALID");
+    await verifyTarget(expectedTarget,git);
     return { bootstrapCommit, targetCommit: expectedTarget };
   }
-  stage("git-fetch");
-  await fetchWithRetry(options => git(["fetch", "--prune", "origin", expectedBranch],
-    { ...options, environment: fetchEnvironment }), { attempts, delay, proxy: Boolean(proxy) });
-  const targetCommit = await git(["rev-parse", `origin/${expectedBranch}`]);
+  if(requestedTarget){if(!FULL_SHA.test(requestedTarget)||await git(["cat-file","-t",requestedTarget])!=="commit")throw new Error("BOOTSTRAP_TARGET_INVALID");}
+  else{stage("git-fetch");
+   await fetchWithRetry(options => git(["fetch", "--prune", "origin", expectedBranch],
+    { ...options, environment: fetchEnvironment }), { attempts, delay, proxy: Boolean(proxy) });}
+  const targetCommit = requestedTarget ?? await git(["rev-parse", `origin/${expectedBranch}`]);
   if (!FULL_SHA.test(targetCommit)) throw new Error("BOOTSTRAP_TARGET_INVALID");
+  if(requestedTarget)await git(["merge-base","--is-ancestor",requestedTarget,`origin/${expectedBranch}`]);
+  stage("host-preflight");
+  await verifyTarget(targetCommit,git);
+  if(planOnly)return {bootstrapCommit,targetCommit};
   stage("fast-forward");
   try { await git(["merge", "--ff-only", targetCommit]); }
   catch (error) { throw classifyGitFailure(error, { operation: "fast-forward" }); }
@@ -149,7 +163,7 @@ export function spawnTargetController({
   runnerPath,
   targetCommit,
   bootstrapCommit,
-  nodePath = "/usr/bin/node",
+  nodePath = process.execPath,
   environment = process.env,
   spawnProcess = spawn,
   sourceRoot = PRODUCTION_SOURCE_ROOT,
@@ -196,12 +210,14 @@ export async function runBootstrap({
   let currentStage = "source-validation";
   let controllerStarted = false;
   let sourceEvidence = {};
+  let handoffEvidence = {};
   const record = (result, error = null) => ({ requestId: request.requestId, mode: request.mode,
     launchId: request.launchId, deploymentId: null, result, applicationResult: "NOT_STARTED",
     stage: currentStage, error, controllerStarted, attempts, migrationState: "NOT_STARTED",
     migrationMayHaveChanged: false, webSwitch: "NOT_STARTED", workerSwitch: "NOT_STARTED",
     applicationAccepted: false, finalizationComplete: false, requestArchived: false,
     ...sourceEvidence,
+    ...handoffEvidence,
     recoverySafe: ["BOOTSTRAP_FAILED", "BOOTSTRAP_RUNNING"].includes(result) && !controllerStarted
       && ["source-validation", "git-fetch", "target-asset"].includes(currentStage) });
   const save = value => {
@@ -219,11 +235,11 @@ export async function runBootstrap({
   };
   try {
   process.stdout.write(`${Object.entries(assertDeploymentRuntime()).map(([key, value]) => `${key}=${value}`).join("\n")}\n`);
-  save(record("BOOTSTRAP_RUNNING"));
   const { bootstrapCommit, targetCommit } = await updateSource({
     configuredProxy: process.env.LUMINA_GIT_PROXY,
     expectedTarget: resuming ? prior.targetCommit : null,
-    stage: value => { currentStage = value; attempt.stage = value; save(record("BOOTSTRAP_RUNNING")); },
+    requestedTarget: request.targetCommit??null,
+    stage: value => { currentStage = value; attempt.stage = value; },
   });
   sourceEvidence = { bootstrapCommit, targetCommit };
   process.stdout.write(`BOOTSTRAP_SOURCE_COMMIT=${bootstrapCommit}\n`);
@@ -237,14 +253,19 @@ export async function runBootstrap({
   // Intent is durable before handoff; a crash here cannot be replayed as a source failure.
   controllerStarted = true;
   attempt.controllerStarted = true;
+  handoffEvidence={handoffNonce:randomUUID()};
   save(record("BOOTSTRAP_RUNNING"));
   const result = await spawnController({
     runnerPath: target.runnerPath,
     targetCommit,
     bootstrapCommit,
     sourceRoot,
+    environment:{...process.env,LUMINA_BOOTSTRAP_ATTEMPT_ID:attempt.attemptId,LUMINA_HOST_HANDOFF_NONCE:handoffEvidence.handoffNonce},
   });
   if (result.code !== 0) {
+    let rejection=null;
+    try{const identity=controllerEntryIdentity(request,{LUMINA_BOOTSTRAP_ATTEMPT_ID:attempt.attemptId,LUMINA_HOST_HANDOFF_NONCE:handoffEvidence.handoffNonce,LUMINA_TARGET_SOURCE_COMMIT:targetCommit});const file=controllerEntryPath(identity,path.dirname(requestPath));rejection=validateEarlyRejection(readJson(file),identity);if(!Number.isSafeInteger(result.pid)||result.pid<1||rejection.controllerPid!==result.pid||rejection.nodeExecutable!==process.execPath)throw new Error("EARLY_REJECTION_PROCESS_MISMATCH");handoffEvidence={...handoffEvidence,controllerExitCode:result.code,controllerPid:result.pid,earlyRejection:{file:path.basename(file),sha256:sha256(JSON.stringify(rejection))}};}catch{ /* Missing or ambiguous entry evidence never permits recovery. */ }
+    if(rejection&&result.code===1){currentStage="target-controller-rejected";attempt.finishedAt=new Date().toISOString();save(record("CONTROLLER_REJECTED",rejection.code));return result.code;}
     let latestAfter = null;
     try { latestAfter = readFileSync(latestPath, "utf8"); } catch { /* The controller did not persist state. */ }
     const latest = readJson(latestPath);
@@ -255,6 +276,7 @@ export async function runBootstrap({
   }
   return result.code;
   } catch (error) {
+    if(error?.code==="HOST_PREFLIGHT_FAILED"){process.stderr.write(`${JSON.stringify(error.diagnostics)}\n`);throw Object.assign(error,{bootstrapRecorded:true});}
     if (error?.code === "CONTROL_PLANE_FINALIZATION_FAILED") throw error;
     const code = controllerStarted ? "TARGET_CONTROLLER_START_FAILED"
       : currentStage === "target-asset" ? "BOOTSTRAP_TARGET_ASSET_INVALID"
@@ -264,7 +286,7 @@ export async function runBootstrap({
     attempt.error = code;
     save(record("BOOTSTRAP_FAILED", code));
     if (code === "NODE_RUNTIME_INCOMPATIBLE") process.stderr.write(`${error.message}\n`);
-    throw Object.assign(new Error(code), { code, bootstrapRecorded: true });
+    throw Object.assign(new Error(code,{cause:error}), { code, bootstrapRecorded: true });
   }
 }
 
@@ -308,6 +330,7 @@ async function main() {
   if (path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..") !== PRODUCTION_SOURCE_ROOT) {
     throw new Error(`Bootstrap must execute from ${PRODUCTION_SOURCE_ROOT}`);
   }
+  if(!hostLocksHeld([HOST_PATHS.deployLock]))throw new Error("BOOTSTRAP_DEPLOYMENT_LOCK_REQUIRED");
   const sourceMetadata = lstatSync(PRODUCTION_SOURCE_ROOT);
   if (!sourceMetadata.isDirectory() || sourceMetadata.isSymbolicLink()
     || realpathSync(PRODUCTION_SOURCE_ROOT) !== PRODUCTION_SOURCE_ROOT) {
