@@ -16,6 +16,7 @@ import {hostPreflight,hostUpgradePlan,assertHostPreflight,readStaticHostTarget} 
 import {updateSourceAndResolveTarget} from "./deploy-production-bootstrap.mjs";
 import {HOST_PATHS,sha256} from "../deploy/libexec/lumina-host-contract.mjs";
 import {hostLocksHeld,reexecWithHostLocks} from "../deploy/libexec/lumina-host-upgrade.mjs";
+import {assertNoIncompleteLegacyArchives,assertNoIncompleteSourceAdoptions} from "./lib/legacy-transition-host.mjs";
 import {earlyArchivePlan,archiveEarlyRequest,assertNoIncompleteEarlyArchive} from "./lib/early-request-archive.mjs";
 import { assertEarlyRequestRecoverable, assertPendingAcceptance } from "./lib/deployment-recovery.mjs";
 import { durableDeploymentWrite } from "./lib/deployment-state-write.mjs";
@@ -290,6 +291,7 @@ async function start(mode, { detached = false, resume = false } = {}) {
     throw new Error(`A production deployment is already running${current?.deploymentId ? ` (${current.deploymentId})` : ""}`);
   }
   assertNoIncompleteEarlyArchive(readdirSync(stateRoot).filter(name=>/^early-archive-[0-9a-f-]{36}\.json$/.test(name)).map(name=>{const ledger=readEvidenceJson(path.join(stateRoot,name));let archiveVerified=false;try{const id=ledger.plan.requestId;if(!/^[0-9a-f-]{36}$/.test(id)||name!==`early-archive-${id}.json`)throw new Error("INVALID_ARCHIVE_ID");const archived=readEvidenceJson(path.join(stateRoot,`request-early-${id}.json`));archiveVerified=sha256(JSON.stringify(archived))===ledger.plan.requestSha256&&JSON.stringify(archived)===JSON.stringify(ledger.request);}catch{/* Missing archive evidence blocks admission. */}return{...ledger,archiveVerified};}));
+  assertNoIncompleteLegacyArchives(stateRoot);assertNoIncompleteSourceAdoptions(stateRoot);
   const hostTarget=!resume&&["deploy","initialize"].includes(mode)?await updateSourceAndResolveTarget({planOnly:true}):null;
 
   let request = readJson(requestPath);
@@ -317,6 +319,7 @@ async function start(mode, { detached = false, resume = false } = {}) {
     mkdirSync(stateRoot, { recursive: true, mode: 0o750 });
     request = {
       requestId: randomUUID(),
+      handoffProtocol:2,
       mode,
       requestedAt: new Date().toISOString(),
       sourceRoot,

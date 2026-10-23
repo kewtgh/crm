@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "legacyBootstrapSources": [
+    "796cc43e63784eb8891ca6420572cd563cb2ac80"
+  ],
+  "legacyEntryFailureTargets": [
+    "c164ff1524192b7d699dae1962c02bf72566407b"
+  ],
+  "revisions": {
+    "796cc43e63784eb8891ca6420572cd563cb2ac80": {
+      "files": {
+        "scripts/deploy-production-bootstrap.mjs": "e47e0eaa286729c0f548aa9a9b7a292c515a45d15bcb55df1b741abd920d2f0f",
+        "scripts/deploy-production-runner.mjs": "ad59570cb77ed8085d10966cdc199312a43e72b3114badaecc0615f5e1e6f036",
+        "deploy/libexec/lumina-crm-storage-maintenance.mjs": "1897c16446f48863b345e40d850ad657d8067ed822a457be94961fd135d2974f"
+      },
+      "unitHashes": {
+        "lumina-crm.service": "24b5ef97085a2bd735056740fbccffb3255e11f746271a5fcb3ad2e9fd9d401b",
+        "lumina-crm-deploy.service": "c6848c675ca81106c7ab1ebd56e2ec3cfc6af14a4d0234e2115f2d4d2e3f6498",
+        "lumina-crm-storage-prepare.service": "f253a22e512c48c1d9b52e01c7630506903543b43c771e0b8aabb82fa79798f5",
+        "lumina-crm-build-cache-cleanup.service": "1c1644a961bbe4950336011d70887efe7db55d77d8b7632c497f2798dc38526b",
+        "lumina-crm-storage-cleanup.service": "e366b4d3424c28bf580c0c39897d27163ef9d19f82e5f08ca008829e03b14a18"
+      },
+      "bundle": null,
+      "maintenanceBuilderImages": [
+        "moby/buildkit:v0.34.1"
+      ]
+    },
+    "c164ff1524192b7d699dae1962c02bf72566407b": {
+      "files": {
+        "scripts/deploy-production-bootstrap.mjs": "23160097518059d8a1ea8bb847a07c4d211944edbf95016c065a5c4f554d4ff4",
+        "scripts/deploy-production-runner.mjs": "ff14ccac7fbb04d2a9023945e3e6380ad851e9a73911aa4def8b61dfb04cf7d3",
+        "scripts/lib/controller-entry.mjs": "b222c260a4797f8d675cb757ad6d3e87416d5f4592ed8e3b057234f207a677d4",
+        "deploy/libexec/lumina-crm-storage-maintenance.mjs": "81ec124367011635ee973c2131119e58b88e4705aea32d6cf96b30ebaee7c365"
+      },
+      "unitHashes": {
+        "lumina-crm.service": "24b5ef97085a2bd735056740fbccffb3255e11f746271a5fcb3ad2e9fd9d401b",
+        "lumina-crm-deploy.service": "c6848c675ca81106c7ab1ebd56e2ec3cfc6af14a4d0234e2115f2d4d2e3f6498",
+        "lumina-crm-storage-prepare.service": "f253a22e512c48c1d9b52e01c7630506903543b43c771e0b8aabb82fa79798f5",
+        "lumina-crm-build-cache-cleanup.service": "1c1644a961bbe4950336011d70887efe7db55d77d8b7632c497f2798dc38526b",
+        "lumina-crm-storage-cleanup.service": "e366b4d3424c28bf580c0c39897d27163ef9d19f82e5f08ca008829e03b14a18"
+      },
+      "bundle": {
+        "paths": [
+          "deploy/libexec/host-runtime-contract.json",
+          "deploy/libexec/lumina-host-contract.mjs",
+          "deploy/libexec/lumina-host-upgrade.mjs",
+          "deploy/libexec/lumina-crm-storage-maintenance.mjs"
+        ],
+        "hashes": {
+          "deploy/libexec/host-runtime-contract.json": "1a8050f03c121d57fe766e723986aa745add06b352917c885246cd542a7f2767",
+          "deploy/libexec/lumina-host-contract.mjs": "671fb2a07d6ba8ddd6183c58c643b10803cf4bbd622c2d60cc88ade3af76fcb1",
+          "deploy/libexec/lumina-host-upgrade.mjs": "131863ff96e73c301de910b9454dd2d504d92951880f46f7b88f227ed95217e8",
+          "deploy/libexec/lumina-crm-storage-maintenance.mjs": "81ec124367011635ee973c2131119e58b88e4705aea32d6cf96b30ebaee7c365"
+        },
+        "digest": "e60a75d293d228133a43fd1b14fc3e85c81c61a1c6ad8747f175d18d94542c25"
+      },
+      "maintenanceBuilderImages": [
+        "moby/buildkit:v0.34.1"
+      ]
+    },
+    "44b2ff8c05a89986fa05e650aa368b009983e2d6": {
+      "files": {
+        "scripts/deploy-production-bootstrap.mjs": "e47e0eaa286729c0f548aa9a9b7a292c515a45d15bcb55df1b741abd920d2f0f",
+        "scripts/deploy-production-runner.mjs": "ad59570cb77ed8085d10966cdc199312a43e72b3114badaecc0615f5e1e6f036",
+        "deploy/libexec/lumina-crm-storage-maintenance.mjs": "647da3ff73213bec1d2961d3721c192e5a682237d56071b6e3792c423a4e03f1"
+      },
+      "unitHashes": {
+        "lumina-crm.service": "24b5ef97085a2bd735056740fbccffb3255e11f746271a5fcb3ad2e9fd9d401b",
+        "lumina-crm-deploy.service": "c6848c675ca81106c7ab1ebd56e2ec3cfc6af14a4d0234e2115f2d4d2e3f6498",
+        "lumina-crm-storage-prepare.service": "f253a22e512c48c1d9b52e01c7630506903543b43c771e0b8aabb82fa79798f5",
+        "lumina-crm-build-cache-cleanup.service": "1c1644a961bbe4950336011d70887efe7db55d77d8b7632c497f2798dc38526b",
+        "lumina-crm-storage-cleanup.service": "e366b4d3424c28bf580c0c39897d27163ef9d19f82e5f08ca008829e03b14a18"
+      },
+      "bundle": null,
+      "maintenanceBuilderImages": [
+        "moby/buildkit:v0.33.1"
+      ]
+    }
+  }
+}

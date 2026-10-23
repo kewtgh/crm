@@ -1,4 +1,4 @@
-import {HOST_CONTRACT} from "../../deploy/libexec/lumina-host-contract.mjs";
+import {HOST_CONTRACT,supportedBuilderImage} from "../../deploy/libexec/lumina-host-contract.mjs";
 export const DOCKER_BUILD_PROXY_KEYS = [
   "HTTP_PROXY",
   "HTTPS_PROXY",
@@ -66,7 +66,7 @@ export function validateBuildxInspectContract(output, { builderName, dockerProxy
   if (consumed.trim() !== value || options.get("network") !== "host") {
     throw new Error("LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH");
   }
-  if (options.get("image") !== LUMINA_BUILDKIT_IMAGE) {
+  if (!supportedBuilderImage(options.get("image"))) {
     throw new Error("LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH");
   }
   const proxy = parseDockerBuildProxy(dockerProxy);

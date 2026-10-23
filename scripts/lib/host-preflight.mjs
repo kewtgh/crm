@@ -2,8 +2,10 @@ import {spawnSync} from "node:child_process";
 import {readFileSync,lstatSync,realpathSync,statfsSync,existsSync} from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
+import {probeHostCapabilities} from "./host-capabilities.mjs";
+import {inspectMaintenanceTrust,trustedUnit} from "./host-trust.mjs";
 import {parseDockerBuildProxy} from "./docker-build-proxy.mjs";
-import {HOST_CONTRACT,HOST_CONTRACT_PATH,HOST_PATHS,MAINTENANCE_ASSETS,validateHostContract,componentDiagnostic,maintenanceBundle,sha256,validateOwnedBuilder} from "../../deploy/libexec/lumina-host-contract.mjs";
+import {HOST_CONTRACT,HOST_CONTRACT_PATH,HOST_PATHS,MAINTENANCE_ASSETS,validateHostContract,componentDiagnostic,maintenanceBundle,sha256,validateOwnedBuilder,supportedBuilderImage} from "../../deploy/libexec/lumina-host-contract.mjs";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
 export const HOST_UNIT_PATHS=["lumina-crm.service","lumina-crm-deploy.service","lumina-crm-storage-prepare.service","lumina-crm-build-cache-cleanup.service","lumina-crm-storage-cleanup.service"];
@@ -22,26 +24,29 @@ export async function readStaticHostTarget(git,commit){
 }
 const item=(component,current,required,ok,remediation)=>({component,current,required,status:ok?"READY":"BLOCKED",blocking:!ok,remediation:ok?null:remediation});
 export function evaluateHostSnapshot(snapshot,target,{executionLockHeld=false}={}){
- const {contract,bundle}=target,rows=[];
- for(const name of Object.keys(contract.components))rows.push(componentDiagnostic(name,snapshot.versions?.[name],contract.components[name]));
+ const {contract}=target,rows=[];
+ for(const name of Object.keys(contract.components)){const row=componentDiagnostic(name,snapshot.versions?.[name],contract.components[name]);if(!snapshot.isolated&&["docker","compose","buildx"].includes(name)&&row.current===null){row.status="DEPENDENCY_BLOCKED";row.dependsOn="docker.isolation";}rows.push(row);}
  rows.push(componentDiagnostic("systemd.node",snapshot.systemdNode,contract.components.node));
  rows.push(item("systemd.node.identity",snapshot.sameNode??false,"CLI, systemd, Bootstrap and target use the same Node executable",snapshot.sameNode===true,"Install the approved Node toolchain at /usr/bin/node and rerun diagnostics with that executable"));
  rows.push(item("host.identity",snapshot.identity??null,"non-root lumina-crm on Linux",snapshot.identity===true,"Run as the lumina-crm host account on Linux"));
  rows.push(item("docker.isolation",snapshot.isolated??false,"CRM-owned socket, data root and private Docker/Buildx config",snapshot.isolated===true,"Review CRM rootless socket ownership, daemon data root, cgroup v2 and private configuration directories"));
  rows.push(item("docker.service",snapshot.dockerServiceReady??false,"active docker.service in the lumina-crm user systemd manager",snapshot.dockerServiceReady===true,"Review the CRM user manager and its rootless Docker service; do not restart another daemon"));
- let builderError=null;try{validateOwnedBuilder({...snapshot.builder,image:contract.builder.image});}catch(error){builderError=error.message;}
+ let builderError=null;try{const image=snapshot.builder?.image;if(!supportedBuilderImage(image,contract))throw new Error("BUILDKIT_IMAGE_NOT_AUDITED");validateOwnedBuilder({...snapshot.builder,image});}catch(error){builderError=error.message;}
  rows.push(item("buildkit",{image: snapshot.builder?.image??null,configurationVerified:!builderError},contract.builder,builderError===null,`${builderError??""}: use host-upgrade-plan; owner-verified replacement requires explicit cache-loss approval`));
- rows.push(item("buildkit.daemon",snapshot.builderDaemon??null,{image:contract.builder.image,network:"host"},snapshot.builderDaemon?.image===contract.builder.image&&snapshot.builderDaemon?.network==="host"&&(!snapshot.builder?.marker?.hostOperationId||snapshot.builderDaemon?.operationId===snapshot.builder.marker.hostOperationId),"Operator-approved builder bootstrap/replace is required; metadata alone cannot prove the daemon image"));
- rows.push(item("maintenance.bundle",snapshot.maintenanceDigest??null,bundle.digest,snapshot.maintenanceDigest===bundle.digest,"Review and atomically install the approved root-owned maintenance bundle; Git update is insufficient"));
+ rows.push(item("buildkit.daemon",snapshot.builderDaemon??null,{image:contract.builder.image,network:"host"},supportedBuilderImage(snapshot.builderDaemon?.image,contract)&&snapshot.builderDaemon?.image===snapshot.builder?.image&&snapshot.builderDaemon?.network==="host"&&(!snapshot.builder?.marker?.hostOperationId||snapshot.builderDaemon?.operationId===snapshot.builder.marker.hostOperationId),"Operator-approved builder bootstrap/replace is required; metadata alone cannot prove the daemon image"));
+ const maintenanceReady=snapshot.maintenanceTrust&&snapshot.maintenanceTrust.builderImages?.includes(snapshot.builder?.image)&&(contract.maintenance?.supportedProtocols??[1]).includes(snapshot.maintenanceTrust.protocol)&&(contract.maintenance?.requiredCapabilities??["trusted-code"]).every(value=>snapshot.maintenanceTrust.capabilities.includes(value));
+ rows.push({...item("maintenance.bundle",snapshot.maintenanceTrust??null,"trusted compatible maintenance protocol",Boolean(maintenanceReady),"Audit unknown code or install an approved compatible maintenance bundle; application-source equality is not required"),...(maintenanceReady&&snapshot.maintenanceTrust.trust==="LEGACY_SUPPORTED"?{status:"LEGACY_SUPPORTED"}:{})});
+ rows.push(item("docker.capabilities",snapshot.capabilities??null,contract.capabilityProfile??"crm-compose-buildx-v1",snapshot.capabilities?.ready===true,"Inspect the reported missing flags/security-model capability using Ubuntu packages; no Docker CE migration is implied"));
  rows.push(item("systemd.units",snapshot.unitsReady??false,"reviewed CRM deployment and maintenance units",snapshot.unitsReady===true,"Install reviewed systemd units and run daemon-reload as operator"));
  rows.push(item("admission.lock",snapshot.admissionLockReady??false,"preprovisioned CRM-owned admission lock",snapshot.admissionLockReady===true,"Provision the fixed CRM lock files as operator before requesting deployment"));
  rows.push(item("deployment.lock",snapshot.deployLockFree??false,"exclusive deployment lock available",executionLockHeld||snapshot.deployLockFree===true,"Wait for the current deployment or host operation; never bypass the lock"));
  rows.push(item("maintenance.lock",snapshot.maintenanceLockFree??false,"exclusive maintenance lock available",snapshot.maintenanceLockFree===true,"Wait for CRM maintenance to finish"));
  rows.push(item("host.operation",snapshot.operationPending??true,"no incomplete CRM host upgrade",snapshot.operationPending===false,"Explicitly resume the recorded host operation before deploying"));
  rows.push(item("disk",snapshot.disk??null,"configured minimum capacity and free percentage",snapshot.diskReady===true,"Free reviewed project artifacts or increase capacity; preserve database volumes and evidence"));
+ for(const row of rows){if(!snapshot.isolated&&["buildkit","buildkit.daemon","docker.capabilities","docker.service"].includes(row.component)){row.status="DEPENDENCY_BLOCKED";row.dependsOn="docker.isolation";}else if(row.status!=="DEPENDENCY_BLOCKED"&&row.blocking&&row.current===null)row.status="NOT_CHECKED";}
  return{schemaVersion:1,contractRevision:contract.revision,targetCommit:target.commit??null,ready:rows.every(row=>!row.blocking),diagnostics:rows};
 }
-export function collectHostSnapshot({environment=process.env,sourceRoot=root,unitSources=null,platform=process.platform,uid=process.getuid?.(),executable=process.execPath,read=readFileSync,stat=lstatSync,realpath=realpathSync,statfs=statfsSync,run=(command,args,env)=>spawnSync(command,args,{encoding:"utf8",timeout:3000,maxBuffer:2_000_000,windowsHide:true,env,stdio:["ignore","pipe","pipe"]})}={}){
+export function collectHostSnapshot({environment=process.env,sourceRoot=root,unitSources=null,platform=process.platform,uid=process.getuid?.(),executable=process.execPath,read=readFileSync,stat=lstatSync,realpath=realpathSync,statfs=statfsSync,run=(command,args,env,input)=>spawnSync(command,args,{input,encoding:"utf8",timeout:3000,maxBuffer:2_000_000,windowsHide:true,env,stdio:[input===undefined?"ignore":"pipe","pipe","pipe"]})}={}){
  const snapshot={versions:{node:process.version},builder:{},disk:[]};
  const safe=(fn,fallback=null)=>{try{return fn();}catch{return fallback;}};
  const command=(name,args,env=environment)=>{const result=run(name,args,env);if(result.error||result.status!==0)throw new Error("HOST_READ_FAILED");return String(result.stdout??"").trim();};
@@ -60,9 +65,10 @@ export function collectHostSnapshot({environment=process.env,sourceRoot=root,uni
   if(info.DockerRootDir!==HOST_PATHS.dockerRoot||info.CgroupDriver!=="systemd"||String(info.CgroupVersion)!=="2"||!info.SecurityOptions?.includes("name=rootless"))throw new Error("ROOTLESS_INFO_INVALID");return true;
  },false);
  if(snapshot.isolated){
+  snapshot.capabilities=probeHostCapabilities(run,env);
   snapshot.dockerServiceReady=safe(()=>{const status=command("/usr/bin/systemctl",["--user","show","docker.service","--property=LoadState,ActiveState","--no-pager"],{...env,XDG_RUNTIME_DIR:`/run/user/${uid}`,DBUS_SESSION_BUS_ADDRESS:`unix:path=/run/user/${uid}/bus`});return /^LoadState=loaded$/m.test(status)&&/^ActiveState=active$/m.test(status);},false);
   snapshot.versions.compose=safe(()=>command("/usr/bin/docker",["compose","version","--short"],env).replace(/^v/,""));
-  snapshot.versions.buildx=safe(()=>/\bv(\d+\.\d+\.\d+)\b/.exec(command("/usr/bin/docker",["buildx","version"],env))?.[1]);
+  snapshot.versions.buildx=safe(()=>/\bv?(\d+\.\d+\.\d+(?:[+-][0-9A-Za-z.+~-]+)?)/.exec(command("/usr/bin/docker",["buildx","version"],env))?.[1]);
   snapshot.builder=safe(()=>{
    const markerPath=`${HOST_PATHS.storage}/builder-owner.json`,meta=stat(markerPath);if(!meta.isFile()||meta.isSymbolicLink()||meta.uid!==uid||(meta.mode&0o077)!==0||realpath(markerPath)!==markerPath)throw new Error("MARKER_INVALID");
    const inspect=command("/usr/bin/docker",["buildx","inspect",HOST_CONTRACT.builder.name],env);
@@ -73,12 +79,9 @@ export function collectHostSnapshot({environment=process.env,sourceRoot=root,uni
   },{});
   snapshot.builderDaemon=safe(()=>{const value=JSON.parse(command("/usr/bin/docker",["container","inspect","buildx_buildkit_lumina-crm-buildkit0"],env));if(!Array.isArray(value)||value.length!==1)throw new Error("BUILDER_DAEMON_INVALID");return{image:value[0].Config?.Image,network:value[0].HostConfig?.NetworkMode,operationId:value[0].Config?.Env?.find(value=>value.startsWith("LUMINA_HOST_OPERATION_ID="))?.slice("LUMINA_HOST_OPERATION_ID=".length)??null};});
  }
- // A root-owned launcher binds one immutable bundle. Read it as data; never import installed code.
- snapshot.maintenanceDigest=safe(()=>{
-  const launcher=rootFile(HOST_PATHS.program),match=/^#!\/usr\/bin\/env node\nimport \{main\} from '\/usr\/local\/libexec\/lumina-crm-host\/([0-9a-f]{64})\/lumina-crm-storage-maintenance.mjs';\nawait main\(\);\n$/.exec(launcher);if(!match)throw new Error("MAINTENANCE_LAUNCHER_INVALID");
-  const assets=Object.fromEntries(MAINTENANCE_ASSETS.map(file=>[file,rootFile(`${HOST_PATHS.bundles}/${match[1]}/${path.basename(file)}`)])),bundle=maintenanceBundle(assets);if(bundle.digest!==match[1]||bundle.launcher!==launcher)throw new Error("MAINTENANCE_CONTENT_MISMATCH");const receipt=JSON.parse(rootFile(`${HOST_PATHS.bundles}/installed.json`));if(receipt.schemaVersion!==1||receipt.stage!=="COMPLETE"||receipt.bundleDigest!==bundle.digest||receipt.launcherSha256!==bundle.launcherSha256)throw new Error("MAINTENANCE_INSTALL_INCOMPLETE");return bundle.digest;
- });
- snapshot.unitsReady=safe(()=>HOST_UNIT_PATHS.every(unit=>{const expected=unitSources?.[unit]??read(path.join(sourceRoot,"deploy/systemd",unit),"utf8");const installed=rootFile(`/etc/systemd/system/${unit}`);if(installed!==expected)return false;const status=command("/usr/bin/systemctl",["show",unit,"--property=LoadState,NeedDaemonReload,DropInPaths,User,FragmentPath","--no-pager"]),fields=Object.fromEntries(status.split(/\r?\n/).map(line=>{const at=line.indexOf("=");return[line.slice(0,at),line.slice(at+1)];}));return fields.LoadState==="loaded"&&fields.NeedDaemonReload==="no"&&fields.DropInPaths===""&&fields.User==="lumina-crm"&&fields.FragmentPath===`/etc/systemd/system/${unit}`;}),false);
+ snapshot.maintenanceTrust=safe(()=>inspectMaintenanceTrust(rootFile));
+ snapshot.maintenanceDigest=snapshot.maintenanceTrust?.digest??null;
+ snapshot.unitsReady=safe(()=>HOST_UNIT_PATHS.every(unit=>{const expected=unitSources?.[unit]??read(path.join(sourceRoot,"deploy/systemd",unit),"utf8");const installed=rootFile(`/etc/systemd/system/${unit}`);if(!trustedUnit(unit,installed,expected))return false;const status=command("/usr/bin/systemctl",["show",unit,"--property=LoadState,NeedDaemonReload,DropInPaths,User,FragmentPath","--no-pager"]),fields=Object.fromEntries(status.split(/\r?\n/).map(line=>{const at=line.indexOf("=");return[line.slice(0,at),line.slice(at+1)];}));return fields.LoadState==="loaded"&&fields.NeedDaemonReload==="no"&&fields.DropInPaths===""&&fields.User==="lumina-crm"&&fields.FragmentPath===`/etc/systemd/system/${unit}`;}),false);
  snapshot.operationPending=safe(()=>{const file=`${HOST_PATHS.storage}/host-upgrade-active.json`;try{const meta=stat(file);if(!meta.isFile()||meta.isSymbolicLink()||meta.uid!==uid||realpath(file)!==file)return true;}catch(error){if(error.code==="ENOENT")return false;throw error;}return JSON.parse(read(file,"utf8")).stage!=="COMPLETE";},true);
  const lockFree=file=>safe(()=>{const meta=stat(file);if(!meta.isFile()||meta.isSymbolicLink()||meta.uid!==uid||realpath(file)!==file||(meta.mode&0o022)!==0)return false;return run("/usr/bin/flock",["--nonblock","--exclusive",file,"/usr/bin/true"],env).status===0;},false);
  snapshot.admissionLockReady=safe(()=>{const meta=stat(HOST_PATHS.admissionLock);return meta.isFile()&&!meta.isSymbolicLink()&&meta.uid===uid&&(meta.mode&0o022)===0&&realpath(HOST_PATHS.admissionLock)===HOST_PATHS.admissionLock;},false);
@@ -92,5 +95,5 @@ export function collectHostSnapshot({environment=process.env,sourceRoot=root,uni
 }
 export function hostPreflight({target=localHostTarget(),snapshot=collectHostSnapshot({unitSources:target.units}),executionLockHeld=false}={}){return evaluateHostSnapshot(snapshot,target,{executionLockHeld});}
 export function assertHostPreflight(options){const result=hostPreflight(options);if(!result.ready)throw Object.assign(new Error("HOST_PREFLIGHT_FAILED"),{code:"HOST_PREFLIGHT_FAILED",diagnostics:result});return result;}
-export function hostUpgradePlan(report){return{schemaVersion:1,contractRevision:report.contractRevision,readOnly:true,systemChanges:"Operator only: provision approved Node/npm/Docker/Compose/Buildx; never performed by deployment",cacheWarning:"Replacing the CRM builder may lose BuildKit cache. CRM data volumes and application images are excluded.",requiredActions:report.diagnostics.filter(row=>row.blocking||row.status==="SUPPORTED").map(row=>({component:row.component,current:row.current,required:row.required,recommended:row.recommended??null,remediation:row.remediation}))};}
+export function hostUpgradePlan(report){return{schemaVersion:1,contractRevision:report.contractRevision,readOnly:true,systemChanges:"Operator only: provision approved Node/npm/Docker/Compose/Buildx; never performed by deployment",cacheWarning:"Replacing the CRM builder may lose BuildKit cache. CRM data volumes and application images are excluded.",requiredActions:report.diagnostics.filter(row=>row.blocking).map(row=>({component:row.component,current:row.current,required:row.required,recommended:row.recommended??null,remediation:row.remediation}))};}
 export function pendingHostOperation(){const file=`${HOST_PATHS.storage}/host-upgrade-active.json`;if(!existsSync(file))return false;try{return JSON.parse(readFileSync(file,"utf8")).stage!=="COMPLETE";}catch{return true;}}

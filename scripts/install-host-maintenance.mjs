@@ -23,7 +23,7 @@ export async function installMaintenance({assets,plan,approval,resumeId=null,ope
   await save("ACTIVATION_INTENT");
   if(currentHash!==bundle.launcherSha256){await operations.preservePrevious(journal,current);await operations.activate(bundle.launcher);}
   if(sha256(await operations.readLauncher())!==bundle.launcherSha256)throw new Error("MAINTENANCE_INSTALL_VERIFICATION_FAILED");
-  await save("COMPLETE");await operations.writeReceipt({schemaVersion:1,stage:"COMPLETE",operationId:journal.operationId,bundleDigest:bundle.digest,launcherSha256:bundle.launcherSha256});return journal;
+  await save("COMPLETE");await operations.writeReceipt({schemaVersion:1,protocol:1,capabilities:["trusted-code"],stage:"COMPLETE",operationId:journal.operationId,bundleDigest:bundle.digest,launcherSha256:bundle.launcherSha256});return journal;
  });
 }
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");

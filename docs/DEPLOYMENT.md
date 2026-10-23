@@ -95,7 +95,7 @@ Dependency baseline refreshed on 2026-10-23, including Node LTS and the retained
 | Docker Engine | 29.9.2 | [Official releases](https://github.com/moby/moby/releases) |
 | Docker Compose | 5.6.1 | [Official releases](https://github.com/docker/compose/releases) |
 | Docker Buildx | 0.38.1 | [Official releases](https://github.com/docker/buildx/releases) |
-| BuildKit | 0.34.1 | Fixed builder image in storage maintenance |
+| BuildKit | 0.34.1 recommended; audited 0.33.1 supported | Versioned compatibility catalog |
 | Dockerfile frontend | 1.28.0 | Dockerfile syntax directive |
 | Caddy | 2.11.7 | [Official releases](https://github.com/caddyserver/caddy/releases) |
 | cloudflared | 2026.10.3 | [Official releases](https://github.com/cloudflare/cloudflared/releases) |
@@ -103,8 +103,8 @@ Dependency baseline refreshed on 2026-10-23, including Node LTS and the retained
 Upgrade host-managed packages through the host provisioning process before deployment; editing
 this repository does not install them on an existing host. Newly created Lumina builders use
 `moby/buildkit:v0.34.1`; an existing builder retains its current container until its operator
-upgrades it. Both prepare and deployment reject a builder with a missing or different image pin;
-upgrade an existing builder through the reviewed host provisioning process before deployment.
+upgrades it. Both prepare and deployment reject an unknown image, ownership or configuration;
+an audited existing image is retained when its installed maintenance program also supports it.
 PostgreSQL remains on major version 18, so the existing 18 data directory layout
 is unchanged. Prisma in the planning reference stays on stable 7.10.1 rather than the registry's
 8.0 release candidate. Browser QA now uses Playwright Core 1.64.1 and Chromium revision 1248.
@@ -182,11 +182,17 @@ request, change deployment journals, start Docker, bootstrap a builder, install 
 anything. An older target without a versioned contract is unsupported, not executable discovery.
 
 Node >=24.22.1 <25 and npm >=12.2.1 <13 match the application manifests. Their recommended pins
-are 24.22.1 and 12.2.1. Docker >=29.8.2 <30, Compose >=5.6.0 <6 and Buildx >=0.37.2 <0.39 retain
-the previous supported component lines and required rootless/cgroup capabilities; recommended
-versions are 29.9.2, 5.6.1 and 0.38.1. A supported older patch is informational, not a blocker.
-Unknown future major/unsupported minor lines fail closed. BuildKit image/driver/network/proxy,
-reviewed configuration fingerprint and installed maintenance content remain exact contracts.
+are 24.22.1 and 12.2.1. Explicit supported lines are Docker `>=29.1.3 <29.2 || >=29.8.2 <30`,
+Compose `>=2.40.3 <3 || >=5.6.0 <6`, Buildx `>=0.30.1 <0.31 || >=0.37.2 <0.39`.
+Ubuntu package suffixes such as `2.40.3+ds1-0ubuntu1` and `0.30.1-0ubuntu1` are parsed;
+prereleases and unaudited lines remain blocked. Recommendations 29.9.2 / 5.6.1 / 0.38.1 are optional.
+Version support also requires the actual read-only capability probes below. Missing versions report
+NOT_CHECKED or DEPENDENCY_BLOCKED, never a fabricated version incompatibility.
+Builder ownership, private endpoint, image allowlist, network/proxy and config hash stay mandatory.
+Known installed maintenance revisions and units can report LEGACY_SUPPORTED independently of the
+application source hash; unknown code, loaded drop-ins and incomplete installation stay blocked.
+The installed maintenance program must support the actual Builder image. Docker CE migration and
+replacement of Ubuntu containerd/runc/rootlesskit are not deployment prerequisites.
 
 Only an operator may approve system Node/npm/Docker/Compose/Buildx upgrades. The plan command
 never installs them. Record package sources, signed-package/checksum verification, current and
@@ -217,7 +223,7 @@ maintenance takes maintenance.lock; systemd keeps deploy.lock throughout deploym
 Use an independently reviewed, root-owned, non-writable staging copy of this control-plane
 package for privileged installation. Retain its full commit and reviewed hashes. Do not execute
 an installer with root privileges directly from a deployment-writable working tree. Required
-files are scripts/install-host-maintenance.mjs and all four MAINTENANCE_ASSETS declared in
+files are scripts/install-host-maintenance.mjs and all five MAINTENANCE_ASSETS declared in
 [the contract module](../deploy/libexec/lumina-host-contract.mjs), preserving relative paths.
 The operator must independently approve this control-plane code before using it to inspect a
 future application target; fetching application code never authorizes executing it.
@@ -301,14 +307,89 @@ No archive is allowed for migration/switch/acceptance, an admitted controller, i
 missing evidence or control-plane finalization failure. Keep the original accept/recover/reconcile
 procedures for those cases; do not edit latest.json or remove request.json.
 
-For initial adoption on a host running an older control plane, the legacy executable cannot
-retroactively enforce this protocol or manufacture an early-rejection receipt. Separately accept
-and stage the reviewed control-plane repair, approve the required system/runtime and maintenance
-changes, and pass its read-only target check before an operator-approved control-plane source
-transition. Existing ambiguous legacy requests remain blocked pending evidence reconciliation.
-Application version 3.40.0 is unchanged; the repaired commit is newer than baseline 796cc43.
-The last accepted 3.37.7 application is not considered schema-compatible solely because its images
-still exist. This procedure never rolls back a database.
+For initial adoption use the reviewed repair CLI below. It does not require upgrading a supported
+Ubuntu Docker toolchain or reinstalling compatible maintenance. Application version 3.40.0 remains
+unchanged; the last accepted application is 3.40.0 at 796cc43. This procedure never rolls back a database.
+
+### Audited capabilities and handoff transition
+
+The `crm-compose-buildx-v1` profile checks help for project/env/file/profile selection, up isolation
+and wait options, disposable run options, Buildx targets/build args/provenance/load/output/tag and
+bounded cache-filter flags. It also runs `compose config` against a fictional stdin-only model,
+verifying UID, init, read-only rootfs, dropped capabilities, no-new-privileges, PID/memory/CPU limits,
+tmpfs protection, internal networking and loopback binding. No up/build/prune/bootstrap executes.
+Rootless daemon inspection separately requires the CRM data root and systemd cgroup v2.
+Tagged [Compose 2.40.3 source](https://github.com/docker/compose/blob/v2.40.3/cmd/compose/up.go)
+and [Buildx 0.30.1 source](https://github.com/docker/buildx/blob/v0.30.1/commands/prune.go)
+contain the required flags; the latter requires BuildKit >=0.17 for its space filters. Both audited
+BuildKit versions exceed that requirement. This establishes required capabilities, not a claim that
+all older or future versions are safe. Actual Engine build/health acceptance still runs on the host.
+
+New requests use handoff protocol 2 (attempt ID, nonce and entry receipt); c164ff1 protocol 1 remains
+supported. Protocol 0 accepts only the pinned 796cc43 Bootstrap source hash, exact four launch args,
+actual UID/parent executable/ancestry, active systemd invocation, approved loaded unit without drop-ins,
+kernel deployment lock, matching original request and independent durable bootstrap intent, clean
+target SHA and a reflog fast-forward from the approved old SHA within the process lifetime.
+Missing modern fields never constitute sufficient authority. Protocol-2 requests cannot downgrade.
+Its newly observed legacy entry receipt has a separate filename; it does not manufacture evidence
+for an earlier failed process. Future protocol changes must retain audited transition readers and a
+cross-commit test for the first upgrade, rather than requiring both components to update beforehand.
+
+### Legacy transition failure: independently approved recovery
+
+This special CLI recognizes only the catalogued old-Bootstrap/new-entry rejection, not arbitrary
+started failures. Stage the complete reviewed repair checkout in `ROOT_REVIEWED_PACKAGE`, with root
+ownership and no deployment-account write access. Do not run root code from the ordinary checkout.
+Keep all invocation logs; do not reset the failed unit or restart deployment before collecting them.
+Set the following placeholders from the original state and trusted journal, not from a guessed date:
+
+```sh
+REQUEST=ORIGINAL_REQUEST_UUID
+INVOCATION=FAILED_SYSTEMD_INVOCATION_32_HEX
+REPAIR=ROOT_REVIEWED_PACKAGE
+TARGET=FULL_REVIEWED_REPAIR_SHA
+
+# Root/operator: inspect plan, then explicitly capture both full invocation streams.
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invocation="$INVOCATION"
+sudo /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invocation="$INVOCATION" --capture
+sudo chgrp lumina-crm "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+sudo chmod 0640 "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+
+# As lumina-crm, with reviewed host settings loaded: plan then approve its exact hash.
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION"
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION" --approve=ARCHIVE_PLAN_SHA256
+
+# Fetch data only. Adoption reads target contract before source-only fast-forward.
+git -C /opt/lumina-crm/source fetch origin main
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET"
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET" --approve=ADOPTION_PLAN_SHA256 --operation=NEW_OPERATION_UUID
+cd /opt/lumina-crm/source
+npm run deploy:production:host-check
+npm run deploy:production
+```
+
+The journal capture is root-owned, exclusive, bounded and invocation-scoped. It includes trusted
+systemd-manager exit fields as well as service output. Credential interpretation follows
+[systemd journal fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html):
+inherited stdout may carry parent credentials, so a stack trace PID alone is insufficient.
+Approval requires the exact uncaught entry error/stack and child PID, compatible Node diagnostics,
+known source execution order, matching request/latest/bootstrap history, no deployment journal/log
+or admitted entry, service exit 1, and healthy CRM Web/Worker still using the last accepted image,
+revision and immutable image ID, with container creation predating the failed attempt. Absence of a
+journal alone proves nothing. Any migration, switch, acceptance, conflicting attempt, incomplete
+capture, unknown code, newer container or finalization failure blocks archival with missing/failed
+evidence keys. Preserve the complete evidence for independent operator review; use the original
+schema-aware accept/recover/reconcile process for actual business effects, never synthesize receipts.
+
+Approval holds admission/deployment/maintenance locks and records APPROVED → SNAPSHOTS_SAVED →
+ARCHIVE_INTENT → ARCHIVED under `legacy-transition-REQUEST_UUID/`. Original request/latest bytes,
+full private evidence and the renamed request remain there. latest.json is unchanged, including
+BOOTSTRAP_FAILED, controllerStarted=true and recoverySafe=false. Repeat the same approved command
+after interruption; incomplete ledgers or missing archives block new admission. Do not remove them.
+Source adoption has its own intent/completion journal and explicit operation UUID; resume it using
+the same hash and UUID. It neither starts deployment nor changes last-success. The next normal
+deployment creates a fresh request ID. Repository tests do not prove this production request safe;
+the host evidence assessment must pass first.
 
 The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, `rollback`, or
 `recover`. Production deployment is always two-stage: the stable bootstrap reads the request while

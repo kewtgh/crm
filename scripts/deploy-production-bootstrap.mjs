@@ -253,14 +253,14 @@ export async function runBootstrap({
   // Intent is durable before handoff; a crash here cannot be replayed as a source failure.
   controllerStarted = true;
   attempt.controllerStarted = true;
-  handoffEvidence={handoffNonce:randomUUID()};
+  handoffEvidence={handoffNonce:randomUUID(),handoffProtocol:2};
   save(record("BOOTSTRAP_RUNNING"));
   const result = await spawnController({
     runnerPath: target.runnerPath,
     targetCommit,
     bootstrapCommit,
     sourceRoot,
-    environment:{...process.env,LUMINA_BOOTSTRAP_ATTEMPT_ID:attempt.attemptId,LUMINA_HOST_HANDOFF_NONCE:handoffEvidence.handoffNonce},
+    environment:{...process.env,LUMINA_HOST_HANDOFF_PROTOCOL:"2",LUMINA_BOOTSTRAP_ATTEMPT_ID:attempt.attemptId,LUMINA_HOST_HANDOFF_NONCE:handoffEvidence.handoffNonce},
   });
   if (result.code !== 0) {
     let rejection=null;

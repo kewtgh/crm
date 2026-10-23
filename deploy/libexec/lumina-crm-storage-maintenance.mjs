@@ -2,7 +2,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import {HOST_CONTRACT,HOST_PATHS,componentDiagnostic,validateOwnedBuilder as validateHostBuilder} from "./lumina-host-contract.mjs";
+import {HOST_CONTRACT,HOST_PATHS,componentDiagnostic,supportedBuilderImage,validateOwnedBuilder as validateHostBuilder} from "./lumina-host-contract.mjs";
 import {builderReplacementPlan,replaceOwnedBuilder,hostLocksHeld,reexecWithHostLocks} from "./lumina-host-upgrade.mjs";
 import {
   appendFileSync,
@@ -514,7 +514,7 @@ export function validateBuilderInspect(output, dockerProxy, operationId = null) 
   if (options?.get("network") !== LUMINA_BUILDKIT_NETWORK_MODE) {
     throw new Error("LUMINA_BUILDKIT_NETWORK_CONFIGURATION_MISMATCH");
   }
-  if (options.get("image") !== LUMINA_BUILDKIT_IMAGE) {
+  if (!supportedBuilderImage(options.get("image"))) {
     throw new Error("LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH");
   }
   const expectedProxy = parseDockerProxy(dockerProxy);
@@ -564,7 +564,7 @@ function ensureBuilder(policy) {
   if (marker) validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   const inspected = runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], {
     allowFailure: true,
-    validateStdout: (output) => {validateBuilderInspect(output, policy.dockerProxy, marker?.hostOperationId);if(marker)validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST});},
+    validateStdout: (output) => {validateBuilderInspect(output, policy.dockerProxy, marker?.hostOperationId);if(marker)validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST,image:parseBuilderDriverOptions(output)?.get("image")});},
   });
   if (inspected.ok) {
     if (!marker) throw new Error(`Refusing to adopt unmarked existing builder ${LUMINA_BUILDER_NAME}`);
@@ -704,7 +704,7 @@ function validateOwnedBuilder(policy) {
   const fingerprint = configFingerprint(policy);
   validateBuilderMarker(marker, { fingerprint, dockerProxy: policy.dockerProxy });
   runDocker(["buildx", "inspect", LUMINA_BUILDER_NAME], {
-    validateStdout: (output) => {validateBuilderInspect(output,policy.dockerProxy,marker?.hostOperationId);validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST});},
+    validateStdout: (output) => {validateBuilderInspect(output,policy.dockerProxy,marker?.hostOperationId);validateHostBuilder({marker,inspect:output,fingerprint,proxy:policy.dockerProxy,endpoint:process.env.DOCKER_HOST,image:parseBuilderDriverOptions(output)?.get("image")});},
   });
 }
 

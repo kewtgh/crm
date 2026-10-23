@@ -1,8 +1,8 @@
 # Lumina CRM 生产部署运行手册
 
-> 2026-10-23 控制平面修复：本节优先于下方历史手工 merge、运行时安装与重试步骤。
+> 2026-10-24 控制平面兼容性修复：本节优先于下方历史手工 merge、运行时安装与重试步骤。
 > 应用版本保持 3.40.0；开发基线为 `796cc43e63784eb8891ca6420572cd563cb2ac80`。
-> [共享宿主机契约](../deploy/libexec/host-runtime-contract.json)、[实现与验证](HOST_CONTROL_PLANE_PLAN.md)、
+> [共享宿主机契约](../deploy/libexec/host-runtime-contract.json)、[兼容性审计与计划](HOST_COMPATIBILITY_REPAIR_PLAN.md)、
 > [完整英文操作流程](DEPLOYMENT.md)。本次仓库修改不代表已在生产执行升级或部署。
 
 ## 0. Host Preflight → 人工审批升级 → Production Deploy
@@ -25,14 +25,17 @@ npm run deploy:production:host-check -- --target=FULL_REVIEWED_SHA
 | --- | --- | --- |
 | Node | `>=24.22.1 <25`，CLI 和 systemd 使用同一解析后的可执行文件 | 24.22.1 LTS |
 | npm | `>=12.2.1 <13` | 12.2.1 |
-| Docker Engine | `>=29.8.2 <30`；必须是 CRM Rootless、systemd cgroup v2 | 29.9.2 |
-| Compose | `>=5.6.0 <6` | 5.6.1 |
-| Buildx | `>=0.37.2 <0.39` | 0.38.1 |
-| BuildKit | 精确的已审核 image/driver/network/proxy、标记与配置哈希 | `moby/buildkit:v0.34.1` |
+| Docker Engine | `>=29.1.3 <29.2` 或 `>=29.8.2 <30`；CRM Rootless、systemd cgroup v2 | 29.9.2 |
+| Compose | `>=2.40.3 <3` 或 `>=5.6.0 <6` | 5.6.1 |
+| Buildx | `>=0.30.1 <0.31` 或 `>=0.37.2 <0.39` | 0.38.1 |
+| BuildKit | 审计白名单 `v0.33.1` / `v0.34.1`，同时满足维护程序支持、driver/network/proxy、所有权与配置哈希 | `moby/buildkit:v0.34.1` |
 
-Docker/Compose/Buildx 保留已支持的前一补丁线；未知的新主版本或未支持次版本仍拒绝。
-Node/npm 范围与应用 engines 一致。维护程序按源码内容哈希和安装完成凭证匹配。
-不能通过放宽版本号、修改 Builder marker 或忽略不匹配来消除故障。
+Ubuntu docker.io 29.1.3、Compose 2.40.3、Buildx 0.30.1 是明确基线；包后缀 `+ds1-0ubuntu1`、
+`-0ubuntu1` 可解析，预发布与未审核版本仍拒绝。版本达标后还必须通过只读能力探测：实际命令选项、
+Compose 安全配置解析、Rootless 数据根与 cgroup。未检测项为 NOT_CHECKED 或 DEPENDENCY_BLOCKED。
+已知维护源码/旧 bundle 与 unit 可为 LEGACY_SUPPORTED，不要求与每次应用 Git 更新字节相同；
+未知代码、drop-in、未完成安装、维护程序不支持当前 Builder 的真实不兼容仍阻断。
+禁止默认更换 Ubuntu Docker 为 Docker CE，或替换 containerd/runc/rootlesskit。禁止修改 marker 消除故障。
 
 诊断检查 CRM 专属 socket、目录权限、Docker 数据根、Builder endpoint、实际 daemon image/network、
 配置哈希、root-owned 维护 bundle、systemd unit 与未审核 drop-in、锁、未完成升级和磁盘阈值。
@@ -67,7 +70,7 @@ systemctl cat lumina-crm-deploy.service
 
 ### 0.3 独立原子安装 root-owned 维护程序
 
-普通 Git 更新不会安装维护程序。先独立审核并接受控制平面修复包，再将安装器及契约声明的四个
+已兼容维护程序无需重装。普通 Git 更新不会安装维护程序。确需升级时，独立审核修复包，再将安装器及契约声明的五个
 维护资产按原目录布局放入 root 所有、不可由部署账户修改的审核暂存目录。
 不要直接对部署账户可写的工作树执行 root 安装器。操作者替换下列路径/哈希占位值：
 
@@ -126,11 +129,57 @@ npm run deploy:production
 不要修改 latest 状态、手删 request、伪造凭证或绕过锁。已迁移/已切换/已接收或证据不完整的请求
 继续沿用 `accept/recover/reconcile` 的原有规则，不会自动重放初始化或迁移。
 
-旧控制平面不会自动获得新能力。首次采用时须先人工审核接受独立控制平面修复包、完成必要宿主机
-与维护程序升级，用已接受的诊断器读取目标静态要求后，才批准控制平面源码的过渡。
-旧版本留下的无入口凭证请求不能凭空补证，本工具会拒绝归档；必须保留证据并人工对账。
-本轮修复提交将晚于基线 `796cc43`，应用仍为 3.40.0。生产上最后接受的 3.37.7 不能仅凭旧镜像存在
-就当成可回退目标；数据库迁移始终前向，原 schema/image 兼容性保护保持有效。
+新请求使用交接协议 2（nonce、attempt、入口凭证），协议 1 保持兼容。仅允许固定的 `796cc43`
+旧 Bootstrap 走协议 0：必须验证源码哈希、精确参数、实际父子进程/UID/可执行文件、systemd invocation
+及无 drop-in 的已审核 unit、内核锁、原请求和独立持久化 intent、干净目标 SHA、从旧 SHA fast-forward
+的 reflog 及进程时间关系。缺少 nonce 本身不构成放行理由，协议 2 请求不允许降级。
+
+### 0.6 无旧入口凭证的 Legacy Transition Failure
+
+只能处理目录中明确审计的旧 Bootstrap → c164ff1 入口身份拒绝。普通 `archive-early` 规则不放宽。
+先将完整修复 checkout 独立审核，放入 root 所有、部署账户不可写的 `ROOT_REVIEWED_PACKAGE`。
+不要先 reset-failed、重启部署或清理日志。必须从原状态和 systemd 日志取得真实 request/invocation，
+以下占位值不是自动推断或补造的证据：
+
+```sh
+REQUEST=ORIGINAL_REQUEST_UUID
+INVOCATION=FAILED_SYSTEMD_INVOCATION_32_HEX
+REPAIR=ROOT_REVIEWED_PACKAGE
+TARGET=FULL_REVIEWED_REPAIR_SHA
+
+# 管理员：只读计划；明确 --capture 才落盘 root 所有的完整 invocation 证据。
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invocation="$INVOCATION"
+sudo /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invocation="$INVOCATION" --capture
+sudo chgrp lumina-crm "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+sudo chmod 0640 "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+
+# lumina-crm：加载已审核宿主机设置；审阅计划的全部证据后批准其哈希。
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION"
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION" --approve=ARCHIVE_PLAN_SHA256
+
+# 旧 CLI 无法通过错误门槛时，用独立工具审核目标静态数据，明确批准仅更新源码。
+git -C /opt/lumina-crm/source fetch origin main
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET"
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET" --approve=ADOPTION_PLAN_SHA256 --operation=NEW_OPERATION_UUID
+cd /opt/lumina-crm/source
+npm run deploy:production:host-check
+npm run deploy:production
+```
+
+审查同时要求原 request/latest/独立 Bootstrap 一致、固定旧/目标源码执行顺序、完整可信 invocation
+输出与 systemd manager 退出字段、唯一子进程 PID、明确未捕获的入口错误栈、兼容 Node 诊断；
+没有对应 Deployment Journal/日志/准入凭证/其他已启动 attempt；Web/Worker 健康、镜像及 revision
+匹配最后接受的 3.40.0，immutable image ID 相同，容器创建早于失败 attempt。不能只凭“没有 Journal”。
+日志截断、证据缺失、新容器、迁移/切换/接受或控制平面最终归档失败都会拒绝，并输出缺失/失败项。
+此时保留全部私有证据，交由操作者独立审计；有业务操作时按原 schema 约束使用 accept/recover/reconcile。
+不要重放初始化/迁移，也不要把普通失败解释为本过渡故障。
+
+批准归档持有 admission → deployment → maintenance 三把锁，在 `legacy-transition-REQUEST_UUID/`
+保存原始 request/latest 字节、完整私有证据、重命名后的请求与阶段日志。latest 保持 BOOTSTRAP_FAILED、
+controllerStarted=true、recoverySafe=false；不会伪造旧入口凭证。落盘中断重复原命令与审批哈希恢复，
+不完整阶段或丢失归档仍阻断新请求。源码 adopt 另存 intent/completion 日志，中断使用相同审批及 operation
+UUID 恢复；它不启动应用、不改 last-success。最后普通 deploy 创建全新 Request ID。
+仓库测试不能证明当前生产遗留请求已安全；必须现场证据检查通过后才允许归档。
 
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
