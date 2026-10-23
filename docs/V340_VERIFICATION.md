@@ -76,6 +76,26 @@ Final release metadata and whitespace checks passed. The release is committed lo
 or deployment was performed. Rebuild before starting the application because accepted build
 output was deliberately removed during cleanup.
 
+## CI follow-up: drawer ownership assertion
+
+The CI run for `c354d43` passed typecheck, privacy, lint and database smoke. Its Build and test
+step built successfully but failed one of 431 tests: an older drawer-protection assertion still
+expected the calendar drawer in `calendar-page.tsx`. Creation had moved to `calendar-editor.tsx`.
+The audit step was skipped because of that test failure; it did not report an audit vulnerability.
+
+The test now checks the editor that owns the drawer, explicitly requires both pending and uncertain
+creation to lock it, and confirms the calendar page renders that editor. Assertions for Escape,
+overlay, close-button and the other drawers remain. Production behavior and the CI gate are unchanged.
+
+The focused five-test file reproduces the old failure and passes after correction. One fresh
+production build passed. The original Windows sandbox run reported all 431 passing assertions but
+could not stop its test-owned server, so it hit the idle watchdog. The verified test process tree
+was cleaned up. Reusing that build, both original CI test commands were run with permission to
+manage their child processes: 431 main tests and eight captcha tests passed, without skips or
+forced-exit flags. Changed-file lint passed; all three CI npm audit commands report zero vulnerabilities.
+Logs remain private under ignored `work/ci-build-test-fix/`. The new build is retained locally.
+These are local results; the corrected commit still requires a new remote CI run after publication.
+
 ## Limits
 
 Component fixtures use actual components and production CSS with fictional API responses. Database

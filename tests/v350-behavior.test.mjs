@@ -103,8 +103,12 @@ test("prevents pending drawers from being dismissed through every close surface"
   assert.match(ui, /aria-busy=\{pending\}/);
   assert.match(ui, /ref=\{closeRef\}[\s\S]*disabled=\{pending\}/);
 
+  // The calendar page delegates creation to its editor, which owns the drawer lock.
+  assert.match(await source("components/calendar-page.tsx"), /<CalendarEditor\b/);
+  assert.match(await source("components/calendar-editor.tsx"), /<AccessibleDrawer\s+pending=\{pending\|\|uncertain\}/);
+
   for (const file of [
-    "components/calendar-page.tsx",
+    "components/calendar-editor.tsx",
     "components/communications-inbox-page.tsx",
     "components/customer-360-page.tsx",
     "components/growth-workspace.tsx",
