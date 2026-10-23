@@ -66,7 +66,7 @@ Primary source checks:
 
 | Check | Result |
 | --- | --- |
-| `npm run test:deploy` | 200 tests: 199 pass, 1 existing PostgreSQL integration skip, 0 fail |
+| `npm run test:deploy` | 201 tests: 200 pass, 1 existing PostgreSQL integration skip, 0 fail |
 | `npm run typecheck` | Pass |
 | `npm run lint` | Pass, 0 errors, 0 warnings |
 | `npm run test:public-privacy` | 14 pass, 0 fail |
@@ -108,3 +108,29 @@ There is no default Docker CE, containerd, runc, rootlesskit or shared-service u
 Private verification logs remain under ignored `work/`. Temporary test clones are removed by test
 teardown. Final cleanup removes only this task's inspection/download scratch and regenerable
 TypeScript build cache; the pinned Node runtime, dependencies, audit documents and evidence remain.
+
+## CI shallow-checkout follow-up
+
+The [CI run for 34e49bd](https://github.com/kewtgh/crm/actions/runs/39989894106/job/120538640660)
+passed typecheck, lint, application build/tests and privacy checks, but failed the cross-commit
+deployment test with `unable to read tree (796cc43...)`. Dependency audit was subsequently skipped.
+The separate database job passed. This was a fixture transport failure, not a runtime-contract
+or production handoff rejection.
+
+CI uses a shallow checkout and fetches the pinned historical objects separately. Cloning that
+checkout did not carry the unreferenced historical tree into the temporary target repository.
+The fixture now initializes an isolated repository and explicitly fetches the exact legacy SHA
+from the local source via file transport. No remote production access or history expansion is needed.
+
+The original full-repository handoff case remains. A second case constructs the CI conditions:
+depth-one current HEAD, separately fetched legacy commit, and no branch/remote ref containing that
+legacy commit. Before the fix it reproduced the same read-tree error locally. After the fix both
+cases execute the original Bootstrap, real Git fast-forward and current Controller child successfully.
+All source-hash, PID, environment, request and receipt assertions remain intact.
+
+Follow-up verification on Node 24.22.1 / npm 12.2.1: deployment suite 200 pass / 1 existing skip /
+0 fail; all 3 cross-commit/trust tests pass; lint of the modified test file passes without warnings.
+Full application build, database suite and dependency audit were not rerun for this test-only fix.
+Private before/after/deployment/lint logs are retained under ignored `work/host-shallow-ci-*`.
+Temporary repositories are removed by test teardown. Remote CI still requires the new commit to
+be published and run; local verification is not a remote green result.

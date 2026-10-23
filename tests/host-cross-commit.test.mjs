@@ -25,11 +25,27 @@ function handoff(){
  const latest={...request,result:"BOOTSTRAP_RUNNING",stage:"target-controller-start",controllerStarted:true,deploymentId:null,applicationResult:"NOT_STARTED",migrationState:"NOT_STARTED",migrationMayHaveChanged:false,webSwitch:"NOT_STARTED",workerSwitch:"NOT_STARTED",applicationAccepted:false,finalizationComplete:false,requestArchived:false,bootstrapCommit:legacy,targetCommit:target,attempts:[{attemptId:id(3),controllerStarted:true,startedAt:"2026-10-24T00:00:00.000Z"}]};
  return{request,latest,bootstrap:clone(latest),launch:{bootstrapSource:legacy,expectedTarget:target,bootstrapPid:200},parent:{pid:200,ppid:100,uid,exe:"/usr/bin/node",argv:["/usr/bin/node",path.join("/opt/lumina-crm/source","scripts/deploy-production-bootstrap.mjs")],start:20,cgroup:"/system.slice/lumina-crm-deploy.service"},child:{pid:201,ppid:200,uid,exe:"/usr/bin/node",start:30,cgroup:"/system.slice/lumina-crm-deploy.service"},service:{mainPid:100,mainStart:10,user:"lumina-crm",activeState:"active",invocationId:invocation,controlGroup:"/system.slice/lumina-crm-deploy.service"},source:{head:target,clean:true,branch:"main",origin:"https://github.com/kewtgh/crm.git"},sourceHashes:{bootstrap:HOST_COMPATIBILITY.revisions[legacy].files["scripts/deploy-production-bootstrap.mjs"]},transition:{previousHead:legacy,fastForward:true,at:1000,parentStartedAt:0,childStartedAt:2000},stateMetadataVerified:true,unitVerified:true,lockHeld:true,uid,sourceRoot:request.sourceRoot,invocationId:invocation};
 }
-test("genuine 796cc43 Bootstrap source launches current controller entry in a real child without new handoff fields",async t=>{
+async function exerciseCrossCommit(t,{shallow=false}={}){
  const directory=mkdtempSync(path.join(os.tmpdir(),"crm-cross-commit-"));t.after(()=>rmSync(directory,{recursive:true,force:true,maxRetries:3,retryDelay:50}));
  const oldRoot=path.join(directory,"old"),sourceRoot=path.join(directory,"target"),state=path.join(directory,"state");for(const dir of [oldRoot,state])mkdirSync(dir);
- git(["-c","core.autocrlf=false","clone","--shared","--no-checkout",repository,sourceRoot]);git(["-c","core.autocrlf=false","checkout","-B","main",legacy],sourceRoot);git(["remote","set-url","origin","https://github.com/kewtgh/crm.git"],sourceRoot);
- const archive=path.join(directory,"old.tar");git(["-c","core.autocrlf=false","archive","--format=tar",`--output=${archive}`,legacy,"scripts","deploy/libexec","package.json",".nvmrc"]);
+ let fixtureRepository=repository;
+ if(shallow){
+  fixtureRepository=path.join(directory,"ci-checkout");
+  git(["init","--initial-branch=main",fixtureRepository]);
+  const localOrigin=pathToFileURL(repository).href;
+  git(["fetch","--no-tags","--depth=1",localOrigin,"HEAD"],fixtureRepository);
+  git(["-c","core.autocrlf=false","checkout","-B","main","FETCH_HEAD"],fixtureRepository);
+  git(["fetch","--no-tags","--depth=1",localOrigin,legacy],fixtureRepository);
+  assert.equal(git(["rev-parse","--is-shallow-repository"],fixtureRepository).trim(),"true");
+  assert.equal(git(["for-each-ref",`--contains=${legacy}`,"--format=%(refname)","refs/heads","refs/remotes"],fixtureRepository).trim(),"");
+ }
+ // A clone of a shallow checkout transfers advertised refs, not every separately
+ // fetched historical object. Fetch the pinned commit explicitly into this fixture.
+ git(["init","--initial-branch=main",sourceRoot]);
+ git(["fetch","--no-tags","--depth=1",pathToFileURL(fixtureRepository).href,legacy],sourceRoot);
+ git(["-c","core.autocrlf=false","checkout","-B","main","FETCH_HEAD"],sourceRoot);
+ git(["remote","add","origin","https://github.com/kewtgh/crm.git"],sourceRoot);
+ const archive=path.join(directory,"old.tar");git(["-c","core.autocrlf=false","archive","--format=tar",`--output=${archive}`,legacy,"scripts","deploy/libexec","package.json",".nvmrc"],fixtureRepository);
  const unpack=spawnSync("tar",["-xf",archive,"-C",oldRoot],{timeout:10000,encoding:"utf8"});assert.equal(unpack.status,0,unpack.stderr);
  cpSync(path.join(repository,"scripts/lib"),path.join(sourceRoot,"scripts/lib"),{recursive:true});cpSync(path.join(repository,"deploy/libexec"),path.join(sourceRoot,"deploy/libexec"),{recursive:true});
  writeFileSync(path.join(sourceRoot,"package.json"),JSON.stringify({version:"3.40.0",type:"module"}));
@@ -45,4 +61,6 @@ test("genuine 796cc43 Bootstrap source launches current controller entry in a re
  const requestPath=path.join(state,"request.json");writeFileSync(requestPath,JSON.stringify(context.request));
  const code=await oldModule.runBootstrap({requestPath,sourceRoot,updateSource:()=>oldModule.updateSourceAndResolveTarget({git:async args=>args[0]==="fetch"?"":git(args,sourceRoot).trim()}),spawnController:options=>oldModule.spawnTargetController({...options,nodePath:process.execPath,environment:{...process.env,CRM_TEST_STATE:state}})});
  assert.equal(code,0);const receipt=JSON.parse(readFileSync(path.join(state,"business-entry.json")));assert.equal(receipt.handoffProtocol,0);assert.equal(receipt.targetCommit,targetSha);assert.equal(receipt.bootstrapPid,process.pid);assert.equal(receipt.outcome,"ADMITTED");assert.equal(readdirSync(state).filter(name=>name.startsWith("legacy-entry-")).length,1);
-});
+}
+test("genuine 796cc43 Bootstrap source launches current controller entry in a real child without new handoff fields",exerciseCrossCommit);
+test("shallow CI checkout retains separately fetched legacy objects through real cross-commit handoff",t=>exerciseCrossCommit(t,{shallow:true}));
