@@ -27,7 +27,7 @@ export const LUMINA_ROOTLESS_DOCKER_DATA_ROOT = "/var/lib/lumina-crm/docker";
 export const LUMINA_DOCKER_CONFIG_ROOT = "/var/lib/lumina-crm/docker-config";
 export const LUMINA_BUILDX_CONFIG_ROOT = `${LUMINA_DOCKER_CONFIG_ROOT}/buildx`;
 export const LUMINA_BUILDKIT_NETWORK_MODE = "host";
-export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.33.1";
+export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.34.1";
 
 const PROGRAM_PATH = "/usr/local/libexec/lumina-crm-storage-maintenance.mjs";
 const DOCKER_COMMAND = "/usr/bin/docker";

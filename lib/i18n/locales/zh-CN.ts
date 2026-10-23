@@ -1,3 +1,4 @@
+import {qualityTriageZh} from "./quality-triage";
 import {calendarRecoveryZh} from "./calendar-recovery";
 import {actionReviewZh} from "./action-review";
 import {taskQueueZh} from "./task-queue";
@@ -539,5 +540,6 @@ export const zhCN: Messages = {
   ...taskQueueZh,
   ...actionReviewZh,
   ...calendarRecoveryZh,
+  ...qualityTriageZh,
 };
 import {operationsRepairZh} from "./operations-repair";

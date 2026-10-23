@@ -1,12 +1,21 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { apiRoute, parsePagination, requireApiCapability } from "@/lib/api";
-import { listQualityIssues,qualityOperation } from "@/lib/phase2-repository";
-import { mutationIsTrusted } from "@/lib/request-security";
-import { DatabaseRequestError } from "@/lib/db/gateway";
-import { assignQualityIssue,configureQualityRule,loadQualityRules,loadQualityTrend } from "@/lib/v220-repository";
-const schema=z.discriminatedUnion("operation",[z.object({operation:z.literal("run")}),z.object({operation:z.literal("resolve"),id:z.uuid(),resolution:z.string().trim().min(2).max(500),dismiss:z.boolean().default(false)}),z.object({operation:z.literal("configure"),ruleKey:z.string().trim().min(2).max(100),enabled:z.boolean(),severity:z.enum(["LOW","MEDIUM","HIGH"])}),z.object({operation:z.literal("assign"),id:z.uuid()})]);
-async function get(request:Request){await requireApiCapability("dataQuality.manage");const url=new URL(request.url);const{page,pageSize}=parsePagination(url.searchParams,10);try{const[issues,trend,rules]=await Promise.all([listQualityIssues({query:url.searchParams.get("q")??"",page,pageSize,status:url.searchParams.get("status")??"all"}),loadQualityTrend(),loadQualityRules()]);return NextResponse.json({...issues,trend,rules});}catch{return NextResponse.json({code:"QUALITY_LOAD_FAILED"},{status:500});}}
-async function post(request:Request){if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});const user=await requireApiCapability("dataQuality.manage");const parsed=schema.safeParse(await request.json().catch(()=>({})));if(!parsed.success)return NextResponse.json({code:"INVALID_QUALITY_INPUT"},{status:400});try{if(parsed.data.operation==="configure")return NextResponse.json({item:await configureQualityRule(parsed.data.ruleKey,parsed.data.enabled,parsed.data.severity)});if(parsed.data.operation==="assign")return NextResponse.json({item:await assignQualityIssue(parsed.data.id,user.id)});return NextResponse.json({item:await qualityOperation(parsed.data)});}catch(error){if(error instanceof DatabaseRequestError&&`${error.code} ${error.message}`.toLowerCase().includes("quality_source_not_fixed"))return NextResponse.json({code:"QUALITY_SOURCE_NOT_FIXED"},{status:409});return NextResponse.json({code:"QUALITY_OPERATION_FAILED"},{status:500});}}
+import {NextResponse} from "next/server";
+import {ApiError,apiRoute,parsePagination,requireApiCapability} from "@/lib/api";
+import {mutationIsTrusted} from "@/lib/request-security";
+import {DatabaseRequestError} from "@/lib/db/gateway";
+import {qualityCommandSchema,qualityFilterSchema,qualityParams} from "@/lib/quality-contract";
+import {executeQualityCommand,loadQualityWorkspace} from "@/lib/quality-workspace-repository";
+async function get(request:Request){
+ const user=await requireApiCapability("dataQuality.manage"),params=new URL(request.url).searchParams,{page,pageSize}=parsePagination(params,10);
+ const parsed=qualityFilterSchema.safeParse(qualityParams(params));if(!parsed.success)throw new ApiError("INVALID_QUALITY_FILTER",400);
+ const {q,...filters}=parsed.data;
+ return NextResponse.json(await loadQualityWorkspace({...filters,query:q.trim(),page,pageSize,actorId:user.id}));
+}
+async function post(request:Request){
+ if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);
+ await requireApiCapability("dataQuality.manage");const parsed=qualityCommandSchema.safeParse(await request.json().catch(()=>null));
+ if(!parsed.success)throw new ApiError("INVALID_QUALITY_INPUT",400);
+ try{return NextResponse.json({item:await executeQualityCommand(parsed.data)});}
+ catch(error){if(error instanceof DatabaseRequestError){const status=["QUALITY_VERSION_CONFLICT","QUALITY_REQUEST_CONFLICT","QUALITY_SOURCE_NOT_FIXED"].includes(error.code)?409:error.code==="QUALITY_NOT_AUTHORIZED"?403:error.status;throw new ApiError(error.code,status);}throw error;}
+}
 export const GET=apiRoute(get,"QUALITY_LOAD_FAILED");
 export const POST=apiRoute(post,"QUALITY_OPERATION_FAILED");

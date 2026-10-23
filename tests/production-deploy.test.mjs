@@ -1308,7 +1308,7 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
   assert.equal(assertAllowedDockerArguments(direct), true);
   assert.deepEqual(direct.slice(8), [
     "--driver-opt", "network=host",
-    "--driver-opt", "image=moby/buildkit:v0.33.1",
+    "--driver-opt", "image=moby/buildkit:v0.34.1",
   ]);
   assert.equal(LUMINA_BUILDKIT_NETWORK_MODE, "host");
 
@@ -1316,7 +1316,7 @@ test("BuildKit builder proxy options are exact, allowlisted, and marker-safe", (
   assert.equal(assertAllowedDockerArguments(proxied), true);
   assert.deepEqual(proxied.slice(8), [
     "--driver-opt", "network=host",
-    "--driver-opt", "image=moby/buildkit:v0.33.1",
+    "--driver-opt", "image=moby/buildkit:v0.34.1",
     ...DOCKER_BUILD_PROXY_KEYS.flatMap((key) => [
       "--driver-opt", `env.${key}=${proxy}`,
     ]),
@@ -1364,7 +1364,7 @@ test("BuildKit inspect requires host networking and exact direct or proxied driv
   const direct = [
     "Name:          lumina-crm-buildkit",
     "Driver:        docker-container",
-    "Driver Options: network=\"host\" image=\"moby/buildkit:v0.33.1\"",
+    "Driver Options: network=\"host\" image=\"moby/buildkit:v0.34.1\"",
   ].join("\n");
   const proxied = direct.replace('network="host"', [
     'network="host"',
@@ -1381,9 +1381,9 @@ test("BuildKit inspect requires host networking and exact direct or proxied driv
     dockerProxy: proxy,
   }), true);
   for (const output of [
-    direct.replace(' image="moby/buildkit:v0.33.1"', ''),
-    direct.replace('image="moby/buildkit:v0.33.1"', 'image="moby/buildkit:latest"'),
-    direct.replace('image="moby/buildkit:v0.33.1"', 'image="moby/buildkit:v0.32.0"'),
+    direct.replace(' image="moby/buildkit:v0.34.1"', ''),
+    direct.replace('image="moby/buildkit:v0.34.1"', 'image="moby/buildkit:latest"'),
+    direct.replace('image="moby/buildkit:v0.34.1"', 'image="moby/buildkit:v0.32.0"'),
   ]) {
     assert.throws(() => validateBuilderInspect(output, ""), /LUMINA_BUILDKIT_IMAGE_CONFIGURATION_MISMATCH/);
     assert.throws(() => validateBuildxInspectContract(output, {

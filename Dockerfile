@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.27.1
+# syntax=docker/dockerfile:1.28.0
 
-ARG NODE_IMAGE=node:24.22.0-trixie-slim
+ARG NODE_IMAGE=node:24.22.1-trixie-slim
 ARG POSTGRES_IMAGE=postgres:18.6-trixie
 
 FROM ${NODE_IMAGE} AS node-toolchain
-RUN npm install --global npm@12.2.0
+RUN npm install --global npm@12.2.1
 
 FROM node-toolchain AS dependencies
 WORKDIR /app

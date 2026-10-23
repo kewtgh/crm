@@ -1,154 +1,45 @@
 "use client";
-import {WorkspaceHeading} from "./workspace-heading";
-
-
-import {SafeDiagnostics} from "./safe-diagnostics";
-import { useState } from "react";
-import { CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
+import {useState} from "react";
 import Link from "next/link";
-import type { QualityIssue } from "@/lib/phase2-repository";
-import type { QualityRuleConfig } from "@/lib/v220-repository";
-import { useI18n } from "./i18n-provider";
-import { InlineMessage, Pagination, SearchField, StatusBadge, Toast } from "./ui";
-import { ApiClientError, apiFetch } from "@/lib/api-client";
-import { useRemoteSearch } from "@/hooks/use-remote-search";
+import {usePathname,useRouter,useSearchParams} from "next/navigation";
+import {CheckCircle2,RefreshCw,ShieldAlert} from "lucide-react";
+import {WorkspaceHeading} from "./workspace-heading";
+import {SafeDiagnostics} from "./safe-diagnostics";
+import {useI18n} from "./i18n-provider";
+import {useUserPreferences} from "./user-preferences-context";
+import {InlineMessage,Pagination,SearchField,StatusBadge,Toast} from "./ui";
+import type {QualityIssue} from "@/lib/phase2-repository";
+import type {QualityRuleConfig} from "@/lib/v220-repository";
+import type {QualityWorkspace} from "@/lib/quality-workspace-repository";
+import {useQualityWorkspace} from "@/hooks/use-quality-workspace";
+import {qualityDefaults,qualityStatusFilters,qualitySeverities,qualityAssignments,readQualityFilters,writeQualityFilters,qualityIsActive,qualityRecordHref,type QualityFilters} from "@/lib/quality-contract";
 
-type QualityTrend={snapshot_date:string;open_low:number;open_medium:number;open_high:number;resolved:number;dismissed:number;captured_at:string};
-export function DataQualityPage({ initialItems, initialTotal,initialTrend,initialRules }: { initialItems: QualityIssue[]; initialTotal: number;initialTrend:QualityTrend[];initialRules:QualityRuleConfig[] }) {
-  const { t,enumLabel } = useI18n();
-  const ruleLabel=(key:string)=>{const direct=enumLabel(`quality.rule.${key}`);const mapped=enumLabel(qualityRuleKey(key));return direct.known?direct.label:mapped.known?mapped.label:t("quality.rule.generic");};
-  const [items, setItems] = useState(initialItems);
-  const [total, setTotal] = useState(initialTotal);
-  const [trend,setTrend]=useState(initialTrend);
-  const [rules,setRules]=useState(initialRules);
-  const [page, setPage] = useState(1);
-  const [pageSize,setPageSize]=useState(10);
-  const [query, setQuery] = useState("");
-  const [error, setError] = useState("");
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
-  const [pending, setPending] = useState(false);
-  const [toast, setToast] = useState("");
-  const [action, setAction] = useState<{ id: string; dismiss: boolean } | null>(null);
-  const [resolution, setResolution] = useState("");
-  const runLatest = useRemoteSearch();
-
-  const load = async (nextPage = page, nextPageSize = pageSize) => {
-    const request = await runLatest((signal) => apiFetch<{ items: QualityIssue[]; total: number;trend:QualityTrend[];rules:QualityRuleConfig[] }>(`/api/data-quality?page=${nextPage}&pageSize=${nextPageSize}&q=${encodeURIComponent(query)}`, { signal }));
-    if (!request.current) return;
-    if ("error" in request) {
-      setError(t("quality.loadFailed"));
-      return;
-    }
-    setError("");
-    setItems(request.value.items);
-    setTotal(request.value.total);
-    setTrend(request.value.trend);
-    setRules(request.value.rules);
-  };
-
-  const runRules = async () => {
-    setPending(true);
-    setError("");
-    try {
-      await apiFetch("/api/data-quality", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "run" }) });
-    } catch {
-      setPending(false);
-      setError(t("quality.operationFailed"));
-      return;
-    }
-    setPending(false);
-    setPage(1);
-    await load(1);
-    setToast(t("quality.scanComplete"));
-  };
-
-  const submitResolution = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!action || !resolution.trim()) return;
-    setPending(true);
-    setRowError(null);
-    try {
-      await apiFetch("/api/data-quality", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operation: "resolve", id: action.id, resolution: resolution.trim(), dismiss: action.dismiss }),
-      });
-    } catch(caught) {
-      setPending(false);
-      setRowError({ id: action.id, message: t(caught instanceof ApiClientError&&caught.code==="QUALITY_SOURCE_NOT_FIXED"?"quality.stillInvalid":"quality.operationFailed") });
-      return;
-    }
-    setPending(false);
-    setAction(null);
-    setResolution("");
-    await load(page);
-    setToast(t("quality.resolved"));
-  };
-
-  const beginResolution = (id: string, dismiss: boolean) => {
-    setRowError(null);
-    setResolution("");
-    setAction({ id, dismiss });
-  };
-
-  const configureRule=async(rule:QualityRuleConfig,change:Partial<Pick<QualityRuleConfig,"enabled"|"severity">>)=>{setPending(true);setError("");try{await apiFetch("/api/data-quality",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"configure",ruleKey:rule.ruleKey,enabled:change.enabled??rule.enabled,severity:change.severity??rule.severity})});await load(page);setToast(t("quality.ruleSaved"));}catch{setError(t("quality.operationFailed"));}finally{setPending(false);}};
-  const assignToMe=async(id:string)=>{setPending(true);setError("");try{await apiFetch("/api/data-quality",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operation:"assign",id})});await load(page);setToast(t("quality.assigned"));}catch{setError(t("quality.operationFailed"));}finally{setPending(false);}};
-
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  return <div className="page-stack quality-page">
-    <section className="page-heading-row">
-      <div><p className="eyebrow">{t("quality.eyebrow")}</p><WorkspaceHeading>{t("quality.title")}</WorkspaceHeading><p>{t("quality.description")}</p></div>
-      <button className="primary-button" disabled={pending} onClick={() => void runRules()}><RefreshCw size={16} />{t("quality.run")}</button>
-    </section>
-    {error && <InlineMessage type="error">{error}</InlineMessage>}
-    <section className="quick-summary"><span><b>{total}</b><small>{t("quality.openIssues")}</small></span><span><b>{items.filter((item) => item.severity === "HIGH").length}</b><small>{t("quality.highOnPage")}</small></span><span><b>{items.filter((item) => item.status === "ASSIGNED").length}</b><small>{t("quality.assignedOnPage")}</small></span></section>
-    <section className="surface quality-trend-card"><div className="surface-heading"><div><h2>{t("quality.trend")}</h2><p>{t("quality.trendHelp")}</p></div></div>{trend.length?<div className="quality-trend" role="img" aria-label={t("quality.trend")}>{trend.map(item=>{const totalOpen=item.open_low+item.open_medium+item.open_high;const max=Math.max(1,...trend.map(point=>point.open_low+point.open_medium+point.open_high));return <div key={item.snapshot_date}><span style={{height:`${Math.max(totalOpen?6:0,totalOpen/max*100)}%`}} title={`${item.snapshot_date}: ${totalOpen}`}/><small>{item.snapshot_date.slice(5)}</small></div>;})}</div>:<div className="empty-state"><span>{t("quality.trendHelp")}</span></div>}</section>
-    <section className="surface quality-rules">
-      <div className="surface-heading"><div><h2>{t("quality.rules")}</h2><p>{t("quality.rulesHelp")}</p></div></div>
-      <div className="quality-rule-grid">{rules.map(rule=><article key={rule.id} data-severity={rule.severity} data-enabled={rule.enabled}>
-        <div><b>{ruleLabel(rule.ruleKey)}</b></div>
-        <div className="quality-rule-controls">
-          <label className="quality-rule-enabled"><input type="checkbox" checked={rule.enabled} disabled={pending} onChange={event=>void configureRule(rule,{enabled:event.target.checked})}/><span>{t("quality.enabled")}</span></label>
-          <label><span>{t("quality.severityLabel")}</span><select value={rule.severity} disabled={pending} onChange={event=>void configureRule(rule,{severity:event.target.value as QualityRuleConfig["severity"]})}>{["LOW","MEDIUM","HIGH"].map(value=><option value={value} key={value}>{t(`quality.severity.${value.toLowerCase()}`)}</option>)}</select></label>
-        </div>
-      </article>)}</div>
-    </section>
-    <section className="surface quality-list">
-      <div className="table-toolbar"><SearchField value={query} onChange={(value) => { setQuery(value); setPage(1); }} placeholder={t("quality.search")} /><button className="secondary-button" onClick={() => void load(1)}>{t("common.search")}</button></div>
-      {items.map((item) => <article className="quality-row" key={item.id}>
-        <span className={`quality-icon ${item.severity.toLowerCase()}`}><ShieldAlert size={17} /></span>
-        <div><b>{t(item.titleKey)}</b><small>{t(`search.type.${item.entityType.toLowerCase()}`)} · {item.entityId.slice(0, 8)}</small>{qualityHref(item)&&<Link className="text-button" href={qualityHref(item)!}>{t("quality.openRecord")}</Link>}<small>{t("quality.fixFirst")}</small><SafeDiagnostics items={[{label:t("closure.rule"),value:item.ruleKey},{label:t("closure.reference"),value:item.details.reference}]}/></div>
-        <StatusBadge tone={item.severity === "HIGH" ? "red" : item.severity === "MEDIUM" ? "amber" : "blue"}>{t(`quality.severity.${item.severity.toLowerCase()}`)}</StatusBadge>
-        <div className="quality-actions">{!item.assignedTo&&<button onClick={()=>void assignToMe(item.id)} disabled={pending}>{t("quality.assignToMe")}</button>}<button onClick={() => beginResolution(item.id, false)}><CheckCircle2 size={15} />{t("quality.verifyResolve")}</button><button onClick={() => beginResolution(item.id, true)}>{t("quality.dismiss")}</button></div>
-        {action?.id === item.id && <form className="quality-resolution-form" onSubmit={submitResolution}>
-          <label className="field"><span>{t(action.dismiss ? "quality.dismissReason" : "quality.resolvePrompt")}</span><textarea rows={3} value={resolution} onChange={(event) => setResolution(event.target.value)} required autoFocus /></label>
-          {rowError?.id === item.id && <InlineMessage type="error">{rowError.message}</InlineMessage>}
-          <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => setAction(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={pending || !resolution.trim()}>{pending ? t("common.saving") : t("common.confirm")}</button></div>
-        </form>}
-      </article>)}
-      {!items.length && <div className="empty-state"><span>{t("quality.empty")}</span></div>}
-      <Pagination page={page} totalPages={pages} total={total} pageSize={pageSize} onPage={(next) => { setPage(next); setAction(null); void load(next); }} onPageSize={(value)=>{setPageSize(value);setPage(1);setAction(null);void load(1,value);}} />
-    </section>
-    {toast && <Toast message={toast} onClose={() => setToast("")} />}
-  </div>;
+type QualityTrend=QualityWorkspace["trend"][number];
+export function DataQualityPage({initialItems,initialTotal,initialTrend,initialRules,initialUnavailable=[]}:{initialItems:QualityIssue[];initialTotal:number;initialTrend:QualityTrend[];initialRules:QualityRuleConfig[];initialUnavailable?:QualityWorkspace["unavailable"]}){
+ const {t,enumLabel}=useI18n(),{formatDate}=useUserPreferences(),params=useSearchParams(),router=useRouter(),pathname=usePathname();
+ const filters=readQualityFilters(params),state=useQualityWorkspace({items:initialItems,total:initialTotal,trend:initialTrend,rules:initialRules,unavailable:initialUnavailable,page:1,pageSize:10},filters);
+ const {items,trend,rules,total,unavailable}=state.data;
+ const [action,setAction]=useState<{item:QualityIssue;dismiss:boolean}|null>(null),[resolution,setResolution]=useState("");
+ const ruleLabel=(key:string)=>{const direct=enumLabel(`quality.rule.${key}`),mapped=enumLabel(qualityRuleKey(key));return direct.known?direct.label:mapped.known?mapped.label:t("quality.rule.generic");};
+ const select=(change:Partial<QualityFilters>,replace=false)=>{const query=writeQualityFilters(new URLSearchParams(params.toString()),{...filters,...change}).toString();(replace?router.replace:router.push)(query?`${pathname}?${query}`:pathname,{scroll:false});if(!state.uncertain)setAction(null);};
+ const begin=(item:QualityIssue,dismiss:boolean)=>{setAction({item,dismiss});setResolution("");};
+ const resolve=async(event:React.FormEvent)=>{event.preventDefault();if(!action)return;if(await state.send({operation:"resolve",id:action.item.id,expectedRevision:action.item.revision,resolution:resolution.trim(),dismiss:action.dismiss})){setAction(null);setResolution("");}};
+ const filtered=Object.keys(qualityDefaults).some(key=>filters[key as keyof QualityFilters]!==qualityDefaults[key as keyof QualityFilters]);
+ const trendMax=Math.max(1,...trend.map(point=>point.open_low+point.open_medium+point.open_high));
+ return <div className="page-stack quality-page">
+  <section className="page-heading-row"><div><p className="eyebrow">{t("quality.eyebrow")}</p><WorkspaceHeading>{t("quality.title")}</WorkspaceHeading><p>{t("qualityTriage.description")}</p></div><div className="page-actions"><button type="button" className="secondary-button" disabled={state.pending||state.uncertain||state.loading} onClick={()=>void state.refresh()}><RefreshCw size={16}/>{t(state.loading?"common.loading":"qualityTriage.refresh")}</button><button type="button" className="primary-button" disabled={state.locked} onClick={()=>void state.send({operation:"run"})}><RefreshCw size={16}/>{t("quality.run")}</button></div></section>
+  {state.readError&&<InlineMessage type="error">{state.readError}</InlineMessage>}{state.error&&<InlineMessage type="error">{state.error}</InlineMessage>}{state.refreshOnly&&<InlineMessage type="warning">{t("qualityTriage.refreshOnly")}</InlineMessage>}{state.uncertain&&<button type="button" className="secondary-button" disabled={state.pending} onClick={async()=>{if(await state.retry()){setAction(null);setResolution("");}}}>{t("business.retrySame")}</button>}
+  {(state.loading||!state.current)&&!state.readError&&!state.uncertain&&<p role="status">{t("qualityTriage.loading")}</p>}
+  {unavailable.length>0&&<InlineMessage type="warning">{t("qualityTriage.partial",{sources:unavailable.map(source=>t(`qualityTriage.source.${source}`)).join(" · ")})}</InlineMessage>}
+  <section className="quick-summary"><span><b>{total}</b><small>{t("qualityTriage.matches")}</small></span><span><b>{items.filter(item=>item.severity==="HIGH").length}</b><small>{t("quality.highOnPage")}</small></span><span><b>{items.filter(item=>item.status==="ASSIGNED").length}</b><small>{t("quality.assignedOnPage")}</small></span></section>
+  <section className="surface quality-trend-card"><div className="surface-heading"><div><h2>{t("quality.trend")}</h2><p>{t("quality.trendHelp")}</p></div></div>{trend.length?<div className="quality-trend" role="img" aria-label={t("quality.trend")}>{trend.map(point=>{const open=point.open_low+point.open_medium+point.open_high;return <div key={point.snapshot_date}><span style={{height:`${Math.max(open?6:0,open/trendMax*100)}%`}} title={`${point.snapshot_date}: ${open}`}/><small>{point.snapshot_date.slice(5)}</small></div>;})}</div>:<p className="field-help">{t(unavailable.includes("trend")?"qualityTriage.unavailable":"qualityTriage.noTrend")}</p>}</section>
+  <details className="surface quality-rules"><summary>{t("quality.rules")}</summary><p className="field-help">{t("quality.rulesHelp")}</p>{unavailable.includes("rules")?<p>{t("qualityTriage.unavailable")}</p>:<div className="quality-rule-grid">{rules.map(rule=><article key={rule.id} data-severity={rule.severity} data-enabled={rule.enabled}><div><b>{ruleLabel(rule.ruleKey)}</b></div><div className="quality-rule-controls"><label className="quality-rule-enabled"><input type="checkbox" checked={rule.enabled} disabled={state.locked} onChange={event=>void state.send({operation:"configure",ruleKey:rule.ruleKey,expectedRevision:rule.revision,enabled:event.target.checked,severity:rule.severity})}/><span>{t("quality.enabled")}</span></label><label><span>{t("quality.severityLabel")}</span><select value={rule.severity} disabled={state.locked} onChange={event=>void state.send({operation:"configure",ruleKey:rule.ruleKey,expectedRevision:rule.revision,enabled:rule.enabled,severity:event.target.value})}>{["LOW","MEDIUM","HIGH"].map(value=><option value={value} key={value}>{t(`quality.severity.${value.toLowerCase()}`)}</option>)}</select></label></div></article>)}</div>}</details>
+  <section className="surface quality-list" aria-busy={state.loading}>
+   <fieldset className="quality-triage-filters" disabled={state.pending||state.uncertain}><SearchField value={filters.q} onChange={value=>select({q:value.slice(0,100)},true)} placeholder={t("quality.search")}/><label className="field"><span>{t("common.status")}</span><select value={filters.status} onChange={event=>select({status:event.target.value as QualityFilters["status"]})}>{qualityStatusFilters.map(value=><option key={value} value={value}>{t(`qualityTriage.status.${value}`)}</option>)}</select></label><label className="field"><span>{t("quality.severityLabel")}</span><select value={filters.severity} onChange={event=>select({severity:event.target.value as QualityFilters["severity"]})}>{qualitySeverities.map(value=><option key={value} value={value}>{t(value==="all"?"common.all":`quality.severity.${value.toLowerCase()}`)}</option>)}</select></label><label className="field"><span>{t("qualityTriage.assignment")}</span><select value={filters.assignment} onChange={event=>select({assignment:event.target.value as QualityFilters["assignment"]})}>{qualityAssignments.map(value=><option key={value} value={value}>{t(`qualityTriage.assignment.${value}`)}</option>)}</select></label>{filtered&&<button type="button" className="secondary-button" onClick={()=>select(qualityDefaults)}>{t("qualityTriage.reset")}</button>}</fieldset>
+   {items.map(item=>{const href=qualityRecordHref(item),active=qualityIsActive(item.status);return <article className="quality-row" data-issue-id={item.id} key={item.id}><span className={`quality-icon ${item.severity.toLowerCase()}`}><ShieldAlert size={17}/></span><div><b>{t(item.titleKey)}</b><small>{t(`search.type.${item.entityType.toLowerCase()}`)} · {item.entityId.slice(0,8)}</small>{href&&<Link className="text-button" href={href}>{t("quality.openRecord")}</Link>}<small>{formatDate(item.lastSeenAt,{includeTime:true})}</small>{active?<small>{t("quality.fixFirst")}</small>:item.resolution&&<p className="quality-resolution-note">{item.resolution}</p>}<SafeDiagnostics items={[{label:t("closure.rule"),value:item.ruleKey},{label:t("closure.reference"),value:item.details.reference}]}/></div><div className="quality-statuses"><StatusBadge tone={item.severity==="HIGH"?"red":item.severity==="MEDIUM"?"amber":"blue"}>{t(`quality.severity.${item.severity.toLowerCase()}`)}</StatusBadge><StatusBadge tone={active?"amber":"gray"}>{t(`qualityTriage.status.${item.status}`)}</StatusBadge></div>{active&&<div className="quality-actions">{!item.assignedTo&&<button type="button" disabled={state.locked} onClick={()=>void state.send({operation:"assign",id:item.id,expectedRevision:item.revision})}>{t("quality.assignToMe")}</button>}<button type="button" disabled={state.locked} onClick={()=>begin(item,false)}><CheckCircle2 size={15}/>{t("quality.verifyResolve")}</button><button type="button" disabled={state.locked} onClick={()=>begin(item,true)}>{t("quality.dismiss")}</button></div>}{action?.item.id===item.id&&<form className="quality-resolution-form" onSubmit={resolve}><label className="field"><span>{t(action.dismiss?"quality.dismissReason":"quality.resolvePrompt")}</span><textarea rows={3} value={resolution} onChange={event=>setResolution(event.target.value)} minLength={2} maxLength={500} disabled={state.pending||state.uncertain} required autoFocus/></label><div className="drawer-actions"><button type="button" className="secondary-button" disabled={state.pending||state.uncertain} onClick={()=>setAction(null)}>{t("common.cancel")}</button><button className="primary-button" disabled={state.locked||resolution.trim().length<2}>{t(state.pending?"common.saving":"common.confirm")}</button></div></form>}</article>;})}
+   {!items.length&&!state.loading&&!state.readError&&state.current&&<div className="empty-state"><span>{t(filtered?"qualityTriage.filteredEmpty":"qualityTriage.empty")}</span></div>}
+   <Pagination page={Math.min(state.page,Math.max(1,Math.ceil(total/state.pageSize)))} totalPages={Math.max(1,Math.ceil(total/state.pageSize))} total={total} pageSize={state.pageSize} onPage={value=>{if(!state.pending&&!state.uncertain){setAction(null);state.setPage(value);}}} onPageSize={value=>{if(!state.pending&&!state.uncertain){setAction(null);state.setPageSize(value);}}}/>
+  </section>{state.toast&&<Toast message={state.toast} onClose={()=>state.setToast("")}/>}
+ </div>;
 }
-
-function qualityRuleKey(ruleKey:string){if(["SUCCESS_","COHORT_","ENROLLMENT_","APPLICATION_","MILESTONE_","VISA_RESULT_","WORKFLOW_","STRATEGIC_ACCOUNT_","HIGH_TIER_ACCOUNT_","KEY_CONTACT_","CHANNEL_ACCOUNT_","CLAIMED_LEAD_","QUALIFYING_SCHOOL_","QUALIFIED_SCHOOL_","RECRUITMENT_ACTIVATED_","SOLUTION_PROPOSED_"].some(prefix=>ruleKey.startsWith(prefix)))return `quality.rule.${ruleKey}`;const key=ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase());return `quality.rule.${key}`;}
-
-function qualityHref(item:QualityIssue){
-  if(item.entityType==="ORGANIZATION")return `/schools/${item.entityId}`;
-  if(item.entityType==="STUDENT_SUCCESS_CASE")return `/student-success?focus=${item.entityId}`;
-  if(["STUDENT_SUCCESS_RISK","STUDENT_SUCCESS_INTERVENTION"].includes(item.entityType)&&typeof item.details.caseId==="string")return `/student-success?focus=${item.details.caseId}`;
-  if(item.entityType==="CONTACT")return `/people/${item.entityId}`;
-  if(item.entityType==="ENROLLMENT")return `/enrollments?focus=${item.entityId}`;
-  if(item.entityType==="ADMISSION_MILESTONE"&&typeof item.details.enrollmentId==="string")return `/enrollments?focus=${item.details.enrollmentId}`;
-  if(item.entityType==="WORKFLOW"&&typeof item.details.enrollmentId==="string")return `/enrollments?focus=${item.details.enrollmentId}`;
-  if(item.entityType==="APPLICATION")return `/applications?focus=${item.entityId}`;
-  if(item.entityType==="COHORT")return `/products?cohort=${item.entityId}`;
-  if(item.entityType==="STUDENT")return `/students?focus=${item.entityId}`;
-  if(item.entityType==="LEAD")return `/leads?focus=${item.entityId}`;
-  if(item.entityType==="TASK")return "/tasks";
-  if(item.entityType==="OPPORTUNITY")return "/opportunities";
-  if(item.entityType==="CONTRACT")return "/contracts";
-  return null;
-}
+function qualityRuleKey(ruleKey:string){if(["SUCCESS_","COHORT_","ENROLLMENT_","APPLICATION_","MILESTONE_","VISA_RESULT_","WORKFLOW_","STRATEGIC_ACCOUNT_","HIGH_TIER_ACCOUNT_","KEY_CONTACT_","CHANNEL_ACCOUNT_","CLAIMED_LEAD_","QUALIFYING_SCHOOL_","QUALIFIED_SCHOOL_","RECRUITMENT_ACTIVATED_","SOLUTION_PROPOSED_"].some(prefix=>ruleKey.startsWith(prefix)))return `quality.rule.${ruleKey}`;return `quality.rule.${ruleKey.toLowerCase().replace(/_([a-z])/g,(_,letter:string)=>letter.toUpperCase())}`;}

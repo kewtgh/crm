@@ -1,9 +1,9 @@
-export const REQUIRED_NODE_VERSION = ">=24.22.0 <25";
+export const REQUIRED_NODE_VERSION = ">=24.22.1 <25";
 
 export function deploymentRuntime(version = process.version) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version);
   const compatible = Boolean(match && Number(match[1]) === 24
-    && (Number(match[2]) > 22 || (Number(match[2]) === 22 && Number(match[3]) >= 0)));
+    && (Number(match[2]) > 22 || (Number(match[2]) === 22 && Number(match[3]) >= 1)));
   return { HOST_NODE_VERSION: version, REQUIRED_NODE_VERSION,
     COMPATIBILITY_RESULT: compatible ? "COMPATIBLE" : "INCOMPATIBLE" };
 }

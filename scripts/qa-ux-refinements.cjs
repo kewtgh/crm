@@ -133,7 +133,7 @@ module.exports=async({browser,base,output,report,observe})=>{
       });
       for(const viewport of [{width:1440,height:1000},{width:375,height:812}]){
         await page.setViewportSize(viewport);await page.getByRole("button",{name:"QA quality",exact:true}).click();
-        await page.locator(".quality-rule-grid select").first().waitFor();await qualityControls();await overflow();
+        if(await page.locator(".quality-rules").evaluate(element=>element.tagName==="DETAILS"&&!element.open))await page.locator(".quality-rules summary").click();await page.locator(".quality-rule-grid select").first().waitFor();await qualityControls();await overflow();
         await page.screenshot({path:path.join(output,`quality-${viewport.width}.png`),fullPage:true});
         await page.getByRole("button",{name:"QA history",exact:true}).click();
         const history=page.locator(".email-history-page");
@@ -152,7 +152,7 @@ module.exports=async({browser,base,output,report,observe})=>{
     }
     for(const viewport of [{width:1440,height:1000},{width:375,height:812}]){
       await page.setViewportSize(viewport);await page.getByRole("button",{name:"QA quality",exact:true}).click();
-      await page.locator(".quality-rule-grid select").first().waitFor();
+      if(await page.locator(".quality-rules").evaluate(element=>element.tagName==="DETAILS"&&!element.open))await page.locator(".quality-rules summary").click();await page.locator(".quality-rule-grid select").first().waitFor();
       await qualityControls();await overflow();
       await page.screenshot({path:path.join(output,`quality-${viewport.width}.png`),fullPage:true});
       await page.getByRole("button",{name:"QA workers",exact:true}).click();if(viewport.width===375)await page.locator(".operations-mobile-tabs").getByRole("button",{name:"队列",exact:true}).click();await page.locator(".worker-list article").first().waitFor();

@@ -70,31 +70,31 @@ test("dependency policy pins patched advisories without weakening CI", async () 
     readFile(new URL("../package-lock.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
   assert.equal(manifest.devDependencies["brace-expansion-secure"], "npm:brace-expansion@5.0.12");
-  assert.equal(manifest.dependencies.next, "16.3.8");
+  assert.equal(manifest.dependencies.next, "16.4.2");
   assert.equal(manifest.devDependencies["eslint-config-next"], manifest.dependencies.next);
   assert.equal(manifest.devDependencies.vite, "8.3.5");
-  assert.equal(manifest.overrides["baseline-browser-mapping"], "2.11.27");
-  assert.equal(manifest.overrides.browserslist, "4.29.3");
-  assert.equal(manifest.overrides["fast-uri"], "4.2.1");
+  assert.equal(manifest.overrides["baseline-browser-mapping"], "2.11.31");
+  assert.equal(manifest.overrides.browserslist, "4.29.4");
+  assert.equal(manifest.overrides["fast-uri"], "4.2.3");
   assert.equal(manifest.overrides.fflate, "0.8.3");
   assert.equal(manifest.overrides["image-size"], undefined);
   assert.ok(!Object.keys(lock.packages).some(path => path.endsWith("node_modules/image-size")), "vinext no longer installs image-size");
   assert.equal(manifest.overrides.braces, "file:vendor/braces-safe");
-  assert.equal(manifest.overrides["js-yaml"], "5.4.2");
-  assert.equal(manifest.overrides.nanoid, "6.0.1");
-  assert.equal(manifest.overrides.postcss, "8.5.30");
+  assert.equal(manifest.overrides["js-yaml"], "5.5.0");
+  assert.equal(manifest.overrides.nanoid, "6.0.2");
+  assert.equal(manifest.overrides.postcss, "8.5.31");
   assert.equal(manifest.overrides.sharp, "0.35.5");
   assert.equal(lock.packages["node_modules/brace-expansion-secure"].version, "5.0.12");
   for (const [name, versions] of Object.entries({
-    next: ["16.3.8"],
+    next: ["16.4.2"],
     vite: ["8.3.5"],
-    postcss: ["8.5.30"],
-    "baseline-browser-mapping": ["2.11.27"],
-    browserslist: ["4.29.3"],
-    "fast-uri": ["4.2.1"],
+    postcss: ["8.5.31"],
+    "baseline-browser-mapping": ["2.11.31"],
+    browserslist: ["4.29.4"],
+    "fast-uri": ["4.2.3"],
     fflate: ["0.8.3"],
-    "js-yaml": ["5.4.2"],
-    nanoid: ["6.0.1"],
+    "js-yaml": ["5.5.0"],
+    nanoid: ["6.0.2"],
     sharp: ["0.35.5"],
   })) {
     const entries = Object.entries(lock.packages).filter(([path]) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`));

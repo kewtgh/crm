@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24.22.0 <25",
-    "npm": ">=12.2.0 <13"
+    "node": ">=24.22.1 <25",
+    "npm": ">=12.2.1 <13"
   },
   "scripts": {
     "test": "node --test --test-isolation=none test/worker.test.js test/email-design.test.js",
@@ -15,10 +15,10 @@
     "deploy:production:dry-run": "node scripts/deploy-production.mjs --dry-run"
   },
   "devDependencies": {
-    "wrangler": "4.147.0"
+    "wrangler": "4.152.0"
   },
   "overrides": {
     "sharp": "0.35.5"
   },
-  "packageManager": "npm@12.2.0"
+  "packageManager": "npm@12.2.1"
 }

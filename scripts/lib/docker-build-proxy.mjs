@@ -5,7 +5,7 @@ export const DOCKER_BUILD_PROXY_KEYS = [
   "https_proxy",
 ];
 
-export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.33.1";
+export const LUMINA_BUILDKIT_IMAGE = "moby/buildkit:v0.34.1";
 
 export function parseDockerBuildProxy(value) {
   const proxy = String(value ?? "").trim();

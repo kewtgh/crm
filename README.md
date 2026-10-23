@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.39.0**
+Current release candidate: **v3.40.0**
+
+## v3.40.0 — Quality triage and stable dependency refresh
+
+Quality governance separates active findings from retained history, with shareable severity/assignment
+views, versioned commands, durable exact-request recovery and explicit refresh outcomes. Optional
+trend/configuration failures preserve the issue queue. Stable dependencies, Node 24.22.1 LTS and
+npm 12.2.1 are aligned across application, worker, planning, CI and Docker configuration.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V340.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V340.md),
+[release notes](docs/RELEASE_V3.40.0.md) and [verification](docs/V340_VERIFICATION.md).
 
 ## v3.39.0 — Appointment recovery and full daily schedules
 
@@ -466,8 +475,8 @@ monthly restore verification creates and destroys only a uniquely named temporar
 
 Requirements:
 
-- Node.js 24 LTS (`24.22.0` is pinned in `.nvmrc`);
-- npm 12.x (`12.2.0` is pinned in `package.json`);
+- Node.js 24 LTS (`24.22.1` is pinned in `.nvmrc`);
+- npm 12.x (`12.2.1` is pinned in `package.json`);
 - Docker Desktop.
 
 ```bash

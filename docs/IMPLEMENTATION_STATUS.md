@@ -1,4 +1,13 @@
-# Implementation status — v3.39.0 release candidate
+# Implementation status — v3.40.0 release candidate
+
+## v3.40.0 — Quality governance and current stable dependencies
+
+Migration 137 adds quality finding/rule revisions and atomic receipt-bound commands. Triage URL
+filters, active/history boundaries, independent optional reads and explicit mutation/refresh recovery
+are implemented. All three dependency projects and Node/npm/CI/Docker pins are refreshed to stable
+versions with LTS preference. See [audit](FIRST_PRINCIPLES_AUDIT_V340.md),
+[plan](FIRST_PRINCIPLES_PLAN_V340.md), [dependencies](DEPENDENCY_REFRESH_V340.md)
+and [verification](V340_VERIFICATION.md).
 
 ## v3.39.0 — Calendar lifecycle and export recovery
 

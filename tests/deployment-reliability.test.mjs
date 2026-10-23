@@ -222,7 +222,8 @@ test("terminal archive faults reconcile once without application replay, includi
 
 test("Node diagnostics reject 26 before caller side effects and accept pinned LTS", () => {
   assert.throws(() => assertDeploymentRuntime("v26.10.0"), /HOST_NODE_VERSION=v26.10.0.*REQUIRED_NODE_VERSION=.*COMPATIBILITY_RESULT=INCOMPATIBLE/);
-  assert.equal(assertDeploymentRuntime("v24.22.0").COMPATIBILITY_RESULT, "COMPATIBLE");
+  assert.equal(assertDeploymentRuntime("v24.22.1").COMPATIBILITY_RESULT, "COMPATIBLE");
+  assert.throws(() => assertDeploymentRuntime("v24.22.0"), /NODE_RUNTIME_INCOMPATIBLE/);
 });
 
 test("crash after accepted record but before terminal journal can reconcile without replay", () => {

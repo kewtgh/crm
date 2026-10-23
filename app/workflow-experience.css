@@ -78,3 +78,12 @@
 .calendar-page .reminder-actions { grid-column:2; justify-self:end; flex-wrap:wrap; }
 .calendar-page .reminder-actions button { min-width:40px; min-height:40px; }
 .calendar-page .reminder-item small { flex-wrap:wrap; }
+.quality-triage-filters { border:0; padding:0 0 16px; margin:0; min-width:0; display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.quality-triage-filters>.search-field { flex:1 1 220px; }
+.quality-triage-filters>.field { flex:1 1 180px; min-width:0; margin:0; }
+.quality-triage-filters select { width:100%; }
+.quality-page>.toast { pointer-events:none; }
+.quality-page>.toast button { pointer-events:auto; }
+.quality-statuses { display:flex; flex-wrap:wrap; gap:6px; }
+.quality-rules>summary { cursor:pointer; font-weight:650; }
+.quality-resolution-note { white-space:pre-wrap; overflow-wrap:anywhere; }

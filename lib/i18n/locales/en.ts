@@ -1,3 +1,4 @@
+import {qualityTriageEn} from "./quality-triage";
 import {calendarRecoveryEn} from "./calendar-recovery";
 import {actionReviewEn} from "./action-review";
 import {taskQueueEn} from "./task-queue";
@@ -541,4 +542,5 @@ export const en: Messages = {
   ...taskQueueEn,
   ...actionReviewEn,
   ...calendarRecoveryEn,
+  ...qualityTriageEn,
 };
