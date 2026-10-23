@@ -1,3 +1,4 @@
+import {calendarRecoveryEn} from "./calendar-recovery";
 import {actionReviewEn} from "./action-review";
 import {taskQueueEn} from "./task-queue";
 import {revenueNavigationEn} from "../../revenue-workspace-labels";
@@ -539,4 +540,5 @@ export const en: Messages = {
   ...revenueNavigationEn,
   ...taskQueueEn,
   ...actionReviewEn,
+  ...calendarRecoveryEn,
 };

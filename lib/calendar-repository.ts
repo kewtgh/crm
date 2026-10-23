@@ -1,3 +1,4 @@
+import type { CalendarAction } from "./calendar-actions";
 import { databaseJson, databaseRequest } from "./db/gateway";
 import {
   dateTimePartsFor,
@@ -6,9 +7,9 @@ import {
   type SupportedTimezone,
 } from "./timezone";
 
-export type CalendarRecord = { id: string; date: string; time: string; title: string; titleEn: string; related: string; type: "meeting" | "consultation" | "followup" | "deadline"; channel: string; reminder: string; deliveryStatus:string };
+export type CalendarRecord = { id: string; date: string; time: string; title: string; titleEn: string; related: string; type: "meeting" | "consultation" | "followup" | "deadline"; channel: string; reminder: string; deliveryStatus:string; eventVersion:number };
 export type CalendarResult = { items: CalendarRecord[]; total: number; truncated: boolean };
-type AppointmentRow = { id: string; title_zh: string; title_en: string; appointment_type: string; related_label: string; starts_at: string; channel: string; reminder_minutes: number[]; status: string };
+type AppointmentRow = { id: string; title_zh: string; title_en: string; appointment_type: string; related_label: string; starts_at: string; channel: string; reminder_minutes: number[]; status: string; event_version:number };
 const CALENDAR_RESULT_LIMIT = 500;
 const typeMap: Record<string, CalendarRecord["type"]> = { MEETING: "meeting", CONSULTATION: "consultation", FOLLOW_UP: "followup", DEADLINE: "deadline" };
 const reminderLabel = (minutes: number[]) => minutes.includes(4320) ? "calendar.reminder.3d" : minutes.includes(1440) ? "calendar.reminder.day" : minutes.includes(120) ? "calendar.reminder.2h" : minutes.includes(30) ? "calendar.reminder.30m" : "calendar.reminder.start";
@@ -16,7 +17,7 @@ const reminderLabel = (minutes: number[]) => minutes.includes(4320) ? "calendar.
 function localParts(value:Date,timezone:SupportedTimezone){const parts=dateTimePartsFor(value,timezone);return{date:`${parts.year}-${parts.month}-${parts.day}`,time:`${parts.hour}:${parts.minute}`};}
 
 export async function listAppointments(from: string, to: string,timezone:SupportedTimezone=normalizeTimezone(undefined)):Promise<CalendarResult> {
-  const response = await databaseRequest(`/db/table/appointments?select=id,title_zh,title_en,appointment_type,related_label,starts_at,channel,reminder_minutes,status&status=eq.SCHEDULED&starts_at=gte.${encodeURIComponent(from)}&starts_at=lt.${encodeURIComponent(to)}&order=starts_at.asc`,{
+  const response = await databaseRequest(`/db/table/appointments?select=id,title_zh,title_en,appointment_type,related_label,starts_at,channel,reminder_minutes,status,event_version&status=eq.SCHEDULED&starts_at=gte.${encodeURIComponent(from)}&starts_at=lt.${encodeURIComponent(to)}&order=starts_at.asc`,{
     headers:{Prefer:"count=exact",Range:`0-${CALENDAR_RESULT_LIMIT-1}`},
   });
   const rows=await response.json() as AppointmentRow[];
@@ -24,7 +25,7 @@ export async function listAppointments(from: string, to: string,timezone:Support
   const reportedTotal=contentRange?.split("/")[1];
   const total=reportedTotal&&reportedTotal!=="*"?Number(reportedTotal):rows.length;
   const ids=rows.map(row=>row.id);const deliveries=ids.length?await databaseJson<Array<{appointment_id:string;status:string;created_at:string}>>(`/db/table/calendar_deliveries?select=appointment_id,status,created_at&appointment_id=in.(${ids.join(",")})&order=created_at.desc`):[];const status=new Map<string,string>();deliveries.forEach(item=>{if(!status.has(item.appointment_id))status.set(item.appointment_id,item.status);});
-  const items=rows.map((row) => { const local=localParts(new Date(row.starts_at),timezone); return { id: row.id, date: local.date, time: local.time, title: row.title_zh, titleEn: row.title_en, related: row.related_label, type: typeMap[row.appointment_type] ?? "meeting", channel: row.channel, reminder: reminderLabel(row.reminder_minutes),deliveryStatus:status.get(row.id)??"NONE" }; });
+  const items=rows.map((row) => { const local=localParts(new Date(row.starts_at),timezone); return { id: row.id,eventVersion:row.event_version, date: local.date, time: local.time, title: row.title_zh, titleEn: row.title_en, related: row.related_label, type: typeMap[row.appointment_type] ?? "meeting", channel: row.channel, reminder: reminderLabel(row.reminder_minutes),deliveryStatus:status.get(row.id)??"NONE" }; });
   return {items,total,truncated:total>items.length};
 }
 
@@ -34,5 +35,7 @@ export async function createAppointment(input: { title: string; locale: "zh-CN" 
   return databaseJson<AppointmentRow>("/db/rpc/create_appointment_with_delivery",{method:"POST",body:JSON.stringify({title_zh:input.locale==="zh-CN"?input.title:input.title,title_en:input.title,event_type:types[input.type],relation_type:input.relatedType??null,relation_id:input.relatedId??null,relation_label:input.related,starts:startsAt.toISOString(),ends:endsAt.toISOString(),event_channel:input.channel,reminders:[input.reminder],attendees:input.attendees,target_request_key:input.requestKey})});
 }
 
-export async function completeAppointment(id: string) { await databaseJson("/db/rpc/complete_appointment", { method: "POST", body: JSON.stringify({ appointment_id: id }) }); }
-export async function changeAppointmentDelivery(id:string,action:"UPDATE"|"CANCEL",date?:string,time?:string,timezone:SupportedTimezone=normalizeTimezone(undefined)){let starts:string|null=null,ends:string|null=null;if(action==="UPDATE"&&date&&time){const start=zonedLocalDateTimeToUtc(`${date}T${time}`,timezone);starts=start.toISOString();ends=new Date(start.getTime()+3600000).toISOString();}return databaseJson("/db/rpc/update_appointment_delivery",{method:"POST",body:JSON.stringify({target_appointment:id,action,starts,ends})});}
+export async function mutateAppointment(id:string,input:CalendarAction,timezone:SupportedTimezone=normalizeTimezone(undefined),request=databaseJson){
+  const start=input.action==="UPDATE"?zonedLocalDateTimeToUtc(input.date+"T"+input.time,timezone):null;
+  return request<AppointmentRow>("/db/rpc/mutate_calendar_appointment",{method:"POST",body:JSON.stringify({target_appointment:id,action:input.action,expected_event_version:input.expectedVersion,p_request_key:input.requestKey,starts:start?.toISOString()??null,ends:start?new Date(start.getTime()+3600000).toISOString():null})});
+}

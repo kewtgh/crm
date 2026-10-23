@@ -1,6 +1,14 @@
 # ewaya CRM
 
-Current release candidate: **v3.38.0**
+Current release candidate: **v3.39.0**
+
+## v3.39.0 — Appointment recovery and full daily schedules
+
+Appointment actions now use version preconditions and durable exact-request receipts. Calendar
+creation retains uncertain requests, dates open a complete daily agenda, and failed reads offer
+visible refresh recovery. Export lists recover page changes and respect download expiry.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V339.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V339.md),
+[release notes](docs/RELEASE_V3.39.0.md) and [verification](docs/V339_VERIFICATION.md).
 
 ## v3.38.0 — Actionable and reliable work overview
 

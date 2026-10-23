@@ -13,10 +13,10 @@ test("rejects malformed calendar actions without inferring a business transition
   for (const value of [{}, null, "", { action: "complete" }, { action: "UPDATE" }]) {
     assert.equal(parseCalendarAction(value).success, false);
   }
-  assert.equal(parseCalendarAction({ action: "COMPLETE" }).success, true);
-  assert.equal(parseCalendarAction({ action: "CANCEL" }).success, true);
+  assert.equal(parseCalendarAction({ action: "COMPLETE",expectedVersion:1,requestKey:"fictional-request" }).success, true);
+  assert.equal(parseCalendarAction({ action: "CANCEL",expectedVersion:1,requestKey:"fictional-request" }).success, true);
   assert.equal(calendarActionSchema.safeParse({
-    action: "UPDATE",
+    action: "UPDATE",expectedVersion:1,requestKey:"fictional-request",
     date: "2026-07-30",
     time: "09:45",
   }).success, true);
@@ -25,10 +25,10 @@ test("rejects malformed calendar actions without inferring a business transition
 test("persists appointment request fingerprints and closes the malformed JSON fallback", async () => {
   const [migration, createRoute, actionRoute, repository, calendar] = await Promise.all([
     readFile(repositoryFile("db/migrations/202607290063_v320_delivery_integrity.sql"), "utf8"),
-    readFile(repositoryFile("app/api/calendar/route.ts"), "utf8"),
+    readFile(repositoryFile("lib/calendar-actions.ts"), "utf8"),
     readFile(repositoryFile("app/api/calendar/[id]/route.ts"), "utf8"),
     readFile(repositoryFile("lib/calendar-repository.ts"), "utf8"),
-    readFile(repositoryFile("components/calendar-page.tsx"), "utf8"),
+    readFile(repositoryFile("components/calendar-editor.tsx"), "utf8"),
   ]);
   assert.match(migration, /appointments_creation_request_uidx/);
   assert.match(migration, /creation_request_fingerprint/);
@@ -37,8 +37,8 @@ test("persists appointment request fingerprints and closes the malformed JSON fa
   assert.match(migration, /target_request_key text/);
   assert.match(createRoute, /requestKey:z\.string\(\)\.trim\(\)\.min\(8\)\.max\(160\)/);
   assert.match(repository, /target_request_key:input\.requestKey/);
-  assert.match(calendar, /scheduleRequestKey\.current\?\?=crypto\.randomUUID\(\)/);
-  assert.match(calendar, /onChange=\{\(\)=>\{if\(!schedulePending\)scheduleRequestKey\.current=null;\}\}/);
+  assert.match(calendar, /createReceiptAttempt/);
+  assert.match(calendar, /disabled=\{pending\|\|uncertain\}/);
   assert.doesNotMatch(actionRoute, /catch\(\(\)=>\(\{action:"COMPLETE"\}\)\)/);
   assert.match(actionRoute, /parseCalendarAction\(await request\.json\(\)\.catch\(\(\) => \(\{\}\)\)\)/);
 });

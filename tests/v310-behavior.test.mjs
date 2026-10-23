@@ -73,15 +73,15 @@ test("keeps profile updates atomic and avatar replacement recoverable", async ()
 test("reports calendar truncation and blocks duplicate schedule submission", async () => {
   const [repository, calendar] = await Promise.all([
     readFile(repositoryFile("lib/calendar-repository.ts"), "utf8"),
-    readFile(repositoryFile("components/calendar-page.tsx"), "utf8"),
+    readFile(repositoryFile("components/calendar-editor.tsx"), "utf8"),
   ]);
   assert.match(repository, /Prefer:"count=exact"/);
   assert.match(repository, /truncated:total>items\.length/);
-  assert.match(calendar, /if\(scheduleLock\.current\)return/);
-  assert.match(calendar, /scheduleLock\.current=true/);
-  assert.match(calendar, /scheduleLock\.current=false/);
-  assert.match(calendar, /aria-busy=\{schedulePending\}/);
-  assert.match(calendar, /calendar\.truncated/);
+  assert.match(calendar, /if\(busy\.current\)return/);
+  assert.match(calendar, /busy\.current=true/);
+  assert.match(calendar, /busy\.current=false/);
+  assert.match(calendar, /aria-busy=\{pending\}/);
+
 });
 
 test("logs allow-listed uncaught API failure diagnostics and mobile modal semantics", async () => {

@@ -67,3 +67,14 @@
 .action-review-controls p { margin:0; align-self:center; color:var(--muted,#536577); }
 .dashboard-task-links { display:flex; flex-wrap:wrap; gap:8px 16px; }
 .dashboard-task-links a { text-decoration:underline; text-underline-offset:3px; }
+.calendar-editor-fields { border:0; padding:0; margin:0; min-width:0; display:grid; gap:16px; }
+.calendar-agenda-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.calendar-agenda-tabs [aria-pressed=true] { background:var(--green-soft); color:var(--forest); }
+.calendar-page .reschedule-form fieldset { border:0; padding:0; margin:0; min-width:0; display:grid; gap:8px; }
+.calendar-page .calendar-legend { flex-wrap:wrap; white-space:normal; overflow:visible; gap:8px; }
+.calendar-page .calendar-legend>span { display:inline-flex; align-items:center; gap:5px; }
+.calendar-page .calendar-legend i { display:inline-block; flex:none; }
+.calendar-page .reminder-item { grid-template-columns:32px minmax(0,1fr); }
+.calendar-page .reminder-actions { grid-column:2; justify-self:end; flex-wrap:wrap; }
+.calendar-page .reminder-actions button { min-width:40px; min-height:40px; }
+.calendar-page .reminder-item small { flex-wrap:wrap; }

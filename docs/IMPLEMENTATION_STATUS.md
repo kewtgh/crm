@@ -1,4 +1,13 @@
-# Implementation status — v3.38.0 release candidate
+# Implementation status — v3.39.0 release candidate
+
+## v3.39.0 — Calendar lifecycle and export recovery
+
+Forward migration 136 adds atomic appointment action receipts, version/state checks and audit,
+and closes legacy staff mutation paths. Calendar exact-request recovery, selected-day agenda,
+explicit read recovery and supported relation lookups are implemented. Export refresh, page
+correction, expiry-aware eligibility and API validation preserve the existing access boundaries.
+See [audit](FIRST_PRINCIPLES_AUDIT_V339.md), [plan](FIRST_PRINCIPLES_PLAN_V339.md)
+and [verification](V339_VERIFICATION.md).
 
 ## v3.38.0 — Reliable work discovery
 
