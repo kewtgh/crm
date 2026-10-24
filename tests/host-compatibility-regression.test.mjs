@@ -60,8 +60,35 @@ function transition(){
  const entries=[`BOOTSTRAP_SOURCE_COMMIT=${legacy}`,`TARGET_SOURCE_COMMIT=${failure}`,"HOST_NODE_VERSION=v24.22.1","COMPATIBILITY_RESULT=COMPATIBLE","TARGET_APPLICATION_VERSION=3.40.0","TARGET_CONTROLLER_PID=201","Error: CONTROLLER_ENTRY_IDENTITY_INVALID","    at controllerEntryIdentity (file:///opt/lumina-crm/source/scripts/lib/controller-entry.mjs:12:1)","    at productionControllerEntry (file:///opt/lumina-crm/source/scripts/lib/controller-entry.mjs:33:1)"].map(log);
  entries.push({...log("Main process exited"),_UID:"0",_PID:"1",UNIT:"lumina-crm-deploy.service",INVOCATION_ID:invocation,EXIT_CODE:"exited",EXIT_STATUS:"1"});
  const runtime={isolated:true,uid};for(const name of ["web","worker"])runtime[name]={image:accepted.currentImage,imageId:`sha256:${"a".repeat(64)}`,state:"running",health:"healthy",project:"lumina-crm",revision:legacy,createdAt:"2026-10-23T00:00:00Z"};
- return{request:context.request,latest,bootstrap:clone(latest),accepted,journal:{rootAttested:true,complete:true,invocationId:invocation,entries},sourceProof:{bootstrap:context.sourceHashes.bootstrap,runner:HOST_COMPATIBILITY.revisions[failure].files["scripts/deploy-production-runner.mjs"],entry:HOST_COMPATIBILITY.revisions[failure].files["scripts/lib/controller-entry.mjs"],guardBeforeBusiness:true},runtime,state:{inventoryComplete:true,journals:[],logs:[],admittedEntries:[],conflictingHistory:[]},serviceActive:false,service:{result:"exit-code",execMainStatus:"1",invocationId:invocation},rawRequest:JSON.stringify(context.request),rawLatest:JSON.stringify(latest),toolSha256:"c".repeat(64)};
+ return{request:context.request,latest,bootstrap:clone(latest),accepted,journal:{rootAttested:true,complete:true,invocationId:invocation,entries},sourceProof:{bootstrap:context.sourceHashes.bootstrap,runner:HOST_COMPATIBILITY.revisions[failure].files["scripts/deploy-production-runner.mjs"],entry:HOST_COMPATIBILITY.revisions[failure].files["scripts/lib/controller-entry.mjs"],guardBeforeBusiness:true},runtime,state:{inventoryComplete:true,journals:[],logs:[],admittedEntries:[],conflictingHistory:[]},serviceActive:false,service:{activeState:"failed",result:"exit-code",execMainStatus:"1",invocationId:invocation},rawRequest:JSON.stringify(context.request),rawLatest:JSON.stringify(latest),toolSha256:"c".repeat(64)};
 }
+test("historical exit remains authoritative after current systemd becomes inactive/success",()=>{
+ for(const currentInvocation of ["","e".repeat(32)]){
+  const value=transition();value.service={activeState:"inactive",result:"success",execMainStatus:"0",invocationId:currentInvocation};
+  const assessment=assessLegacyTransition(value);assert.equal(assessment.eligible,true,JSON.stringify(assessment));
+  const plan=legacyTransitionPlan(value);assert.equal(plan.historicalExit.invocationId,invocation);assert.equal(plan.historicalExit.exitStatus,"1");assert.equal(plan.historicalExit.timestampUs,value.journal.entries.at(-1).__REALTIME_TIMESTAMP);
+ }
+});
+test("current service result cannot replace missing, forged or conflicting historical manager exit evidence",()=>{
+ for(const mutate of [
+  v=>v.journal.entries.pop(),v=>v.journal.invocationId="",v=>v.journal.entries.at(-1)._PID="2",v=>v.journal.entries.at(-1)._UID="1001",
+  v=>v.journal.entries.at(-1)._PID=["1"],v=>v.journal.entries.at(-1).UNIT="fictional-other.service",v=>v.journal.entries.at(-1).INVOCATION_ID="e".repeat(32),
+  v=>v.journal.entries.at(-1).EXIT_CODE="killed",v=>v.journal.entries.at(-1).EXIT_STATUS="0",v=>delete v.journal.entries.at(-1).EXIT_STATUS,
+  v=>v.journal.entries.push({...v.journal.entries.at(-1),__CURSOR:"fictional-conflicting-exit",EXIT_STATUS:"0"}),
+  v=>v.journal.entries.at(-1).__REALTIME_TIMESTAMP="1792799999999999",v=>v.journal.entries[6].__REALTIME_TIMESTAMP="1792800000100001",
+  v=>v.journal.entries[0].__REALTIME_TIMESTAMP="not-a-timestamp",v=>v.journal.entries[0].__REALTIME_TIMESTAMP="1792799998999999",
+  v=>v.journal.entries.at(-1).__CURSOR="",v=>v.journal.entries.at(-1).__CURSOR=v.journal.entries[0].__CURSOR
+ ]){
+  const value=transition();mutate(value);assert.equal(assessLegacyTransition(value).eligible,false);assert.throws(()=>legacyTransitionPlan(value),/EVIDENCE_INCOMPLETE/);
+ }
+});
+test("current systemd only proves quiescence and never authorizes a running or unknown service",()=>{
+ for(const activeState of ["active","activating","deactivating","reloading","unknown","",undefined]){
+  const value=transition();value.service={activeState,result:"exit-code",execMainStatus:"1",invocationId:invocation};value.serviceActive=false;
+  assert.equal(assessLegacyTransition(value).eligible,false);
+ }
+ const value=transition();value.service={activeState:"active",result:"success",execMainStatus:"0",invocationId:"e".repeat(32)};value.serviceActive=true;assert.equal(assessLegacyTransition(value).eligible,false);
+});
 test("legacy transition requires multiple independent proofs and rejects all business/finalization ambiguity",()=>{
  assert.equal(assessLegacyTransition(transition()).eligible,true,JSON.stringify(assessLegacyTransition(transition())));
  for(const mutate of [v=>v.journal=null,v=>v.journal.entries=[],v=>v.journal.entries[6].MESSAGE="unrelated failure",v=>v.journal.entries.at(-1)._UID="1001",v=>v.sourceProof.guardBeforeBusiness=false,v=>v.latest.migrationMayHaveChanged=true,v=>v.latest.webSwitch="STARTED",v=>v.latest.applicationAccepted=true,v=>v.latest.result="CONTROL_PLANE_FINALIZATION_FAILED",v=>v.state.journals.push("fictional.json"),v=>v.state.logs.push("empty.log"),v=>v.state.admittedEntries.push("entry.json"),v=>v.runtime.web.createdAt="2026-10-24T00:00:01Z",v=>v.runtime.worker.image="other:image",v=>v.accepted.commit=target,v=>v.serviceActive=true,v=>v.journal.entries[0]._LINE_BREAK="line-max"]){const value=transition();mutate(value);assert.equal(assessLegacyTransition(value).eligible,false);assert.throws(()=>legacyTransitionPlan(value),/EVIDENCE_INCOMPLETE/);}
@@ -76,11 +103,27 @@ test("legacy archival approval preserves originals/latest and resumes after rena
  busy=true;await assert.rejects(archiveLegacyTransition({plan,approval:plan.approvalSha256,operations}),/BUSY/);
 });
 test("journal collection queries complete service and trusted manager invocation streams without truncation",()=>{
- const calls=[];const result=captureTransitionJournal(invocation,"a".repeat(64),{run:(cmd,args)=>{calls.push({cmd,args});if(cmd.endsWith("systemctl"))return`ActiveState=failed\nResult=exit-code\nExecMainStatus=1\nInvocationID=${invocation}`;return JSON.stringify({__CURSOR:args.at(-1),__REALTIME_TIMESTAMP:"1000",MESSAGE:"fictional"});}});assert.equal(result.entries.length,2);assert.ok(calls.some(call=>call.args.includes(`INVOCATION_ID=${invocation}`)));assert.ok(calls.every(call=>!call.args.includes("-n")));
+ const records=transition().journal.entries,calls=[];const result=captureTransitionJournal(invocation,"a".repeat(64),{run:(cmd,args)=>{
+  calls.push({cmd,args});if(cmd.endsWith("systemctl"))return"ActiveState=inactive\nResult=success\nExecMainStatus=0\nInvocationID=";
+  const selected=args.includes(`INVOCATION_ID=${invocation}`)?records.slice(-1):records.slice(0,-1);return selected.map(value=>JSON.stringify(value)).join("\n");
+ }});
+ assert.equal(result.entries.length,records.length);assert.equal(result.service.activeState,"inactive");assert.equal(result.service.result,"success");assert.equal(result.service.invocationId,"");assert.equal(result.historicalExit.invocationId,invocation);assert.equal(result.historicalExit.exitStatus,"1");assert.ok(calls.some(call=>call.args.includes(`INVOCATION_ID=${invocation}`)));assert.ok(calls.every(call=>!call.args.includes("-n")));
+ const evidence=transition();evidence.journal=result;evidence.service=result.service;assert.equal(assessLegacyTransition(evidence).eligible,true);
+});
+test("journal capture rejects incomplete historical exit even when current systemd reports a failure",()=>{
+ for(const exit of [null,{...transition().journal.entries.at(-1),_PID:"2"},{...transition().journal.entries.at(-1),EXIT_STATUS:"0"}]){
+  assert.throws(()=>captureTransitionJournal(invocation,"a".repeat(64),{run:(cmd)=>cmd.endsWith("systemctl")?`ActiveState=failed\nResult=exit-code\nExecMainStatus=1\nInvocationID=${invocation}`:exit?JSON.stringify(exit):""}),/HISTORICAL_MANAGER_EXIT_UNVERIFIED/);
+ }
+});
+test("missing historical proof stops archival before any state write or request rename",async()=>{
+ const evidence=transition();evidence.service={activeState:"inactive",result:"success",execMainStatus:"0",invocationId:""};const plan=legacyTransitionPlan(evidence);let mutations=0;
+ const incomplete=clone(evidence);incomplete.journal.entries.pop();
+ await assert.rejects(archiveLegacyTransition({plan,approval:plan.approvalSha256,operations:{exclusive:async fn=>fn(),collect:async()=>incomplete,readLedger:async()=>{mutations++;},persist:async()=>{mutations++;},saveOriginals:async()=>{mutations++;},renameRequestOnce:async()=>{mutations++;}}}),/EVIDENCE_INCOMPLETE/);
+ assert.equal(mutations,0);
 });
 test("file-backed legacy archive retains byte-exact evidence across a completion-write failure",async t=>{
  const stateRoot=mkdtempSync(path.join(os.tmpdir(),"crm-transition-files-"));t.after(()=>rmSync(stateRoot,{recursive:true,force:true,maxRetries:3,retryDelay:50}));
- const evidence=transition(),plan=legacyTransitionPlan(evidence),caseRoot=transitionCasePath(evidence.request.requestId,stateRoot);
+ const evidence=transition();evidence.service={activeState:"inactive",result:"success",execMainStatus:"0",invocationId:""};const plan=legacyTransitionPlan(evidence),caseRoot=transitionCasePath(evidence.request.requestId,stateRoot);
  writeFileSync(path.join(stateRoot,"request.json"),evidence.rawRequest);writeFileSync(path.join(stateRoot,"latest.json"),evidence.rawLatest);
  const operations=fileArchiveOperations({requestId:evidence.request.requestId,stateRoot,uid:1001,exclusive:async fn=>fn(),read:file=>readFileSync(file,"utf8"),verifyDirectory:()=>{const meta=lstatSync(caseRoot);assert.ok(meta.isDirectory()&&!meta.isSymbolicLink());},collect:()=>clone(evidence)}),persist=operations.persist;let fail=true;
  operations.persist=ledger=>{if(ledger.stage==="ARCHIVED"&&fail){fail=false;throw Error("COMPLETION_WRITE_FAILED");}return persist(ledger);};

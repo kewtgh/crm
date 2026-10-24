@@ -343,6 +343,13 @@ ownership and no deployment-account write access. Do not run root code from the 
 Keep all invocation logs; do not reset the failed unit or restart deployment before collecting them.
 Set the following placeholders from the original state and trusted journal, not from a guessed date:
 
+Historical failure is established by the specified invocation's unique trusted manager exit event:
+PID1, UID0, the exact CRM UNIT/INVOCATION_ID, EXIT_CODE=exited and EXIT_STATUS=1. Its cursor and
+integer microsecond timestamp must be complete, with the original attempt and service/error output
+bound to that exit. Conflicting exits are rejected. Current systemctl observations prove only that
+the service is inactive/failed. Current success, cleared InvocationID or a different inactive
+invocation does not replace or invalidate the historical event; running/unknown states still block.
+
 ```sh
 REQUEST=ORIGINAL_REQUEST_UUID
 INVOCATION=FAILED_SYSTEMD_INVOCATION_32_HEX
@@ -355,7 +362,7 @@ sudo /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invo
 sudo chgrp lumina-crm "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
 sudo chmod 0640 "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
 
-# As lumina-crm, with reviewed host settings loaded: plan then approve its exact hash.
+# As lumina-crm: verify historicalExit ID/status/microsecond timestamp/cursor, then approve.
 /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION"
 /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION" --approve=ARCHIVE_PLAN_SHA256
 
@@ -366,6 +373,30 @@ git -C /opt/lumina-crm/source fetch origin main
 cd /opt/lumina-crm/source
 npm run deploy:production:host-check
 npm run deploy:production
+```
+
+Run each step only after the previous step succeeds and its output is reviewed. Capture is exclusive:
+an existing evidence file must not be overwritten or have its producer toolSha256 edited. This repair
+changes the tool hash. An operator must hash and preserve the old root-owned file under a separate
+audited name before capturing with the same reviewed new tool copy. Stop for any incomplete archival
+ledger; do not discard evidence or replace its approval to force a resume. Missing/contradictory
+manager proof, invalid timestamps, changed evidence/source/tool identity, active/unknown service,
+busy locks, business effects, missing accepted-image proof, unknown adoption source or failed host
+preflight all stop the workflow. Never delete request.json, manufacture receipts or upgrade shared
+Docker to bypass these conditions. The archive plan exposes historicalExit for operator review.
+
+For an existing capture only: after confirming there is no incomplete archive and independently
+approving preservation, the operator can retain it under a new name before fresh capture. Verify
+identical SHA-256 and retained ownership/permissions, record the action, and stop on an existing backup:
+
+```sh
+EVIDENCE="/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+BACKUP="$EVIDENCE.before-$TARGET"
+sudo sha256sum -- "$EVIDENCE"
+sudo test ! -e "$BACKUP"
+sudo mv --no-clobber -- "$EVIDENCE" "$BACKUP"
+sudo sha256sum -- "$BACKUP"
+# After reviewing preservation, repeat journal --capture with the reviewed repair copy.
 ```
 
 The journal capture is root-owned, exclusive, bounded and invocation-scoped. It includes trusted

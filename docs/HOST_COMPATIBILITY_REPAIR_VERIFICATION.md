@@ -66,7 +66,7 @@ Primary source checks:
 
 | Check | Result |
 | --- | --- |
-| `npm run test:deploy` | 201 tests: 200 pass, 1 existing PostgreSQL integration skip, 0 fail |
+| `npm run test:deploy` | 206 tests: 205 pass, 1 existing PostgreSQL integration skip, 0 fail |
 | `npm run typecheck` | Pass |
 | `npm run lint` | Pass, 0 errors, 0 warnings |
 | `npm run test:public-privacy` | 14 pass, 0 fail |
@@ -134,3 +134,37 @@ Full application build, database suite and dependency audit were not rerun for t
 Private before/after/deployment/lint logs are retained under ignored `work/host-shallow-ci-*`.
 Temporary repositories are removed by test teardown. Remote CI still requires the new commit to
 be published and run; local verification is not a remote green result.
+
+## Historical exit versus current systemd state
+
+The transition assessment incorrectly required current Result=exit-code, ExecMainStatus=1 and
+InvocationID to match the failed request's historical invocation. A later inactive/success state
+or cleared ID therefore rejected valid historical proof. No live server changes were made.
+
+The repaired profile v2 separates these authorities:
+
+- Current observation must prove inactive/failed and serviceActive=false. Current result, exit
+  status and invocation remain diagnostic data; another invocation's result cannot prove the old exit.
+- The specified historical invocation needs exactly one manager exit candidate with trusted PID1,
+  UID0, exact UNIT/INVOCATION_ID, exited/1, a nonempty unique cursor and valid microsecond timestamp.
+  A conflicting exit status is not filtered away. Capture rejects absent or invalid exit proof.
+- Attempt start, service source/version/PID/error output and the historical exit are checked using
+  integer microseconds, retaining the existing one-second start tolerance. Post-exit service output,
+  malformed times and incomplete journal records remain blocking.
+- Approval plans expose the verified historicalExit and bind it through the full evidence hash.
+  Request/source hashes, original state, deployment/log inventory, business-effect exclusions,
+  accepted runtime image checks, locks and durable request archival are unchanged.
+
+Regression tests first reproduced the old rejection, then covered inactive/success with both empty
+and newer current invocation IDs; forged PID/UID/UNIT/ID/status, missing and contradictory exits,
+ambiguous cursors, invalid or unbound times, and running/unknown current states. Missing historical
+proof is tested to stop before any archive state write or rename. File-backed interrupted archival
+now also runs with current inactive/success and preserves original request/latest bytes.
+
+Verification on Node 24.22.1 / npm 12.2.1: 14 focused tests pass; deployment suite 205 pass / 1 existing
+PostgreSQL skip / 0 fail; typecheck and lint pass, lint has no warnings. No application build,
+production access, Docker mutation or database operation was performed. Temporary test repositories
+are removed by teardown; private logs remain under ignored `work/legacy-historical-exit-*`.
+Updated English and Chinese runbooks contain journal → archive → adopt commands and stop conditions.
+Existing captures must retain their original bytes/tool identity; recapture using the reviewed new
+tool after separately preserving the old file. Incomplete archival ledgers require independent audit.

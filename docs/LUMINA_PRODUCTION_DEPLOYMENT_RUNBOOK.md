@@ -141,6 +141,14 @@ npm run deploy:production
 不要先 reset-failed、重启部署或清理日志。必须从原状态和 systemd 日志取得真实 request/invocation，
 以下占位值不是自动推断或补造的证据：
 
+历史失败只认指定 invocation 的可信 journald manager 退出事件：`_PID=1`、`_UID=0`、
+`UNIT=lumina-crm-deploy.service`、匹配的 `INVOCATION_ID`、`EXIT_CODE=exited`、`EXIT_STATUS=1`。
+该 invocation 的退出候选必须唯一，cursor 和微秒时间戳必须完整，Bootstrap 输出与入口错误必须位于
+原 attempt 的时间窗口内且不晚于历史退出事件。矛盾的第二个退出事件不能被忽略。
+当前 `systemctl show` 仅确认 `inactive/failed`、服务未运行；它的 Result、ExecMainStatus、InvocationID
+不证明也不否定历史失败。当前已为 `inactive/success`、ID 清空或变为另一 ID 时，不会把当前结果冒充旧结果。
+当前 active/activating/deactivating/reloading 或状态不明仍停止；其他来源、Journal、镜像与锁检查不变。
+
 ```sh
 REQUEST=ORIGINAL_REQUEST_UUID
 INVOCATION=FAILED_SYSTEMD_INVOCATION_32_HEX
@@ -153,7 +161,7 @@ sudo /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" journal --invo
 sudo chgrp lumina-crm "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
 sudo chmod 0640 "/etc/lumina-crm/transition-evidence/$INVOCATION.json"
 
-# lumina-crm：加载已审核宿主机设置；审阅计划的全部证据后批准其哈希。
+# lumina-crm：加载已审核宿主机设置；核对计划 historicalExit 的 ID、状态、微秒时间戳和 cursor。
 /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION"
 /usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" archive --request="$REQUEST" --invocation="$INVOCATION" --approve=ARCHIVE_PLAN_SHA256
 
@@ -165,6 +173,31 @@ cd /opt/lumina-crm/source
 npm run deploy:production:host-check
 npm run deploy:production
 ```
+
+每一条命令成功并完成审核后再运行下一条；两个审批哈希不同，不得复用。`journal --capture`
+使用排他创建：如已有同名文件则停止，不能覆盖或改写旧文件的 `toolSha256`。本补丁改变工具哈希，
+旧工具生成的采集文件不能冒充新工具产物；由管理员记录旧文件哈希、保留原字节和属主，再独立归档
+到另一个审计文件名，随后用同一已审核修复副本重新采集。若已有 APPROVED/ARCHIVE_INTENT 等未完成
+归档，先停止并独立审计，不删除 ledger、更换审批哈希或丢弃旧证据强行继续。
+
+仅在管理员已确认没有未完成归档，并批准保留旧采集文件后，已有文件可按以下步骤独立改名留存，
+前后 SHA-256 必须相同。`TARGET` 必须为上述已审核的完整修复 SHA；备份名已存在时停止，不覆盖：
+
+```sh
+EVIDENCE="/etc/lumina-crm/transition-evidence/$INVOCATION.json"
+BACKUP="$EVIDENCE.before-$TARGET"
+sudo sha256sum -- "$EVIDENCE"
+sudo test ! -e "$BACKUP"
+sudo mv --no-clobber -- "$EVIDENCE" "$BACKUP"
+sudo sha256sum -- "$BACKUP"
+# 审核哈希、原属主/权限与留存记录后，再从 journal --capture 重新开始。
+```
+
+`TRANSITION_HISTORICAL_MANAGER_EXIT_UNVERIFIED`、`TRANSITION_JOURNAL_TIMESTAMP_INVALID`、
+`LEGACY_TRANSITION_EVIDENCE_INCOMPLETE/CHANGED`、身份/源码/工具哈希不匹配、锁占用、服务非静止、
+任何迁移/镜像切换/接受痕迹或缺失镜像证明都必须停止。审批计划的 `historicalExit` 应对应操作者
+已取得的那条历史事件，不用当前 `ExecMainStatus` 替代。adopt 的未知来源或 Host Preflight 失败也停止；
+不通过改 marker、升级共享 Docker、删除 request 或伪造入口凭证解决。
 
 审查同时要求原 request/latest/独立 Bootstrap 一致、固定旧/目标源码执行顺序、完整可信 invocation
 输出与 systemd manager 退出字段、唯一子进程 PID、明确未捕获的入口错误栈、兼容 Node 诊断；

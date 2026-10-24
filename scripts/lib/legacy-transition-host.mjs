@@ -5,7 +5,7 @@ import {fileURLToPath} from "node:url";
 import {HOST_PATHS,HOST_COMPATIBILITY,sha256} from "../../deploy/libexec/lumina-host-contract.mjs";
 import {hostLocksHeld} from "../../deploy/libexec/lumina-host-upgrade.mjs";
 import {collectHostSnapshot} from "./host-preflight.mjs";
-import {assessLegacyTransition,assertLegacyArchiveComplete} from "./legacy-transition-archive.mjs";
+import {assessLegacyTransition,assertLegacyArchiveComplete,deploymentServiceInactive,historicalManagerExit,journalTimestampUs} from "./legacy-transition-archive.mjs";
 
 export const TRANSITION_EVIDENCE_ROOT="/etc/lumina-crm/transition-evidence";
 const unit="lumina-crm-deploy.service";
@@ -26,6 +26,7 @@ export function durableText(file,text,{exclusive=false}={}){
 }
 export function serviceObservation(run=hostRead){
  const fields=Object.fromEntries(run("/usr/bin/systemctl",["show",unit,"--property=ActiveState,Result,ExecMainStatus,InvocationID","--no-pager"]).trim().split(/\r?\n/).map(line=>{const at=line.indexOf("=");return[line.slice(0,at),line.slice(at+1)];}));
+ // These are current observations retained for diagnostics, not historical proof.
  return{activeState:fields.ActiveState,result:fields.Result,execMainStatus:fields.ExecMainStatus,invocationId:fields.InvocationID};
 }
 export function captureTransitionJournal(invocationId,toolSha256,{run=hostRead}={}){
@@ -37,7 +38,10 @@ export function captureTransitionJournal(invocationId,toolSha256,{run=hostRead}=
   const text=run("/usr/bin/journalctl",["--no-pager","--all","--output=json",filter]);
   for(const line of text.trim().split("\n").filter(Boolean)){const entry=JSON.parse(line);if(!entry.__CURSOR)throw new Error("TRANSITION_JOURNAL_CURSOR_MISSING");const prior=entries.get(entry.__CURSOR);if(prior&&JSON.stringify(prior)!==JSON.stringify(entry))throw new Error("TRANSITION_JOURNAL_CONFLICT");entries.set(entry.__CURSOR,entry);}
  }
- return{schemaVersion:1,rootAttested:true,complete:true,invocationId,toolSha256,entries:[...entries.values()].sort((a,b)=>Number(a.__REALTIME_TIMESTAMP)-Number(b.__REALTIME_TIMESTAMP)),service:serviceObservation(run)};
+ const records=[...entries.values()];if(records.some(value=>journalTimestampUs(value.__REALTIME_TIMESTAMP)===null))throw new Error("TRANSITION_JOURNAL_TIMESTAMP_INVALID");
+ const historicalExit=historicalManagerExit({invocationId,entries:records});if(!historicalExit)throw new Error("TRANSITION_HISTORICAL_MANAGER_EXIT_UNVERIFIED");
+ records.sort((a,b)=>{const left=journalTimestampUs(a.__REALTIME_TIMESTAMP),right=journalTimestampUs(b.__REALTIME_TIMESTAMP);return left<right?-1:left>right?1:0;});
+ return{schemaVersion:1,rootAttested:true,complete:true,invocationId,toolSha256,entries:records,historicalExit,service:serviceObservation(run)};
 }
 export function transitionCasePath(requestId,stateRoot=HOST_PATHS.state){if(!uuid(requestId))throw new Error("TRANSITION_REQUEST_INVALID");return path.join(stateRoot,`legacy-transition-${requestId}`);}
 export function assertNoIncompleteLegacyArchives(stateRoot=HOST_PATHS.state){
@@ -82,7 +86,7 @@ export function collectTransitionEvidence({requestId,invocationId,toolSha256,run
   const values=JSON.parse(run("/usr/bin/docker",["container","inspect",ids[0]],{env:environment}));if(values.length!==1||values[0].Id!==ids[0])throw new Error("TRANSITION_RUNTIME_INSPECTION_INVALID");const value=values[0];
   runtime[name]={image:value.Config.Image,imageId:value.Image,state:value.State.Status,health:value.State.Health?.Status,project:value.Config.Labels?.["com.docker.compose.project"],revision:value.Config.Labels?.["org.opencontainers.image.revision"],createdAt:value.Created};
  }
- const service=serviceObservation(run),serviceActive=!["inactive","failed"].includes(service.activeState);
+ const service=serviceObservation(run),serviceActive=!deploymentServiceInactive(service);
  return{request,latest,bootstrap,accepted,journal,sourceProof,state:inventory,runtime,service,serviceActive,rawRequest,rawLatest,toolSha256};
 }
 export function fileArchiveOperations(options){
