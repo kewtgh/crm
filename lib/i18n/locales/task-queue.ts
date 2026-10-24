@@ -1,4 +1,12 @@
 export const taskQueueZh={
+  "taskQueue.reload":"任务信息已变更或缺少当前版本。请刷新后再操作。",
+  "taskQueue.requestConflict":"该请求与原操作不一致，未确认新的完成操作。请刷新任务信息。",
+  "taskQueue.uncertain":"完成结果尚未确认。请重试原请求以确认结果；请勿重新提交其他操作。",
+  "taskQueue.refreshOnly":"完成操作已确认，但工作负载刷新失败。请刷新显示，无需再次完成任务。",
+  "taskQueue.priority":"队列优先级",
+  "taskQueue.reset":"重置队列筛选",
+  "notifications.refreshOnly":"已确认标记已读，但刷新失败。请刷新显示，无需再次标记。",
+  "notifications.uncertain":"标记结果尚未确认。请先刷新通知以确认当前状态。",
   "taskQueue.refresh":"刷新任务队列",
   "taskQueue.scope":"当前快照最多包含 100 条可见待办；筛选和汇总仅针对该快照。今日和逾期筛选显示我的任务。",
   "taskQueue.search":"搜索当前队列中的任务、关联对象或负责人…",
@@ -11,6 +19,14 @@ export const taskQueueZh={
   "savedViews.filterCount":"{count} 项详细筛选",
 };
 export const taskQueueEn={
+  "taskQueue.reload":"Task information changed or its current version is missing. Refresh before acting.",
+  "taskQueue.requestConflict":"This request differs from the original operation. No new completion was confirmed. Refresh task information.",
+  "taskQueue.uncertain":"The completion result is unconfirmed. Retry the original request to confirm it before submitting other work.",
+  "taskQueue.refreshOnly":"Completion was confirmed, but the workload refresh failed. Refresh the display without completing the tasks again.",
+  "taskQueue.priority":"Queue priority",
+  "taskQueue.reset":"Reset queue filters",
+  "notifications.refreshOnly":"Marking as read was confirmed, but refresh failed. Refresh the display without marking again.",
+  "notifications.uncertain":"The read status is unconfirmed. Refresh notifications to confirm the current state first.",
   "taskQueue.refresh":"Refresh task queue",
   "taskQueue.scope":"This snapshot contains up to 100 visible open tasks. Filters and summaries describe that snapshot. Today and overdue filters show my tasks.",
   "taskQueue.search":"Search tasks, related records or owners in this queue…",

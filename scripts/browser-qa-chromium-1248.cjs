@@ -25,7 +25,7 @@ if(process.env.CI==="true"&&gitState!=="clean")throw new Error(`CI browser evide
 
 function envFile(){
   const values={};
-  if(["quality-triage","calendar-exports","action-review","staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
+  if(["task-completion","notification-integrity","quality-triage","calendar-exports","action-review","staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
   const filename=path.resolve(".env.local");
   if(!fs.existsSync(filename))return values;
   for(const raw of fs.readFileSync(filename,"utf8").split(/\r?\n/)){
@@ -360,7 +360,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="quality-triage"){await require("./qa-quality-triage.cjs")({browser,base,output,report});}
+    if(["task-completion","notification-integrity"].includes(env.QA_SCOPE)){await require("./qa-daily-work.cjs")({browser,base,output,report});}
+    else if(env.QA_SCOPE==="quality-triage"){await require("./qa-quality-triage.cjs")({browser,base,output,report});}
     else if(env.QA_SCOPE==="calendar-exports"){await require("./qa-calendar-exports.cjs")({browser,base,output,report});}
     else if(env.QA_SCOPE==="action-review"){await require("./qa-action-review.cjs")({browser,base,output,report});}
     else if(env.QA_SCOPE==="workflow-quality"){await require("./qa-workflow-quality.cjs")({browser,base,output,report,observe});}

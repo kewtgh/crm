@@ -1,4 +1,11 @@
-# Implementation status — v3.40.0 release candidate
+# Implementation status — v3.41.0 release candidate
+
+## v3.41.0 — Task command integrity and notification recovery
+
+Migration 138 advances task revisions for all updates and adds atomic, version-aware completion
+with request receipts. Dashboard/queue recovery, shareable queue views and permission-aligned
+notification controls are implemented. See [audit](FIRST_PRINCIPLES_AUDIT_V341.md),
+[plan](FIRST_PRINCIPLES_PLAN_V341.md) and [verification](V341_VERIFICATION.md).
 
 ## v3.40.0 — Quality governance and current stable dependencies
 

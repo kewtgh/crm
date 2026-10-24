@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.40.0**
+Current release candidate: **v3.41.0**
+
+## v3.41.0 — Reliable daily work and notification recovery
+
+Quick task completion checks observed versions and retains exact-request receipts. Dashboard and
+queue recover uncertain outcomes explicitly; shareable queue search, priority and paging preserve
+directory context. Notification controls follow existing capabilities and serialize refreshes with
+accepted writes. See [audit](docs/FIRST_PRINCIPLES_AUDIT_V341.md),
+[plan](docs/FIRST_PRINCIPLES_PLAN_V341.md), [release notes](docs/RELEASE_V3.41.0.md)
+and [verification](docs/V341_VERIFICATION.md).
 
 ## v3.40.0 — Quality triage and stable dependency refresh
 

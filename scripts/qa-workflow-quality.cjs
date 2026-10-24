@@ -10,7 +10,7 @@ module.exports=async({browser,base,output,report})=>{
     const health=await page.goto(`${base}/api/health`);assert.equal((await health.json()).version,report.evidence.appVersion);
     const id=number=>`00000000-0000-4000-8000-${String(number).padStart(12,"0")}`;
     const dueAt=new Date().toISOString();
-    const items=Array.from({length:25},(_,index)=>({id:id(index+1),titleZh:`示例任务 ${index+1}`,titleEn:`Example Task ${index+1}`,related:"Fictional Academy",status:"TODO",priority:"NORMAL",ownerId:id(index===24?98:99),ownerName:index===24?"Advisor B":"Advisor A",dueAt,slaDueAt:null}));
+    const items=Array.from({length:25},(_,index)=>({id:id(index+1),titleZh:`示例任务 ${index+1}`,titleEn:`Example Task ${index+1}`,related:"Fictional Academy",status:"TODO",priority:"NORMAL",ownerId:id(index===24?98:99),ownerName:index===24?"Advisor B":"Advisor A",dueAt,slaDueAt:null,revision:1}));
     let removed=new Set(),failRead=false,delayRead=false,heldRead=null,failWrite=false,taskWrites=0;
     const saved=[],directoryRequests=[];
     const workspace=()=>({canViewTeam:false,capacity:[],items:items.filter(item=>!removed.has(item.id))});
@@ -25,11 +25,11 @@ module.exports=async({browser,base,output,report})=>{
       if(url.pathname.startsWith("/api/tasks/")&&request.method()==="PATCH"){
         taskWrites++;
         if(failWrite)return route.fulfill({status:409,json:{code:"TASK_STATE_CHANGED"}});
-        removed.add(url.pathname.split("/").at(-1));return route.fulfill({json:{ok:true}});
+        const taskId=url.pathname.split("/").at(-1);removed.add(taskId);return route.fulfill({json:{ids:[taskId],affected:1}});
       }
       if(url.pathname==="/api/tasks"&&request.method()==="POST"){
-        const body=request.postDataJSON();assert.equal(body.operation,"bulkComplete");assert.ok(body.ids.length<=12);assert.ok(body.reason.length>=3);
-        body.ids.forEach(value=>removed.add(value));return route.fulfill({json:{affected:body.ids.length}});
+        const body=request.postDataJSON();assert.equal(body.operation,"bulkComplete");assert.ok(body.tasks.length<=12);assert.ok(body.reason.length>=3);assert.ok(body.requestKey);
+        const ids=body.tasks.map(task=>task.id);ids.forEach(value=>removed.add(value));return route.fulfill({json:{ids,affected:ids.length}});
       }
       if(url.pathname==="/api/crm/schools"){
         directoryRequests.push(Object.fromEntries(url.searchParams));
@@ -80,9 +80,12 @@ module.exports=async({browser,base,output,report})=>{
     assert.equal(await page.locator('.task-work-row').count(),12);failWrite=false;
     delayRead=true;await page.getByRole("button",{name:"Refresh task queue",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.task-work-list p[role="status"]'));
+    assert.equal(await page.locator('.task-work-row .icon-button').first().isDisabled(),true);
+    assert.ok(heldRead);await heldRead.route.fulfill({json:heldRead.data}).catch(()=>{});heldRead=null;
+    await page.waitForFunction(()=>document.querySelector('.task-work-list')?.getAttribute('aria-busy')==='false');
     const before=taskWrites;await page.locator('.task-work-row .icon-button').first().click();
     await page.waitForFunction(()=>!document.querySelector('.task-work-row a[href$="000000000001"]'));
-    assert.equal(taskWrites,before+1);assert.ok(heldRead);await heldRead.route.fulfill({json:heldRead.data}).catch(()=>{});heldRead=null;
+    assert.equal(taskWrites,before+1);
     await page.getByRole("button",{name:"Refresh task queue",exact:true}).waitFor({state:"visible"});
     assert.equal(await page.locator('.task-work-row a[href$="000000000001"]').count(),0);
     await page.locator('.task-work-row input[type=checkbox]').nth(0).check();await page.locator('.task-work-row input[type=checkbox]').nth(1).check();

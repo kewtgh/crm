@@ -483,6 +483,9 @@ body { overflow-x:hidden; }
 .task-queue-summary > span { min-width:0; white-space:normal; }
 .task-queue-scope { margin:0; color:var(--muted); font-size:13px; }
 .task-queue-filters { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.task-queue-controls { border:0; padding:0; margin:0; min-width:0; display:grid; gap:10px; }
+.task-queue-controls .field { min-width:0; }
+.task-queue-controls select { width:100%; max-width:100%; }
 .task-queue-filters .secondary-button { padding:6px 10px; min-height:32px; }
 .task-queue-filters .secondary-button.active { border-color:var(--forest); color:var(--forest); }
 .notification-center>article>div { min-width:0; }

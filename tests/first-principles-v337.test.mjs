@@ -13,24 +13,21 @@ import {loadActionCenter} from '../lib/action-center-repository.ts';
 const id='00000000-0000-4000-8000-000000000001';
 const base={version:1,query:'Example',status:'all',sort:'primary',direction:'asc',pageSize:10};
 
-test('task completion requires the actual row and only updates active incomplete work',async()=>{
+test('task completion requires a confirmed receipt and the observed revision',async()=>{
  let request;
- await completeDashboardTask(id,async(url,init)=>{request={url,init};return [{id}];});
- const url=new URL(request.url,'https://example.test');
- assert.equal(url.searchParams.get('id'),`eq.${id}`);
- assert.equal(url.searchParams.get('archived_at'),'is.null');
- assert.equal(url.searchParams.get('status'),'neq.DONE');
- assert.equal(request.init.headers.Prefer,'return=representation');
+ await completeDashboardTask(id,3,'fictional-task-request',async(url,init)=>{request={url,init};return {ids:[id],affected:1};});
+ assert.equal(request.url,'/db/rpc/complete_crm_tasks_command');
  const body=JSON.parse(request.init.body);
- assert.equal(body.status,'DONE');assert.equal(body.completed_at,body.updated_at);
+ assert.deepEqual(body.command,{operation:'complete',tasks:[{id,expectedRevision:3}]});
+ assert.equal(body.p_request_key,'fictional-task-request');
 });
 
 test('zero, unexpected and malformed completion results never produce success',async()=>{
  for(const value of [undefined,null,[],{},[{id:'different'}],[{id},{id}]]){
-  await assert.rejects(completeDashboardTask(id,async()=>value),error=>error instanceof DatabaseRequestError&&error.status===409&&error.code==='TASK_STATE_CHANGED');
+  await assert.rejects(completeDashboardTask(id,1,'fictional-task-request',async()=>value),error=>error instanceof DatabaseRequestError&&error.status===502&&error.code==='INVALID_TASK_COMPLETION_RESULT');
  }
  const denied=new DatabaseRequestError(403,'DATABASE_PERMISSION_DENIED','synthetic failure');
- await assert.rejects(completeDashboardTask(id,async()=>{throw denied;}),error=>error===denied);
+ await assert.rejects(completeDashboardTask(id,1,'fictional-task-request',async()=>{throw denied;}),error=>error===denied);
 });
 
 test('new views round-trip complete directory filters and clear filters absent from the saved view',()=>{
