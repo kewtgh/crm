@@ -74,3 +74,26 @@ No persistent application identity, external communication, financial posting or
 Disposable identities were removed with the test database. The task-owned QA server is stopped
 and its PID file is cleared; production build output and private evidence are retained. The release
 is committed locally, without a push or production deployment.
+
+## CI follow-up for dashboard completion ownership
+
+[CI run 40125482485](https://github.com/kewtgh/crm/actions/runs/40125482485), job `120965871907`,
+failed Build and test for `b9dca6f`: the build succeeded and 444 of 445 main tests passed. Typecheck,
+privacy, lint and the database job passed. Deployment/Worker/dependency-audit steps were skipped.
+The failing frontline test still required `pendingTaskIds` and an inline PATCH in the dashboard,
+although task completion transport and duplicate prevention now belong to `useTaskCompletion`.
+
+The assertion now follows the dashboard's shared completion wiring and pending/uncertain action
+gating. Layout and accepted-row removal checks remain. The existing Chromium dashboard case also
+checks two synchronous clicks produce one request, uncertainty disables competing tasks and explicit
+retry preserves the accepted request bytes. Production code and CI gates are unchanged.
+
+The focused pre-fix file reproduced the same one failure among ten tests. After correction, 24
+targeted tests passed. Reusing the validated v3.42.0 build, the original CI main and CAPTCHA commands
+passed 445 and eight tests respectively, with no failures or skips. They use the npm execution-path
+environment required by the root-redirect server fixture. Changed-file lint passed. The targeted
+Chromium 1248 task phase passed eight checks with no errors/warnings and no browser-created identity.
+Logs and minimized remote failure metadata remain under ignored `work/ci-frontline-assertion/`;
+browser evidence is isolated under `work/browser-qa-chromium-1248/ci-frontline-assertion/`.
+The task-owned QA server was stopped. No new production build, push or remote rerun was performed;
+the corrected commit still requires a new remote CI run after publication.

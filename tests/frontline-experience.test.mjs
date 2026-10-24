@@ -56,7 +56,9 @@ test('Dashboard daily hierarchy precedes launchpad; management summary has no Ex
  assert.match(code,/operational-attention/);assert.match(code,/\{business\}[\s\S]*data-region="quick-navigation"/);
  assert.match(code,/WorkflowLaunchpad audience="daily"/);assert.match(code,/href="\/reports\/executive"/);assert.match(code,/href="\/action-center"/);
  assert.doesNotMatch(code,/\/api\/(management|action-center)|\.reduce\(/);
- assert.match(code,/pendingTaskIds\.current\.has\(task.id\)/);assert.match(code,/method:"PATCH"/);assert.match(code,/focusTasks:current.focusTasks.filter/);
+ assert.match(code,/useTaskCompletion\(\)/);assert.match(code,/completion\.send\(/);
+ assert.match(code,/pending=\{completion\.pending\|\|completion\.uncertain/);
+ assert.match(code,/focusTasks:current.focusTasks.filter/);
  assert.match(code,/growthUnavailable/);assert.match(code,/signals:AttentionItem\[\]=\[\]/);
  assert.match(code,/Object.entries\(snapshot.monthRevenueByCurrency\)/);
 });
