@@ -3,6 +3,10 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  RECYCLE_VERSION_CONFLICT: "recovery.conflict",
+  RECYCLE_REQUEST_CONFLICT: "recovery.requestConflict",
+  RECYCLE_ACCESS_DENIED: "recovery.reload",
+  RECYCLE_INPUT_INVALID: "recovery.reload",
   APPOINTMENT_STATE_CHANGED: "calendarRecovery.conflict",
   APPOINTMENT_REQUEST_CONFLICT: "calendarRecovery.requestConflict",
   APPOINTMENT_FORBIDDEN: "calendarRecovery.forbidden",

@@ -1,12 +1,12 @@
 import {notFound} from "next/navigation";
 import {RecycleBinPage} from "@/components/recycle-bin-page";
-import {DataLoadError} from "@/components/data-state";
 import {getCurrentUser} from "@/lib/auth";
-import {listRecycleBin} from "@/lib/recycle-bin-repository";
+import {loadRecyclePage} from "@/lib/recycle-bin-repository";
+import {readRecycleQuery} from "@/lib/recycle-contract";
 
-export default async function Page(){
-  const user=await getCurrentUser();
-  if(user?.role!=="SUPER_ADMIN")notFound();
-  const items=await listRecycleBin().catch(()=>null);
-  return items?<RecycleBinPage initialItems={items}/>:<DataLoadError detailKey="recycle.loadFailed"/>;
+export default async function Page({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+ const user=await getCurrentUser();if(user?.role!=="SUPER_ADMIN")notFound();const params=await searchParams;
+ const query=readRecycleQuery(new URLSearchParams(Object.entries(params).flatMap(([key,value])=>typeof value==="string"?[[key,value]]:[])));
+ const initial=await loadRecyclePage("workspace",query).catch(()=>null);
+ return <RecycleBinPage initial={initial} initialQuery={query}/>;
 }

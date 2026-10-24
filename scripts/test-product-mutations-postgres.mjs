@@ -87,11 +87,11 @@ try{
   await assert.rejects(client.query("select public.set_product_price($1,'CNY',200,current_date)",[product.id]),/product_not_found/);
   await assert.rejects(client.query("select public.create_quote_v100('ARCHIVED-PRODUCT-QUOTE',$1,null,$2,null,null,'CNY',100,0,current_date+1)",[organization,product.id]),/quote_product_invalid/);
   await assert.rejects(client.query("select public.create_quote_v100('ARCHIVED-BUNDLE-QUOTE',$1,null,null,$2,null,'CNY',100,0,current_date+1)",[organization,bundle.id]),/quote_bundle_invalid/);
-  await assert.rejects(client.query("select public.restore_crm_recycle_bin('PRODUCT',$1)",[product.id]),/super_admin_required/);
+  await assert.rejects(client.query("select public.restore_recycle_record_command('workspace','PRODUCT',$1,(select archived_at from public.products where id=$1),gen_random_uuid()::text)",[product.id]),/recycle_access_denied/);
   await client.query("reset role");
   await client.query("update public.workspace_memberships set role='SUPER_ADMIN' where user_id=$1",[user]);
   await client.query("set role crm_app");
-  await client.query("select public.restore_crm_recycle_bin('PRODUCT',$1)",[product.id]);
+  await client.query("select public.restore_recycle_record_command('workspace','PRODUCT',$1,(select archived_at from public.products where id=$1),gen_random_uuid()::text)",[product.id]);
   const restored=(await catalog()).find(item=>item.id===product.id);
   assert.equal(restored.active,true);
   assert.equal(restored.isDefault,false);

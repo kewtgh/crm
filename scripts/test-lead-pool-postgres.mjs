@@ -118,9 +118,9 @@ try{
  assert.equal((await client.query('select count(*)::int n from public.lead_pool_records where id=$1',[deleteTarget.id])).rows[0].n,0);
  await assert.rejects(save(deleteTarget.id,deleted.revision,{next_action:'Cannot edit a deleted lead'}),/lead_forbidden/);
  await context(stranger,otherWs);await assert.rejects(archive(deleteTarget.revision),/lead_forbidden/);
- await context();await assert.rejects(client.query("select public.restore_crm_recycle_bin('LEAD',$1)",[deleteTarget.id]),/super_admin_required/);
+ await context();await assert.rejects(client.query("select public.restore_recycle_record_command('workspace','LEAD',$1,(select archived_at from public.leads where id=$1),gen_random_uuid()::text)",[deleteTarget.id]),/recycle_access_denied/);
  await client.query('reset role');await client.query("update public.workspace_memberships set role='SUPER_ADMIN' where workspace_id=$1 and user_id=$2",[ws,admin]);await context();
- await client.query("select public.restore_crm_recycle_bin('LEAD',$1)",[deleteTarget.id]);
+ await client.query("select public.restore_recycle_record_command('workspace','LEAD',$1,(select archived_at from public.leads where id=$1),gen_random_uuid()::text)",[deleteTarget.id]);
  assert.equal((await client.query('select count(*)::int n from public.lead_pool_records where id=$1',[deleteTarget.id])).rows[0].n,1);
  // Directory filters operate before count/paging, with real canonical columns.
  await client.query('reset role');await client.query("update public.students set current_grade='G8',academic_year='2026-2027' where id=$1",[student]);await client.query("update public.organizations set city='Example City',curriculum='IB' where id=$1",[o]);await context();
@@ -149,7 +149,7 @@ try{
  assert.equal((await client.query('select public.get_channel_agreements($1) item',[o])).rows[0].item.items.length,0);
  const recycled=(await client.query('select public.list_deleted_business_records() item')).rows[0].item;assert.ok(recycled.some(item=>item.kind==='CHANNEL_AGREEMENT_VERSION'&&item.id===versionId));assert.ok(recycled.some(item=>item.kind==='CHANNEL_AGREEMENT'&&item.id===agreementId));
  await assert.rejects(client.query('select public.save_channel_agreement($1,$2,null,$3,$4)',[agreementId,randomUUID(),agreementData,randomUUID()]),/not_found/);
- await client.query("select public.restore_crm_recycle_bin('CHANNEL_AGREEMENT',$1)",[agreementId]);await client.query("select public.restore_crm_recycle_bin('CHANNEL_AGREEMENT_VERSION',$1)",[versionId]);
+ await client.query("select public.restore_recycle_record_command('workspace','CHANNEL_AGREEMENT',$1,(select archived_at from public.channel_agreements where id=$1),gen_random_uuid()::text)",[agreementId]);await client.query("select public.restore_recycle_record_command('workspace','CHANNEL_AGREEMENT_VERSION',$1,(select archived_at from public.channel_agreement_versions where id=$1),gen_random_uuid()::text)",[versionId]);
  assert.equal((await client.query('select public.get_channel_agreements($1) item',[o])).rows[0].item.items[0].versions.length,1);
  // Price cleanup cannot select another tenant or silently reuse an archived current price.
  await client.query("select public.set_product_price($1,'CNY',250,current_date)",[product]);
@@ -164,7 +164,7 @@ try{
  assert.equal((await client.query('select count(*)::int n from public.education_outreach_events where id=$1',[eventId])).rows[0].n,0);
  await assert.rejects(client.query("select public.save_education_business('events',$1,$2,$3)",[eventId,event.revision+1,{organization_id:o,partner_organization_id:null,name:'Cannot modify a removed event',kind:'SEMINAR',starts_on:'2026-10-04',ends_on:'2026-10-04',location:'Campus',capacity:null,attendee_count:null,status:'CONFIRMED',next_action:'',campaign_id:null,product_id:product,cohort_id:cohort}]),/forbidden|deleted/);
  await context(stranger,otherWs);await assert.rejects(cleanup('OUTREACH_EVENT',eventId,event.revision,event.updatedAt,randomUUID()),/forbidden/);
- await context();await client.query("select public.restore_crm_recycle_bin('OUTREACH_EVENT',$1)",[eventId]);assert.equal((await client.query('select count(*)::int n from public.education_outreach_events where id=$1',[eventId])).rows[0].n,1);
+ await context();await client.query("select public.restore_recycle_record_command('workspace','OUTREACH_EVENT',$1,(select archived_at from public.education_outreach_events where id=$1),gen_random_uuid()::text)",[eventId]);assert.equal((await client.query('select count(*)::int n from public.education_outreach_events where id=$1',[eventId])).rows[0].n,1);
  // Archiving an Enrollment with active related facts is blocked without removing those facts.
  const enrolled=(await client.query("select public.list_deletable_business_records('ENROLLMENT',$1,1,20) item",[eid])).rows[0].item.items[0];assert.ok(enrolled);
  await client.query('reset role');await client.query("update public.workspace_memberships set role='SALES_SUPPORT' where workspace_id=$1 and user_id=$2",[ws,sales]);await context(sales);

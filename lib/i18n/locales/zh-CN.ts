@@ -1,3 +1,4 @@
+import {recoveryZh} from "./recovery-workspace";
 import {qualityTriageZh} from "./quality-triage";
 import {calendarRecoveryZh} from "./calendar-recovery";
 import {actionReviewZh} from "./action-review";
@@ -53,6 +54,7 @@ import { zhV390 } from "./v390";
 import { zhAudit20260926 } from "./audit-2026-09-26";
 
 export const zhCN: Messages = {
+  ...recoveryZh,
   "staff.reporting.requiresTeam": "参与销售统计需要销售业务岗位，以及有效团队 / 区域成员关系。",
   "staff.removal.deactivateFirst": "请先停用账户，再清理业务关联后重新检查。",
   "staff.removal.references": "当前仍有业务关联，请清理或转交后重新检查删除资格。",

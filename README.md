@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.41.0**
+Current release candidate: **v3.42.0**
+
+## v3.42.0 — Complete and verifiable record recovery
+
+The recycle bin uses complete server pagination and shareable search, resource and cleanup-state
+filters. Restoration binds the exact deletion to a durable receipt, with explicit retry and
+accepted-restore display recovery. Personal and workspace scope remain distinct; retention labels
+state cleanup eligibility rather than promise physical deletion. See [audit](docs/FIRST_PRINCIPLES_AUDIT_V342.md),
+[plan](docs/FIRST_PRINCIPLES_PLAN_V342.md), [release notes](docs/RELEASE_V3.42.0.md)
+and [verification](docs/V342_VERIFICATION.md).
 
 ## v3.41.0 — Reliable daily work and notification recovery
 

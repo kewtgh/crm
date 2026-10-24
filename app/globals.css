@@ -486,6 +486,11 @@ body { overflow-x:hidden; }
 .task-queue-controls { border:0; padding:0; margin:0; min-width:0; display:grid; gap:10px; }
 .task-queue-controls .field { min-width:0; }
 .task-queue-controls select { width:100%; max-width:100%; }
+.recovery-filters { border:0; padding:0; margin:12px 0 18px; min-width:0; display:grid; grid-template-columns:minmax(150px,1.5fr) repeat(2,minmax(120px,1fr)); gap:12px; align-items:end; }
+.recovery-filters .field,.recovery-filters .search-field { min-width:0; }
+.recovery-filters select { width:100%; max-width:100%; }
+.recovery-record-link { align-self:flex-start; }
+@media(max-width:760px){.recovery-filters{grid-template-columns:minmax(0,1fr)}.recovery-page .recycle-list article{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px}.recovery-page .recycle-list article>div{min-width:0;overflow-wrap:anywhere}.recovery-page .recycle-list article>.secondary-button{justify-self:start}.recovery-page .page-heading-row .secondary-button{white-space:normal}}
 .task-queue-filters .secondary-button { padding:6px 10px; min-height:32px; }
 .task-queue-filters .secondary-button.active { border-color:var(--forest); color:var(--forest); }
 .notification-center>article>div { min-width:0; }

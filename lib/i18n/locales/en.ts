@@ -1,3 +1,4 @@
+import {recoveryEn} from "./recovery-workspace";
 import {qualityTriageEn} from "./quality-triage";
 import {calendarRecoveryEn} from "./calendar-recovery";
 import {actionReviewEn} from "./action-review";
@@ -54,6 +55,7 @@ import { enV390 } from "./v390";
 import { enAudit20260926 } from "./audit-2026-09-26";
 
 export const en: Messages = {
+  ...recoveryEn,
   "staff.reporting.requiresTeam": "Sales reporting requires a Sales business function and an active team / region membership.",
   "staff.removal.deactivateFirst": "Suspend this account first, then clear business links and check again.",
   "staff.removal.references": "Current business links remain. Clear or reassign them, then check deletion eligibility again.",

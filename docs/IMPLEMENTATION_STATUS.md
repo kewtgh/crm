@@ -1,4 +1,11 @@
-# Implementation status — v3.41.0 release candidate
+# Implementation status — v3.42.0 release candidate
+
+## v3.42.0 — Recovery identity and complete archived-record views
+
+Migration 139 provides authorized global recovery queries and archive-token-bound restoration
+receipts. Complete pagination, URL triage views, consistent cleanup metadata, read recovery and
+explicit uncertain-request confirmation are implemented. See [audit](FIRST_PRINCIPLES_AUDIT_V342.md),
+[plan](FIRST_PRINCIPLES_PLAN_V342.md) and [verification](V342_VERIFICATION.md).
 
 ## v3.41.0 — Task command integrity and notification recovery
 
