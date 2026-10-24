@@ -112,7 +112,7 @@ test("dependency policy pins patched advisories without weakening CI", async () 
   assert.match(workflow, /npm audit --audit-level=moderate/);
 });
 
-test("independent CI audit projects pin patched sharp including native binaries", async () => {
+test("independent CI audit projects pin patched sharp and Miniflare HTTP dependencies", async () => {
   const workerRoot = new URL("../infrastructure/email-delivery-worker/", import.meta.url);
   const [manifest, lock, workflow] = await Promise.all([
     readFile(new URL("package.json", workerRoot), "utf8").then(JSON.parse),
@@ -120,6 +120,10 @@ test("independent CI audit projects pin patched sharp including native binaries"
     readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
   ]);
   assert.equal(manifest.overrides.sharp, "0.35.5");
+  assert.equal(manifest.overrides["miniflare@5.20261019.2-beta"].undici, "7.30.1");
+  const undiciEntries = Object.entries(lock.packages).filter(([key]) => key.endsWith("node_modules/undici"));
+  assert.ok(undiciEntries.length, "Miniflare's installed HTTP client must be represented in the worker lockfile");
+  for (const [key, entry] of undiciEntries) assert.equal(entry.version, "7.30.1", `${key} must not retain vulnerable undici`);
   assert.deepEqual(lock.packages[""].devDependencies, manifest.devDependencies);
   const sharpEntries = Object.entries(lock.packages).filter(([key]) => key.endsWith("node_modules/sharp"));
   assert.ok(sharpEntries.length, "worker audit has its own transitive sharp dependency");

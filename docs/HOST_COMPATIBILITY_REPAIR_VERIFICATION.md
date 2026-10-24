@@ -168,3 +168,53 @@ are removed by teardown; private logs remain under ignored `work/legacy-historic
 Updated English and Chinese runbooks contain journal → archive → adopt commands and stop conditions.
 Existing captures must retain their original bytes/tool identity; recapture using the reviewed new
 tool after separately preserving the old file. Incomplete archival ledgers require independent audit.
+
+## Independent CI dependency-audit follow-up
+
+[Run 40083087211, quality job](https://github.com/kewtgh/crm/actions/runs/40083087211/job/120840460937)
+passed typecheck, lint, application build/tests and deployment control-plane tests. Its database job
+also passed. The remaining failure was dependency audit: the independent email Worker installed
+Wrangler 4.152.0 → Miniflare 5.20261019.2-beta → undici 7.29.1, affected by newly indexed advisories.
+The root project audit was clean. CI stopped before auditing the planning project; checking that
+project independently also exposed fast-uri 3.1.8 through Prisma's Ajv dependency.
+
+The fixes are limited to those dependency paths:
+
+- The Worker scopes an undici 7.30.1 override to its existing Miniflare version. Wrangler and
+  Miniflare are unchanged; the Worker lockfile changes only undici version, tarball and integrity.
+  Latest stable Wrangler still selected the affected client at verification time. The maintained
+  [undici 7.30.1 security release](https://github.com/nodejs/undici/releases/tag/v7.30.1) fixes the
+  EventSource, content-encoding and integrity-check issues and supports the pinned Node runtime.
+- The planning lockfile updates fast-uri to 3.1.9 within Ajv's existing ^3.0.1 requirement. Prisma,
+  Ajv and the planning manifest are unchanged. The upstream
+  [fast-uri advisory](https://github.com/advisories/GHSA-w74x-v6f9-j3xg) identifies this patched 3.x
+  version; related host, relative-path and suffix-reference advisories share that fix boundary.
+- CI now clean-installs and tests the independent Worker before the existing three-project audit.
+  The moderate threshold and all audit commands remain intact. No audit fix --force, Wrangler
+  downgrade, advisory suppression, major client upgrade or runtime change is introduced.
+
+The new loopback-only security test resolves the actual HTTP client used by Miniflare. Before the
+fix, an incorrect SHA256 integrity digest was accepted, reproducing the advisory. After the fix,
+lowercase, uppercase and mixed-case algorithm tokens all reject incorrect digests and accept the
+correct digest. Worker tests and its syntax-check script include this test; the existing repository
+dependency policy also verifies the independent lockfile's patched client.
+
+Local verification on Node 24.22.1 / npm 12.2.1:
+
+| Check | Result |
+| --- | --- |
+| Clean npm ci in Worker and planning projects | Pass |
+| npm audit --audit-level=moderate, root / Worker / planning | 0 vulnerabilities in each |
+| Worker functional/email/security tests | 125 pass |
+| Worker deployment-controller tests | 83 pass, including real no-upload Wrangler dry-run |
+| Repository dependency-security policy tests | 8 pass |
+| Lint of modified JS test files | Pass, no warnings |
+| Planning Prisma schema validation | Pass, no database connection or migration |
+
+The first Prisma invocation could not update its global engine cache under the filesystem sandbox.
+Validation then used a SHA-256-checked copy of the matching existing engine under ignored work/,
+selected with PRISMA_SCHEMA_ENGINE_BINARY and a fictional database URL. The temporary engine copy
+is removed after verification; global cache and database resources are unchanged. Raw validation
+logs stay under ignored work/. No repeated full application build or database suite was needed for
+this dependency-only change. A remote green workflow still requires publishing and running the
+new commit; local audit success is not a remote CI result.

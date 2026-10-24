@@ -73,6 +73,12 @@ jobs:
           git fetch --no-tags --depth=1 origin 796cc43e63784eb8891ca6420572cd563cb2ac80 c164ff1524192b7d699dae1962c02bf72566407b 44b2ff8c05a89986fa05e650aa368b009983e2d6
           npm run test:deploy
 
+      - name: Verify email Worker dependency security
+        timeout-minutes: 3
+        run: |
+          npm --prefix infrastructure/email-delivery-worker ci --no-audit --no-fund
+          npm --prefix infrastructure/email-delivery-worker test
+
       - name: Audit dependencies
         timeout-minutes: 3
         run: |
