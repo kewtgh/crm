@@ -66,7 +66,7 @@ Primary source checks:
 
 | Check | Result |
 | --- | --- |
-| `npm run test:deploy` | 206 tests: 205 pass, 1 existing PostgreSQL integration skip, 0 fail |
+| `npm run test:deploy` | 213 tests: 212 pass, 1 existing PostgreSQL integration skip, 0 fail |
 | `npm run typecheck` | Pass |
 | `npm run lint` | Pass, 0 errors, 0 warnings |
 | `npm run test:public-privacy` | 14 pass, 0 fail |
@@ -218,3 +218,56 @@ is removed after verification; global cache and database resources are unchanged
 logs stay under ignored work/. No repeated full application build or database suite was needed for
 this dependency-only change. A remote green workflow still requires publishing and running the
 new commit; local audit success is not a remote CI result.
+
+## Compose security-model false-positive repair
+
+The production probe's unquoted tmpfs flow-array entry was valid YAML with unintended semantics:
+real Compose 2.40.3 parsed it as four mounts. Mock-produced byte-normalized JSON concealed both
+that defect and a second difference: config --no-interpolate retained mem_limit as "512m", while
+the previous validator required a numeric byte count. The probe now quotes the complete tmpfs
+entry and accepts only exact 512 MiB byte equivalence. noexec, nosuid and nodev remain mandatory;
+contradictory options, other limits, public ports and changed security fields are rejected.
+
+The [tagged Compose config implementation](https://github.com/docker/compose/blob/v2.40.3/cmd/compose/config.go)
+supports the production arguments used unchanged in integration. Both official release artifacts
+were downloaded and verified against the
+[release checksum manifest](https://github.com/docker/compose/releases/download/v2.40.3/checksums.txt):
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Windows x86_64 | 4c864dd7f879dd40366e087e68a8a02cbcf018be0128867b13369898e67e1532 |
+| Linux x86_64 | dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372 |
+
+The real integration runs docker compose config with the actual production-exported YAML and
+arguments; no adapter supplies normalized JSON. It verifies user, init, read_only, cap_drop,
+security_opt, pids_limit, mem_limit, cpus, tmpfs, internal network attachment and loopback ports.
+The original unquoted input is also fed to real Compose and must reproduce four tmpfs items and
+fail security validation. Real malformed YAML must be classified separately. Execution/YAML/model/
+JSON/security failures have distinct statuses; individual mismatches report fixed field names,
+expected policy and observed types, without raw stderr, configuration values or environment dumps.
+Adoption forwards these redacted capability details. No other host blocking predicate is relaxed.
+
+Conditional adoption-plan tests feed the actual Compose result into explicit fixture observations
+for the other host checks, confirm ready=true and the capabilities row READY, and confirm other
+failed host gates remain blocking. This is not a claim that this workstation or production passed
+all real host checks. Completed Legacy archival is left alone; the new staging workflow is adopt-only.
+
+Local results on Node 24.22.1 / npm 12.2.1:
+
+- Real Docker CLI plus official Compose 2.40.3 Windows plugin: pass with private configuration and
+  an unreachable daemon socket. The integration first reproduced the tmpfs failure, then passed
+  after quoting. It found the retained "512m" representation using the real --no-interpolate path.
+- Targeted capability/control-plane/integration tests: 42 pass.
+- npm run test:deploy: 212 pass / 1 existing PostgreSQL-condition skip / 0 fail, including the real
+  Compose integration and original cross-commit tests.
+- npm run typecheck and npm run lint: pass, lint without warnings.
+
+Ubuntu execution is mandatory in the added CI integration, which downloads/verifies the Linux
+2.40.3 plugin and checks Ubuntu identity. It was not executed locally: only Docker Desktop's WSL
+distribution is installed, and it was not started or changed for this task. An explicitly reviewed
+Ubuntu package plugin reporting 2.40.3+ds1-0ubuntu1 is supported by the version gate. Remote Ubuntu
+CI and production adopt remain pending operator publication/execution; no green result is fabricated.
+The tested Windows plugin is retained as ignored test tooling; duplicate/unused download scratch
+and regenerable caches are cleaned, while verification logs remain under ignored work/compose-security-*.
+No production server, root-owned repair staging copy, completed archive, latest.json, container,
+host package, Builder marker or database was changed by this repository implementation.

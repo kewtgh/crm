@@ -18,7 +18,7 @@ import {sourceAdoptionPlan} from "../scripts/deploy-legacy-transition.mjs";
 const repository=fileURLToPath(new URL("..",import.meta.url));
 const legacy="796cc43e63784eb8891ca6420572cd563cb2ac80",failure="c164ff1524192b7d699dae1962c02bf72566407b",target="b".repeat(40),uid=1001,invocation="f".repeat(32);
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`,clone=value=>JSON.parse(JSON.stringify(value));
-const model={services:{web:{user:"10001:10001",init:true,read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"],pids_limit:256,mem_limit:536870912,cpus:1,tmpfs:["/tmp:rw,noexec,nosuid,nodev"],ports:[{host_ip:"127.0.0.1"}]}},networks:{backend:{internal:true}}};
+const model={services:{web:{user:"10001:10001",init:true,read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"],pids_limit:256,mem_limit:536870912,cpus:1,tmpfs:["/tmp:rw,noexec,nosuid,nodev"],networks:{backend:null},ports:[{host_ip:"127.0.0.1",target:3200,published:"3200",protocol:"tcp"}]}},networks:{backend:{internal:true}}};
 function capabilityRun(command,args,env,input){assert.equal(command,"/usr/bin/docker");assert.ok(args.includes("--help")||args.includes("config"));if(args.includes("--help"))return{status:0,stdout:REQUIRED_DOCKER_CAPABILITIES.find(p=>JSON.stringify(p.args)===JSON.stringify(args)).flags.join(" ")};assert.ok(input.includes("example.invalid/fictional-crm"));return{status:0,stdout:JSON.stringify(model)};}
 function snapshot(image="moby/buildkit:v0.33.1"){
  const endpoint="unix:///run/user/1001/docker.sock",fingerprint="f".repeat(64);

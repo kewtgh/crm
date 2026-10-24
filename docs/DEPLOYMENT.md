@@ -422,6 +422,42 @@ the same hash and UUID. It neither starts deployment nor changes last-success. T
 deployment creates a fresh request ID. Repository tests do not prove this production request safe;
 the host evidence assessment must pass first.
 
+### Compose capability repair after completed Legacy archival
+
+Keep completed archives and latest.json unchanged. Do not run journal/archive again. Do not edit
+the previously reviewed root-owned repair copy. Independently review the new full commit and stage
+it in a new root-owned directory readable, but not writable, by lumina-crm:
+
+```sh
+TARGET=NEW_FULL_REVIEWED_COMMIT_SHA
+REPAIR="/opt/lumina-crm-repair/$TARGET"
+# After separately staging/reviewing that new directory, run as lumina-crm:
+git -C /opt/lumina-crm/source fetch origin main
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET"
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET" --approve=NEW_ADOPTION_PLAN_SHA256 --operation=NEW_OPERATION_UUID
+cd /opt/lumina-crm/source
+npm run deploy:production:host-check
+```
+
+The plan must pass every real host check. Use its newly generated approval hash without editing or
+reusing old approvals. Stop on any blocking check, unaudited source/target, busy lock or incomplete
+archive/adoption operation. Adoption only updates source; it does not start application deployment.
+
+The probe's tmpfs flow-array entry must be quoted, preserving one mount with rw/noexec/nosuid/nodev.
+Compose 2.40.3 config --no-interpolate retains human-readable memory limits such as 512m; validation
+accepts exact 512 MiB equivalence rather than relaxing the limit. It checks normalized UID, init,
+read-only rootfs, dropped capabilities, privilege policy, resource limits, tmpfs options, internal
+network attachment and explicit loopback TCP port mapping. Command execution, YAML parsing, model
+validation, JSON formatting and security-field mismatches have separate redacted diagnoses.
+Adoption failures expose these as hostCapabilities without raw stderr or configuration values.
+
+Host/CI test:deploy includes a real docker compose config integration using the production YAML,
+private plugin/config directories and an unreachable daemon socket. A checksum-pinned 2.40.3
+plugin is mandatory; Ubuntu CI must run it. An explicitly reviewed Ubuntu package plugin can be
+supplied through LUMINA_COMPOSE_2403_PATH and must report 2.40.3, including supported package suffixes.
+Source-only Docker verification uses test:deploy:raw without Git or this native integration runtime.
+No host software, Docker daemon, Builder ownership data, other containers or database is modified.
+
 The controller writes one exclusive `request.json` with mode `initialize`, `deploy`, `rollback`, or
 `recover`. Production deployment is always two-stage: the stable bootstrap reads the request while
 the systemd `flock` owns the deployment lock, validates/fetches/fast-forwards the exact production

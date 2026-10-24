@@ -214,6 +214,44 @@ controllerStarted=true、recoverySafe=false；不会伪造旧入口凭证。落�
 UUID 恢复；它不启动应用、不改 last-success。最后普通 deploy 创建全新 Request ID。
 仓库测试不能证明当前生产遗留请求已安全；必须现场证据检查通过后才允许归档。
 
+### 0.7 已完成 Legacy 归档后：Compose 探测修复与 adopt
+
+已完成归档时，不再执行 journal/archive，不改 `latest.json`、归档证据或既有审批记录。
+Compose 探测 YAML 的 tmpfs 必须为 `tmpfs: ["/tmp:rw,noexec,nosuid,nodev"]`；未加引号时逗号会
+产生四个数组元素。2.40.3 在生产探测参数 `--no-interpolate` 下还可能保留 `mem_limit: "512m"`，
+诊断器按精确字节等价确认 512 MiB，同时检查 noexec/nosuid/nodev、内部网络和 loopback 端口。
+不会通过忽略字段、接受其他内存限额或改宿主机版本门槛消除误报。
+
+诊断区分 COMMAND_FAILED、YAML_INVALID、MODEL_INVALID、JSON_INVALID、SECURITY_MISMATCH；
+MISSING 只表示缺少所需命令选项。字段不匹配列出固定字段路径、期望和脱敏类型，不回显原 stderr、
+JSON 值或环境变量。adopt 的 HOST_PREFLIGHT_FAILED 会带 `hostCapabilities`，应逐项处理。
+
+不要修改原 root-owned 审核目录，包括先前 44a59518… 的副本。对新的完整提交重新审核、分发到
+新的独立 root-owned 目录，确保 lumina-crm 可读但不可写；不要把旧目录内容替换后继续使用旧审批。
+下列命令由操作者执行，不能把审批哈希占位值当成已批准的值：
+
+```sh
+TARGET=NEW_FULL_REVIEWED_COMMIT_SHA
+REPAIR="/opt/lumina-crm-repair/$TARGET"
+# 先完成该新目录的独立分发、源码/哈希与权限审核。以下以 lumina-crm 身份运行。
+git -C /opt/lumina-crm/source fetch origin main
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET"
+# 核对目标、工具哈希、静态契约和完整 Host Preflight；仅使用上条计划生成的新哈希。
+/usr/bin/node "$REPAIR/scripts/deploy-legacy-transition.mjs" adopt --target="$TARGET" --approve=NEW_ADOPTION_PLAN_SHA256 --operation=NEW_OPERATION_UUID
+cd /opt/lumina-crm/source
+npm run deploy:production:host-check
+```
+
+第一条 adopt 仅生成计划；第二条经明确批准后仅 fast-forward 源码，不创建部署请求、不启动应用。
+存在任一阻断诊断、源码/目标不受审计范围支持、锁冲突、未完成归档或旧 source-adoption 操作时停止。
+不得更改审批哈希、删 ledger 或重做已完成归档来继续。全部现场检查通过后，再按原发布流程创建新请求。
+无需因此修改 Ubuntu Docker、维护程序安装、Builder marker、其他项目容器或数据库。
+
+开发验证使用 `npm run test:deploy`：先准备经官方 SHA-256 校验的 Compose 2.40.3 测试插件，
+通过私有 Docker 配置及不可达 socket 执行真实 config，直接输入生产探测器 YAML。Ubuntu CI 强制
+运行该集成测试；支持显式的 `LUMINA_COMPOSE_2403_PATH` 指向经审核的 Ubuntu 2.40.3 包内插件，
+不能用其他版本替代。完整测试不把 fixture 宿主机状态当作生产 READY 证明，现场仍须运行上述计划。
+
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
 > Forward migrations require proven image/schema compatibility; public-edge failure can leave a healthy candidate pending acceptance.

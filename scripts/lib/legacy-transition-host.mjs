@@ -101,5 +101,8 @@ export function transitionToolHash(sourceRoot=path.resolve(path.dirname(fileURLT
  const files=["scripts/deploy-legacy-transition.mjs","scripts/lib/legacy-transition-host.mjs","scripts/lib/legacy-transition-archive.mjs","deploy/libexec/host-compatibility-catalog.json","scripts/lib/host-preflight.mjs","scripts/lib/host-capabilities.mjs","scripts/lib/host-trust.mjs","scripts/lib/docker-build-proxy.mjs","scripts/lib/deployment-runtime.mjs","deploy/libexec/lumina-host-contract.mjs","deploy/libexec/lumina-host-upgrade.mjs","deploy/libexec/host-runtime-contract.json"];
  return sha256(JSON.stringify(Object.fromEntries(files.map(file=>[file,sha256(readFileSync(path.join(sourceRoot,file)))]))));
 }
-export function describeTransitionFailure(error){return{error:error.message,missing:error.assessment?.missing??[],failed:error.assessment?.failed??[],remediation:"Preserve all evidence. Obtain an independent operator audit if invocation logs, immutable source proof or accepted runtime observations cannot prove absence of business effects."};}
+export function describeTransitionFailure(error){
+ const capabilities=error.code==="HOST_PREFLIGHT_FAILED"?error.diagnostics?.diagnostics?.find(row=>row.component==="docker.capabilities")?.current?.results:null;
+ return{error:error.message,missing:error.assessment?.missing??[],failed:error.assessment?.failed??[],...(Array.isArray(capabilities)?{hostCapabilities:capabilities}:{}),remediation:error.code==="HOST_PREFLIGHT_FAILED"?"Resolve the listed blocking host/probe checks using the new reviewed tool. Parsing or output-format errors do not establish a missing host capability; do not alter approval hashes or completed archives.":"Preserve all evidence. Obtain an independent operator audit if invocation logs, immutable source proof or accepted runtime observations cannot prove absence of business effects."};
+}
 export {assessLegacyTransition,HOST_COMPATIBILITY};
