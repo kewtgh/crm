@@ -39,7 +39,8 @@ jobs:
             package="${spec%%:*}"
             pattern="${spec#*:}"
             printf 'V1_PACKAGE_STAGE=SELECT_%s\n' "$package"
-            version="$(apt-cache madison "$package" | awk -v pattern="$pattern" '$3 ~ pattern {print $3; exit}')"
+            available_versions="$(apt-cache madison "$package")"
+            version="$(awk -v pattern="$pattern" '$3 ~ pattern && !selected {selected=$3} END {print selected}' <<< "$available_versions")"
             if test -z "$version"; then printf 'V1_PACKAGE_VERSION_UNAVAILABLE=%s\n' "$package"; exit 1; fi
             printf 'V1_PACKAGE_STAGE=DOWNLOAD_%s_%s\n' "$package" "$version"
             apt-get download "$package=$version"
