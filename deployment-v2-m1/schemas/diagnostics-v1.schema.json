@@ -1,0 +1,602 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lumina/m1/diagnostics-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "lumina.deployment.diagnostics"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": "0.1.0-experimental"
+        },
+        "releaseDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "policyVersion": {
+          "const": 1
+        },
+        "productionApproved": {
+          "const": false
+        },
+        "provenance": {
+          "const": "UNATTESTED_M1"
+        }
+      },
+      "required": [
+        "version",
+        "releaseDigest",
+        "policyVersion",
+        "productionApproved",
+        "provenance"
+      ]
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "string",
+          "maxLength": 24,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 45000
+        },
+        "readOnly": {
+          "const": true
+        },
+        "networkMode": {
+          "const": "NONE"
+        },
+        "scope": {
+          "const": "NONPRODUCTION_TEST"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "at",
+        "durationMs",
+        "readOnly",
+        "networkMode",
+        "scope",
+        "complete"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "pattern": "^host-[a-f0-9-]{36}$",
+      "maxLength": 41
+    },
+    "versions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "type": "string",
+            "enum": [
+              "node",
+              "docker",
+              "compose",
+              "buildx"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNKNOWN",
+              "NOT_RUN"
+            ]
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24,
+                "pattern": "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "component",
+          "status",
+          "version"
+        ]
+      }
+    },
+    "checks": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checkId": {
+            "type": "string",
+            "enum": [
+              "host.platform",
+              "host.identity",
+              "host.os",
+              "docker.socket",
+              "docker.config",
+              "docker.data-directory",
+              "docker.info",
+              "docker.version",
+              "docker.rootless",
+              "docker.data-root",
+              "docker.cgroup",
+              "docker.isolation",
+              "compose.version",
+              "compose.security-model",
+              "buildx.version",
+              "systemd.user-bus",
+              "systemd.manager",
+              "systemd.docker",
+              "systemd.agent",
+              "cgroup.controllers",
+              "storage.capacity",
+              "state.snapshot"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNKNOWN",
+              "NOT_RUN"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "BLOCKING",
+              "WARNING"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "MATCH",
+              "LINUX_REQUIRED",
+              "PROJECT_UID_MISMATCH",
+              "METADATA_PERMISSION_DENIED",
+              "METADATA_MISSING",
+              "METADATA_READ_FAILED",
+              "RESOURCE_TYPE_MISMATCH",
+              "RESOURCE_OWNER_MISMATCH",
+              "RESOURCE_PERMISSIONS_UNSAFE",
+              "RESOURCE_PATH_UNTRUSTED",
+              "DEPENDENCY_UNRESOLVED",
+              "COMMAND_TIMEOUT",
+              "COMMAND_OUTPUT_LIMIT",
+              "COMMAND_SPAWN_FAILED",
+              "COMMAND_NONZERO_EXIT",
+              "COMMAND_EXECUTABLE_UNTRUSTED",
+              "JSON_INVALID",
+              "JSON_SHAPE_INVALID",
+              "INFO_FIELD_MISSING",
+              "INFO_FIELD_INVALID",
+              "DAEMON_NOT_ROOTLESS",
+              "DATA_ROOT_MISMATCH",
+              "CGROUP_CONFIGURATION_MISMATCH",
+              "VERSION_INVALID",
+              "VERSION_NOT_BASELINE",
+              "COMPOSE_SECURITY_MISMATCH",
+              "OS_NOT_BASELINE",
+              "USER_MANAGER_RESPONSE_INVALID",
+              "SERVICE_STATUS_INVALID",
+              "SERVICE_NOT_RUNNING",
+              "NOT_INSTALLED",
+              "CONTROLLERS_MISSING",
+              "CAPACITY_BELOW_MINIMUM",
+              "CAPACITY_UNAVAILABLE",
+              "M1_COLLECTION_NOT_IMPLEMENTED",
+              "M1_STORE_READER_NOT_IMPLEMENTED",
+              "READ_FAILED"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "PLATFORM",
+              "READ_METADATA",
+              "EXECUTE",
+              "PARSE",
+              "EVALUATE"
+            ]
+          },
+          "dependsOn": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "enum": [
+                "host.platform",
+                "host.identity",
+                "host.os",
+                "docker.socket",
+                "docker.config",
+                "docker.data-directory",
+                "docker.info",
+                "docker.version",
+                "docker.rootless",
+                "docker.data-root",
+                "docker.cgroup",
+                "docker.isolation",
+                "compose.version",
+                "compose.security-model",
+                "buildx.version",
+                "systemd.user-bus",
+                "systemd.manager",
+                "systemd.docker",
+                "systemd.agent",
+                "cgroup.controllers",
+                "storage.capacity",
+                "state.snapshot"
+              ]
+            }
+          },
+          "expected": {
+            "type": "null"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "matches": {
+                    "type": "boolean"
+                  },
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "version": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "pattern": "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"
+                  },
+                  "installed": {
+                    "type": "boolean"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "mismatches": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "init",
+                        "read_only",
+                        "cap_drop",
+                        "cap_add",
+                        "privileged",
+                        "security_opt",
+                        "tmpfs",
+                        "pids_limit",
+                        "mem_limit",
+                        "cpus",
+                        "networks",
+                        "ports",
+                        "backend.internal"
+                      ]
+                    }
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "inactive",
+                      "failed",
+                      "activating",
+                      "deactivating",
+                      "unknown"
+                    ]
+                  }
+                },
+                "required": []
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errno": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ENOENT",
+                  "EACCES",
+                  "EPERM",
+                  "ETIMEDOUT",
+                  "EIO",
+                  "EROFS",
+                  "ENOSPC",
+                  "EBUSY",
+                  "EINVAL",
+                  "UNKNOWN"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 45000
+          },
+          "remediationId": {
+            "type": "string",
+            "enum": [
+              "REVIEW_PROJECT_SCOPE",
+              "RESOLVE_DEPENDENCY_FIRST",
+              "REVIEW_OBSERVATION"
+            ]
+          }
+        },
+        "required": [
+          "checkId",
+          "status",
+          "severity",
+          "code",
+          "stage",
+          "dependsOn",
+          "expected",
+          "observed",
+          "exitCode",
+          "errno",
+          "durationMs",
+          "remediationId"
+        ]
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "const": "UNAVAILABLE"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "oneshot.lifecycle",
+              "rootless.limits",
+              "storage.power-loss",
+              "memory.hard-rss"
+            ]
+          },
+          "requiredLayer": {
+            "type": "string",
+            "enum": [
+              "L2",
+              "L3"
+            ]
+          },
+          "result": {
+            "const": "NOT_RUN"
+          },
+          "reason": {
+            "const": "OUTSIDE_READ_ONLY_SCOPE"
+          }
+        },
+        "required": [
+          "id",
+          "requiredLayer",
+          "result",
+          "reason"
+        ]
+      }
+    },
+    "compatibilityCertified": {
+      "const": false
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pass": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "fail": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "notRun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 128
+        },
+        "blocking": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "enum": [
+              "host.platform",
+              "host.identity",
+              "host.os",
+              "docker.socket",
+              "docker.config",
+              "docker.data-directory",
+              "docker.info",
+              "docker.version",
+              "docker.rootless",
+              "docker.data-root",
+              "docker.cgroup",
+              "docker.isolation",
+              "compose.version",
+              "compose.security-model",
+              "buildx.version",
+              "systemd.user-bus",
+              "systemd.manager",
+              "systemd.docker",
+              "systemd.agent",
+              "cgroup.controllers",
+              "storage.capacity",
+              "state.snapshot"
+            ]
+          }
+        },
+        "partialReason": {
+          "anyOf": [
+            {
+              "const": "OBSERVATIONS_INCOMPLETE"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "pass",
+        "fail",
+        "unknown",
+        "notRun",
+        "blocking",
+        "partialReason"
+      ]
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileVersion": {
+          "const": 1
+        },
+        "pseudonyms": {
+          "const": "PER_REPORT"
+        },
+        "rawIncluded": {
+          "const": false
+        },
+        "omitted": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "enum": [
+              "PATHS",
+              "UIDS",
+              "RAW_OUTPUT",
+              "ENVIRONMENT",
+              "HOST_IDENTITY"
+            ]
+          }
+        }
+      },
+      "required": [
+        "profileVersion",
+        "pseudonyms",
+        "rawIncluded",
+        "omitted"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deadlineMs": {
+          "const": 45000
+        },
+        "outputBytesMaximum": {
+          "const": 1048576
+        },
+        "observedPeakRssBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217728
+        },
+        "rssLimitBytes": {
+          "const": 134217728
+        },
+        "hardRssLimit": {
+          "const": false
+        }
+      },
+      "required": [
+        "deadlineMs",
+        "outputBytesMaximum",
+        "observedPeakRssBytes",
+        "rssLimitBytes",
+        "hardRssLimit"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "tool",
+    "capture",
+    "subject",
+    "versions",
+    "checks",
+    "state",
+    "capabilities",
+    "compatibilityCertified",
+    "summary",
+    "redaction",
+    "budget"
+  ]
+}

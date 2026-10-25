@@ -1,6 +1,6 @@
 # 开发 / 生产隔离下的环境复现与 CI 验证
 
-M0 v0.2 将验证位置与证据能力分开。开发 / CI 测试不在生产宿主机运行；生产只允许受审只读适配。当前所有新增 Linux / 按需生命周期 / 现场适配能力均为 NOT_RUN，没有因本次文档修订获得运行认证。
+M0 v0.2 将验证位置与证据能力分开。开发 / CI 测试不在生产宿主机运行；生产只允许受审只读适配。M1 已有 [本地实施与能力清单](m1/acceptance.md)，Windows 原生 SQLite / 进程和 Compose parser 结果单列；新增 Linux / systemd / Rootless / 现场适配仍为 NOT_RUN，没有从配置或模拟获得动态认证。
 
 ## 目标环境与软件来源
 
@@ -49,7 +49,7 @@ L0 模拟和 L1 真实 CLI 分开标记；L2 / L3 要有实际系统证据。每
 
 ## 按需生命周期与真实测试矩阵
 
-M1 只实现未来测试 harness / 诊断 MVP 和可行性验证，不替换 V1。oneshot 的进程 / 持久化小型 harness 不等于完整应用发布验证；后者留在 M3。当前下列动态测试均 NOT_RUN。
+M1 实现独立测试 harness / 诊断 MVP 和可行性验证，不替换 V1。oneshot 的进程 / 持久化小型 harness 不等于完整应用发布验证；后者留在 M3。下列 Linux 动态门槛仍 NOT_RUN；已执行的 Windows 子集及其方法见 [M1 验收](m1/acceptance.md)。
 
 | ID / 阶段 | 位置与真实方法 | 必须观察的判定 | 缺条件时 |
 | --- | --- | --- | --- |
@@ -96,7 +96,7 @@ M1 不以常驻 daemon 作默认对照依赖。如果 oneshot 出现可复现的
 | 外部 CI L1 | 既有 runner；候选 2 vCPU / 4 GiB | 每 job 20 分钟；测试 scratch 12 GiB；正式应用构建使用原 CI 预算 | 新建生产 runner / 服务器，未批准付费扩容 |
 | 非生产 L2 | 已有或另行批准的专用 Linux；候选 4 vCPU / 8 GiB | 每组 30 分钟，scratch 20 GiB；包含虚构 canary | 影响其他共享任务 / 在生产代跑 |
 | 非生产 L3 | 仅已有或另行批准的可丢弃环境 | 每组 45 分钟；使用 VM 时磁盘上限 40 GiB、单并发 | 为满足 gate 在生产建 VM 或重启生产 |
-| 生产 P0 | 无 Agent daemon / DB 服务；一个短诊断进程 | 总计 45 秒、候选 RSS 128 MiB、报告 1 MiB；顺序采集、默认无网络 | 负载测试、创建持久状态库、安装 unit、读取业务数据库 |
+| 生产 P0 | 无 Agent daemon / DB 服务；按需短诊断进程树 | 合计 45 秒、候选 RSS 128 MiB、报告 1 MiB；顺序采集、默认无网络；M1 supervisor / collector 实测不含 Linux 查询子进程，尚未获准 P0 | 负载测试、创建持久状态库、安装 unit、读取业务数据库 |
 
 Agent 正式部署的生产预算另见 [最小增量](06-release-and-agent-lifecycle.md#生产最小增量与资源预算)，不与测试设施预算混为一谈。只读 P0 的安全上限也要先在 L1 / L2 测量，不能为了取得测量数据在生产压测。
 

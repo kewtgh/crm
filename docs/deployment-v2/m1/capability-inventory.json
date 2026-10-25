@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m1.reviewed-capability-inventory",
+  "reviewedOn": "2026-10-25",
+  "baselineCommit": "0e786b190ceabbb0716cac4242b0ed8d82313669",
+  "applicationVersion": "3.44.0",
+  "platform": "win32",
+  "node": "24.22.1",
+  "sqlite": "3.53.4",
+  "nativeLockProfile": "WINDOWS_SQLITE_ONLY",
+  "compatibleWithProduction": false,
+  "capabilities": [
+    {
+      "id": "node.runtime",
+      "result": "PASS",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "process.version",
+      "reason": "PIN_COMPARISON"
+    },
+    {
+      "id": "sqlite.transaction",
+      "result": "PASS",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "real SQLite schema, SELECT and transaction",
+      "reason": "EMBEDDED_NO_SERVICE"
+    },
+    {
+      "id": "fictional-task.native-process",
+      "result": "PASS",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "CLI child + SQLite + exclusive effect receipt",
+      "reason": "NO_DATABASE_OR_CONTAINER_TASK"
+    },
+    {
+      "id": "linux.flock",
+      "result": "NOT_RUN",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "worker validates its own /proc/locks identity",
+      "reason": "LINUX_UNAVAILABLE"
+    },
+    {
+      "id": "linux.filesystem",
+      "result": "NOT_RUN",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "fsync file and directory; normal execution only",
+      "reason": "LINUX_UNAVAILABLE"
+    },
+    {
+      "id": "compose.actual-parser",
+      "result": "PASS",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "pinned 2.40.3 real config + malformed tmpfs regression; no daemon",
+      "reason": "PARSER_ONLY_NOT_ROOTLESS"
+    },
+    {
+      "id": "systemd.user-manager.access",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "read-only fixed manager property",
+      "reason": "MANAGER_NOT_VALIDATED"
+    },
+    {
+      "id": "systemd.oneshot.lifecycle",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "tests/systemd.test.mjs requires explicit isolated user-manager execution",
+      "reason": "NO_EXECUTED_L2_EVIDENCE"
+    },
+    {
+      "id": "rootless.docker",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "no approved project policy supplied; no daemon fallback",
+      "reason": "NO_ISOLATED_ROOTLESS_EVIDENCE"
+    },
+    {
+      "id": "cgroup.v2.limits",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "configuration alone is insufficient",
+      "reason": "NO_DYNAMIC_LIMIT_TEST"
+    },
+    {
+      "id": "system.reboot",
+      "result": "NOT_RUN",
+      "scope": "L3",
+      "evidence": "no disposable reboot target provided",
+      "reason": "NO_ISOLATED_REBOOT_TARGET"
+    },
+    {
+      "id": "storage.power-loss",
+      "result": "NOT_RUN",
+      "scope": "L3",
+      "evidence": "no disposable power-loss target provided",
+      "reason": "NO_ISOLATED_POWER_LOSS_TARGET"
+    },
+    {
+      "id": "ci.linux.definition",
+      "result": "NOT_RUN",
+      "scope": "REPOSITORY_CONFIGURATION",
+      "evidence": ".github/workflows/ci.yml and deployment-v2-m1.yml",
+      "reason": "CONFIGURED_NOT_EXECUTED_FOR_THIS_COMMIT"
+    },
+    {
+      "id": "compose.daemon-integration",
+      "result": "NOT_RUN",
+      "scope": "EXTERNAL_LINUX",
+      "evidence": "acceptance.md",
+      "reason": "PARSER_IS_NOT_CONTAINER_EXECUTION"
+    },
+    {
+      "id": "process.crash-injection",
+      "result": "PASS",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "../../../deployment-v2-m1/tests/lifecycle.test.mjs",
+      "reason": "REAL_WINDOWS_PROCESSES_EXIT_23_24_AND_KILL"
+    },
+    {
+      "id": "terminal.disconnect",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "lifecycle-decision.md",
+      "reason": "REAL_SESSION_HANGUP_NOT_TESTED"
+    },
+    {
+      "id": "ci.service.metadata",
+      "result": "PASS",
+      "scope": "READ_ONLY_SERVICE_METADATA",
+      "evidence": "https://github.com/kewtgh/crm/actions/runs/40172579587",
+      "reason": "HISTORICAL_APP_COMMIT_ONLY_NOT_M1_LINUX_EVIDENCE",
+      "headSha": "926819e566c5736e83817cd55e45dbf3e5337e66"
+    },
+    {
+      "id": "wsl.enumeration-probe",
+      "result": "FAIL",
+      "scope": "LOCAL_NATIVE",
+      "evidence": "wsl.exe --list --quiet",
+      "exitCode": 4294967295,
+      "reason": "INTERFACE_QUERY_FAILED_NOT_PROOF_OF_NO_INSTALLED_DISTRO"
+    }
+  ],
+  "evidencePolicy": {
+    "rawLogsPublished": false,
+    "actualProductionObservations": "NOT_RUN",
+    "injectedLinuxObservationsAreDynamicEvidence": false
+  }
+}

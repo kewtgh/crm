@@ -1,0 +1,51 @@
+name: Deployment V2 M1 experiments
+
+on:
+  pull_request:
+    paths: ["deployment-v2-m1/**", ".github/workflows/deployment-v2-m1.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install development tooling only
+        run: npm install --global npm@12.2.1
+      - name: Install locked development dependencies
+        run: npm ci --no-audit --no-fund
+        timeout-minutes: 5
+      - name: Typecheck isolated experiment
+        run: node node_modules/@typescript/native/bin/tsc -p deployment-v2-m1/tsconfig.json
+      - name: Lint isolated experiment
+        run: node node_modules/eslint/bin/eslint.js deployment-v2-m1/src deployment-v2-m1/tools deployment-v2-m1/tests
+      - name: Native SQLite, Linux flock and simulated observation tests
+        run: node scripts/run-bounded.mjs --label m1-unit --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-m1/tests/*.test.mjs
+      - name: Prepare pinned parser in test workspace
+        run: |
+          mkdir -p work/deployment-v2-m1
+          curl --fail --location --max-time 45 https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64 --output work/deployment-v2-m1/compose
+          echo 'dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372  work/deployment-v2-m1/compose' | sha256sum --check
+          chmod 700 work/deployment-v2-m1/compose
+      - name: Real Compose parser without daemon access
+        env:
+          M1_COMPOSE_BINARY: ${{ github.workspace }}/work/deployment-v2-m1/compose
+        run: node deployment-v2-m1/tools/compose-integration.ts
+      - name: Minimized capability inventory
+        env:
+          M1_COMPOSE_BINARY: ${{ github.workspace }}/work/deployment-v2-m1/compose
+        run: node deployment-v2-m1/tools/inventory.ts --output work/deployment-v2-m1/ci-inventory.json
+      - name: Public privacy contracts
+        run: npm run test:public-privacy
+      # No production credentials, application deployment, unit installation, reboot,
+      # rootless provisioning, self-hosted runner, or raw artifact publication.

@@ -1,6 +1,8 @@
 # 生产环境独立只读诊断包规范
 
-协议名：`lumina.deployment.diagnostics`，schema version：1。这里交付的是规范，尚无可在生产执行的 V2 诊断程序。管理员未来可单独取得受审包，在本机运行并手动传出 JSON；Codex 不访问该主机。
+协议名：`lumina.deployment.diagnostics`，schema version：1。这里保留 M0 生产规范；已有 [M1 独立实验 MVP](../../deployment-v2-m1/README.md) 和 [Schema](../../deployment-v2-m1/schemas/diagnostics-v1.schema.json)，但尚无可获准在生产执行的 V2 诊断包。M1 强制 NONPRODUCTION_TEST / UNATTESTED_M1，未完成下面全部采集或发行要求。管理员未来可单独取得受审包，在本机运行并手动传出 JSON；Codex 不访问该主机。
+
+M1 已实现固定 Docker / Compose / systemctl 查询、元数据 / cgroup / 容量、首因依赖与脱敏；未实现 dpkg / kernel 来源锁、Buildx plugin 采集、V1 parser、SQLite 安全只读 / hot-journal reader、可选 HTTP 健康或签名私有运行时。Buildx 与 state reader 明确 NOT_RUN，未列入 MVP 的其他项不能从现有字段推导为通过；具体证据及 P0 阻断见 [M1 验收](m1/acceptance.md)。
 
 ## 目的与非目标
 
@@ -20,7 +22,7 @@ P0 只观测管理员声明的既有 CRM UID / socket / data-root、工具版本
 
 ## 运行与时限约束
 
-拟定接口：`lumina-diagnostics collect --policy <reviewed-local-policy> --output <new-local-json>`，属于待实现名称。policy 仅列项目身份、允许资源及预先受审的本地健康地址，不允许自定义命令。
+正式拟定接口：`lumina-diagnostics collect --policy <reviewed-local-policy> --output <new-local-json>`，属于待实现名称。M1 使用独立 Node CLI 实验，不安装此命令。正式 policy 仅列项目身份、允许资源及预先受审的本地健康地址，不允许自定义命令；M1 更小 policy 完全没有网络健康能力。
 
 工具包由管理员事先验证并放在受控路径；collector 不自行下载、解包安装或创建运行服务。需要临时签名诊断包时，由管理员单独准备和收回，其空间纳入预算，不能借“临时”绕过生产只读采集契约。
 
@@ -30,6 +32,8 @@ P0 只观测管理员声明的既有 CRM UID / socket / data-root、工具版本
 - 候选 RSS 上限 128 MiB、顺序采集、无常驻子进程；在非生产 L1 / L2 先测量，不为设置限额新建生产 unit 或调整主机 cgroup。结束后仅保留管理员指定报告。
 - 输出新文件必须 exclusive create、0600、父目录可信，拒绝 symlink / overwrite。写入失败返回独立错误，不在 stderr 退回原始观测。
 - 默认禁止网络，包括公网健康和 DNS 查询。明确启用 `local-health` 才访问 policy 中的固定 loopback 端点，不跟随重定向，不记录响应正文。独立的 `edge-health` 扩展须由管理员另外指定允许地址，不自动启用。
+
+M1 在开发侧先生成独立纯 JavaScript 包，再用短 supervisor / collector 限时和限制输出；运行时不解析 TypeScript。48 MiB V8 old-space 及 RSS / 两进程峰值和检查不是内核硬 RSS 限制。Windows 提前判定平台不适用的路径实测约 120.3 MiB；尚未测 Linux 查询子进程和整体限额，不能据此获准 P0，也不为补证在生产新增 unit。
 
 ## 采集白名单
 
