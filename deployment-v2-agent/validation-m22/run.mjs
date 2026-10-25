@@ -105,6 +105,12 @@ try {
     report.metrics.stateBytes = fs.statSync(`${root}/state.sqlite`).size;
   });
   phase = 'SETUP';
+  const engineBinary = profile === '26.04' ? find([`${engineRoot}/usr/bin/dockerd`, `${engineRoot}/usr/sbin/dockerd`]) : '/usr/bin/dockerd';
+  if (engineBinary) {
+    report.environment.engineBinary = exec(engineBinary, ['--version']).match(/\b(\d+\.\d+\.\d+)\b/)?.[1];
+    if (profile === '26.04' && report.environment.engineBinary === '29.1.3') mark('target-engine', 'PASS');
+    else mark('target-engine', 'NOT_RUN', 'TARGET_VERSION_MISMATCH');
+  } else mark('target-engine', 'NOT_RUN', 'PACKAGES_UNAVAILABLE');
   for (const [id, binary, expected] of [['target-compose', compose, '2.40.3'], ['target-buildx', buildx, '0.30.1']]) {
     const key = id.slice(7);
     if (!binary) { mark(id, 'NOT_RUN', 'PACKAGES_UNAVAILABLE'); continue; }
@@ -114,9 +120,6 @@ try {
   phase = 'DAEMON';
   if (!dockerBin || !rootlessScript || !fs.existsSync('/usr/bin/rootlesskit') || !fs.existsSync('/usr/bin/newuidmap')) missingRootless('HELPER_UNAVAILABLE');
   else await rootless();
-  if (!report.environment.engine) mark('target-engine', 'NOT_RUN', 'PACKAGES_UNAVAILABLE');
-  else if (report.environment.engine === '29.1.3' && profile === '26.04') mark('target-engine', 'PASS');
-  else mark('target-engine', 'NOT_RUN', 'TARGET_VERSION_MISMATCH');
   const target = ['ubuntu', 'target-engine', 'target-compose', 'target-buildx', 'rootless-isolation', 'rootless-kernel-config', 'rootless-memory', 'rootless-cpu', 'rootless-pids', 'rootless-compose'];
   if (profile === '26.04' && target.every(id => report.cases[id].status === 'PASS')) mark('target-combination', 'PASS');
   else mark('target-combination', 'NOT_RUN', 'TARGET_VERSION_MISMATCH');
@@ -155,7 +158,11 @@ async function rootless() {
       : /Failed to connect to bus|cgroup.*delegat/i.test(log) ? 'CGROUP_USER_BUS_UNAVAILABLE'
       : /executable file not found|command not found|no such file/i.test(log) ? 'ENGINE_RUNTIME_MISSING'
       : /failed to start daemon|invalid argument/i.test(log) ? 'ENGINE_CONFIGURATION_REJECTED' : 'UNCLASSIFIED_PRIVATE_LOG';
-    report.daemonFailure = { reason, exitCode: Number(show(daemonUnit).ExecMainStatus), words: failureWords(log) };
+    const denied = log.split('\n').filter(line => /permission denied/i.test(line)).join('\n');
+    const executable = denied.includes('/proc/self/exe') ? 'ROOTLESSKIT_SELF'
+      : denied.includes(rootlessScript) ? 'VENDOR_LAUNCHER' : /dockerd/.test(denied) ? 'DOCKERD'
+      : /newuidmap|newgidmap/.test(denied) ? 'UIDMAP_HELPER' : 'OTHER';
+    report.daemonFailure = { reason, exitCode: Number(show(daemonUnit).ExecMainStatus), words: failureWords(log), executable };
     missingRootless('DAEMON_START_FAILED'); return;
   }
   const sampleDaemon = suffix => { const s = sample(daemonUnit); Object.assign(report.metrics,
@@ -163,6 +170,7 @@ async function rootless() {
       daemonMemoryPeakBytes: s.peak, daemonCpuUsec: s.cpu }); save(); };
   await check('rootless-isolation', async () => {
     const info = JSON.parse(docker(['info', '--format', '{{json .}}'])); report.environment.engine = info.ServerVersion.match(/^[\d.]+/)?.[0];
+    if (profile === '26.04') assert.equal(report.environment.engine, report.environment.engineBinary);
     assert(info.SecurityOptions.some(v => v.includes('rootless'))); assert.equal(info.DockerRootDir, dataRoot);
     assert.equal(fs.statSync(socket).uid, process.getuid()); assert.equal(fs.statSync(dataRoot).uid, process.getuid());
     assert.equal(info.CgroupVersion, '2'); assert.equal(info.CgroupDriver, 'systemd');

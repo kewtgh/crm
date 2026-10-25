@@ -114,6 +114,11 @@ cleanup() {
   sudo cp /home/lumina-m22-fixture/lab/report.json work/ci-private/m22-report.json 2>/dev/null || true
   sudo cp /home/lumina-m22-fixture/lab/errors.json work/ci-private/m22-errors.json 2>/dev/null || true
   sudo chown "$(id -u):$(id -g)" work/ci-private/*.json 2>/dev/null || true
+  # Read only this disposable VM's kernel audit; publish solely a fixed profile alias and
+  # whether an exec denial matches the fresh fixture UID. No raw kernel log is uploaded.
+  if sudo journalctl --dmesg --since '-5 minutes' --no-pager --output=cat > work/ci-private/m22-kernel.private.log 2>/dev/null; then
+    M22_FIXTURE_UID="$fixture_uid" node --input-type=module -e 'import fs from "node:fs";const p="work/ci-private/m22-report.json",r=JSON.parse(fs.readFileSync(p));const uid=process.env.M22_FIXTURE_UID;const lines=fs.readFileSync("work/ci-private/m22-kernel.private.log","utf8").split("\n").filter(l=>l.includes("fsuid="+uid+" ")&&l.includes("apparmor=\"DENIED\"")&&l.includes("operation=\"exec\""));r.facts.apparmorExecDenied=lines.length>0;if(lines.length&&r.daemonFailure){const profile=lines[0].match(/profile="([^"]+)"/)?.[1];r.daemonFailure.apparmorProfile=["unprivileged_userns","rootlesskit"].includes(profile)?profile:"OTHER";}fs.writeFileSync(p,JSON.stringify(r));' || true
+  fi
   if test -d /home/lumina-m22-fixture/lab/docker-data; then
     sudo du -s -B1 /home/lumina-m22-fixture/lab/docker-data > work/ci-private/m22-disk 2>/dev/null || true
   fi

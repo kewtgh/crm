@@ -76,7 +76,7 @@ export function summary(raw, context) {
       ...(['SETUP', 'MANAGER', 'AGENT', 'DAEMON', 'CONFIG', 'MEMORY', 'CPU', 'PIDS', 'COMPOSE', 'CLEANUP'].includes(item.phase) ? { phase: item.phase } : {}) };
   });
   const environment = {};
-  for (const key of ['ubuntu', 'kernel', 'node', 'systemd', 'engine', 'compose', 'buildx', 'rootlesskit']) if (version(raw.environment?.[key])) environment[key] = raw.environment[key];
+  for (const key of ['ubuntu', 'kernel', 'node', 'systemd', 'engine', 'engineBinary', 'compose', 'buildx', 'rootlesskit']) if (version(raw.environment?.[key])) environment[key] = raw.environment[key];
   for (const key of ['managerBefore', 'managerAfterInjection', 'managerAfterCleanup']) if (['running', 'degraded'].includes(raw.environment?.[key])) environment[key] = raw.environment[key];
   const metrics = {}; for (const key of METRICS) if (integer(raw.metrics?.[key])) metrics[key] = raw.metrics[key];
   const kernel = {}; for (const phase of ['config', 'cpu', 'pids', 'memory']) {
@@ -94,7 +94,7 @@ export function summary(raw, context) {
   const facts = {}; for (const key of ['initialExtrasInstalled', 'initialRootlessScript', 'initialRootlesskit', 'officialDockerSourceConfigured',
     'enginePackageUnchanged', 'dedicatedUid', 'socketOwned', 'dataRootOwned', 'rootlessReported',
     'cgroupV2', 'systemdDriver', 'controllersDelegated', 'baselineFailuresPreserved', 'agentIdle',
-    'daemonStopped', 'lingerDisabled', 'managerStopped']) if (typeof raw.facts?.[key] === 'boolean') facts[key] = raw.facts[key];
+    'daemonStopped', 'lingerDisabled', 'managerStopped', 'apparmorExecDenied']) if (typeof raw.facts?.[key] === 'boolean') facts[key] = raw.facts[key];
   const legacy = {}; for (const key of ['update', 'helpers', 'extras']) {
     if (['PLAN_AVAILABLE', 'SOURCE_SIGNED_BY_CONFLICT', 'SIGNATURE_REJECTED', 'EXTRAS_VERSION_ABSENT',
       'REPOSITORY_UNAVAILABLE', 'APT_LOCK_BUSY', 'NETWORK_OR_TLS', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.legacy?.[key])) legacy[key] = raw.legacy[key];
@@ -110,6 +110,8 @@ export function summary(raw, context) {
     'ENGINE_CONFIGURATION_REJECTED', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.daemonFailure?.reason)) daemonFailure.reason = raw.daemonFailure.reason;
   if (integer(raw.daemonFailure?.exitCode) && raw.daemonFailure.exitCode <= 255) daemonFailure.exitCode = raw.daemonFailure.exitCode;
   if (Array.isArray(raw.daemonFailure?.words)) daemonFailure.words = raw.daemonFailure.words.filter(word => FAILURE_WORDS.includes(word)).slice(0, 32);
+  if (['ROOTLESSKIT_SELF', 'VENDOR_LAUNCHER', 'DOCKERD', 'UIDMAP_HELPER', 'OTHER'].includes(raw.daemonFailure?.executable)) daemonFailure.executable = raw.daemonFailure.executable;
+  if (['unprivileged_userns', 'rootlesskit', 'OTHER'].includes(raw.daemonFailure?.apparmorProfile)) daemonFailure.apparmorProfile = raw.daemonFailure.apparmorProfile;
   return { schemaVersion: 1, scope: 'NONPRODUCTION_ALPHA', productionApproved: false,
     ...context, sourceDigest: raw.sourceDigest,
     payloadDigest: /^[a-f0-9]{64}$/.test(raw.payloadDigest) ? raw.payloadDigest : null,
