@@ -164,13 +164,15 @@ test("all workflow uploads use the fixed public summary allowlist and never dump
       uploads++;
       const expected = name === '.github/workflows/deployment-v2-agent.yml'
         ? /path: work\/public-artifacts\/deployment-v2-validation-summary\.json\s/
+        : name === '.github/workflows/deployment-v2-rootless.yml'
+          ? /path: work\/public-artifacts\/deployment-v2-rootless-summary\.json\s/
         : /path: work\/public-artifacts\/browser-qa-summary\.json\s/;
       assert.ok(expected.test(block), `WORKFLOW_ARTIFACT_ALLOWLIST:${name}`);
       assert.ok(!/path:.*\*|path: work\/browser-qa/.test(block), `WORKFLOW_RAW_ARTIFACT:${name}`);
       assert.ok(/steps\.public_summary\.outcome == 'success'/.test(block), `WORKFLOW_PUBLICATION_FAILURE_GATE:${name}`);
     }
   }
-  assert.equal(uploads, 2);
+  assert.equal(uploads, 3);
   const release = readFileSync(path.join(root, ".github/workflows/full-release-gate.yml"), "utf8");
   assert.ok(/publish-public-ci-artifacts\.mjs/.test(release), "PUBLIC_SUMMARY_STEP_REQUIRED");
   assert.ok(/ci:private-stage -- release/.test(release), "PRIVATE_RELEASE_CAPTURE_REQUIRED");
