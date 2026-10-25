@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m1.local-measurements",
+  "platform": "win32",
+  "node": "24.22.1",
+  "worker": {
+    "peakRssBytes": 79798272,
+    "cpuMicroseconds": 108000,
+    "wallMs": 179,
+    "sqliteBytes": 32768,
+    "effects": 1
+  },
+  "diagnostics": {
+    "executionProfile": "PRECOMPILED_JAVASCRIPT",
+    "bundleBytesExcludingNode": 40188,
+    "peakRssBytes": 64720896,
+    "supervisorPeakRssBytes": 61386752,
+    "conservativePeakSumBytes": 126107648,
+    "wallMs": 223,
+    "collectMs": 4,
+    "outputBytes": 11064,
+    "extraDirectoryEntries": 1,
+    "existingFixtureFilesUnchanged": true,
+    "hardRssLimit": "NOT_RUN"
+  },
+  "transport": {
+    "kind": "lumina.m1.transport-result",
+    "signature": "PASS",
+    "identityPolicy": "PASS",
+    "evidenceClass": "EPHEMERAL_TEST_KEY_ONLY",
+    "productionCiProvenance": "NOT_RUN",
+    "dockerLoad": "NOT_RUN",
+    "manifestDigest": "sha256:0be740aefaa3b087197ad05074ecb013ab296bf2f5c3af8615d4f423f053a852",
+    "configDigest": "sha256:efe81e8bce7300f2520332173dc53d64330cbc6f4ed4f70a3ff3e86489627920",
+    "sameDigestKind": false,
+    "objectBytes": 796,
+    "imageContentBytes": 1024,
+    "verifierScratchBytes": 0,
+    "dockerStorageOverhead": "NOT_RUN",
+    "additionalDiskLowerBoundBytes": 1820,
+    "verifyMs": 16
+  },
+  "sourceBytes": 64094,
+  "sourceDigest": "056eebe627473927c86adf467e287e2ed032222221fc8ed77ce02ea5c7d2cbcc",
+  "privateRuntimeBundleBytes": "NOT_RUN",
+  "systemdRuntimeResources": "NOT_RUN",
+  "productionResourceProof": false,
+  "reviewedOn": "2026-10-25",
+  "baselineCommit": "0e786b190ceabbb0716cac4242b0ed8d82313669",
+  "measurementProfile": "WINDOWS_PRECOMPILED_JAVASCRIPT_LINUX_CHECKS_NOT_RUN",
+  "sourceDigestMethod": "sha256 of sorted src filenames with sha256 of exact file bytes joined by newline",
+  "excludes": [
+    "private Node runtime",
+    "Docker or systemctl descendant memory",
+    "Linux positive collection path",
+    "kernel hard RSS",
+    "real CI provenance",
+    "Docker load and storage overhead",
+    "production evidence"
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m2.reviewed-resource-comparison",
+  "reviewedOn": "2026-10-25",
+  "agentVersion": "0.2.0-alpha.1",
+  "applicationVersion": "3.44.0",
+  "runtimeSourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+  "m1": {
+    "baselineCommit": "e93cc03",
+    "platform": "win32",
+    "worker": {
+      "peakRssBytes": 79798272,
+      "cpuMicroseconds": 108000,
+      "wallMs": 179,
+      "sqliteBytes": 32768,
+      "effects": 1
+    },
+    "diagnostics": {
+      "executionProfile": "PRECOMPILED_JAVASCRIPT",
+      "bundleBytesExcludingNode": 40188,
+      "peakRssBytes": 64720896,
+      "supervisorPeakRssBytes": 61386752,
+      "conservativePeakSumBytes": 126107648,
+      "wallMs": 223,
+      "collectMs": 4,
+      "outputBytes": 11064,
+      "extraDirectoryEntries": 1,
+      "existingFixtureFilesUnchanged": true,
+      "hardRssLimit": "NOT_RUN"
+    },
+    "privateNodeBundle": "NOT_RUN"
+  },
+  "m2": {
+    "windows": {
+      "schemaVersion": 1,
+      "kind": "lumina.m2.measurements",
+      "platform": "win32",
+      "node": "24.22.1",
+      "sqlite": "3.53.4",
+      "sourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+      "worker": {
+        "peakRssBytes": 42790912,
+        "cpuMicroseconds": 265000,
+        "wallMs": 334,
+        "sqliteBytes": 73728
+      },
+      "diagnostics": {
+        "durationMs": 45,
+        "peakRssBytes": 52895744,
+        "maximumRssBytes": 134217728,
+        "hardRssLimit": false,
+        "processes": 1,
+        "workerThreads": 1,
+        "wallMs": 135,
+        "outputBytes": 730,
+        "existingFixtureFilesUnchanged": true,
+        "coverage": "STATE_ONLY_M1_HOST_COLLECTOR_RETAINED_SEPARATELY"
+      },
+      "package": {
+        "nodeBytes": 93915464,
+        "compiledCodeBytes": 58161,
+        "payloadBytes": 93975824,
+        "maximumBytes": 402653184,
+        "privateNode": true
+      },
+      "release": {
+        "format": "lumina.offline-directory.v1",
+        "scope": "NONPRODUCTION_ALPHA",
+        "kind": "APPLICATION",
+        "artifactDigest": "b4db402f19acdf573d2d3bdb39c37b04f8d2b1b6158b559c97c44003dc2aad4f",
+        "signature": "PASS",
+        "identityPolicy": "PASS",
+        "integrity": "PASS",
+        "signerClass": "TEST_ONLY",
+        "sourceProof": "PINNED_KEY_SIGNED_CLAIMS_ONLY",
+        "ciProvenance": "NOT_RUN",
+        "productionApproved": false,
+        "payloadBytes": 796,
+        "verificationMs": 21,
+        "image": {
+          "manifestDigest": "sha256:0be740aefaa3b087197ad05074ecb013ab296bf2f5c3af8615d4f423f053a852",
+          "configDigest": "sha256:efe81e8bce7300f2520332173dc53d64330cbc6f4ed4f70a3ff3e86489627920",
+          "objectBytes": 766,
+          "unpackedBytes": 1024,
+          "dockerLoad": "NOT_RUN",
+          "dockerIncrementalBytes": "NOT_RUN"
+        }
+      },
+      "systemdLifecycle": "NOT_RUN",
+      "hardRssLimit": "NOT_RUN",
+      "productionCompatibility": false
+    },
+    "localLinux": {
+      "schemaVersion": 1,
+      "kind": "lumina.m2.measurements",
+      "platform": "linux",
+      "node": "24.22.1",
+      "sqlite": "3.53.4",
+      "sourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+      "worker": {
+        "peakRssBytes": 59555840,
+        "cpuMicroseconds": 306808,
+        "wallMs": 651,
+        "sqliteBytes": 73728
+      },
+      "diagnostics": {
+        "durationMs": 40,
+        "peakRssBytes": 68497408,
+        "maximumRssBytes": 134217728,
+        "hardRssLimit": false,
+        "processes": 1,
+        "workerThreads": 1,
+        "wallMs": 75,
+        "outputBytes": 730,
+        "existingFixtureFilesUnchanged": true,
+        "coverage": "STATE_ONLY_M1_HOST_COLLECTOR_RETAINED_SEPARATELY"
+      },
+      "package": {
+        "nodeBytes": 126879696,
+        "compiledCodeBytes": 58161,
+        "payloadBytes": 126940053,
+        "maximumBytes": 402653184,
+        "privateNode": true
+      },
+      "release": {
+        "format": "lumina.offline-directory.v1",
+        "scope": "NONPRODUCTION_ALPHA",
+        "kind": "APPLICATION",
+        "artifactDigest": "ceb9c939b21beb3efda8d6be4dac6984965a58d42df27e4ee8aa436f091cd1dc",
+        "signature": "PASS",
+        "identityPolicy": "PASS",
+        "integrity": "PASS",
+        "signerClass": "TEST_ONLY",
+        "sourceProof": "PINNED_KEY_SIGNED_CLAIMS_ONLY",
+        "ciProvenance": "NOT_RUN",
+        "productionApproved": false,
+        "payloadBytes": 796,
+        "verificationMs": 11,
+        "image": {
+          "manifestDigest": "sha256:cb436ce49fa94e0f80f5f63ba754e8020ae029538e9466baf3a96fc44da1526c",
+          "configDigest": "sha256:efe81e8bce7300f2520332173dc53d64330cbc6f4ed4f70a3ff3e86489627920",
+          "objectBytes": 766,
+          "unpackedBytes": 1024,
+          "dockerLoad": "NOT_RUN",
+          "dockerIncrementalBytes": "NOT_RUN"
+        }
+      },
+      "systemdLifecycle": "NOT_RUN",
+      "hardRssLimit": "NOT_RUN",
+      "productionCompatibility": false
+    }
+  },
+  "comparison": {
+    "sqliteDeltaBytes": 40960,
+    "diagnosticCoverageComparable": false,
+    "reason": "M1_HOST_COLLECTION_VS_M2_STATE_ONLY",
+    "m1HostCollectorRetained": true,
+    "privateNodeNewlyMeasured": true,
+    "workerRssExcludesManualLinuxLockWrapper": true,
+    "systemdGroupResourceProof": "NOT_RUN"
+  },
+  "actualProductionAdditions": {
+    "files": 0,
+    "units": 0,
+    "processes": 0,
+    "databaseServices": 0,
+    "diskBytes": 0
+  },
+  "productionCompatibility": false
+}

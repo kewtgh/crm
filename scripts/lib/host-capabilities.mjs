@@ -95,12 +95,16 @@ export function probeComposeSecurityModel(run,environment){
  if(diagnostics.length)return failure("SECURITY_MISMATCH","COMPOSE_SECURITY_MODEL_UNSUPPORTED",diagnostics);
  return{id:"compose.security-model",status:"VERIFIED",missing:[],diagnostics:[]};
 }
-export function probeHostCapabilities(run,environment){
+export function probeHostCapabilities(run,environment,{scope="full"}={}){
+ if(!["full","deployment"].includes(scope))throw new Error("HOST_CAPABILITY_SCOPE_INVALID");
  const results=[];
  for(const probe of REQUIRED_DOCKER_CAPABILITIES){
-  try{const result=run("/usr/bin/docker",probe.args,environment),text=String(result.stdout??"");const missing=probe.flags.filter(flag=>!new RegExp(`(?:^|\\s)${flag}(?:[=\\s,]|$)`).test(text));results.push({id:probe.id,status:result.status===0&&!result.error&&!missing.length?"VERIFIED":result.status!==0||result.error?"COMMAND_FAILED":"MISSING",missing:result.status===0?missing:probe.flags});}
-  catch{results.push({id:probe.id,status:"COMMAND_FAILED",missing:probe.flags});}
+  // The runner inspects an existing builder; only operator maintenance bootstraps or prunes it.
+  if(scope==="deployment"&&probe.id==="buildx.cache")continue;
+  const flags=scope==="deployment"&&probe.id==="buildx.inspect"?[]:probe.flags;
+  try{const result=run("/usr/bin/docker",probe.args,environment),text=String(result.stdout??"");const missing=flags.filter(flag=>!new RegExp(`(?:^|\\s)${flag}(?:[=\\s,]|$)`).test(text));results.push({id:probe.id,status:result.status===0&&!result.error&&!missing.length?"VERIFIED":result.status!==0||result.error?"COMMAND_FAILED":"MISSING",missing:result.status===0?missing:flags});}
+  catch{results.push({id:probe.id,status:"COMMAND_FAILED",missing:flags});}
  }
  results.push(probeComposeSecurityModel(run,environment));
- return{profile:"crm-compose-buildx-v1",ready:results.every(value=>value.status==="VERIFIED"),results};
+ return{profile:"crm-compose-buildx-v1",scope,ready:results.every(value=>value.status==="VERIFIED"),results};
 }

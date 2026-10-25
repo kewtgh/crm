@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m2.reviewed-verification",
+  "reviewedOn": "2026-10-25",
+  "runtimeSourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+  "agentVersion": "0.2.0-alpha.1",
+  "applicationVersion": "3.44.0",
+  "checks": {
+    "m2Windows": {
+      "result": "PASS",
+      "tests": 24,
+      "pass": 21,
+      "fail": 0,
+      "notRun": 3,
+      "nativePrimitiveTests": 19,
+      "staticOrPureTests": 2,
+      "simulatedObservationTests": 0,
+      "durationMs": 31163.2261,
+      "command": "node scripts/run-bounded.mjs --label m2-validated-tests --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-agent/tests/*.test.mjs"
+    },
+    "m2LocalLinux": {
+      "result": "PASS",
+      "tests": 24,
+      "pass": 23,
+      "fail": 0,
+      "notRun": 1,
+      "nativePrimitiveTests": 21,
+      "staticOrPureTests": 2,
+      "simulatedObservationTests": 0,
+      "durationMs": 43565.826845,
+      "command": "node deployment-v2-agent/tools/run-local-linux.ts --suite m2"
+    },
+    "m1PreservedLocalLinux": {
+      "result": "PASS",
+      "tests": 35,
+      "pass": 34,
+      "fail": 0,
+      "notRun": 1,
+      "nativePrimitiveTests": 20,
+      "staticOrPureTests": 3,
+      "simulatedObservationTests": 11,
+      "durationMs": 6524.328967,
+      "command": "node --test --test-concurrency=1 deployment-v2-m1/tests/*.test.mjs"
+    },
+    "agentTypecheck": {
+      "result": "PASS",
+      "command": "node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/tsconfig.json"
+    },
+    "agentLint": {
+      "result": "PASS",
+      "warnings": 0,
+      "command": "node node_modules/eslint/bin/eslint.js deployment-v2-agent/src deployment-v2-agent/tools deployment-v2-agent/tests"
+    },
+    "applicationTypeIsolation": {
+      "result": "PASS",
+      "command": "node node_modules/@typescript/native/bin/tsc --noEmit --incremental false -p tsconfig.json"
+    },
+    "linuxComposeParser": {
+      "result": "PASS",
+      "version": "2.40.3",
+      "binarySha256": "dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372",
+      "positiveModel": "PASS",
+      "malformedTmpfsRegression": "PASS",
+      "daemonAccess": false
+    },
+    "composeWorkload": {
+      "result": "PASS",
+      "clientPlatform": "win32",
+      "compose": "2.40.3",
+      "workloadPlatform": "linux",
+      "node": "24.22.1",
+      "kernelMemoryLimitObservedBytes": 134217728,
+      "kernelPidsLimitObserved": 32,
+      "dynamicStress": "NOT_RUN"
+    },
+    "privacy": {
+      "result": "PASS",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "notRun": 0,
+      "durationMs": 2380.7128,
+      "command": "node scripts/run-bounded.mjs --label m2-public-privacy --timeout-seconds 55 --idle-seconds 45 -- node --test --test-isolation=none tests/public-repository-privacy.test.mjs tests/public-ci-artifacts.test.mjs"
+    },
+    "documentation": {
+      "result": "PASS",
+      "markdown": 19,
+      "links": 140,
+      "tables": 48,
+      "jsonExamples": 1,
+      "jsonFiles": 7,
+      "sourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+      "changedFiles": 42,
+      "scope": "ALPHA_AND_DOCS_WITH_TSCONFIG_EXCLUSION_ONLY",
+      "m1Unchanged": true,
+      "appVersion": "3.44.0",
+      "privateWorkIgnored": true,
+      "workflowStructureAssertions": "PASS",
+      "fullYamlParser": "NOT_RUN_NOT_INSTALLED",
+      "externalCi": "NOT_RUN"
+    },
+    "localTestContainerCleanup": {
+      "result": "PASS",
+      "remainingTaskContainers": 0,
+      "existingProjectsInspected": false,
+      "productionAccessed": false
+    }
+  },
+  "localLinuxEnvironment": {
+    "kind": "DOCKER_DESKTOP_CONTAINER_NOT_EXTERNAL_CI",
+    "os": "Debian 12",
+    "node": "24.22.1",
+    "sqlite": "3.53.4",
+    "imageDigest": "sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205",
+    "fixtureUser": "NONROOT_FICTIONAL_TEST_IDENTITY",
+    "filesystem": "EXECUTABLE_TMPFS",
+    "network": "NONE",
+    "sourceMount": "MINIMIZED_READ_ONLY_TEST_WORKSPACE",
+    "engine": "29.9.2",
+    "cgroupVersion": "2",
+    "cgroupDriver": "cgroupfs",
+    "matchesProductionTarget": false
+  },
+  "remoteCi": {
+    "result": "NOT_RUN",
+    "candidatePushed": false,
+    "workflow": ".github/workflows/deployment-v2-agent.yml",
+    "observedHistoricalAppRun": {
+      "id": 40172579587,
+      "headSha": "926819e566c5736e83817cd55e45dbf3e5337e66",
+      "conclusion": "success",
+      "url": "https://github.com/kewtgh/crm/actions/runs/40172579587"
+    },
+    "historicalRunCertifiesM2": false
+  },
+  "reviewedAgentTestArtifact": {
+    "result": "PASS",
+    "artifactDigest": "8bb22f682631ac6d0441452e369e96ca4bfafacd46e594a4731194636ecaa4f2",
+    "payloadBytes": 93975824,
+    "signerClass": "TEST_ONLY",
+    "privateKeyPersisted": false,
+    "ciProvenance": "NOT_RUN",
+    "productionApproved": false
+  },
+  "sourceBoundaries": {
+    "m1Modified": false,
+    "v1Modified": false,
+    "applicationCodeModified": false,
+    "productionAccessed": false,
+    "rootDependenciesChanged": false
+  },
+  "productionCompatibility": false,
+  "m3": {
+    "fullIntegration": "NO_GO",
+    "offlineFixturePreparation": "GO"
+  }
+}

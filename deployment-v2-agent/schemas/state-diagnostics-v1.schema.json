@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/lumina/alpha-state-diagnostics-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "toolVersion",
+    "scope",
+    "readOnly",
+    "network",
+    "productionApproved",
+    "compatibilityCertified",
+    "status",
+    "code",
+    "snapshot",
+    "budget"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "lumina.alpha.state-diagnostics"
+    },
+    "toolVersion": {
+      "const": "0.2.0-alpha.1"
+    },
+    "scope": {
+      "const": "NONPRODUCTION_ALPHA"
+    },
+    "readOnly": {
+      "const": true
+    },
+    "network": {
+      "const": "NONE"
+    },
+    "productionApproved": {
+      "const": false
+    },
+    "compatibilityCertified": {
+      "const": false
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNKNOWN",
+        "NOT_RUN"
+      ]
+    },
+    "code": {
+      "enum": [
+        "MATCH",
+        "NOT_INSTALLED",
+        "STATE_RECOVERY_REQUIRED",
+        "STATE_SIZE_INVALID",
+        "STATE_SCHEMA_UNSUPPORTED",
+        "STATE_PROJECTION_INVALID",
+        "STATE_CORRUPT",
+        "SQLITE_BUSY",
+        "STATE_READ_FAILED",
+        "METADATA_PERMISSION_DENIED",
+        "FILE_UNTRUSTED",
+        "SITE_UNTRUSTED",
+        "SITE_IDENTITY_MISMATCH",
+        "ALPHA_SCOPE_REQUIRED",
+        "FIELDS_INVALID",
+        "INPUT_LIMIT"
+      ]
+    },
+    "snapshot": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "siteRevision",
+        "ownerEpoch",
+        "epoch",
+        "state",
+        "operationRevision",
+        "unresolved",
+        "grant",
+        "checkpoint",
+        "recoveryRequired",
+        "acceptedApplication"
+      ],
+      "properties": {
+        "siteRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ownerEpoch": {
+          "const": 1
+        },
+        "epoch": {
+          "const": 1
+        },
+        "state": {
+          "enum": [
+            null,
+            "QUEUED",
+            "PREPARING",
+            "RECOVERY_REQUIRED",
+            "COMPLETED",
+            "REJECTED"
+          ]
+        },
+        "operationRevision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "unresolved": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "grant": {
+          "enum": [
+            null,
+            "READY",
+            "CONSUMED"
+          ]
+        },
+        "checkpoint": {
+          "enum": [
+            null,
+            "NOT_STARTED",
+            "INTENT",
+            "PROVEN",
+            "UNKNOWN"
+          ]
+        },
+        "recoveryRequired": {
+          "type": "boolean"
+        },
+        "acceptedApplication": {
+          "type": "null"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durationMs",
+        "peakRssBytes",
+        "maximumRssBytes",
+        "hardRssLimit",
+        "processes",
+        "workerThreads"
+      ],
+      "properties": {
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 45000
+        },
+        "peakRssBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 134217728
+        },
+        "maximumRssBytes": {
+          "const": 134217728
+        },
+        "hardRssLimit": {
+          "const": false
+        },
+        "processes": {
+          "const": 1
+        },
+        "workerThreads": {
+          "const": 1
+        }
+      }
+    }
+  }
+}

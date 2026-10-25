@@ -1,0 +1,13 @@
+{
+  "name": "lumina-deployment-agent",
+  "version": "0.2.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.22.1 <25" },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "typecheck": "node ../node_modules/@typescript/native/bin/tsc -p tsconfig.json",
+    "lint": "node ../node_modules/eslint/bin/eslint.js src tools tests",
+    "build": "node tools/build.ts"
+  }
+}

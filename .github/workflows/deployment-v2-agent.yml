@@ -1,0 +1,95 @@
+name: Deployment V2 offline Alpha
+
+on:
+  push:
+    branches: [validation/deployment-v2-m2.1]
+  pull_request:
+    paths: ["deployment-v2-agent/**", "deployment-v2-m1/**", ".github/workflows/deployment-v2-agent.yml", ".nvmrc", "tests/public-repository-privacy.test.mjs", "scripts/lib/public-ci-artifacts.mjs"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@12.2.1
+      - run: npm ci --no-audit --no-fund
+        timeout-minutes: 5
+      - name: Alpha typecheck and lint
+        run: |
+          node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/tsconfig.json
+          node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/validation/tsconfig.json
+          node node_modules/eslint/bin/eslint.js deployment-v2-agent/src deployment-v2-agent/tools deployment-v2-agent/tests deployment-v2-agent/validation
+      - name: Retain M1 tests on native Linux
+        run: node scripts/run-bounded.mjs --label m1-linux --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-m1/tests/*.test.mjs
+      - name: Alpha native SQLite, flock, filesystem, crypto and termination
+        run: node scripts/run-bounded.mjs --label m2-linux --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-agent/tests/*.test.mjs
+      - name: Prepare fixed Compose and fictional workload image
+        run: |
+          mkdir -p work/deployment-v2-m2
+          curl --fail --location --max-time 45 https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64 --output work/deployment-v2-m2/compose
+          echo 'dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372  work/deployment-v2-m2/compose' | sha256sum --check
+          chmod 700 work/deployment-v2-m2/compose
+          docker pull node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
+      - name: Real Compose parser
+        env:
+          M1_COMPOSE_BINARY: ${{ github.workspace }}/work/deployment-v2-m2/compose
+        run: node deployment-v2-m1/tools/compose-integration.ts
+      - name: Real Compose synthetic workload with existing CI Docker
+        env:
+          M2_NONPRODUCTION_DOCKER: ACK_NONPRODUCTION
+          M2_DOCKER_ENDPOINT: unix:///var/run/docker.sock
+          M2_COMPOSE_BINARY: ${{ github.workspace }}/work/deployment-v2-m2/compose
+        run: node scripts/run-bounded.mjs --label m2-compose --timeout-seconds 55 --idle-seconds 45 -- node deployment-v2-agent/tools/compose.ts
+      - name: Public privacy contracts
+        run: npm run test:public-privacy
+      - name: Validation publication contract tests
+        run: node --test deployment-v2-agent/validation/contract.test.mjs
+      - name: Real Python fixture import regression
+        run: |
+          python3 -I -c "import ast,pathlib,sys; sys.path.insert(0,str(pathlib.Path('deployment-v2-agent/validation').resolve())); import pty; assert callable(pty.fork); ast.parse(pathlib.Path('deployment-v2-agent/validation/terminal-hangup.py').read_text())"
+
+  dynamic-linux:
+    # PR code never provisions a privileged fixture. This exact branch is published only
+    # after administrator review; hosted runners are disposable and have no production keys.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/validation/deployment-v2-m2.1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Disposable systemd and Rootless validation
+        timeout-minutes: 8
+        run: |
+          mkdir -p work/ci-private
+          bash deployment-v2-agent/validation/provision.sh > work/ci-private/deployment-v2-provision.log 2>&1
+      - name: Publish minimized validation summary
+        id: public_summary
+        if: always()
+        run: node deployment-v2-agent/validation/publish.mjs
+      - name: Upload reviewed validation summary
+        if: always() && steps.public_summary.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-v2-validation-summary
+          path: work/public-artifacts/deployment-v2-validation-summary.json
+          if-no-files-found: error
+          retention-days: 14
+      # No raw diagnostics or environment dumps, production credentials, self-hosted runner,
+      # reboot, database connection, application deployment, or production installation.

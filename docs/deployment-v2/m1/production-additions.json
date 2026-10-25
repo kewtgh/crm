@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m1.production-additions-review",
+  "reviewedOn": "2026-10-25",
+  "baselineCommit": "0e786b190ceabbb0716cac4242b0ed8d82313669",
+  "productionAccessed": false,
+  "m1Actual": {
+    "newFiles": 0,
+    "newDirectories": 0,
+    "newUnits": 0,
+    "newProcesses": 0,
+    "newDatabaseInstances": 0,
+    "newDiskBytes": 0,
+    "v1Changed": false,
+    "existingInfrastructureChanged": false
+  },
+  "futureAgent": {
+    "status": "NOT_RUN",
+    "installationAuthorized": false,
+    "approvalMilestone": "M5",
+    "fileDigestStatus": "NOT_RUN_NO_INSTALLABLE_M1_BUNDLE",
+    "entries": [
+      {
+        "pathTemplate": "/opt/lumina-deployment-agent/releases/<payload-digest>/",
+        "role": "immutable Agent, private Node and verifier",
+        "ownerRole": "ROOT_INSTALLER",
+        "modePolicy": "directories and executables 0755; readonly content 0644; no project writes",
+        "quantity": "current and previous; one temporary upgrade candidate",
+        "maximumUnpackedBytesPerVersion": 402653184,
+        "measuredBytes": null,
+        "digest": null
+      },
+      {
+        "pathTemplate": "/opt/lumina-deployment-agent/current",
+        "role": "single controlled active symlink",
+        "ownerRole": "ROOT_INSTALLER",
+        "modePolicy": "root-owned parent; target restricted to verified immutable releases",
+        "quantity": 1,
+        "digest": null
+      },
+      {
+        "pathTemplate": "/usr/local/libexec/lumina-deployment-v2",
+        "role": "fixed launcher; resolves payload once under lock",
+        "ownerRole": "ROOT_INSTALLER",
+        "modePolicy": "0755; root-owned non-writable ancestors",
+        "quantity": 1,
+        "candidateMaximumBytes": 4096,
+        "digest": null
+      },
+      {
+        "pathTemplate": "/etc/lumina-deployment-agent/{site,trust}.json",
+        "role": "approved policy and independent trust material",
+        "ownerRole": "ROOT_INSTALLER",
+        "modePolicy": "0640 with approved project read access; never world readable private values",
+        "quantity": 2,
+        "candidateMaximumBytesCombined": 1048576,
+        "digest": null
+      },
+      {
+        "pathTemplate": "<approved-project-user-unit-location>/lumina-crm-deployment-v2.service",
+        "role": "one fixed user oneshot unit; no replacement of existing units",
+        "ownerRole": "ROOT_INSTALLER_APPROVED_LOCATION",
+        "modePolicy": "0644; final parent ownership and manager lookup frozen in M2",
+        "quantity": 1,
+        "properties": ["Type=oneshot", "RemainAfterExit=no", "Restart=no", "KillMode=control-group"],
+        "digest": null
+      },
+      {
+        "pathTemplate": "/var/lib/lumina-crm/deployment-v2/",
+        "role": "dedicated control state directory",
+        "ownerRole": "PROJECT_UID_FROM_PRIVATE_POLICY",
+        "modePolicy": "0700 directory, 0600 state.sqlite and write.lock; journal only during transaction",
+        "files": ["state.sqlite", "write.lock", "state.sqlite-journal when required"],
+        "stateWarningBytes": 67108864,
+        "stateAdmissionCeilingBytes": 134217728,
+        "journalAndFinalResultReserveMeasured": "NOT_RUN",
+        "mutableStateDigestPolicy": "recorded per real operation, not a fixed installation digest"
+      },
+      {
+        "pathTemplate": "<approved-private-install-record-location>/",
+        "role": "one current installer journal and bounded reviewed history; not application accepted state",
+        "ownerRole": "ROOT_INSTALLER",
+        "modePolicy": "0700 directory; 0600 files",
+        "candidateMaximumBytesCombinedWithRuntimeRecords": 16777216,
+        "digest": null
+      },
+      {
+        "pathTemplate": "<approved-temporary-package-and-report-location>/",
+        "role": "one verified candidate and limited diagnostic output; no automatic deletion of unresolved evidence",
+        "ownerRole": "APPROVED_OPERATOR_OR_PROJECT_UID",
+        "modePolicy": "0700 directories; exclusive 0600 output; fixed digest manifest for packages",
+        "measuredBytes": null,
+        "digest": null
+      }
+    ],
+    "processes": {
+      "idleNewProcesses": 0,
+      "newResidentServices": 0,
+      "newDatabaseServices": 0,
+      "newApiSockets": 0,
+      "newTimers": 0,
+      "worker": "one on demand, sequential bounded subprocesses; same lock with CLI and installer",
+      "cliInstallerAndDiagnostics": "short operator processes; diagnostics currently supervisor and collector plus sequential query children",
+      "candidateWorkerMemoryMaximumBytes": 536870912,
+      "candidateWorkerCpuQuotaPercent": 100,
+      "candidateWorkerTasksMaximum": 64,
+      "candidateWorkerTimeoutSeconds": 900,
+      "dynamicResourceEnforcement": "NOT_RUN"
+    },
+    "diskBudget": {
+      "candidateFixedPeakBytes": 2147483648,
+      "status": "NOT_RUN_CANDIDATE_LIMIT_NOT_MEASURED_RESERVATION",
+      "includes": ["current previous and upgrade candidate", "private runtime and verifier", "state and journal", "bounded records", "temporary diagnostic package"],
+      "excludes": ["application transport A", "verification or extraction U", "Docker incremental storage D", "operation result safety reserve R"],
+      "applicationSpaceProof": "NOT_RUN_REAL_ARTIFACT_AND_DAEMON_MEASUREMENT_REQUIRED"
+    }
+  },
+  "reuseWithoutChanges": [
+    "existing project identity and Rootless Docker socket, data root and configuration",
+    "existing Docker Engine, Compose and Buildx installations; no normal production build",
+    "existing systemd user manager and delegated cgroup when validated",
+    "existing project Caddy and Tunnel configuration",
+    "existing CRM PostgreSQL for business only; no control state table or new connection in M1",
+    "existing external CI and an administrator-approved file channel"
+  ],
+  "mustRemainSeparate": [
+    "V2 package, private runtime, policy and trust roots from application releases",
+    "V2 SQLite and writer lock from V1 state and business PostgreSQL",
+    "CRM socket, data root, unit and namespace from all other projects",
+    "raw diagnostic evidence from public repository and CI uploads",
+    "V1 fence and owner handoff from prototype mutual exclusion"
+  ],
+  "forbiddenAdditions": ["production VM", "production DIND", "production CI runner", "required new Registry", "required new build server", "new database service", "resident Agent without separate necessity evidence"]
+}

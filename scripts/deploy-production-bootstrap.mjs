@@ -95,7 +95,7 @@ export async function updateSourceAndResolveTarget({
   expectedTarget = null,
   requestedTarget = null,
   planOnly = false,
-  verifyTarget = async (commit,reader) => assertHostPreflight({target:await readStaticHostTarget(reader,commit),executionLockHeld:!planOnly}),
+  verifyTarget = async (commit,reader) => assertHostPreflight({scope:"deployment",target:await readStaticHostTarget(reader,commit),executionLockHeld:!planOnly}),
 } = {}) {
   stage("source-validation");
   const branch = await git(["branch", "--show-current"]);

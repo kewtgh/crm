@@ -1,0 +1,13 @@
+{
+  "name": "lumina-deployment-m1-experiments",
+  "version": "0.1.0-experimental",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.22.1 <25" },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "typecheck": "node ../node_modules/@typescript/native/bin/tsc -p tsconfig.json",
+    "lint": "node ../node_modules/eslint/bin/eslint.js src tools tests",
+    "inventory": "node tools/inventory.ts"
+  }
+}

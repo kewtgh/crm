@@ -41,3 +41,6 @@ db/migrations/202610080117_revenue_candidates.sql -text whitespace=cr-at-eol
 db/migrations/202610080118_revenue_facts.sql -text whitespace=-blank-at-eof,cr-at-eol
 db/migrations/202610080119_cash_applications.sql -text whitespace=cr-at-eol
 db/migrations/202610080120_revenue_workspace_reads.sql -text whitespace=cr-at-eol
+
+# Preserve the reviewed CI evidence bytes for its recorded SHA-256 on every checkout.
+/docs/deployment-v2/m2.1/ci-summary.json -text

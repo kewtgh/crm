@@ -1,0 +1,60 @@
+name: Deployment V2 M2.2 Rootless and target profile
+on:
+  push:
+    branches: [validation/deployment-v2-m2.2]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rootless:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/validation/deployment-v2-m2.2'
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ['24.04', '26.04']
+    runs-on: ubuntu-${{ matrix.profile }}
+    timeout-minutes: 18
+    env:
+      M22_PROFILE: ${{ matrix.profile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@12.2.1
+      - run: npm ci --no-audit --no-fund
+        timeout-minutes: 5
+      - name: Typecheck and lint
+        run: |
+          node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/tsconfig.json
+          node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/validation-m22/tsconfig.json
+          node node_modules/eslint/bin/eslint.js deployment-v2-agent/validation-m22
+          bash -n deployment-v2-agent/validation-m22/provision.sh
+      - name: Preserve native Alpha and privacy tests
+        run: |
+          node scripts/run-bounded.mjs --label m22-alpha --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-agent/tests/*.test.mjs
+          node --test deployment-v2-agent/validation/contract.test.mjs deployment-v2-agent/validation-m22/contract.test.mjs
+          npm run test:public-privacy
+      - name: Preserve M1 tests
+        if: matrix.profile == '24.04'
+        run: node scripts/run-bounded.mjs --label m22-m1 --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-m1/tests/*.test.mjs
+      - name: Dedicated Rootless and Ubuntu package fixture
+        timeout-minutes: 10
+        run: |
+          mkdir -p work/ci-private
+          bash deployment-v2-agent/validation-m22/provision.sh > work/ci-private/m22-provision.log 2>&1
+      - name: Publish minimized M2.2 evidence
+        id: public_summary
+        if: always()
+        run: node deployment-v2-agent/validation-m22/publish.mjs
+      - name: Upload reviewed M2.2 summary
+        if: always() && steps.public_summary.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-v2-rootless-${{ matrix.profile }}
+          path: work/public-artifacts/deployment-v2-rootless-summary.json
+          if-no-files-found: error
+          retention-days: 14

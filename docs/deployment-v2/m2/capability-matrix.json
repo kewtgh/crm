@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "kind": "lumina.m2.reviewed-capability-matrix",
+  "reviewedOn": "2026-10-25",
+  "baseline": {
+    "m0": "0e786b1",
+    "m1": "e93cc03",
+    "application": "3.44.0",
+    "agent": "0.2.0-alpha.1"
+  },
+  "runtimeSourceDigest": "bb0e1b4420e4db285a65a6c33c709472f8be3409401048451326b92a4a0118b8",
+  "capabilities": [
+    {
+      "id": "node.private-runtime",
+      "result": "PASS",
+      "scope": "WINDOWS_AND_LOCAL_LINUX",
+      "evidence": "resource-comparison.json",
+      "reason": "EXACT_24_22_1_BINARY_COPIED_AND_EXECUTED"
+    },
+    {
+      "id": "sqlite.transaction-cas-grant",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "../../../deployment-v2-agent/tests/state.test.mjs",
+      "reason": "REAL_SQLITE_AND_CONCURRENT_PROCESSES"
+    },
+    {
+      "id": "sqlite.intent-vs-external-effect",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "../../../deployment-v2-agent/tests/state.test.mjs",
+      "reason": "REAL_RECEIPT_AND_SQLITE_ABORT_NOT_DISK_FAILURE"
+    },
+    {
+      "id": "linux.flock",
+      "result": "PASS",
+      "scope": "LOCAL_LINUX_CONTAINER",
+      "evidence": "verification.json",
+      "reason": "REAL_PROC_LOCK_IDENTITY_NO_EMULATION"
+    },
+    {
+      "id": "linux.filesystem-normal-path",
+      "result": "PASS",
+      "scope": "LOCAL_LINUX_CONTAINER",
+      "evidence": "verification.json",
+      "reason": "REAL_EXECUTABLE_TMPFS_FILE_AND_DIRECTORY_FSYNC_NOT_POWER_LOSS"
+    },
+    {
+      "id": "unix.sigterm",
+      "result": "PASS",
+      "scope": "LOCAL_LINUX_CONTAINER",
+      "evidence": "verification.json",
+      "reason": "REAL_SIGNAL_NO_GRANT_REPLAY"
+    },
+    {
+      "id": "fixed-unit.export",
+      "result": "PASS",
+      "scope": "LOCAL_LINUX_CONTAINER",
+      "evidence": "../../../deployment-v2-agent/tests/systemd.test.mjs",
+      "reason": "NATIVE_NONROOT_EXPORT_ONLY_NO_INSTALL_OR_DISPATCH"
+    },
+    {
+      "id": "systemd.oneshot.lifecycle",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "../../../deployment-v2-agent/tests/systemd.test.mjs",
+      "reason": "NO_APPROVED_FIXED_UNIT_AND_USER_MANAGER_EXECUTION"
+    },
+    {
+      "id": "terminal.disconnect",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "acceptance.md",
+      "reason": "PROCESS_EXIT_IS_NOT_REAL_SESSION_HANGUP"
+    },
+    {
+      "id": "rootless.limits",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "acceptance.md",
+      "reason": "LOCAL_ROOTFUL_DOCKER_IS_NOT_A_ROOTLESS_TARGET"
+    },
+    {
+      "id": "cgroup.v2.configuration",
+      "result": "PASS",
+      "scope": "LOCAL_DOCKER_NATIVE_WORKLOAD",
+      "evidence": "verification.json",
+      "reason": "KERNEL_LIMIT_FILES_OBSERVED_128_MIB_AND_32_PIDS"
+    },
+    {
+      "id": "cgroup.v2.stress-enforcement",
+      "result": "NOT_RUN",
+      "scope": "L2",
+      "evidence": "acceptance.md",
+      "reason": "NO_LIMIT_STRESS_OR_UNIT_GROUP_MEASUREMENT"
+    },
+    {
+      "id": "system.reboot",
+      "result": "NOT_RUN",
+      "scope": "L3",
+      "evidence": "acceptance.md",
+      "reason": "NO_DISPOSABLE_REBOOT_TARGET_EXECUTED"
+    },
+    {
+      "id": "storage.power-loss-enospc-eio",
+      "result": "NOT_RUN",
+      "scope": "L3",
+      "evidence": "acceptance.md",
+      "reason": "PROCESS_KILL_AND_SQL_ABORT_ARE_NOT_DISK_FAULTS"
+    },
+    {
+      "id": "compose.linux-parser-2.40.3",
+      "result": "PASS",
+      "scope": "LOCAL_LINUX_CONTAINER",
+      "evidence": "verification.json",
+      "reason": "REAL_FIXED_SHA_LINUX_BINARY_MODEL_AND_BAD_TMPFS"
+    },
+    {
+      "id": "compose.synthetic-linux-workload",
+      "result": "PASS",
+      "scope": "LOCAL_DOCKER_NATIVE_WORKLOAD",
+      "evidence": "verification.json",
+      "reason": "PINNED_2_40_3_CLIENT_WITH_ACTUAL_FICTIONAL_CONTAINER"
+    },
+    {
+      "id": "release.offline-signature-integrity",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "../../../deployment-v2-agent/tests/release.test.mjs",
+      "reason": "FIXED_KEY_SIGNED_CLAIMS_ONLY_NOT_CI_ATTESTATION"
+    },
+    {
+      "id": "release.independent-verifier",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "../../../deployment-v2-agent/tests/release.test.mjs",
+      "reason": "CANDIDATE_CODE_NOT_EXECUTED_PRIVATE_RUNTIME_BUNDLE_CHECKED"
+    },
+    {
+      "id": "release.ci-attestation",
+      "result": "NOT_RUN",
+      "scope": "EXTERNAL_RELEASE",
+      "evidence": "acceptance.md",
+      "reason": "NO_REAL_OIDC_ATTESTATION_OR_PRODUCTION_TRUST_ROOT"
+    },
+    {
+      "id": "release.docker-load-and-storage",
+      "result": "NOT_RUN",
+      "scope": "M3",
+      "evidence": "acceptance.md",
+      "reason": "NO_REAL_APPLICATION_IMAGE_LOAD_OR_DAEMON_STORAGE_MEASUREMENT"
+    },
+    {
+      "id": "diagnostics.read-only-privacy",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "../../../deployment-v2-agent/tests/diagnostics.test.mjs",
+      "reason": "STATE_ONLY_FILE_DIGESTS_UNCHANGED_JOURNAL_REFUSED_STRICT_SCHEMA"
+    },
+    {
+      "id": "diagnostics.observed-budget",
+      "result": "PASS",
+      "scope": "NATIVE_BOTH_OS",
+      "evidence": "resource-comparison.json",
+      "reason": "ONE_NODE_SHORT_THREAD_128_MIB_UNCHANGED_INCLUDING_PUBLICATION_WATCHDOG"
+    },
+    {
+      "id": "diagnostics.kernel-hard-rss-and-io-hang",
+      "result": "NOT_RUN",
+      "scope": "L2_L3",
+      "evidence": "acceptance.md",
+      "reason": "JS_HEAP_AND_SOFTWARE_WATCHDOG_ARE_NOT_KERNEL_PROOF"
+    },
+    {
+      "id": "ci.external-current-candidate",
+      "result": "NOT_RUN",
+      "scope": "EXTERNAL_CI",
+      "evidence": "../../../.github/workflows/deployment-v2-agent.yml",
+      "reason": "ENTRY_DEFINED_CURRENT_CANDIDATE_LOCAL_NOT_PUSHED_OR_EXECUTED"
+    },
+    {
+      "id": "local-target-profile.ubuntu-rootless-systemd",
+      "result": "FAIL",
+      "scope": "LOCAL_DOCKER_PROFILE_COMPARISON",
+      "evidence": "acceptance.md",
+      "reason": "OBSERVED_DEBIAN_12_ENGINE_29_9_2_ROOTFUL_CGROUPFS_DIFFERS_FROM_TARGET"
+    },
+    {
+      "id": "production.adaptation",
+      "result": "NOT_RUN",
+      "scope": "P0",
+      "evidence": "acceptance.md",
+      "reason": "NO_PRODUCTION_ACCESS_ALPHA_NOT_APPROVED"
+    }
+  ],
+  "productionCompatibility": false,
+  "m3FullIntegration": "NO_GO"
+}

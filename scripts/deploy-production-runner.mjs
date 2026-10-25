@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertRootlessDockerHost,
   assertRootlessDockerInfo,
+  rootlessUserEnvironment,
   LUMINA_ROOTLESS_DOCKER_DATA_ROOT,
 } from "./lib/rootless-docker.mjs";
 import { assertProductionSecretSources } from "./lib/production-secret-sources.mjs";
@@ -244,7 +245,7 @@ function stage(name) {
 }
 
 function directEnvironment(overrides = {}) {
-  const environment = { ...process.env, ...overrides };
+  const environment = { ...process.env, ...overrides, ...rootlessUserEnvironment() };
   for (const key of proxyKeys) delete environment[key];
   environment.NO_PROXY = "postgres,web,worker,localhost,127.0.0.1,::1";
   environment.no_proxy = environment.NO_PROXY;

@@ -1,5 +1,19 @@
 # Lumina CRM 生产部署运行手册
 
+> 2026-10-26 V1 稳定化更新优先于下方历史步骤。普通发布仍为 `npm run deploy:production`，
+> 自动执行准入与发布安全检查，无需每次先升级维护程序。应用版本保持 3.44.0；V2 后续开发暂停。
+> 常规发布的只读适配检查：`npm run deploy:production:host-check -- --scope=deployment`；
+> 无 scope 的 `host-check` / `host-upgrade-plan` 仍是完整首装 / 维护检查，不应把维护专用失败当作普通发布前置。
+> [审计与计划](deployment-v1-stabilization/audit-and-plan.md)记录改动边界；本次没有生产操作。
+
+`docker.isolation.current=false` 现在同时附带 `cause.stage/code`、固定目录 role、权限 mode、
+owner 是否匹配，以及白名单 errno / exitCode。原 env、stderr、实际错误路径及完整 daemon info 不回显。
+依赖 Docker 的项目标为 DEPENDENCY_BLOCKED，按首因处理，不逐项重装工具。
+例如 `directory / DIRECTORY_NOT_PRIVATE / buildx-config / 0750` 表示客户端配置目录不私有，
+`daemon / DOCKER_INFO_COMMAND_FAILED / EACCES` 表示探针执行遇到权限错误，不能直接推断 daemon 不支持 Rootless。
+Docker 29.1.3 会为 data-root 设置遍历权限，只有该目录接受 0700/0710/0711；客户端配置仍须私有。
+不得自动 chmod、换 socket 或切到 Rootful 绕过失败。生产故障材料只保存于忽略的 work/，公开仅提供固定字段。
+
 > 2026-10-24 控制平面兼容性修复：本节优先于下方历史手工 merge、运行时安装与重试步骤。
 > 应用版本保持 3.40.0；开发基线为 `796cc43e63784eb8891ca6420572cd563cb2ac80`。
 > [共享宿主机契约](../deploy/libexec/host-runtime-contract.json)、[兼容性审计与计划](HOST_COMPATIBILITY_REPAIR_PLAN.md)、

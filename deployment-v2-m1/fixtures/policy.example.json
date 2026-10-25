@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "projectUid": 2001,
+  "socket": "/run/user/2001/fictional-m1/docker.sock",
+  "dataRoot": "/var/lib/fictional-m1/docker",
+  "dockerConfig": "/var/lib/fictional-m1/docker-config",
+  "composeBinary": "/usr/libexec/docker/cli-plugins/docker-compose",
+  "stateParent": "/var/lib/fictional-m1",
+  "minimumFreeBytes": 2147483648
+}
