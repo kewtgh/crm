@@ -24,6 +24,12 @@ export const METRICS = Object.freeze(['agentMemoryPeakBytes', 'agentTasksPeak',
   'payloadBytes', 'rootlessDiskBytes', 'rootlessDaemonRssBytes',
   'memoryMaxBytes', 'cpuQuotaUsec', 'cpuPeriodUsec', 'tasksMax']);
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
+export function managerHealth(exitCode, output) {
+  const state = typeof output === 'string' ? output.trim() : '';
+  // 'degraded' means one or more units failed, not that the manager is unavailable.
+  assert(exitCode === 0 && state === 'running' || exitCode === 1 && state === 'degraded', 'USER_MANAGER_UNAVAILABLE');
+  return state;
+}
 const safeValue = value => typeof value === 'boolean' || Number.isSafeInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER
   || ['oneshot', 'control-group', 'no', 'CONSUMED', 'PROVEN', 'INTENT', 'UNKNOWN', 'COMPLETED',
     'RECOVERY_REQUIRED', 'timeout', 'exit-code', 'oom-kill', 'success', '2', '9', 'systemd'].includes(value);
@@ -71,6 +77,7 @@ export function publicSummary(raw, context) {
     const value = raw.environment?.[name];
     if (typeof value === 'string' && /^\d{1,3}(?:\.\d{1,4}){0,3}$/.test(value)) environment[name] = value;
   }
+  if (['running', 'degraded'].includes(raw.environment?.managerState)) environment.managerState = raw.environment.managerState;
   const metrics = {};
   for (const name of METRICS) {
     const value = raw.metrics?.[name];

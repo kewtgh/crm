@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
-import { assertionDetail, emptyReport, harnessDetail, sha256 } from './contract.mjs';
+import { assertionDetail, emptyReport, harnessDetail, managerHealth, sha256 } from './contract.mjs';
 
 const fixture = '/opt/lumina-m21-fixture', payload = `${fixture}/payload`;
 const node = `${payload}/runtime/node`, cliFile = `${payload}/lib/cli.mjs`;
@@ -42,7 +42,7 @@ function exec(file, args, timeout = 8000, options = {}) {
   if (r.error || r.status !== 0) {
     const error = new Error('FIXTURE_COMMAND_FAILED');
     Object.assign(error, { command: path.basename(file), exitCode: r.status,
-      managerState: file === '/usr/bin/systemctl' && args.includes('is-system-running') ? r.stdout.trim() : null });
+      managerState: file === '/usr/bin/systemctl' && args.includes('is-system-running') ? r.stdout?.trim() : null });
     throw error;
   }
   assert(!r.error && r.status === 0, JSON.stringify({ command: path.basename(file), status: r.status, error: r.error ? Reflect.get(r.error, 'code') : null, stderr: r.stderr?.slice(0, 4096) }));
@@ -126,7 +126,10 @@ try {
   phase = 'CGROUP_CONTROLLERS';
   assert.equal(fs.readFileSync('/sys/fs/cgroup/cgroup.controllers', 'utf8').includes('memory'), true);
   phase = 'USER_MANAGER_HEALTH';
-  systemctl(['is-system-running']);
+  const health = spawnSync('/usr/bin/systemctl', ['--user', 'is-system-running'], { encoding: 'utf8', timeout: 8000 });
+  assert(!health.error); report.environment.managerState = managerHealth(health.status, health.stdout);
+  // Probe the actual manager interface before loading / executing our fixed unit.
+  assert.match(systemctl(['show', '--property=Version', '--value']).trim(), /^255(?:\D|$)/);
   phase = 'UNIT_DIRECTORY';
   fs.mkdirSync(units, { recursive: true, mode: 0o700 });
   // A harmless placeholder permits the first stop before installing the exact rendered unit.

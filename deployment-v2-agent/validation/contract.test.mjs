@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { assertionDetail, emptyReport, harnessDetail, publicSummary, CASES } from './contract.mjs';
+import { assertionDetail, emptyReport, harnessDetail, managerHealth, publicSummary, CASES } from './contract.mjs';
 
 const context = { sha: 'a'.repeat(40), runId: '123456789', attempt: '1', sourceDigest: 'b'.repeat(64) };
 test('publication rejects stale SHA, run and attempt independently', () => {
@@ -42,6 +42,13 @@ test('failure comparisons retain only reviewed enum and numeric evidence', () =>
   assert.deepEqual(harnessDetail({ phase: 'USER_MANAGER_HEALTH', command: 'systemctl', exitCode: 1,
     managerState: 'degraded', stderr: 'FICTIONAL-PRIVATE-MARKER', env: 'FICTIONAL-PRIVATE-MARKER' }),
   { phase: 'USER_MANAGER_HEALTH', command: 'systemctl', exitCode: 1, managerState: 'degraded' });
+});
+test('manager health separates degraded units from an unavailable manager without clearing failures', () => {
+  assert.equal(managerHealth(0, 'running\n'), 'running');
+  assert.equal(managerHealth(1, 'degraded\n'), 'degraded');
+  for (const [code, value] of [[1, 'offline'], [1, 'stopping'], [1, 'starting'], [1, 'initializing'], [1, 'running'], [0, 'degraded'], [null, '']]) {
+    assert.throws(() => managerHealth(code, value), /USER_MANAGER_UNAVAILABLE/);
+  }
 });
 test('host fixture cannot run without an explicit disposable hosted-runner boundary', () => {
   const workflow = fs.readFileSync(new URL('../../.github/workflows/deployment-v2-agent.yml', import.meta.url), 'utf8');
