@@ -17,6 +17,9 @@ assert(process.platform === 'linux' && process.getuid() !== 0);
 assert(process.env.M21_DISPOSABLE_HOST === 'ACK_GITHUB_HOSTED_NONPRODUCTION');
 assert(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_ENVIRONMENT === 'github-hosted');
 assert(home === '/home/lumina-m21-fixture' && fs.readFileSync('/proc/1/comm', 'utf8').trim() === 'systemd');
+// sudo may preserve a runner-owned cwd that a fresh UID cannot traverse (Python startup
+// needs an accessible cwd). Every subprocess starts inside our private fixture instead.
+assert.equal(fs.statSync(lab).uid, process.getuid()); process.chdir(lab);
 const context = { sha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
   attempt: process.env.GITHUB_RUN_ATTEMPT, sourceDigest: process.env.M21_SOURCE_DIGEST };
 const report = emptyReport(context);
@@ -109,9 +112,17 @@ function measure(group) {
   save();
 }
 async function complete(root) {
-  const s = await until(() => { const s = snapshot(root); return s.state === 'COMPLETED' && s; });
+  const s = await until(() => {
+    const s = snapshot(root); if (s.state === 'COMPLETED') return s;
+    const group = cgroup(); if (fs.existsSync(`${group}/cgroup.procs`)) measure(group);
+    return false;
+  });
   assert.equal(s.checkpoint, 'PROVEN'); assert.equal(s.grant, 'CONSUMED'); assert.equal(s.acceptedApplication, null);
-  await inactive(); return s;
+  const end = await inactive();
+  for (const [key, metric, scale] of [['MemoryPeak', 'agentMemoryPeakBytes', 1], ['CPUUsageNSec', 'agentCpuUsageUsec', 1000]]) {
+    if (/^\d+$/.test(end[key])) report.metrics[metric] = Math.max(report.metrics[metric] ?? 0, Math.floor(Number(end[key]) / Number(scale)));
+  }
+  save(); return s;
 }
 function receiptCount(root) { return fs.readdirSync(`${root}/receipts`).length; }
 function size(directory) { return fs.readdirSync(directory, { withFileTypes: true }).reduce((n, item) => n + (item.isDirectory() ? size(path.join(directory, item.name)) : item.isFile() ? fs.statSync(path.join(directory, item.name)).size : 0), 0); }
