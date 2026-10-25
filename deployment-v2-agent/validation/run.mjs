@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
-import { assertionDetail, emptyReport, sha256 } from './contract.mjs';
+import { assertionDetail, emptyReport, harnessDetail, sha256 } from './contract.mjs';
 
 const fixture = '/opt/lumina-m21-fixture', payload = `${fixture}/payload`;
 const node = `${payload}/runtime/node`, cliFile = `${payload}/lib/cli.mjs`;
@@ -23,6 +23,7 @@ const report = emptyReport(context);
 const save = () => fs.writeFileSync(`${lab}/report.json`, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 save();
 const failures = [];
+let phase = 'ENVIRONMENT';
 const result = (id, status, code = status === 'PASS' ? 'OBSERVED' : 'ASSERTION_FAILED') => {
   assert(Object.hasOwn(report.cases, id)); report.cases[id] = { status, code }; save();
   console.log(`${id}:${status}:${code}`);
@@ -38,6 +39,12 @@ async function check(ids, fn) {
 }
 function exec(file, args, timeout = 8000, options = {}) {
   const r = spawnSync(file, args, { encoding: 'utf8', timeout, maxBuffer: 131072, ...options });
+  if (r.error || r.status !== 0) {
+    const error = new Error('FIXTURE_COMMAND_FAILED');
+    Object.assign(error, { command: path.basename(file), exitCode: r.status,
+      managerState: file === '/usr/bin/systemctl' && args.includes('is-system-running') ? r.stdout.trim() : null });
+    throw error;
+  }
   assert(!r.error && r.status === 0, JSON.stringify({ command: path.basename(file), status: r.status, error: r.error ? Reflect.get(r.error, 'code') : null, stderr: r.stderr?.slice(0, 4096) }));
   return r.stdout;
 }
@@ -116,12 +123,16 @@ try {
   report.environment = { ubuntu: osRelease.match(/^VERSION_ID="([\d.]+)"/m)?.[1],
     kernel: os.release().match(/^[\d.]+/)?.[0], node: process.versions.node,
     systemd: exec('/usr/bin/systemctl', ['--version']).match(/^systemd (\d+)/)?.[1] };
+  phase = 'CGROUP_CONTROLLERS';
   assert.equal(fs.readFileSync('/sys/fs/cgroup/cgroup.controllers', 'utf8').includes('memory'), true);
+  phase = 'USER_MANAGER_HEALTH';
   systemctl(['is-system-running']);
+  phase = 'UNIT_DIRECTORY';
   fs.mkdirSync(units, { recursive: true, mode: 0o700 });
   // A harmless placeholder permits the first stop before installing the exact rendered unit.
   fs.writeFileSync(`${units}/${unit}`, '[Service]\nType=oneshot\nExecStart=/usr/bin/true\n', { mode: 0o600 });
-  systemctl(['daemon-reload']);
+  phase = 'UNIT_RELOAD'; systemctl(['daemon-reload']);
+  phase = 'CASES';
 
   await check(['fixed-oneshot', 'cli-exit', 'unit-budget-config'], async () => {
     const root = await fresh(); submit(root); dispatch(root);
@@ -220,6 +231,8 @@ try {
   result('target-ubuntu-profile', 'NOT_RUN', 'TARGET_PROFILE_NOT_MATCHED');
   report.completed = true; save();
 } catch (error) {
+  report.harnessFailure = harnessDetail({ phase, command: error.command, exitCode: error.exitCode,
+    managerState: error.managerState, assertion: assertionDetail(error) });
   failures.push({ cases: ['harness'], error: String(error.stack ?? error) });
   fs.writeFileSync(`${lab}/errors.json`, JSON.stringify(failures, null, 2), { mode: 0o600 }); save();
 } finally {

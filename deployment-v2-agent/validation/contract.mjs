@@ -34,6 +34,15 @@ export function assertionDetail(error) {
   for (const key of ['expected', 'actual']) if (safeValue(error[key])) detail[key] = error[key];
   return detail;
 }
+export function harnessDetail(raw) {
+  const result = {};
+  if (['ENVIRONMENT', 'CGROUP_CONTROLLERS', 'USER_MANAGER_HEALTH', 'UNIT_DIRECTORY', 'UNIT_RELOAD', 'CASES'].includes(raw?.phase)) result.phase = raw.phase;
+  if (['systemctl', 'node', 'docker', 'python3'].includes(raw?.command)) result.command = raw.command;
+  if (Number.isInteger(raw?.exitCode) && raw.exitCode >= 0 && raw.exitCode <= 255) result.exitCode = raw.exitCode;
+  if (['running', 'degraded', 'starting', 'initializing', 'offline', 'maintenance', 'stopping', 'unknown'].includes(raw?.managerState)) result.managerState = raw.managerState;
+  if (raw?.assertion) result.assertion = assertionDetail(raw.assertion);
+  return result;
+}
 export function sourceDigest(root) {
   const names = execFileSync('git', ['ls-files', '-z', '--', 'deployment-v2-agent',
     'deployment-v2-m1', '.github/workflows/deployment-v2-agent.yml'], { cwd: root }).toString().split('\0').filter(Boolean).sort();
@@ -72,5 +81,5 @@ export function publicSummary(raw, context) {
     runner: 'github-hosted-ubuntu-24.04-x64', sourceDigest: raw.sourceDigest,
     payloadDigest: raw.payloadDigest, completed: raw.completed === true,
     result: raw.completed === true && !cases.some(c => c.status === 'FAIL') ? 'PASS' : 'FAIL',
-    environment, metrics, cases };
+    environment, metrics, cases, ...(raw.harnessFailure ? { harnessFailure: harnessDetail(raw.harnessFailure) } : {}) };
 }
