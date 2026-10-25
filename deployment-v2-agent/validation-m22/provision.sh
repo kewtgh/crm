@@ -79,6 +79,24 @@ else
     if test -n "$selected" && test "$selected" != '(none)'; then download_extract "$name" "$selected" || true; fi
   done
 fi
+# Use the helper distributed with this Engine generation rather than the older Ubuntu
+# helper. This is a disposable-VM software comparison, not a security-policy change.
+sudo install -d -m 755 /opt/lumina-m22-fixture/helper
+if test "$M22_PROFILE" = 26.04; then
+  helper_deb=work/ci-private/m22-debs/docker-ce-rootless-extras_29.1.3-1~ubuntu.24.04~noble_amd64.deb
+  if curl --fail --location --max-time 45 https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-ce-rootless-extras_29.1.3-1~ubuntu.24.04~noble_amd64.deb --output "$helper_deb"; then
+    printf '%s  %s\n' f7418f18ce784e1edf5a3709fa4299cf32bde4a9b654ecda161c2fa071a90439 "$helper_deb" | sha256sum --check
+    node deployment-v2-agent/validation-m22/setup.mjs package "$helper_deb"
+    sudo dpkg-deb --extract "$helper_deb" /opt/lumina-m22-fixture/helper
+  fi
+fi
+for helper_file in /opt/lumina-m22-fixture/helper/usr/bin/rootlesskit /opt/lumina-m22-fixture/helper/usr/bin/docker-rootlesskit /opt/lumina-m22-fixture/engine/usr/bin/rootlesskit /opt/lumina-m22-fixture/engine/usr/bin/docker-rootlesskit; do
+  if test -x "$helper_file"; then
+    sudo cp -p /usr/bin/rootlesskit work/ci-private/m22-original-rootlesskit
+    sudo install -m 755 "$helper_file" /usr/bin/rootlesskit
+    break
+  fi
+done
 # A pinned upstream Compose supplements the 24.04 Rootless workload only. Ubuntu 26.04
 # uses the Ubuntu package above; the fallback never certifies an Ubuntu target package.
 if test "$M22_PROFILE" = 24.04; then

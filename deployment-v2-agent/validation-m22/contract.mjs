@@ -115,6 +115,7 @@ export function summary(raw, context) {
   return { schemaVersion: 1, scope: 'NONPRODUCTION_ALPHA', productionApproved: false,
     ...context, sourceDigest: raw.sourceDigest,
     payloadDigest: /^[a-f0-9]{64}$/.test(raw.payloadDigest) ? raw.payloadDigest : null,
+    ...(/^[a-f0-9]{64}$/.test(raw.rootlesskitDigest) ? { rootlesskitDigest: raw.rootlesskitDigest } : {}),
     completed: raw.completed === true,
     result: raw.completed !== true || cases.some(c => c.status === 'FAIL') ? 'FAIL' : cases.some(c => c.status === 'NOT_RUN') ? 'INCOMPLETE' : 'PASS',
     environment, packages, metrics, kernel, facts, legacy, managerFailures, daemonFailure, cases };

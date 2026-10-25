@@ -66,7 +66,10 @@ try {
   report.metrics.payloadBytes = logicalBytes(payload);
   report.environment.node = process.versions.node; report.environment.kernel = os.release().match(/^[\d.]+/)?.[0];
   report.environment.systemd = exec('/usr/bin/systemctl', ['--version']).match(/^systemd (\d+)/)?.[1];
-  if (fs.existsSync('/usr/bin/rootlesskit')) report.environment.rootlesskit = exec('/usr/bin/rootlesskit', ['--version']).match(/\b(\d+\.\d+\.\d+)\b/)?.[1];
+  if (fs.existsSync('/usr/bin/rootlesskit')) {
+    report.environment.rootlesskit = exec('/usr/bin/rootlesskit', ['--version']).match(/\b(\d+\.\d+\.\d+)\b/)?.[1];
+    report.rootlesskitDigest = sha256(fs.readFileSync('/usr/bin/rootlesskit'));
+  }
   report.facts.enginePackageUnchanged = true;
   await check('ubuntu', async () => { assert.equal(report.environment.ubuntu, profile); assert.equal(fs.readFileSync('/proc/1/comm', 'utf8').trim(), 'systemd'); });
   phase = 'MANAGER';
