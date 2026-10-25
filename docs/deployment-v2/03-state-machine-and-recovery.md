@@ -4,7 +4,7 @@
 
 ## 不变量
 
-1. 一个 site 最多有一个未解决的部署操作。所有写入通过固定 Agent；一个 OS 项目写锁覆盖外部副作用与状态提交。
+1. 一个 site 最多有一个未解决的部署操作。短 CLI 准入与按需 worker 通过同一固定 Agent 包的受审 store API 写入；同一 OS 项目锁串行化全部写者并覆盖 worker 副作用与状态提交，不要求常驻 PID。
 2. 请求绑定不可变 release manifest digest、kind、idempotency key、前置 revision 和管理员批准的计划 digest。同 key 同内容返回同 operation；同 key 不同内容拒绝。
 3. 已接受版本只在验收满足后与 operation 终态同事务提交。JSON 导出、日志和归档不得影响该事务的正确性。
 4. SQLite 与 Docker / PostgreSQL 没有分布式原子提交。每个外部副作用必须先落盘 intent，再用独立观测或事务 receipt 证明结果。不得宣称端到端 exactly-once。
@@ -14,7 +14,7 @@
 
 ## 单一事务状态库
 
-首版选择本机文件系统上的 SQLite，`journal_mode=DELETE`、每个连接 `synchronous=EXTRA`、foreign keys 开启、prepared statements、短事务、bounded busy timeout。单写者、低写频率不需要 WAL 的并发复杂度。禁止 NFS / 网络盘、ATTACH 跨库事务和临时 JSON 作为备份真相。
+首选本机项目专属 SQLite 文件，`journal_mode=DELETE`、每个写连接 `synchronous=EXTRA`、foreign keys 开启、prepared statements、短事务与 bounded busy timeout。它是进程内库，不新建数据库实例、容器或服务；不把请求、steps、events 或 accepted 状态写入 CRM 业务 PostgreSQL，也不借用其他项目。低写频率不需 WAL 的并发复杂度，禁止 NFS / ATTACH 跨库事务和临时 JSON 真相副本。
 
 SQLite 的 EXTRA 在 DELETE journal 模式中额外同步删除 journal 的目录；这减少断电紧邻提交时的持久性缺口，不能替代真实文件系统 / VM 崩溃测试。[SQLite synchronous 说明](https://sqlite.org/pragma.html#pragma_synchronous)
 
@@ -22,14 +22,24 @@ SQLite 的 EXTRA 在 DELETE journal 模式中额外同步删除 journal 的目�
 | --- | --- |
 | `store_meta` | schema epoch、Agent 最小读写协议、site identity；禁止从应用版本推断 |
 | `site` | 当前控制平面 owner epoch、单调 revision、accepted 引用（V2 operation 或一次性受审 V1 baseline）；接受更新使用 CAS |
-| `operations` | 不可变请求、plan digest、kind、状态、前置 / 目标 release、创建与结束时间；idempotency key 唯一；未解决操作 partial unique |
+| `operations` | 不可变请求、plan digest、kind、状态、前置 / 目标 release、一次性 action grant / revision / 消费结果；idempotency key 唯一；未解决操作 partial unique |
 | `steps` | `(operationId, stepId)` 唯一；logicalStepId、intent、执行参数摘要、外部资源身份、outcome 与 receipt 引用；禁止覆盖已证实结果 |
 | `events` | 每 operation 单调 sequence、转移前后 revision、结构化 code 与 evidence ref；和 projection 同事务写入，不是另一套可执行队列 |
 | `evidence` | 受限类型、schema version、内容 digest、采集时间、来源身份与最小化结构；不可变，不含 secrets 或业务行数据 |
 
-数据库中的约束、事件和当前投影共同属于一个事务事实来源。不要另建独立 event 文件再异步更新数据库。事件用于审核转移，不用于自动重放外部命令。证据 blob 如需分文件，先写入、fsync 并按内容寻址固定，再以事务引用；孤立 blob 可以晚清理，缺失 blob 必须阻断相关恢复。
+数据库中的约束、事件和投影是一个事务事实来源。小型结构化证据优先内联，避免默认新建 blob 服务或额外 evidence 数据库。确需分文件时先 fsync、按摘要固定再事务引用，缺失证据阻断恢复。保留和空间上限见 [生产预算](06-release-and-agent-lifecycle.md#生产最小增量与资源预算)；不自动删除未解决操作，不清理业务库腾空间。
 
-只读 status 使用正常只读连接 / Agent 查询，不设置会忽略活动 journal 的 `immutable=1`。如果只读打开需要 hot-journal recovery，则返回 `STATE_RECOVERY_REQUIRED`；只有持锁 Agent 可执行 SQLite 自身恢复并检查完整性，诊断工具不能擅自恢复。损坏状态库不能靠拼接日志自动重建。
+status / 诊断短进程使用正常只读连接，不启动 worker，不设置忽略活动 journal 的 `immutable=1`。状态库尚未安装时返回 NOT_INSTALLED，不创建空库；若读取需要 hot-journal recovery，返回 STATE_RECOVERY_REQUIRED。只有显式授权、持锁的按需 Agent 可做 SQLite 自身恢复；损坏库不能靠拼日志自动重建。
+
+## 按需准入与一次性派发
+
+CLI 持同一项目锁提交请求和 action grant 后释放，再请求固定 systemd unit 启动。两步没有原子性保证：已提交但未派发是正常可辨认状态；相同 key 可找回原操作再派发，不重新建请求。systemd job 不是权威请求记录。
+
+worker 获锁后以事务 CAS 消费唯一未消费 grant，并写领取事件。grant 绑定 operation / action / expected revision / plan digest / Agent digest；一经消费不可因退出码、service restart 或再次 start 被重置。CLI 失联、重复启动、陈旧动作和新版本入口都不能复用已消费授权。恢复动作在原 operation 生成新 revision 的明确授权，沿用同一表与转移协议。
+
+QUEUED grant 尚未领取时可以同 key 重新派发；已领取却未完成时先 reconcile。重启后的普通 status 不消费 grant、不自动续跑；显式 worker 启动也不能把旧 INTENT 自动当作待执行命令。unit inactive / failed、内核锁释放和数据库事实分别展示。
+
+准入、worker、安装器均复用一个预置且受信的锁文件；锁顺序和 V1 fence 见 [迁移协议](07-migration-milestones-and-acceptance.md)。锁文件不删除重建，不用时间戳 lease 猜过期；进程退出后锁可释放，但真实 Docker / DB 任务仍必须独立核实。
 
 ## 状态与转移
 
@@ -79,7 +89,7 @@ stateDiagram-v2
 
 ## 副作用协议
 
-每个副作用 step 具有 `NOT_STARTED | INTENT | PROVEN | UNKNOWN`；PROVEN 还必须有 `outcome=APPLIED|NO_EFFECT`，不能只用成功布尔。进程开始、退出和 receipt 是事件 / 证据，不新增互相矛盾的状态字段。
+每个副作用 step 具有 `NOT_STARTED | INTENT | PROVEN | UNKNOWN`；PROVEN 还需 `outcome=APPLIED|NO_EFFECT`、evidenceScope 和 executionAttribution，不能只用成功布尔。证明数据库当前已提交不等于证明由本 step 执行；归属不明不能伪造 operation receipt，后续推进需显式采纳真实状态的恢复计划。
 
 stepId 标识一次不可变执行 intent；logicalStepId 标识同一个逻辑动作。确认旧 step 为 NO_EFFECT 后，经批准重试要创建新 stepId 并引用原 step，不能把旧 PROVEN 结果改回 INTENT。断线后查询或补录原 receipt 则始终使用原 stepId，不产生新执行。
 
@@ -93,31 +103,33 @@ stepId 标识一次不可变执行 intent；logicalStepId 标识同一个逻辑�
 
 Linux 进程锁只约束协作进程，不能锁住已派发的远端 daemon 任务或数据库事务。Agent 死亡后要先确认原任务状态 / 连接 / advisory lock；kill 掉 CLI 或容器进程并不证明数据库未提交。旧任务仍活跃时保持阻断，不启动竞争任务。
 
-## 数据库：解决提交与本地落盘之间的窗口
+## 数据库提交窗口与业务库边界
 
-V1 migrator 已把单个迁移 SQL 与 `app_meta.schema_migrations` 同事务提交，并持 session advisory lock。这一原则保留，但其 receipt 还没有 V2 operation / step 绑定。V2 首版要求应用发布协议提供以下增强，不能只改 Agent JSON：
+V1 migrator 已将单个 SQL 与既有 `app_meta.schema_migrations` 同事务提交，并持 session advisory lock。v0.2 默认复用这个真实账本，不新增部署回执表、控制数据库、角色或后台服务。v0.1 要求新增 operation-bound 数据库回执的方案退出首版前提；单一控制状态始终在 SQLite。
 
-- 保留既有 migration 文件 checksum 和 ledger，不重写历史行。新增受限 `deployment_migration_receipts`，以 `(operationId, stepId)` 唯一，包含 release digest、迁移名 / checksum、前置 / 后置 manifest digest。
-- 每个新增迁移在同一个 PostgreSQL 事务中执行 SQL、写既有 migration ledger、写该 step receipt，再 COMMIT；同一 session advisory lock 覆盖检查与执行。V1 / V2 过渡期锁 namespace 必须与受审 V1 migrator 一致，不能另起一个互不排斥的锁。
-- 一次发布有多项迁移时是逐项事务，不宣称整个发布原子化。已提交前缀保留，后续项不能将整个脚本重新跑一遍。
-- 最终 batch receipt 必须在同一 advisory lock 下核对全部目标账本，再写与 operation 绑定的完成 receipt。它证明核验完成，不把先前多个事务变成一个事务。
-- 默认只准入 PostgreSQL 事务内、无外部网络 / 文件 / 邮件副作用的迁移。非事务 DDL、外部任务或无法证明回滚的内容退出日常发布，使用单独维护设计。
-- receipt 观测只读、repeatable-read；Agent 不以数据库超级用户操作。跨版本新协议的表初始化由受审接入迁移完成，V1 原始记录不能被补写成 V2 执行事实。
+- 在 SQLite intent 绑定 release digest、logical step、迁移 name / checksum、完整前置与目标 manifest、执行容器身份。真实业务迁移才允许执行 SQL；P0 适配不连数据库，M1 不改业务迁移框架。
+- 保留受审 migrator 的 SQL + 原有 ledger 同事务和相同 advisory lock namespace，不改旧 checksum / 历史行。一次发布多项迁移仍是逐项提交，不假设整个 batch 原子化。
+- 只准入事务内、无外部文件 / 网络 / 邮件副作用的迁移。非事务 DDL 或绕过锁的维护不在此协议内，需独立维护设计。
+- ledger 能证明某个 schema 结果已提交，不能单独证明执行者。executionAttribution 为 UNPROVEN 时明确保留；不得补写数据库或日志伪造 V2 operation / step receipt。
+- 正常执行已返回且本地证据完整时，核验账本再推进。COMMIT 后本地记录丢失时先保持 RECOVERY_REQUIRED：只读核实实际 schema / 已提交前缀与任务终结，再由管理员批准采纳当前 schema 的恢复计划，绝不重放已提交 SQL。
+- 恢复采集需在确认旧执行者终结、取得同一 session advisory lock 后，开启新的 repeatable-read 只读事务读取账本；不要使用等待旧任务结束之前建立的旧 snapshot。该检查属于授权恢复，不是 P0 无数据库连接的环境适配。
+
+这个顺序由 session 锁生命周期与 repeatable-read snapshot 语义推导，仍须 L2 / L3 实证。[PostgreSQL advisory locks](https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS)、[事务 snapshot](https://www.postgresql.org/docs/18/transaction-iso.html#XACT-REPEATABLE-READ)。NO_EFFECT 还要求全部相关效果可回滚；既有 sequence 推进等非事务效果不能因为 ledger 未变化就判为未发生。
 
 恢复时的判定：
 
 | 真实观测 | 解释 | 后续动作 |
 | --- | --- | --- |
-| operation / step receipt、checksum 和目标 ledger 一致 | 迁移已提交，即使本地仍是 INTENT | 将 step 记为 PROVEN/APPLIED；不执行该 SQL |
-| receipt 缺失，原 session 已终结，advisory lock 可取得，账本仍等于前置值，且本 step 完全事务化 | 本 step 未提交 | 记 PROVEN/NO_EFFECT；管理员批准续跑计划后，用新 attempt 身份执行未完成 step |
-| 部分目标项已提交且分别有匹配 receipt | 已完成前缀，batch 未完成 | 固定已完成项；对剩余项重新计划，不重放前缀 |
-| receipt 与账本冲突、出现无归属变更、原任务活跃、无法读账本或非事务化 | 结果不明或越界变化 | RECOVERY_REQUIRED；人工调查或向前修复，禁止自动重试 / 回退 |
+| ledger 中预期项 / checksum 与目标一致，本地完成记录不全 | 数据库提交已观测；执行归属可能未证明 | 记录真实结果及 UNPROVEN 归属，保持恢复；批准采纳当前状态后只推进后续步骤，不执行该 SQL |
+| 原 session 已终结、同一锁可取得、新 snapshot 仍为前置账本、step 完全事务化 | 可证明未提交本 step | PROVEN/NO_EFFECT；批准后用新 stepId 执行未完成动作 |
+| 已提交前缀完整且 checksum 一致，后续项缺失 | 逐项结果不同，batch 未完成 | 固定已提交事实，管理员恢复计划仅处理剩余项 |
+| checksum 冲突、未知 schema 漂移、原任务活跃、无法读账本或非事务化 | 证据不足或越界变化 | RECOVERY_REQUIRED；不自动采纳、重试或回退 |
 
-“advisory lock 可取得”只证明该锁当前没有持有者，必须与事务化保证、原任务终结和账本前置值共同使用。若其他维护会绕过该锁，环境不满足本协议，不能把 absence 当作 NO_EFFECT。
+“锁可取得”只证明当前无持有者，需结合事务化保证、任务终结、全新 snapshot 和前置账本。采纳已提交 schema 也不意味着证明原执行者；接受事件必须保留管理员恢复批准和归属限制，不把观测伪装成因果证据。未知漂移不能靠管理员点确认绕过技术守卫。
 
 ## 激活、混合版本与回退
 
-激活前保存每个 service 的真实 image identity 与 schema 兼容基线。Web / Worker 的替换不是原子操作；切换中可能混合版本，必须在真实 VM 测试旧新版本共存、队列负载与重复任务保护。不支持混跑的 release 不得进入默认在线路径，需管理员批准的暂停 Worker / 维护窗口计划。
+激活前保存每个 service 的真实 image identity 与 schema 兼容基线。Web / Worker 替换不是原子操作，旧新共存、队列负载与重复任务保护须在非生产 Linux 实测；需要 reboot / crash 的场景另属 L3，不移到生产。不支持混跑的 release 退出默认在线路径，另做维护计划。
 
 Docker 命令结束后读取实际容器身份、label、状态与应用自身 release identity；不用 tag 或 compose 命令退出码替代。仅一个 service 已切换、原 daemon 任务未结束或身份未知时进入 RECOVERY_REQUIRED，不执行全量重复 recreate。
 
@@ -137,7 +149,7 @@ Docker 命令结束后读取实际容器身份、label、状态与应用自身 r
 | --- | --- |
 | 请求提交前 / 后丢失 CLI 响应 | 前者未准入；后者同 key 找回原操作 |
 | intent 前 / 后进程被终止 | intent 前不执行；intent 后先观测，不能推测未执行 |
-| PostgreSQL COMMIT 后、本地 PROVEN 前 | 用数据库事务 receipt 补齐，绝不重复迁移 |
+| PostgreSQL COMMIT 后、本地 PROVEN 前 | 用既有事务 ledger 证明已提交结果；归属未证实仍需恢复计划，不重复迁移，不新建控制表 |
 | Web 已换、Worker 未换 | 明确混合版本，阻断新发布；针对未完成部分重新计划 |
 | 内部健康、公网不通 | 保留候选和 schema；只重复验收，不回滚数据库 |
 | 接受事务前 / 后崩溃 | 前者仍未接受；后者 terminal 与 accepted pointer 一致，无独立 finalization 修复 |

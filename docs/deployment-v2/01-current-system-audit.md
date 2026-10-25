@@ -2,6 +2,12 @@
 
 审计日期、提交和边界见 [设计入口](README.md)。本报告区分“当前仓库可以直接证明”“历史修复记录”和“需要真实环境验证”，不把旧故障或测试 fixture 当作当前生产事实。
 
+## M0 修订后的现场约束
+
+本次采用管理员声明的共享 Ubuntu 26.04 / 既有 CRM Rootless 容器栈作为适配目标，完整约束见 [当前架构](README.md#当前架构与约束来源)。同机其他业务的 Rootful Docker、数据库和工作流组件是受保护邻居，不是 V2 可借用的测试资源。当前 CRM PostgreSQL 在既有 Rootless 边界内，历史主机 Node 进程 / 外部 Supabase 附件不能用作重建目标。
+
+源码审计结论继续有效；M0 v0.1 选择新增常驻 Agent、强制单一 VM 形态的设计已由 v0.2 替换：优先按需 systemd、项目文件 SQLite、外部 CI / 非生产 Linux 验证。生产只读适配不安装、不运行测试工作负载。现场确切身份和路径进入私有 policy，公开文档不增加原始生产拓扑或操作材料。
+
 ## 第一性原理与应有职责
 
 发布成功要求四个事实同时成立：目标内容可信且确定；变更只发生在本项目授权资源；数据库与应用版本可共同运行；接受记录与实际运行状态一致。部署器本身必须能在应用源码不可运行、网络中断或上次部署未完成时继续读取证据。
@@ -80,7 +86,7 @@ flowchart TD
 | R1 / 高 | systemd 启动应用目录脚本；bootstrap 更新该目录后执行目标 runner；应用 engines 也是主机执行器合约 | 一次业务发布同时改变部署器、解析器及运行时要求；失败版本的源码也可能成为恢复工具 | 独立 Agent 制品与运行时；禁止应用制品更新 Agent；生产不执行检出源码 |
 | R2 / 高 | 请求、latest、单次状态、accepted、归档与多个 active receipt 分步持久化 | 崩溃后各文件分别有效却互相矛盾，必须增加专门协调路径 | 单一事务状态库；接受与终态同事务；归档只导出 |
 | R3 / 高 | `collectHostSnapshot.safe` 将异常变成 null / false；`command` 对非零结果统一 `HOST_READ_FAILED`；`isolated` 合并多个不同条件 | socket 权限、配置、命令失败、JSON 解析和真正安全失配难以区分；下游一并阻断 | 分离采集与规则；保留具体 reason / exit / parse-stage；依赖未满足记 NOT_RUN |
-| R4 / 高 | 当前 CI 为 `ubuntu-latest`；真实 Compose 测试刻意使用不可达 daemon，其余主机观测是 fixtures | 能发现 parser / Git 交接错误，但不能证明指定 Ubuntu 包、rootless daemon、systemd / cgroup 和重启兼容 | 固定 Ubuntu 26.04 完整 VM；真实启动、资源限制与崩溃注入列为发布门槛 |
+| R4 / 高 | 当前 CI 为 `ubuntu-latest`；真实 Compose 测试刻意使用不可达 daemon，其余主机观测是 fixtures | 能发现 parser / Git 交接错误，但不能证明指定 Ubuntu 包、rootless daemon、systemd / cgroup 和重启兼容 | 外部 CI 真实 Linux / Compose；非生产 Linux 验证系统能力；缺条件记 NOT_RUN 并阻断相应发行，不在生产建测试环境 |
 | R5 / 高 | routine workflow 在生产运行三个 Buildx 构建目标；Preflight 因而依赖 BuildKit、缓存策略、维护包及 builder daemon | 应用未变更部署需求时，构建网络、磁盘、builder 维护仍可阻断发布 | 构建移到 CI；Buildx 不在 V2 应用发布依赖集合；维护独立 |
 | R6 / 高 | V1 已有精确 schema / image 守卫，但读取证据仍需当前应用镜像中的工具与可用源码；多种交接 / 归档协议按历史来源判断 | 不同年代版本导致“证据工具本身不可用”，需要持续扩充源码白名单 | 稳定证据协议、每步真实 receipt、明确兼容窗口；历史解释器只留在一次性迁移工具 |
 | R7 / 高 | 本机按提交 tag 构建，检查 image ID / revision；维护包校验内容哈希与审批；未形成独立 Agent 的签名发行 / 安装 / 回退链 | 本地一致性不等于可信发行来源，Agent 版本无法独立验收与冻结 | 单独签名包、固定发布身份、摘要、兼容 manifest、可离线验证和独立回退 |
@@ -108,4 +114,4 @@ Preflight 已对部分依赖使用 `DEPENDENCY_BLOCKED`，Compose 子探测也�
 
 ## 审计范围结论
 
-入口、代码模块、容器操作、主机维护资产、持久化事实、恢复分支和 CI 缺口已经建立映射。生产安装是否漂移、软件包精确 revision、权限 / cgroup 委派、真实公网路径、当前未完成操作均为待取证项；应由 [独立诊断规范](05-diagnostics-spec.md) 和 [真实 VM 验证](04-environment-and-ci.md) 分别解决，不能在开发机上猜测或远程修复。
+入口、代码模块、容器操作、主机维护资产、持久化事实、恢复分支和 CI 缺口已经建立映射。管理员提供的版本线和当前容器架构是设计输入；实际 package revision、权限 / cgroup 委派、user manager 生命周期、未完成操作与兼容性仍待取证。生产仅用 [只读诊断](05-diagnostics-spec.md) 做适配观测；运行 / 重启 / 崩溃行为交给 [外部验证层级](04-environment-and-ci.md)，没有条件就保留 NOT_RUN。
