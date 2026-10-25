@@ -5,11 +5,11 @@ import test from "node:test";
 const repositoryFile = (path) => new URL(`../${path}`, import.meta.url);
 
 test("makes communication thread creation replay-safe at the database boundary", async () => {
-  const [migration, repository, route, component] = await Promise.all([
+  const [migration, repository, contract, hook] = await Promise.all([
     readFile(repositoryFile("db/migrations/202607290064_v330_communication_scalability.sql"), "utf8"),
     readFile(repositoryFile("lib/v220-repository.ts"), "utf8"),
-    readFile(repositoryFile("app/api/communications/route.ts"), "utf8"),
-    readFile(repositoryFile("components/communications-inbox-page.tsx"), "utf8"),
+    readFile(repositoryFile("lib/communications-contract.ts"), "utf8"),
+    readFile(repositoryFile("hooks/use-communications-workspace.ts"), "utf8"),
   ]);
   assert.match(migration, /communication_threads_creation_request_uidx/);
   assert.match(migration, /creation_request_fingerprint/);
@@ -17,10 +17,9 @@ test("makes communication thread creation replay-safe at the database boundary",
   assert.match(migration, /communication_thread_idempotency_conflict/);
   assert.match(migration, /target_request_key text/);
   assert.match(repository, /target_request_key:input\.requestKey/);
-  assert.match(route, /requestKey:z\.string\(\)\.trim\(\)\.min\(8\)\.max\(160\)/);
-  assert.match(component, /threadRequest\.current=request/);
-  assert.match(component, /requestKey:request\.key/);
-  assert.match(component, /onChange=\{\(\)=>\{if\(!pending\)threadRequest\.current=null;\}\}/);
+  assert.match(contract, /requestKey=z\.string\(\)\.trim\(\)\.min\(8\)\.max\(160\)/);
+  assert.match(hook, /original.current=JSON.stringify\(parsed.data\)/);
+  assert.match(hook, /body=original.current/);
 });
 
 test("grants one bounded owner for provider delivery and skips successful replays", async () => {
@@ -37,8 +36,8 @@ test("grants one bounded owner for provider delivery and skips successful replay
   assert.match(migration, /'shouldDeliver',true/);
   assert.match(switchMigration, /'shouldDeliver',false/);
   assert.match(switchMigration, /next_attempt_at=now\(\)/);
-  assert.match(route, /accepted:deliveryStatus==="QUEUED"/);
-  assert.match(route, /status:deliveryStatus==="QUEUED"\?202:200/);
+  assert.match(route, /executeCommunicationCommand/);
+  assert.match(route, /result.deliveryStatus==="QUEUED"\?202:200/);
   assert.doesNotMatch(route, /if\(queued\.shouldDeliver\)|deliveryStarted|fetch\(/);
   assert.doesNotMatch(route, /return NextResponse\.json\(await loadCommunications\(\)\)/);
 });
@@ -61,11 +60,12 @@ test("paginates conversation summaries and one selected message history independ
   assert.doesNotMatch(inboxFunction, /'messages'/);
   assert.match(repository, /CommunicationInboxResult=\{items:CommunicationThreadSummary\[\];total:number;page:number;pageSize:number\}/);
   assert.match(repository, /loadCommunicationThread/);
-  assert.match(route, /parsePagination\(params,20\)/);
+  assert.match(route, /communicationInboxQuerySchema.safeParse/);
   assert.match(route, /messagePagination\.safeParse/);
   assert.equal((component.match(/<Pagination /g)??[]).length,2);
-  assert.match(component, /q:nextQuery\.trim\(\)/);
-  assert.match(component, /messagePageSize:String\(messagePageSize\)/);
+  assert.match(component, /view.q/);
+  const hook=await readFile(repositoryFile("hooks/use-communications-workspace.ts"),"utf8");
+  assert.match(hook, /messagePageSize:String\(messagePageSize\)/);
   assert.doesNotMatch(component, /const visible=/);
   assert.doesNotMatch(component, /communications\.truncated/);
 });

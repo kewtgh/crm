@@ -1,4 +1,12 @@
-# Implementation status — v3.42.0 release candidate
+# Implementation status — v3.43.0 release candidate
+
+## v3.43.0 — Communication command recovery and inbox triage
+
+Migration 140 adds filtered authorized inbox reads, exact-request receipts and guarded redelivery.
+The workspace has independent read recovery, role-aware controls, conversation-specific memory
+drafts, shareable URL views and explicit accepted/unknown outcomes. See
+[audit](FIRST_PRINCIPLES_AUDIT_V343.md), [plan](FIRST_PRINCIPLES_PLAN_V343.md)
+and [verification](V343_VERIFICATION.md).
 
 ## v3.42.0 — Recovery identity and complete archived-record views
 

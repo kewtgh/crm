@@ -824,7 +824,7 @@ test("Web and Worker production email runtime ownership cannot drift", async () 
   assert.match(healthRoute, /configurationBoundary:"web-and-worker"/);
   assert.doesNotMatch(healthRoute, /fetch\([^)]*EMAIL_DELIVERY/);
   assert.doesNotMatch(communicationRoute, /configuredCommunicationDelivery|postCommunicationDelivery|EMAIL_DELIVERY_WEBHOOK/);
-  assert.match(communicationRoute, /requeueCommunicationMessage/);
+  assert.match(communicationRoute, /executeCommunicationCommand/);
   assert.doesNotMatch(communicationRoute, /console\.|logger\.|EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*NextResponse/);
   assert.doesNotMatch(runner, /EMAIL_DELIVERY_WEBHOOK_(?:URL|TOKEN).*\["/);
 });

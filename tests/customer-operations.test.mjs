@@ -214,9 +214,9 @@ test("template writes require a stable UUID and explicit revision, and archive i
 });
 
 test("inbox guards current thread and inputs; invoker RPCs preserve ownership and narrow eligibility",async()=>{
-  const inbox=await source("components/communications-inbox-page.tsx"),hook=await source("hooks/use-remote-search.ts");
-  assert.match(inbox,/selectedIdRef.current!==id/);assert.match(inbox,/runThread\(signal=>apiFetch/);
-  assert.match(inbox,/disabled=\{pending\|\|threadLoading\}/);assert.match(inbox,/operationLock.current\|\|id===selectedId/);
+  const inbox=await source("components/communications-inbox-page.tsx"),workspace=await source("hooks/use-communications-workspace.ts"),hook=await source("hooks/use-remote-search.ts");
+  assert.match(workspace,/selectedIdRef.current!==id/);assert.match(workspace,/threadController.current\?\.abort\(\)/);
+  assert.match(inbox,/disabled=\{!state.ready\}/);assert.match(workspace,/canManage&&!locked&&threadCurrent/);
   assert.match(hook,/AbortSignal.any/);assert.match(hook,/!signal.aborted/);
   const sql=await source("db/migrations/202610020085_email_workflow_integrity.sql");
   assert.match(sql,/security invoker/g);assert.doesNotMatch(sql,/security definer/i);

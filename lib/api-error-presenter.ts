@@ -3,6 +3,12 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  COMMUNICATION_VERSION_CONFLICT:"commsRecovery.reload",
+  COMMUNICATION_REQUEST_CONFLICT:"commsRecovery.requestConflict",
+  COMMUNICATION_ACCESS_DENIED:"commsRecovery.noAccess",
+  COMMUNICATION_DELIVERY_NOT_RETRYABLE:"commsRecovery.notRetryable",
+  COMMUNICATION_THREAD_NOT_OPEN:"commsRecovery.closed",
+  COMMUNICATION_CONSENT_REQUIRED:"communications.consentRequired",
   RECYCLE_VERSION_CONFLICT: "recovery.conflict",
   RECYCLE_REQUEST_CONFLICT: "recovery.requestConflict",
   RECYCLE_ACCESS_DENIED: "recovery.reload",

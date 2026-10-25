@@ -60,9 +60,8 @@ test("switch migration makes durable queueing the atomic delivery boundary", asy
   assert.match(migration, /'shouldDeliver',true/);
   assert.doesNotMatch(route, /shouldDeliver/);
   assert.match(migration, /'accepted',result\.delivery_status='QUEUED'/);
-  assert.match(route, /status:deliveryStatus==="QUEUED"\?202:200/);
-  assert.match(route, /status:202/);
-  assert.match(route, /requeueCommunicationMessage/);
+  assert.match(route, /result.deliveryStatus==="QUEUED"\?202:200/);
+  assert.match(route, /executeCommunicationCommand/);
   assert.doesNotMatch(route, /fetch\(|EMAIL_DELIVERY_WEBHOOK|communicationRecipient|completeCommunication|failCommunication/);
   assert.doesNotMatch(repository, /service_complete_communication|service_fail_communication|retry_communication_message/);
 });
@@ -223,7 +222,8 @@ test("Worker, readiness, Operations and UI expose the asynchronous contract safe
   assert.doesNotMatch(component, /message\.lastError/);
   assert.match(locale, /消息已加入投递队列/);
   assert.match(locale, /消息已重新加入投递队列/);
-  assert.match(component, /\["QUEUED","PROCESSING"\]/);
+  const workspace=await readFile(repositoryFile("hooks/use-communications-workspace.ts"),"utf8");
+  assert.match(workspace, /\["QUEUED","PROCESSING"\]/);
   assert.match(dockerfile, /scripts\/process-communication-deliveries\.mjs/);
   assert.match(dockerfile, /lib\/email-delivery-runtime\.mjs/);
 });

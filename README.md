@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.42.0**
+Current release candidate: **v3.43.0**
+
+## v3.43.0 — Recoverable communication and shareable inbox triage
+
+Communication commands retain atomic outcome receipts, with observed failure tokens for redelivery.
+The inbox separates uncertain requests from accepted work and failed refreshes, respects read-only
+roles, and preserves per-conversation drafts in page memory. Shareable search/status/purpose/delivery
+views and independent pane recovery improve daily triage. See [audit](docs/FIRST_PRINCIPLES_AUDIT_V343.md),
+[plan](docs/FIRST_PRINCIPLES_PLAN_V343.md), [release notes](docs/RELEASE_V3.43.0.md)
+and [verification](docs/V343_VERIFICATION.md).
 
 ## v3.42.0 — Complete and verifiable record recovery
 

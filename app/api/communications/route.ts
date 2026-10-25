@@ -1,19 +1,44 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ApiError,apiRoute,parsePagination,parseUuid,requireApiCapability } from "@/lib/api";
+import { ApiError,apiRoute,parseUuid,requireApiCapability } from "@/lib/api";
 import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { createCommunicationThread,loadCommunications,loadCommunicationThread,queueCommunicationMessage,recordInboundCommunication,requeueCommunicationMessage } from "@/lib/v220-repository";
+import {executeCommunicationCommand,loadCommunications,loadCommunicationThread} from "@/lib/v220-repository";
+import {communicationCommandSchema,communicationInboxQuerySchema,communicationResultSchema} from "@/lib/communications-contract";
 
-const schema=z.discriminatedUnion("operation",[
-  z.object({operation:z.literal("thread"),contactId:z.uuid(),subject:z.string().trim().min(2).max(200),channel:z.literal("EMAIL"),purpose:z.enum(["SERVICE","TRANSACTIONAL","EVENT","MARKETING"]),requestKey:z.string().trim().min(8).max(160)}),
-  z.object({operation:z.literal("send"),threadId:z.uuid(),body:z.string().trim().min(1).max(10000),idempotencyKey:z.string().trim().min(8).max(160)}),
-  z.object({operation:z.literal("inbound"),threadId:z.uuid(),body:z.string().trim().min(1).max(10000),idempotencyKey:z.string().trim().min(8).max(160)}),
-  z.object({operation:z.literal("retry"),messageId:z.uuid()}),
-]);
 const messagePagination=z.object({page:z.coerce.number().int().min(1).max(100000).optional(),pageSize:z.coerce.number().int().refine(value=>[10,20,50].includes(value)).default(20)});
-function remapCommunicationError(error:unknown):never{if(error instanceof DatabaseRequestError){if(["COMMUNICATION_THREAD_IDEMPOTENCY_CONFLICT","COMMUNICATION_IDEMPOTENCY_CONFLICT"].includes(error.code))throw new ApiError(error.code,409);if(error.code==="COMMUNICATION_THREAD_NOT_FOUND")throw new ApiError(error.code,404);if(error.code==="COMMUNICATION_DELIVERY_NOT_RETRYABLE")throw new ApiError(error.code,409);}throw error;}
-async function get(request:Request){await requireApiCapability("messages.view");const params=new URL(request.url).searchParams;const threadId=params.get("threadId");try{if(threadId){const parsed=messagePagination.safeParse({page:params.get("messagePage")??undefined,pageSize:params.get("messagePageSize")??20});if(!parsed.success)throw new ApiError("INVALID_PAGINATION",400,"INVALID_PAGINATION",{field:String(parsed.error.issues[0]?.path[0]??"messagePage")});return NextResponse.json(await loadCommunicationThread(parseUuid(threadId,"threadId"),parsed.data.page,parsed.data.pageSize));}const{page,pageSize}=parsePagination(params,20);if(![10,20,50].includes(pageSize))throw new ApiError("INVALID_PAGINATION",400);const query=params.get("q")?.trim().slice(0,160)??"";return NextResponse.json(await loadCommunications(query,page,pageSize));}catch(error){remapCommunicationError(error);}}
-async function post(request:Request){if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);await requireApiCapability("messages.manage");const parsed=schema.safeParse(await request.json().catch(()=>({})));if(!parsed.success)throw new ApiError("INVALID_COMMUNICATION_INPUT",400,"INVALID_COMMUNICATION_INPUT",{field:String(parsed.error.issues[0]?.path[0]??"form")});try{if(parsed.data.operation==="thread"){const thread=await createCommunicationThread(parsed.data);return NextResponse.json({operation:"thread",threadId:thread.id});}if(parsed.data.operation==="inbound"){const message=await recordInboundCommunication(parsed.data.threadId,parsed.data.body,parsed.data.idempotencyKey);return NextResponse.json({operation:"inbound",threadId:parsed.data.threadId,messageId:message.id});}if(parsed.data.operation==="retry"){const message=await requeueCommunicationMessage(parsed.data.messageId);return NextResponse.json({operation:"retry",threadId:message.thread_id,messageId:message.id,deliveryStatus:"QUEUED",accepted:true},{status:202});}const queued=await queueCommunicationMessage(parsed.data.threadId,parsed.data.body,parsed.data.idempotencyKey);const deliveryStatus=queued.message.delivery_status;return NextResponse.json({operation:"send",threadId:queued.message.thread_id,messageId:queued.message.id,deliveryStatus,accepted:deliveryStatus==="QUEUED"},{status:deliveryStatus==="QUEUED"?202:200});}catch(error){remapCommunicationError(error);}}
+function remapCommunicationError(error:unknown):never{
+ if(error instanceof DatabaseRequestError){
+  if(["COMMUNICATION_THREAD_IDEMPOTENCY_CONFLICT","COMMUNICATION_IDEMPOTENCY_CONFLICT","COMMUNICATION_REQUEST_CONFLICT","COMMUNICATION_VERSION_CONFLICT","COMMUNICATION_DELIVERY_NOT_RETRYABLE","COMMUNICATION_THREAD_NOT_OPEN"].includes(error.code))throw new ApiError(error.code,409);
+  if(error.code==="COMMUNICATION_ACCESS_DENIED")throw new ApiError(error.code,403);
+  if(error.code==="COMMUNICATION_THREAD_NOT_FOUND")throw new ApiError(error.code,404);
+  if(["COMMUNICATION_INPUT_INVALID","COMMUNICATION_MESSAGE_INVALID","COMMUNICATION_THREAD_INVALID","COMMUNICATION_CONSENT_REQUIRED","COMMUNICATION_RECIPIENT_UNAVAILABLE"].includes(error.code))throw new ApiError(error.code,400);
+ }
+ throw error;
+}
+async function get(request:Request){
+ await requireApiCapability("messages.view");const params=new URL(request.url).searchParams,threadId=params.get("threadId");
+ try{
+  if(threadId){
+   const parsed=messagePagination.safeParse({page:params.get("messagePage")??undefined,pageSize:params.get("messagePageSize")??20});
+   if(!parsed.success)throw new ApiError("INVALID_PAGINATION",400);
+   return NextResponse.json(await loadCommunicationThread(parseUuid(threadId,"threadId"),parsed.data.page,parsed.data.pageSize));
+  }
+  const parsed=communicationInboxQuerySchema.safeParse(Object.fromEntries(params));
+  if(!parsed.success)throw new ApiError("INVALID_COMMUNICATION_FILTER",400);
+  const {q,page,pageSize,...filters}=parsed.data;
+  return NextResponse.json(await loadCommunications(q,page,pageSize,filters));
+ }catch(error){remapCommunicationError(error);}
+}
+async function post(request:Request){
+ if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);
+ await requireApiCapability("messages.manage");
+ const parsed=communicationCommandSchema.safeParse(await request.json().catch(()=>({})));
+ if(!parsed.success)throw new ApiError("INVALID_COMMUNICATION_INPUT",400,"INVALID_COMMUNICATION_INPUT",{field:String(parsed.error.issues[0]?.path[0]??"form")});
+ try{
+  const result=communicationResultSchema.parse(await executeCommunicationCommand(parsed.data));
+  return NextResponse.json(result,{status:["send","retry"].includes(result.operation)&&result.deliveryStatus==="QUEUED"?202:200});
+ }catch(error){remapCommunicationError(error);}
+}
 export const GET=apiRoute(get,"COMMUNICATION_LOAD_FAILED");
 export const POST=apiRoute(post,"COMMUNICATION_OPERATION_FAILED");

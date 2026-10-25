@@ -1,3 +1,4 @@
+import {communicationsRecoveryZh} from "./communications-recovery";
 import {recoveryZh} from "./recovery-workspace";
 import {qualityTriageZh} from "./quality-triage";
 import {calendarRecoveryZh} from "./calendar-recovery";
@@ -543,5 +544,6 @@ export const zhCN: Messages = {
   ...actionReviewZh,
   ...calendarRecoveryZh,
   ...qualityTriageZh,
+  ...communicationsRecoveryZh,
 };
 import {operationsRepairZh} from "./operations-repair";

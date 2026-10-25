@@ -44,16 +44,17 @@ test("persists appointment request fingerprints and closes the malformed JSON fa
 });
 
 test("reports communication result capacity and blocks duplicate client operations", async () => {
-  const [migration, route, component] = await Promise.all([
+  const [migration, route, component, workspace] = await Promise.all([
     readFile(repositoryFile("db/migrations/202607290063_v320_delivery_integrity.sql"), "utf8"),
     readFile(repositoryFile("app/api/communications/route.ts"), "utf8"),
     readFile(repositoryFile("components/communications-inbox-page.tsx"), "utf8"),
+    readFile(repositoryFile("hooks/use-communications-workspace.ts"), "utf8"),
   ]);
   assert.match(migration, /'total',\(select count\(\*\) from filtered\)/);
   assert.match(migration, /'truncated',\(select count\(\*\) from filtered\)>jsonb_array_length/);
   assert.doesNotMatch(route, /postCommunicationDelivery|configuredCommunicationDelivery|fetch\(/);
-  assert.match(route, /deliveryStatus,accepted:deliveryStatus==="QUEUED"/);
-  assert.match(component, /if\(operationLock\.current\)return null/);
-  assert.match(component, /messageRequest\.current=request/);
+  assert.match(route, /communicationResultSchema.parse\(await executeCommunicationCommand/);
+  assert.match(workspace, /!canManage\|\|busy.current/);
+  assert.match(workspace, /original.current=JSON.stringify\(parsed.data\)/);
   assert.doesNotMatch(component, /<Search size=/);
 });

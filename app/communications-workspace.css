@@ -1,0 +1,25 @@
+.communications-page .communications-layout{grid-template-columns:minmax(270px,350px) minmax(0,1fr);align-items:start}
+.communication-pane-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border-bottom:1px solid var(--line)}
+.communication-pane-heading .secondary-button{min-width:0;white-space:normal;text-align:center;flex-shrink:0}
+.communications-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:14px;border:0;margin:0;min-width:0}
+.communications-filters>.search-field,.communications-filters>.field:last-of-type,.communications-filters>button{grid-column:1/-1}
+.communications-filters>.search-field{min-height:44px;align-self:start}
+.communications-filters .field{min-width:0;margin:0}.communications-filters select,.communications-filters input{width:100%;min-width:0}
+.communications-threads{max-height:480px;overflow:auto}
+.communications-threads>button{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:14px;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent}
+.communications-threads>button.active{background:var(--green-soft)}.communications-threads>button:disabled{opacity:.6}
+.communications-threads>button>span{display:grid;gap:3px;min-width:0}.communications-threads b{overflow-wrap:anywhere}
+.communications-page .communication-thread{display:flex;flex-direction:column;min-height:620px;min-width:0}
+.communications-page .communication-thread>header{min-width:0}.communication-thread h2,.communication-thread header p,.communication-messages p{overflow-wrap:anywhere}
+.communications-page .communication-messages{flex:1;min-height:200px}.communication-thread>.inline-message{margin:12px}
+.communication-composer .drawer-actions{flex-wrap:wrap}.communication-composer .field small{line-height:1.6}
+.communication-confirm{justify-self:start;max-width:100%;white-space:normal}
+@media(max-width:800px){
+ .communications-page .communications-layout{grid-template-columns:minmax(0,1fr)}
+ .communications-page .communications-layout>aside{max-height:none;overflow:visible}
+ .communications-threads{max-height:240px}.communications-page .communication-thread{min-height:480px}
+ .communication-pane-heading{flex-wrap:wrap}.communication-pane-heading .secondary-button{max-width:100%}
+ .communications-page .communication-messages>div{max-width:94%}
+ .communication-composer .drawer-actions>button{flex:1 1 100%;white-space:normal}
+}
+@media(max-width:420px){.communications-filters{grid-template-columns:minmax(0,1fr)}}
