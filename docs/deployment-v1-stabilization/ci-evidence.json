@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "scope": "V1_DEPLOYMENT_STABILIZATION",
+  "testCommit": "68d79bb1d7f2a6f5f3c27f469e9e3a8d668a5dce",
+  "runId": 40221342101,
+  "jobId": 121253375840,
+  "runUrl": "https://github.com/kewtgh/crm/actions/runs/40221342101",
+  "result": "PASS",
+  "environment": {
+    "os": "Ubuntu 26.04",
+    "runnerImage": "ubuntu-26.04/20261012.163.1",
+    "runnerVersion": "2.338.0",
+    "dockerClientPackage": "29.1.3-0ubuntu4.1",
+    "buildxPackage": "0.30.1-0ubuntu1",
+    "packageArchitecture": "amd64v3",
+    "composeVersion": "2.40.3",
+    "node": "24.22.1",
+    "npm": "12.2.1",
+    "kernelRelease": "NOT_RECORDED"
+  },
+  "sha256": {
+    "docker.io_29.1.3-0ubuntu4.1_amd64v3.deb": "f422f9c1e5c7010c733ed2582ad07480ccf9f810d29bc57f2e62f048b69d4d17",
+    "docker-buildx_0.30.1-0ubuntu1_amd64v3.deb": "ed086c5db3eba0a1a2f3d8c1c1c93f19ab4e7b661453d1dcf590dc6398de6cd1",
+    "docker-compose-linux-x86_64": "dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372",
+    "scripts/lib/host-preflight.mjs": "730bfef0da2559ea5430e7a2562c79e51d02fa6737f01785dd9786a244b08622",
+    "scripts/lib/host-capabilities.mjs": "a81c9f506ff90c659ad9598e965ff4d3f0d3d58f28c56348cfaf933300f9ea63",
+    "scripts/lib/controller-entry.mjs": "167bd1c810c748d743c95af10a55bc9a8f7175367d7bf62bb763a4a111389fb5"
+  },
+  "checks": {
+    "ubuntuDeploymentClientCapabilities": "PASS",
+    "composeSecurityFields": "PASS",
+    "deploymentRegression": {"pass": 222, "fail": 0, "notRun": 1},
+    "nativeFilesystemAndKernelFlock": {"pass": 2, "fail": 0},
+    "publicPrivacy": {"pass": 14, "fail": 0},
+    "typecheck": "PASS",
+    "scopedLint": "PASS",
+    "rootlessDaemon": "NOT_RUN",
+    "businessDatabase": "NOT_RUN",
+    "productionDeployment": "NOT_RUN"
+  },
+  "failedRuns": [
+    {"runId": 40220973108, "testCommit": "8087265778369b5bb74ef8ce0fcc308a3029f311", "stage": "CLIENT_PACKAGE_PREPARATION", "exitCode": 100},
+    {"runId": 40221213517, "testCommit": "8e838f773d47483ddb62ee83e9f3ee42037a60c2", "stage": "APT_CACHE_VERSION_SELECTION", "exitCode": 100}
+  ],
+  "productionAccess": false,
+  "systemPackagesInstalled": false,
+  "daemonAccess": false,
+  "publicRawArtifactsUploaded": false
+}
