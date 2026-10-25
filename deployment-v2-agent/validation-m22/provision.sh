@@ -54,7 +54,18 @@ select_version() {
   apt-cache "${apt_options[@]}" madison "$1" | node --input-type=module -e 'import fs from "node:fs";import {selectPackage} from "./deployment-v2-agent/validation-m22/contract.mjs";const v=selectPackage(fs.readFileSync(0,"utf8"),process.argv[1]);if(!v)process.exit(1);process.stdout.write(v)' "$2"
 }
 if test "$M22_PROFILE" = 24.04; then
-  download_extract docker-ce-rootless-extras "$engine_before" || true
+  if ! download_extract docker-ce-rootless-extras "$engine_before"; then
+    # The runner can retain installed CE while no longer exposing that version in apt.
+    # This immutable official package is matched to the runner's 28.0.4 Engine.
+    if test "$engine_before" = '5:28.0.4-1~ubuntu.24.04~noble'; then
+      deb=work/ci-private/m22-debs/docker-ce-rootless-extras_28.0.4-1~ubuntu.24.04~noble_amd64.deb
+      if curl --fail --location --max-time 45 https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-ce-rootless-extras_28.0.4-1~ubuntu.24.04~noble_amd64.deb --output "$deb"; then
+        printf '%s  %s\n' 2abb177d60561ac77b50a42b60500ab194b70f40f4b225d837c1fdccaaab7a28 "$deb" | sha256sum --check
+        node deployment-v2-agent/validation-m22/setup.mjs package "$deb"
+        sudo dpkg-deb --extract "$deb" /opt/lumina-m22-fixture/engine
+      fi
+    fi
+  fi
 else
   for spec in docker.io:29.1.3 docker-compose-v2:2.40.3 docker-buildx:0.30.1; do
     name=${spec%%:*}; wanted=${spec#*:}
@@ -68,8 +79,31 @@ else
     if test -n "$selected" && test "$selected" != '(none)'; then download_extract "$name" "$selected" || true; fi
   done
 fi
+# A pinned upstream Compose supplements the 24.04 Rootless workload only. Ubuntu 26.04
+# uses the Ubuntu package above; the fallback never certifies an Ubuntu target package.
+if test "$M22_PROFILE" = 24.04; then
+  sudo install -d -m 755 /opt/lumina-m22-fixture/engine/usr/libexec/docker/cli-plugins
+  if curl --fail --location --max-time 45 https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64 --output work/ci-private/m22-compose; then
+    printf '%s  %s\n' dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372 work/ci-private/m22-compose | sha256sum --check
+    sudo install -m 755 work/ci-private/m22-compose /opt/lumina-m22-fixture/engine/usr/libexec/docker/cli-plugins/docker-compose
+  fi
+fi
 engine_after=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || true)
 test "$engine_before" = "$engine_after"
+node deployment-v2-agent/validation-m22/setup.mjs installed
+# The launcher chooses docker-rootlesskit before rootlesskit through PATH; it has no
+# DOCKERD_ROOTLESS_ROOTLESSKIT override. Select only the packaged /usr/bin helper,
+# whose existing AppArmor profile permits user namespaces. No policy is weakened.
+sudo install -d -m 755 /opt/lumina-m22-fixture/bin
+if test -x /usr/bin/rootlesskit; then sudo ln -s /usr/bin/rootlesskit /opt/lumina-m22-fixture/bin/docker-rootlesskit; fi
+for program in docker dockerd containerd runc containerd-shim-runc-v2 docker-proxy; do
+  for folder in /opt/lumina-m22-fixture/engine/usr/bin /opt/lumina-m22-fixture/engine/usr/sbin /usr/bin /usr/sbin; do
+    if test -x "${folder}/${program}"; then
+      sudo ln -s "${folder}/${program}" "/opt/lumina-m22-fixture/bin/${program}"
+      break
+    fi
+  done
+done
 sudo chown -R root:root /opt/lumina-m22-fixture
 sudo find /opt/lumina-m22-fixture -type d -exec chmod 755 {} +
 # Keep executability of binaries from their authenticated packages. Payload is readable by the fresh UID.

@@ -48,7 +48,7 @@ export function sourceDigest(root) {
 export function selectPackage(text, upstream) {
   assert(/^\d+\.\d+\.\d+$/.test(upstream));
   return text.split('\n').map(line => line.split('|')[1]?.trim()).find(version =>
-    version?.replace(/^\d+:/, '').startsWith(`${upstream}-`)) ?? null;
+    version?.replace(/^\d+:/, '').match(/^(\d+\.\d+\.\d+)(?:\+(?:ds|dfsg)\d*)?-/)?.[1] === upstream) ?? null;
 }
 export function initial(context) { return { ...context, completed: false, cases: Object.fromEntries(CASES.map(id =>
   [id, { status: 'NOT_RUN', reason: 'NOT_EXECUTED' }])), environment: {}, packages: [], metrics: {}, kernel: {}, facts: {} }; }
@@ -82,7 +82,7 @@ export function summary(raw, context) {
   const packages = (Array.isArray(raw.packages) ? raw.packages : []).filter(p => PACKAGE_NAMES.includes(p.name) && version(p.version))
     .map(p => ({ name: p.name, version: p.version, installed: p.installed === true,
       ...(/^[a-f0-9]{64}$/.test(p.sha256) ? { sha256: p.sha256 } : {}) }));
-  const facts = {}; for (const key of ['initialExtrasInstalled', 'initialRootlessScript', 'initialRootlesskit',
+  const facts = {}; for (const key of ['initialExtrasInstalled', 'initialRootlessScript', 'initialRootlesskit', 'officialDockerSourceConfigured',
     'enginePackageUnchanged', 'dedicatedUid', 'socketOwned', 'dataRootOwned', 'rootlessReported',
     'cgroupV2', 'systemdDriver', 'controllersDelegated', 'baselineFailuresPreserved', 'agentIdle',
     'daemonStopped', 'lingerDisabled', 'managerStopped']) if (typeof raw.facts?.[key] === 'boolean') facts[key] = raw.facts[key];
@@ -94,10 +94,14 @@ export function summary(raw, context) {
     .filter(item => ['DBUS', 'GPG', 'KEYRING', 'OTHER'].includes(item.kind) && integer(item.exitCode))
     .map(item => ({ kind: item.kind, exitCode: item.exitCode,
       result: ['exit-code', 'signal', 'timeout', 'resources', 'protocol', 'start-limit-hit'].includes(item.result) ? item.result : 'OTHER' }));
+  const daemonFailure = {};
+  if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING',
+    'ENGINE_CONFIGURATION_REJECTED', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.daemonFailure?.reason)) daemonFailure.reason = raw.daemonFailure.reason;
+  if (integer(raw.daemonFailure?.exitCode) && raw.daemonFailure.exitCode <= 255) daemonFailure.exitCode = raw.daemonFailure.exitCode;
   return { schemaVersion: 1, scope: 'NONPRODUCTION_ALPHA', productionApproved: false,
     ...context, sourceDigest: raw.sourceDigest,
     payloadDigest: /^[a-f0-9]{64}$/.test(raw.payloadDigest) ? raw.payloadDigest : null,
     completed: raw.completed === true,
     result: raw.completed !== true || cases.some(c => c.status === 'FAIL') ? 'FAIL' : cases.some(c => c.status === 'NOT_RUN') ? 'INCOMPLETE' : 'PASS',
-    environment, packages, metrics, kernel, facts, legacy, managerFailures, cases };
+    environment, packages, metrics, kernel, facts, legacy, managerFailures, daemonFailure, cases };
 }

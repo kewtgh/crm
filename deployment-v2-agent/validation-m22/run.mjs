@@ -51,7 +51,7 @@ const missingRootless = reason => rootlessIds.forEach(id => mark(id, 'NOT_RUN', 
 const find = names => names.find(file => fs.existsSync(file));
 function logicalBytes(dir) { return fs.readdirSync(dir, { withFileTypes: true }).reduce((n, d) => n + (d.isDirectory() ? logicalBytes(`${dir}/${d.name}`) : d.isFile() ? fs.statSync(`${dir}/${d.name}`).size : 0), 0); }
 const engineRoot = `${base}/engine`, profile = report.profile;
-const engineDirs = `${engineRoot}/usr/bin:${engineRoot}/usr/sbin:/usr/bin:/bin`;
+const engineDirs = `${base}/bin:/usr/sbin:/usr/bin:/bin`;
 const dockerBin = profile === '24.04' ? '/usr/bin/docker' : find([`${engineRoot}/usr/bin/docker`]);
 const rootlessScript = find([`${engineRoot}/usr/bin/dockerd-rootless.sh`, `${engineRoot}/usr/share/docker.io/contrib/dockerd-rootless.sh`, '/usr/bin/dockerd-rootless.sh']);
 const pluginDirs = [`${engineRoot}/usr/libexec/docker/cli-plugins`, `${engineRoot}/usr/lib/docker/cli-plugins`];
@@ -66,6 +66,7 @@ try {
   report.metrics.payloadBytes = logicalBytes(payload);
   report.environment.node = process.versions.node; report.environment.kernel = os.release().match(/^[\d.]+/)?.[0];
   report.environment.systemd = exec('/usr/bin/systemctl', ['--version']).match(/^systemd (\d+)/)?.[1];
+  if (fs.existsSync('/usr/bin/rootlesskit')) report.environment.rootlesskit = exec('/usr/bin/rootlesskit', ['--version']).match(/\b(\d+\.\d+\.\d+)\b/)?.[1];
   report.facts.enginePackageUnchanged = true;
   await check('ubuntu', async () => { assert.equal(report.environment.ubuntu, profile); assert.equal(fs.readFileSync('/proc/1/comm', 'utf8').trim(), 'systemd'); });
   phase = 'MANAGER';
@@ -138,10 +139,19 @@ finally {
 process.exitCode = errors.length || !report.completed ? 1 : 0;
 
 async function rootless() {
-  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nEnvironment=DOCKERD_ROOTLESS_ROOTLESSKIT=/usr/bin/rootlesskit\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\n`;
+  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\n`;
   install(daemonUnit, script); ctl(['start', '--no-block', daemonUnit]);
   try { await until(() => fs.existsSync(socket) && JSON.parse(docker(['info', '--format', '{{json .}}'])), 30000); }
-  catch { missingRootless('DAEMON_START_FAILED'); return; }
+  catch {
+    const r = spawnSync('/usr/bin/journalctl', ['--user', '--unit', daemonUnit, '--no-pager', '--output=cat', '--lines=60'], { encoding: 'utf8', timeout: 3000, maxBuffer: 32768 });
+    const log = r.stdout ?? ''; fs.writeFileSync(`${lab}/daemon-start.private.log`, log, { mode: 0o600 });
+    const reason = /operation not permitted|userns|AppArmor/i.test(log) ? 'ROOTLESSKIT_USERNS_DENIED'
+      : /Failed to connect to bus|cgroup.*delegat/i.test(log) ? 'CGROUP_USER_BUS_UNAVAILABLE'
+      : /executable file not found|command not found|no such file/i.test(log) ? 'ENGINE_RUNTIME_MISSING'
+      : /failed to start daemon|invalid argument/i.test(log) ? 'ENGINE_CONFIGURATION_REJECTED' : 'UNCLASSIFIED_PRIVATE_LOG';
+    report.daemonFailure = { reason, exitCode: Number(show(daemonUnit).ExecMainStatus) };
+    missingRootless('DAEMON_START_FAILED'); return;
+  }
   const sampleDaemon = suffix => { const s = sample(daemonUnit); Object.assign(report.metrics,
     { [`daemonRss${suffix}Bytes`]: s.rss, [`daemonProcesses${suffix}`]: s.processes, [`daemonTasks${suffix}`]: s.tasks,
       daemonMemoryPeakBytes: s.peak, daemonCpuUsec: s.cpu }); save(); };

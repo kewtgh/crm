@@ -8,12 +8,16 @@ if (command === 'init') {
   const report = initial({ sha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
     attempt: process.env.GITHUB_RUN_ATTEMPT, profile: process.env.M22_PROFILE, sourceDigest: sourceDigest(process.cwd()) });
   report.facts = { initialExtrasInstalled: Boolean(pkg('docker-ce-rootless-extras')),
-    initialRootlessScript: fs.existsSync('/usr/bin/dockerd-rootless.sh'), initialRootlesskit: fs.existsSync('/usr/bin/rootlesskit') };
+    initialRootlessScript: fs.existsSync('/usr/bin/dockerd-rootless.sh'), initialRootlesskit: fs.existsSync('/usr/bin/rootlesskit'),
+    officialDockerSourceConfigured: ['/etc/apt/sources.list.d/docker.list', '/etc/apt/sources.list.d/docker.sources']
+      .some(file => fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes('download.docker.com')) };
   report.environment.ubuntu = fs.readFileSync('/etc/os-release', 'utf8').match(/^VERSION_ID="([\d.]+)"/m)?.[1];
   report.packages = PACKAGE_NAMES.map(name => ({ name, version: pkg(name), installed: true })).filter(p => p.version);
   fs.writeFileSync(file, JSON.stringify(report), { flag: 'wx', mode: 0o600 });
 } else {
   const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (command === 'installed') report.packages = [...report.packages.filter(p => !p.installed),
+    ...PACKAGE_NAMES.map(name => ({ name, version: pkg(name), installed: true })).filter(p => p.version)];
   if (command === 'legacy') {
     report.metrics[a] = Number(b); const key = ({ legacyUpdateExit: 'update', legacyHelpersExit: 'helpers', legacyExtrasExit: 'extras' })[a];
     if (!key) throw new Error('STAGE_NOT_ALLOWED'); report.legacy ??= {};

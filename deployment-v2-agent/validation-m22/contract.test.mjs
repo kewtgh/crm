@@ -8,6 +8,8 @@ test('Ubuntu package selection respects epochs, exact upstream and revision', ()
   assert.equal(selectPackage(' docker.io | 29.1.30-1 | repo\n docker.io | 29.1.3-0ubuntu1 | repo', '29.1.3'), '29.1.3-0ubuntu1');
   assert.equal(selectPackage('extra | 5:28.0.4-1~ubuntu.24.04~noble | repo', '28.0.4'), '5:28.0.4-1~ubuntu.24.04~noble');
   assert.equal(selectPackage('pkg | 29.1.4-1 | repo', '29.1.3'), null);
+  assert.equal(selectPackage('pkg | 2.40.3+ds1-0ubuntu1 | repo', '2.40.3'), '2.40.3+ds1-0ubuntu1');
+  assert.equal(selectPackage('pkg | 2.40.3~rc1-1 | repo', '2.40.3'), null);
 });
 test('profile, SHA, run and attempt are independently bound', () => {
   for (const change of [{ sha: 'c'.repeat(40) }, { runId: '987654321' }, { attempt: '2' }, { profile: '24.04' }]) {
@@ -43,4 +45,6 @@ test('M2.1 evidence and runtime are excluded from the M2.2 mutation surface', ()
   const run = fs.readFileSync(new URL('run.mjs', import.meta.url), 'utf8');
   assert.match(run, /\['reset-failed', expectedFailure\]/);
   assert.doesNotMatch(run, /\['reset-failed'\]/);
+  assert.doesNotMatch(run, /Environment=DOCKERD_ROOTLESS_ROOTLESSKIT=/);
+  assert.match(provision, /ln -s \/usr\/bin\/rootlesskit \/opt\/lumina-m22-fixture\/bin\/docker-rootlesskit/);
 });
