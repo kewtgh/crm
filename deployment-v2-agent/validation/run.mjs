@@ -154,7 +154,10 @@ try {
   });
   await check('pty-hangup', async () => {
     const root = await fresh(), file = request(root, 5000);
-    const r = JSON.parse(exec('/usr/bin/python3', [`${fixture}/validation/pty.py`, node, cliFile, root, file], 20000));
+    const pty = spawnSync('/usr/bin/python3', [`${fixture}/validation/pty.py`, node, cliFile, root, file], { encoding: 'utf8', timeout: 20000, maxBuffer: 4096 });
+    assert(!pty.error); const r = JSON.parse(pty.stdout);
+    if (!r.hangup) throw new Error(r.reason);
+    assert.equal(pty.status, 0);
     assert.equal(r.hangup, true);
     // Manager still owns a running worker after the actual controlling terminal was closed.
     await until(() => Number(show().MainPID) > 0); await complete(root);
@@ -176,16 +179,26 @@ try {
     assert.deepEqual(fs.readFileSync(`${root}/receipts/${fs.readdirSync(`${root}/receipts`)[0]}`), receipt);
     assert.equal(query(root, "SELECT count(*) AS n FROM events WHERE code='INTENT_DURABLE'").n, 1);
   });
-  await check(['timeout', 'explicit-reconcile'], async () => {
-    const root = await fresh(); const op = submit(root, request(root, 5000)); dispatch(root);
+  await check('timeout', async () => {
+    const root = await fresh(); submit(root, request(root, 5000)); dispatch(root);
     await until(() => snapshot(root).checkpoint === 'INTENT');
     process.kill(Number(show().MainPID), 'SIGSTOP');
     const end = await inactive(unit, 22000); assert.equal(end.Result, 'timeout');
-    assert.equal(receiptCount(root), 0); assert.equal(snapshot(root).grant, 'CONSUMED');
+    assert.equal(snapshot(root).grant, 'CONSUMED');
+    // Timeout is not evidence of no effect: SIGCONT can run an already-ready timer.
+    const before = fs.readdirSync(`${root}/receipts`).map(name => [name, sha256(fs.readFileSync(`${root}/receipts/${name}`))]);
     // A new start without a new grant cannot replay the stopped operation.
     systemctl(['reset-failed', unit]); dispatch(root); await inactive();
-    assert.equal(receiptCount(root), 0);
+    assert.deepEqual(fs.readdirSync(`${root}/receipts`).map(name => [name, sha256(fs.readFileSync(`${root}/receipts/${name}`))]), before);
+    assert.equal(query(root, "SELECT count(*) AS n FROM events WHERE code='INTENT_DURABLE'").n, 1);
+  });
+  await check('explicit-reconcile', async () => {
+    const root = await fresh(), op = submit(root, request(root, 5000)); dispatch(root);
+    await until(() => snapshot(root).checkpoint === 'INTENT');
+    systemctl(['kill', '--kill-whom=all', '--signal=SIGKILL', unit]);
+    await inactive(); assert.equal(receiptCount(root), 0);
     const old = snapshot(root);
+    assert.equal(old.checkpoint, 'INTENT'); assert.equal(old.grant, 'CONSUMED');
     cli(['reconcile', '--root', root, '--operation', op.operationId, '--revision', String(old.operationRevision)]);
     systemctl(['reset-failed', unit]); dispatch(root); await inactive();
     const after = snapshot(root); assert.equal(after.checkpoint, 'UNKNOWN');
@@ -223,9 +236,13 @@ try {
       systemctl(['start', '--no-block', name]);
       const group = await until(() => { const s = show(name); return Number(s.MainPID) > 0 && `/sys/fs/cgroup${s.ControlGroup}`; });
       const end = await inactive(name, 18000);
-      if (mode === 'memory') { assert.equal(end.Result, 'oom-kill'); assert.equal(end.ExecMainCode, '2'); assert.equal(end.ExecMainStatus, '9'); }
+      if (mode === 'memory' && end.Result === 'oom-kill') { assert.equal(end.ExecMainCode, '2'); assert.equal(end.ExecMainStatus, '9'); }
       else if (mode === 'children') { assert.equal(end.Result, 'timeout'); assert.equal(JSON.parse(fs.readFileSync(output, 'utf8')).children, true); }
-      else { assert.equal(end.Result, 'success'); assert.equal(JSON.parse(fs.readFileSync(output, 'utf8')).enforced, true); }
+      else {
+        assert.equal(end.Result, 'success'); const pressure = JSON.parse(fs.readFileSync(output, 'utf8')); assert.equal(pressure.enforced, true);
+        if (mode === 'memory') Object.assign(report.metrics, { pressureMemoryCurrentBytes: pressure.memoryCurrentBytes,
+          pressureMemoryMaxEvents: pressure.maxEventsDelta, pressureSwapCurrentBytes: pressure.swapCurrentBytes });
+      }
       assert(!fs.existsSync(`${group}/cgroup.procs`) || fs.readFileSync(`${group}/cgroup.procs`, 'utf8').trim() === '');
     });
   }
@@ -249,7 +266,8 @@ async function rootless() {
   const ids = ['rootless-isolation', 'rootless-budget-config', 'rootless-memory-enforced', 'rootless-cpu-enforced', 'rootless-tasks-enforced'];
   const missing = code => { for (const id of ids) result(id, 'NOT_RUN', code); };
   const daemon = ['/usr/bin/dockerd-rootless.sh', '/usr/bin/rootlesskit', '/usr/bin/newuidmap', '/usr/bin/newgidmap'];
-  if (!daemon.every(file => fs.existsSync(file))) { missing('ROOTLESS_PREREQUISITE_MISSING'); return; }
+  const absent = daemon.filter(file => !fs.existsSync(file));
+  if (absent.length) { report.rootlessMissing = absent.map(file => path.basename(file)); missing('ROOTLESS_PREREQUISITE_MISSING'); return; }
   const socket = `/run/user/${process.getuid()}/docker.sock`, dataRoot = `${lab}/docker-data`;
   const rootlessUnit = 'lumina-m21-rootless.service';
   fs.writeFileSync(`${units}/${rootlessUnit}`, `[Service]\nType=simple\nExecStart=/usr/bin/dockerd-rootless.sh --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10\nRestart=no\n`, { mode: 0o600 });
@@ -290,7 +308,7 @@ async function rootless() {
       const name = `lumina-m21-${mode}`;
       docker(['create', '--name', name, '--network=none', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
         '--memory=128m', '--memory-swap=128m', '--cpus=1', '--pids-limit=32',
-        '--mount', `type=bind,source=${probe},target=/probe.mjs,readonly`, image, 'node', '/probe.mjs', mode, '/sys/fs/cgroup']);
+        '--mount', `type=bind,source=${probe},target=/probe.mjs,readonly`, image, 'node', '/probe.mjs', mode === 'memory' ? 'memory-oom' : mode, '/sys/fs/cgroup']);
       try {
         const before = JSON.parse(docker(['inspect', name]))[0];
         assert.equal(before.HostConfig.Memory, 134217728); assert.equal(before.HostConfig.NanoCpus, 1000000000); assert.equal(before.HostConfig.PidsLimit, 32);

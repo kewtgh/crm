@@ -12,10 +12,18 @@ if id lumina-m21-fixture >/dev/null 2>&1; then exit 2; fi
 mkdir -p work/ci-private
 node --input-type=module -e 'import {sourceDigest} from "./deployment-v2-agent/validation/contract.mjs"; process.stdout.write(sourceDigest(process.cwd()))' > work/ci-private/m21-source-digest
 digest=$(cat work/ci-private/m21-source-digest)
-# Reuse the runner's Docker packages. Only missing user namespace helpers are added.
-if ! command -v newuidmap >/dev/null || ! command -v slirp4netns >/dev/null; then
-  sudo timeout 90s apt-get update -qq
-  sudo timeout 90s apt-get install --no-install-recommends -y uidmap slirp4netns
+# Optional Rootless prerequisites must not prevent independent systemd validation.
+# No Engine upgrade/reinstall/removal: extras, if available, match the installed Engine.
+prepare_rootless_helpers() {
+  sudo timeout 90s apt-get update -qq || return 1
+  sudo timeout 90s apt-get install --no-install-recommends --no-upgrade --no-remove -y uidmap slirp4netns || return 1
+  if ! test -x /usr/bin/dockerd-rootless.sh || ! test -x /usr/bin/rootlesskit; then
+    engine_version=$(dpkg-query -W -f='${Version}' docker-ce) || return 1
+    sudo timeout 90s apt-get install --no-install-recommends --no-upgrade --no-remove -y "docker-ce-rootless-extras=${engine_version}" || return 1
+  fi
+}
+if ! test -x /usr/bin/newuidmap || ! test -x /usr/bin/newgidmap || ! test -x /usr/bin/dockerd-rootless.sh || ! test -x /usr/bin/rootlesskit; then
+  prepare_rootless_helpers || printf '%s\n' ROOTLESS_HELPER_PREPARATION_UNAVAILABLE
 fi
 sudo useradd --create-home --user-group --shell /bin/bash lumina-m21-fixture
 fixture_uid=$(id -u lumina-m21-fixture)

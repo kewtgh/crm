@@ -22,7 +22,8 @@ export const CODES = Object.freeze(['OBSERVED', 'ASSERTION_FAILED', 'NOT_EXECUTE
 export const METRICS = Object.freeze(['agentMemoryPeakBytes', 'agentTasksPeak',
   'agentCpuUsageUsec', 'agentProcessPeak', 'agentRssPeakBytes', 'stateBytes',
   'payloadBytes', 'rootlessDiskBytes', 'rootlessDaemonRssBytes',
-  'memoryMaxBytes', 'cpuQuotaUsec', 'cpuPeriodUsec', 'tasksMax']);
+  'memoryMaxBytes', 'cpuQuotaUsec', 'cpuPeriodUsec', 'tasksMax',
+  'pressureMemoryCurrentBytes', 'pressureMemoryMaxEvents', 'pressureSwapCurrentBytes']);
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export function managerHealth(exitCode, output) {
   const state = typeof output === 'string' ? output.trim() : '';
@@ -35,7 +36,9 @@ const safeValue = value => typeof value === 'boolean' || Number.isSafeInteger(va
     'RECOVERY_REQUIRED', 'timeout', 'exit-code', 'oom-kill', 'success', '2', '9', 'systemd'].includes(value);
 export function assertionDetail(error) {
   const detail = {};
-  if (['ERR_ASSERTION', 'OBSERVATION_TIMEOUT', 'CLI_TIMEOUT'].includes(error.code ?? error.message)) detail.code = error.code ?? error.message;
+  if (['ERR_ASSERTION', 'OBSERVATION_TIMEOUT', 'CLI_TIMEOUT', 'PTY_SUBMIT_FAILED',
+    'PTY_DISPATCH_FAILED', 'PTY_DISPATCH_NOT_OBSERVED', 'PTY_HANGUP_NOT_OBSERVED',
+    'PTY_SESSION_DID_NOT_EXIT', 'PTY_READ_FAILED'].includes(error.code ?? error.message)) detail.code = error.code ?? error.message;
   if (['strictEqual', 'deepStrictEqual', '=='].includes(error.operator)) detail.operator = error.operator;
   for (const key of ['expected', 'actual']) if (safeValue(error[key])) detail[key] = error[key];
   return detail;
@@ -88,5 +91,7 @@ export function publicSummary(raw, context) {
     runner: 'github-hosted-ubuntu-24.04-x64', sourceDigest: raw.sourceDigest,
     payloadDigest: raw.payloadDigest, completed: raw.completed === true,
     result: raw.completed === true && !cases.some(c => c.status === 'FAIL') ? 'PASS' : 'FAIL',
-    environment, metrics, cases, ...(raw.harnessFailure ? { harnessFailure: harnessDetail(raw.harnessFailure) } : {}) };
+    environment, metrics, cases,
+    ...(raw.rootlessMissing ? { rootlessMissing: ['dockerd-rootless.sh', 'rootlesskit', 'newuidmap', 'newgidmap'].filter(name => raw.rootlessMissing.includes(name)) } : {}),
+    ...(raw.harnessFailure ? { harnessFailure: harnessDetail(raw.harnessFailure) } : {}) };
 }

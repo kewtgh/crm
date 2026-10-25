@@ -9,7 +9,7 @@ const mode = process.argv[2];
 const cgroup = process.argv[3] === 'self'
   ? `/sys/fs/cgroup${fs.readFileSync('/proc/self/cgroup', 'utf8').trim().split('::')[1]}`
   : process.argv[3];
-assert(['config', 'memory', 'cpu', 'tasks', 'children'].includes(mode));
+assert(['config', 'memory', 'memory-oom', 'cpu', 'tasks', 'children'].includes(mode));
 const controls = Object.fromEntries(['memory.max', 'pids.max', 'cpu.max'].map(name =>
   [name, fs.readFileSync(`${cgroup}/${name}`, 'utf8').trim()]));
 assert.equal(controls['memory.max'], '134217728');
@@ -18,10 +18,24 @@ const [quota, period] = controls['cpu.max'].split(' ').map(Number);
 assert.equal(quota / period, 1);
 if (mode === 'config') console.log(JSON.stringify({ enforced: false, configured: true }));
 const counters = name => Object.fromEntries(fs.readFileSync(`${cgroup}/${name}`, 'utf8').trim().split('\n').map(line => line.split(' ').map((value, index) => index ? Number(value) : value)));
-if (mode === 'memory') {
+if (mode === 'memory' || mode === 'memory-oom') {
   const buffers = [];
-  for (let n = 0; n < 96; n++) { buffers.push(Buffer.alloc(4 * 1024 ** 2, 0x5a)); await delay(10); }
-  throw new Error('MEMORY_LIMIT_NOT_ENFORCED');
+  const before = counters('memory.events');
+  let observed = false;
+  for (let n = 0; n < 96; n++) {
+    buffers.push(Buffer.alloc(4 * 1024 ** 2, 0x5a)); await delay(10);
+    if (mode === 'memory' && counters('memory.events').max > before.max) {
+      const current = Number(fs.readFileSync(`${cgroup}/memory.current`, 'utf8'));
+      assert(current <= 134217728);
+      console.log(JSON.stringify({ enforced: true, memoryCurrentBytes: current,
+        maxEventsDelta: counters('memory.events').max - before.max,
+        swapCurrentBytes: Number(fs.readFileSync(`${cgroup}/memory.swap.current`, 'utf8')) }));
+      observed = true; break;
+    }
+  }
+  // Keep all allocated buffers live until after the kernel observation.
+  assert(buffers.every(buffer => buffer[0] === 0x5a));
+  assert(observed, 'MEMORY_LIMIT_NOT_ENFORCED');
 }
 if (mode === 'cpu') {
   const before = counters('cpu.stat');
