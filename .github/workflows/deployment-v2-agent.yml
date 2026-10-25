@@ -57,6 +57,9 @@ jobs:
         run: npm run test:public-privacy
       - name: Validation publication contract tests
         run: node --test deployment-v2-agent/validation/contract.test.mjs
+      - name: Real Python fixture import regression
+        run: |
+          python3 -I -c "import ast,pathlib,sys; sys.path.insert(0,str(pathlib.Path('deployment-v2-agent/validation').resolve())); import pty; assert callable(pty.fork); ast.parse(pathlib.Path('deployment-v2-agent/validation/terminal-hangup.py').read_text())"
 
   dynamic-linux:
     # PR code never provisions a privileged fixture. This exact branch is published only

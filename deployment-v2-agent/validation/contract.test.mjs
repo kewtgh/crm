@@ -50,6 +50,12 @@ test('manager health separates degraded units from an unavailable manager withou
     assert.throws(() => managerHealth(code, value), /USER_MANAGER_UNAVAILABLE/);
   }
 });
+test('terminal fixture does not shadow the Python standard library pty import', () => {
+  assert.equal(fs.existsSync(new URL('pty.py', import.meta.url)), false);
+  assert(fs.existsSync(new URL('terminal-hangup.py', import.meta.url)));
+  const workflow = fs.readFileSync(new URL('../../.github/workflows/deployment-v2-agent.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /import pty; assert callable\(pty\.fork\)/);
+});
 test('host fixture cannot run without an explicit disposable hosted-runner boundary', () => {
   const workflow = fs.readFileSync(new URL('../../.github/workflows/deployment-v2-agent.yml', import.meta.url), 'utf8');
   assert.match(workflow, /persist-credentials: false/);

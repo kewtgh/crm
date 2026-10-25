@@ -165,7 +165,7 @@ try {
   });
   await check('pty-hangup', async () => {
     const root = await fresh(), file = request(root, 5000);
-    const pty = spawnSync('/usr/bin/python3', [`${fixture}/validation/pty.py`, node, cliFile, root, file], { encoding: 'utf8', timeout: 20000, maxBuffer: 4096 });
+    const pty = spawnSync('/usr/bin/python3', [`${fixture}/validation/terminal-hangup.py`, node, cliFile, root, file], { encoding: 'utf8', timeout: 20000, maxBuffer: 4096 });
     assert(!pty.error); const r = JSON.parse(pty.stdout);
     if (!r.hangup) throw new Error(r.reason);
     assert.equal(pty.status, 0);

@@ -1,4 +1,4 @@
-"""Real controlling PTY hangup; only fictional Alpha CLI operations are allowed."""
+"""Real controlling PTY hangup; never name this file after the stdlib pty module."""
 import json
 import os
 import pty
