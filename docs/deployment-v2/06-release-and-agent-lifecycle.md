@@ -2,6 +2,8 @@
 
 这是 M0 v0.2 待实现的正式发行和安装规范，首选按需 systemd Agent。[M1 运输实验](m1/transport-decision.md) 仅验证虚构密钥与小型 OCI 内容，没有正式 Agent 包 / 信任根 / installer；本阶段 [生产实际增量为零](m1/production-additions.json)。真实制品、运输适配器、非生产 Linux 报告和管理员操作单仍留在后续里程碑，不安装、替换 V1 或创建生产状态。
 
+M2 已冻结 [离线目录 v1 Alpha 格式](m2/protocol-and-release.md) 并交付私有 Node / payload、独立 verifier、来源声明政策与签名负例。它只证明 Alpha 固定密钥与内容关联，真实 CI attestation / production trust root / SBOM / root-owned 安装与回退链仍未完成，不能降低本文件正式发行门槛。M2 不提供生产安装或 active pointer 切换入口。
+
 ## 两条独立发布线
 
 | 项目 | 应用发布 | Agent 发布 |

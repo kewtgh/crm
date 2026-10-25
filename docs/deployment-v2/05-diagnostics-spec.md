@@ -4,6 +4,8 @@
 
 M1 已实现固定 Docker / Compose / systemctl 查询、元数据 / cgroup / 容量、首因依赖与脱敏；未实现 dpkg / kernel 来源锁、Buildx plugin 采集、V1 parser、SQLite 安全只读 / hot-journal reader、可选 HTTP 健康或签名私有运行时。Buildx 与 state reader 明确 NOT_RUN，未列入 MVP 的其他项不能从现有字段推导为通过；具体证据及 P0 阻断见 [M1 验收](m1/acceptance.md)。
 
+M2 增加独立的 [Alpha state 只读诊断](../../deployment-v2-agent/src/readonly.ts) 与 [专用 Schema](../../deployment-v2-agent/schemas/state-diagnostics-v1.schema.json)，M1 主机 collector 保留。新增工具只读现存 Alpha epoch=1，不读取 V1 或业务数据库；journal / 不兼容 / 腐坏 / 权限 / 缺失分别分类，采集与报告 fsync 都在短 worker thread 中由主线程限时。一个进程降低状态报告开销，但不代表已完成本规范的全主机 / P0 认证；真实结果与覆盖差异见 [M2 验收](m2/acceptance.md)。
+
 ## 目的与非目标
 
 诊断需要回答：采集器是否有权看到某个条件；主机是否满足必要运行边界；Agent / V1 处于什么可观测状态；哪些信息缺失。它不应尝试把主机修到“可部署”。诊断结果也不是迁移 / 接受 receipt，不授权恢复或重放。

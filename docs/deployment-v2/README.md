@@ -2,7 +2,7 @@
 
 日期：2026-10-25。设计版本：0.2，M0 约束修订。原审计代码基线：`926819e566c5736e83817cd55e45dbf3e5337e66`；修订前文档提交：`97bbb7c`；CRM `3.44.0`。
 
-本目录的 M0 v0.2 是第一阶段设计基线：现有系统审计、架构决策、协议和后续实施计划，固定于 `0e786b1`。其“未开始 M1”等文字属于当时的历史记录。当前已在独立 namespace 完成 M1 本地实验与缺口交付，见 [M1 验收报告](m1/acceptance.md)；未安装 V2、修改 V1 或访问生产。设计中的正式 V2 路径、命令和 unit 仍不能作为当前生产操作命令。
+本目录的 M0 v0.2 是第一阶段设计基线：现有系统审计、架构决策、协议和后续实施计划，固定于 `0e786b1`。其“未开始 M1”等文字属于当时的历史记录。M1 交付见 [M1 验收报告](m1/acceptance.md)，当前独立离线 Alpha 见 [M2 验收报告](m2/acceptance.md)；未安装 V2、修改 V1 或访问生产。设计中的正式 V2 路径、命令和 unit 仍不能作为当前生产操作命令。
 
 ## 当前架构与约束来源
 
@@ -42,6 +42,7 @@ V2 采用以下设计基线：
 | [07 迁移、里程碑与验收](07-migration-milestones-and-acceptance.md) | 新版 M1 范围、资源预算、证据门槛、V1/V2 迁移 |
 | [08 历史机制处置清单](08-retirement-inventory.md) | 保留、重写、合并、延后删除的逐项映射 |
 | [M1 实施与验收](m1/acceptance.md) | 独立原型 / 诊断 MVP、本地实测、能力清单、资源和 M2 Go / No-Go |
+| [M2 Offline Alpha](m2/acceptance.md) | 独立私有 runtime、状态协议、固定 oneshot、离线 verifier、真实本地 Linux 子集与 M3 前置 |
 
 ## 边界与责任
 
@@ -68,8 +69,14 @@ V2 采用以下设计基线：
 
 本次交付为 M0 v0.2 文档修订。新版 M1 从外部测试能力清单、诊断规范和按需生命周期验证开始；未实现 V2、未申请新服务器 / 仓库、未运行外部 Linux 测试或生产适配。上述动态能力均为 NOT_RUN，不能从文档检查或管理员架构声明推导为通过。CRM 应用版本继续为 `3.44.0`，Agent 另行版本化。
 
-## 当前 M1 状态
+## M1 历史状态
 
 [独立 M1 实验](../../deployment-v2-m1/README.md) 已实现虚构任务 / SQLite / 一次性 grant、非生产 opt-in transient oneshot harness、只读诊断 MVP、运输验证实验与托管 CI 定义。Windows 实际测试 33 passed、2 项 Linux 动态测试 NOT_RUN；真实 Compose parser 通过，不代表 daemon / Rootless 兼容。
 
 外部 M1 Linux CI 尚未执行，systemd / cgroup / Rootless / 重启门槛仍 NOT_RUN；M2 可继续离线 alpha，生产发行和现场诊断 NO_GO。本次生产新增文件 / 服务 / 进程 / 数据库 / 磁盘均为 0。设计保持 v0.2，CRM 仍为 `3.44.0`；M1 实验独立为 `0.1.0-experimental`。
+
+## 当前 M2 状态
+
+[Agent `0.2.0-alpha.1`](../../deployment-v2-agent/README.md) 已实现独立私有 Node / JavaScript 包、SQLite 单一事务、一次性 grant、固定 oneshot 导出 / 派发、只读状态诊断和离线目录 v1 verifier。M1 全部保留，并新增本地 Docker Desktop 隔离 Linux 的实际 flock / 文件系统 / SQLite / Compose 证据；这不是外部 CI 或目标 Ubuntu / Rootless 认证。
+
+精确结果见 [M2 能力与资源验收](m2/acceptance.md)。M3 完整系统集成仍 NO_GO，外部 CI / systemd / Rootless / reboot / 磁盘故障及正式发行缺口不能由 Mock 或普通容器补齐。没有生产增量，CRM 继续为 `3.44.0`。

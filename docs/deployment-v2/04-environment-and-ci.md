@@ -1,6 +1,6 @@
 # 开发 / 生产隔离下的环境复现与 CI 验证
 
-M0 v0.2 将验证位置与证据能力分开。开发 / CI 测试不在生产宿主机运行；生产只允许受审只读适配。M1 已有 [本地实施与能力清单](m1/acceptance.md)，Windows 原生 SQLite / 进程和 Compose parser 结果单列；新增 Linux / systemd / Rootless / 现场适配仍为 NOT_RUN，没有从配置或模拟获得动态认证。
+M0 v0.2 将验证位置与证据能力分开。开发 / CI 测试不在生产宿主机运行；生产只允许受审只读适配。M1 历史记录见 [本地实施](m1/acceptance.md)，M2 已取得 [本地 Docker Linux 子集证据](m2/acceptance.md)：真实 flock / 文件系统 / SQLite / Compose。外部候选 CI、systemd / Rootless / 现场适配仍 NOT_RUN，没有从配置或模拟获得动态认证。
 
 ## 目标环境与软件来源
 
@@ -49,7 +49,7 @@ L0 模拟和 L1 真实 CLI 分开标记；L2 / L3 要有实际系统证据。每
 
 ## 按需生命周期与真实测试矩阵
 
-M1 实现独立测试 harness / 诊断 MVP 和可行性验证，不替换 V1。oneshot 的进程 / 持久化小型 harness 不等于完整应用发布验证；后者留在 M3。下列 Linux 动态门槛仍 NOT_RUN；已执行的 Windows 子集及其方法见 [M1 验收](m1/acceptance.md)。
+M1 实现独立测试 harness / 诊断 MVP 和可行性验证，不替换 V1。oneshot 的进程 / 持久化小型 harness 不等于完整应用发布验证；后者留在 M3。下表保留原门槛；M2 的本地 Linux / Compose 子集与剩余外部门槛分别见 [M2 验收](m2/acceptance.md)，不将容器升级为完整系统认证。
 
 | ID / 阶段 | 位置与真实方法 | 必须观察的判定 | 缺条件时 |
 | --- | --- | --- | --- |
