@@ -151,6 +151,7 @@ async function rootless() {
     const reason = /XDG_RUNTIME_DIR needs to be set and writable/i.test(log) ? 'RUNTIME_DIRECTORY_UNAVAILABLE'
       : /must be executed as a non-privileged user/i.test(log) ? 'EXECUTION_IDENTITY_INVALID'
       : /operation not permitted|userns|AppArmor/i.test(log) ? 'ROOTLESSKIT_USERNS_DENIED'
+      : /permission denied/i.test(log) && /rootlesskit/i.test(log) ? 'ROOTLESSKIT_EXEC_DENIED'
       : /Failed to connect to bus|cgroup.*delegat/i.test(log) ? 'CGROUP_USER_BUS_UNAVAILABLE'
       : /executable file not found|command not found|no such file/i.test(log) ? 'ENGINE_RUNTIME_MISSING'
       : /failed to start daemon|invalid argument/i.test(log) ? 'ENGINE_CONFIGURATION_REJECTED' : 'UNCLASSIFIED_PRIVATE_LOG';

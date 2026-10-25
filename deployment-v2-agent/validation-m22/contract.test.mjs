@@ -55,5 +55,5 @@ test('M2.1 evidence and runtime are excluded from the M2.2 mutation surface', ()
   assert.doesNotMatch(run, /Environment=DOCKERD_ROOTLESS_ROOTLESSKIT=/);
   assert.match(run, /Environment=XDG_RUNTIME_DIR=\/run\/user\/\$\{process\.getuid\(\)\}/);
   assert.match(run, /Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=\/run\/user\//);
-  assert.match(provision, /ln -s \/usr\/bin\/rootlesskit \/opt\/lumina-m22-fixture\/bin\/docker-rootlesskit/);
+  assert.doesNotMatch(provision, /ln -s \/usr\/bin\/rootlesskit/);
 });

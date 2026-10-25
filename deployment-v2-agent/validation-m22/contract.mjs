@@ -106,7 +106,7 @@ export function summary(raw, context) {
       ...(integer(item.exitCode) ? { exitCode: item.exitCode } : {}),
       result: ['exit-code', 'signal', 'timeout', 'resources', 'protocol', 'start-limit-hit'].includes(item.result) ? item.result : 'OTHER' }));
   const daemonFailure = {};
-  if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING', 'RUNTIME_DIRECTORY_UNAVAILABLE', 'EXECUTION_IDENTITY_INVALID',
+  if (['ROOTLESSKIT_USERNS_DENIED', 'ROOTLESSKIT_EXEC_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING', 'RUNTIME_DIRECTORY_UNAVAILABLE', 'EXECUTION_IDENTITY_INVALID',
     'ENGINE_CONFIGURATION_REJECTED', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.daemonFailure?.reason)) daemonFailure.reason = raw.daemonFailure.reason;
   if (integer(raw.daemonFailure?.exitCode) && raw.daemonFailure.exitCode <= 255) daemonFailure.exitCode = raw.daemonFailure.exitCode;
   if (Array.isArray(raw.daemonFailure?.words)) daemonFailure.words = raw.daemonFailure.words.filter(word => FAILURE_WORDS.includes(word)).slice(0, 32);

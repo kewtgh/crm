@@ -91,11 +91,9 @@ fi
 engine_after=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || true)
 test "$engine_before" = "$engine_after"
 node deployment-v2-agent/validation-m22/setup.mjs installed
-# The launcher chooses docker-rootlesskit before rootlesskit through PATH; it has no
-# DOCKERD_ROOTLESS_ROOTLESSKIT override. Select only the packaged /usr/bin helper,
-# whose existing AppArmor profile permits user namespaces. No policy is weakened.
+# Do not alias or copy RootlessKit: invoke the packaged /usr/bin/rootlesskit through
+# its canonical PATH entry so the existing executable policy remains applicable.
 sudo install -d -m 755 /opt/lumina-m22-fixture/bin
-if test -x /usr/bin/rootlesskit; then sudo ln -s /usr/bin/rootlesskit /opt/lumina-m22-fixture/bin/docker-rootlesskit; fi
 for program in docker dockerd containerd runc containerd-shim-runc-v2 docker-proxy; do
   for folder in /opt/lumina-m22-fixture/engine/usr/bin /opt/lumina-m22-fixture/engine/usr/sbin /usr/bin /usr/sbin; do
     if test -x "${folder}/${program}"; then
