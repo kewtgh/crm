@@ -38,6 +38,10 @@ test('publication removes raw errors, environment, unit names, paths and identif
   assert.deepEqual(failureDetail({ code: 'ERR_ASSERTION', actual: 12345, expected: 'FICTIONAL_PRIVATE_MARKER', command: 'systemctl', exitCode: 1 }),
     { condition: 'ERR_ASSERTION', command: 'systemctl', exitCode: 1 });
 });
+test('a failed socket without ExecMainStatus does not invent a process exit code', () => {
+  const raw = fixture(); raw.managerFailures = [{ kind: 'GPG', unitType: 'socket', result: 'exit-code' }];
+  assert.deepEqual(summary(raw, context).managerFailures, [{ kind: 'GPG', unitType: 'socket', result: 'exit-code' }]);
+});
 test('M2.1 evidence and runtime are excluded from the M2.2 mutation surface', () => {
   const provision = fs.readFileSync(new URL('provision.sh', import.meta.url), 'utf8');
   assert.match(provision, /dpkg-deb --extract/); assert.match(provision, /--no-upgrade --no-remove/);
@@ -46,5 +50,7 @@ test('M2.1 evidence and runtime are excluded from the M2.2 mutation surface', ()
   assert.match(run, /\['reset-failed', expectedFailure\]/);
   assert.doesNotMatch(run, /\['reset-failed'\]/);
   assert.doesNotMatch(run, /Environment=DOCKERD_ROOTLESS_ROOTLESSKIT=/);
+  assert.match(run, /Environment=XDG_RUNTIME_DIR=\/run\/user\/\$\{process\.getuid\(\)\}/);
+  assert.match(run, /Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=\/run\/user\//);
   assert.match(provision, /ln -s \/usr\/bin\/rootlesskit \/opt\/lumina-m22-fixture\/bin\/docker-rootlesskit/);
 });

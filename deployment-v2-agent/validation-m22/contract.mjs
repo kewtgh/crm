@@ -91,8 +91,10 @@ export function summary(raw, context) {
       'REPOSITORY_UNAVAILABLE', 'APT_LOCK_BUSY', 'NETWORK_OR_TLS', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.legacy?.[key])) legacy[key] = raw.legacy[key];
   }
   const managerFailures = (Array.isArray(raw.managerFailures) ? raw.managerFailures : [])
-    .filter(item => ['DBUS', 'GPG', 'KEYRING', 'OTHER'].includes(item.kind) && integer(item.exitCode))
-    .map(item => ({ kind: item.kind, exitCode: item.exitCode,
+    .filter(item => ['DBUS', 'GPG', 'KEYRING', 'OTHER'].includes(item.kind))
+    .map(item => ({ kind: item.kind,
+      ...(['socket', 'service', 'other'].includes(item.unitType) ? { unitType: item.unitType } : {}),
+      ...(integer(item.exitCode) ? { exitCode: item.exitCode } : {}),
       result: ['exit-code', 'signal', 'timeout', 'resources', 'protocol', 'start-limit-hit'].includes(item.result) ? item.result : 'OTHER' }));
   const daemonFailure = {};
   if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING', 'RUNTIME_DIRECTORY_UNAVAILABLE', 'EXECUTION_IDENTITY_INVALID',

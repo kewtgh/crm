@@ -73,7 +73,8 @@ try {
   await check('manager-available', async () => { report.environment.managerBefore = await until(() => health(), 5000); baseline = failedUnits(); report.metrics.baselineFailedUnits = baseline.size;
     report.managerFailures = [...baseline].map(name => { const s = show(name); return {
       kind: name.startsWith('dbus') ? 'DBUS' : name.includes('gpg') ? 'GPG' : name.includes('keyring') ? 'KEYRING' : 'OTHER',
-      exitCode: Number(s.ExecMainStatus ?? 0), result: s.Result }; });
+      unitType: name.endsWith('.socket') ? 'socket' : name.endsWith('.service') ? 'service' : 'other',
+      ...(/^\d+$/.test(s.ExecMainStatus) ? { exitCode: Number(s.ExecMainStatus) } : {}), result: s.Result }; });
     assert.match(ctl(['show', '--property=Version', '--value']), /^\d+/); });
   assert(baseline);
   await check('manager-failure-attribution', async () => {
@@ -139,7 +140,7 @@ finally {
 process.exitCode = errors.length || !report.completed ? 1 : 0;
 
 async function rootless() {
-  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\nStandardOutput=append:${lab}/daemon-start.private.log\nStandardError=append:${lab}/daemon-start.private.log\n`;
+  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nEnvironment=HOME=${home}\nEnvironment=XDG_RUNTIME_DIR=/run/user/${process.getuid()}\nEnvironment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${process.getuid()}/bus\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\nStandardOutput=append:${lab}/daemon-start.private.log\nStandardError=append:${lab}/daemon-start.private.log\n`;
   install(daemonUnit, script); ctl(['start', '--no-block', daemonUnit]);
   try { await until(() => fs.existsSync(socket) && JSON.parse(docker(['info', '--format', '{{json .}}'])), 30000); }
   catch {
