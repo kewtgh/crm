@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-export const PUBLIC_ARTIFACT_ALLOWLIST = Object.freeze(["browser-qa-summary.json"]);
+export const PUBLIC_ARTIFACT_ALLOWLIST = Object.freeze(["browser-qa-summary.json", "deployment-v2-validation-summary.json"]);
 export const privateStageNames = Object.freeze(["configure", "release", "cleanup"]);
 
 // Fail closed on redirected evidence/output directories. No operator-supplied publication paths.

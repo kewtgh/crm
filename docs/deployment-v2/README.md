@@ -80,3 +80,7 @@ V2 采用以下设计基线：
 [Agent `0.2.0-alpha.1`](../../deployment-v2-agent/README.md) 已实现独立私有 Node / JavaScript 包、SQLite 单一事务、一次性 grant、固定 oneshot 导出 / 派发、只读状态诊断和离线目录 v1 verifier。M1 全部保留，并新增本地 Docker Desktop 隔离 Linux 的实际 flock / 文件系统 / SQLite / Compose 证据；这不是外部 CI 或目标 Ubuntu / Rootless 认证。
 
 精确结果见 [M2 能力与资源验收](m2/acceptance.md)。M3 完整系统集成仍 NO_GO，外部 CI / systemd / Rootless / reboot / 磁盘故障及正式发行缺口不能由 Mock 或普通容器补齐。没有生产增量，CRM 继续为 `3.44.0`。
+
+## M2.1 动态验证
+
+[执行计划与安全边界](m2.1/plan.md) 复用 GitHub 托管的独立可丢弃 Linux VM，验证现有 Alpha 的 user oneshot、真实 PTY 断线、内核锁、恢复和 Rootless 资源边界。Agent 版本与应用版本保持不变。必须先获准推送候选，再取得该 SHA 对应 run；准备代码不构成动态验收。

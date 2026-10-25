@@ -75,3 +75,5 @@ node deployment-v2-agent/tools/measure.ts --output work/deployment-v2-m2/new-mea
 本地 Docker 入口只访问 Windows Docker Desktop 的固定本机管道。测试镜像以 digest 固定，`--pull=never`、无网络、普通用户、源只读、独立临时文件系统；只允许清理本次随机命名并匹配标签的测试容器。没有 Docker-in-Docker、宿主 Docker socket mount 或生产资源。
 
 [外部 Linux workflow](../.github/workflows/deployment-v2-agent.yml) 提供真实 Linux / Compose 入口；只读仓库权限、无生产凭据、不上传原始证据。workflow 定义、本地 Docker Linux 与实际远端 CI run 分开报告。M1 全部测试保留；没有真实外部 run 的项目继续 NOT_RUN。
+
+M2.1 增加 [可丢弃托管 Linux 验证 fixture](validation/run.mjs)；它不被 buildRuntime 打包，也不能由 Agent 请求调用。推送需单独授权，固定验证分支才执行带临时 UID / user manager / Rootless 的 job。测试不在本机或生产安装 unit；公开证据只上传严格最小化 JSON。执行预算与证明范围见 [M2.1 计划](../docs/deployment-v2/m2.1/plan.md)。

@@ -1,8 +1,10 @@
 name: Deployment V2 offline Alpha
 
 on:
+  push:
+    branches: [validation/deployment-v2-m2.1]
   pull_request:
-    paths: ["deployment-v2-agent/**", "deployment-v2-m1/**", ".github/workflows/deployment-v2-agent.yml", ".nvmrc"]
+    paths: ["deployment-v2-agent/**", "deployment-v2-m1/**", ".github/workflows/deployment-v2-agent.yml", ".nvmrc", "tests/public-repository-privacy.test.mjs", "scripts/lib/public-ci-artifacts.mjs"]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +12,15 @@ permissions:
 
 jobs:
   native-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -26,7 +30,8 @@ jobs:
       - name: Alpha typecheck and lint
         run: |
           node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/tsconfig.json
-          node node_modules/eslint/bin/eslint.js deployment-v2-agent/src deployment-v2-agent/tools deployment-v2-agent/tests
+          node node_modules/@typescript/native/bin/tsc -p deployment-v2-agent/validation/tsconfig.json
+          node node_modules/eslint/bin/eslint.js deployment-v2-agent/src deployment-v2-agent/tools deployment-v2-agent/tests deployment-v2-agent/validation
       - name: Retain M1 tests on native Linux
         run: node scripts/run-bounded.mjs --label m1-linux --timeout-seconds 55 --idle-seconds 45 -- node --test --test-concurrency=1 deployment-v2-m1/tests/*.test.mjs
       - name: Alpha native SQLite, flock, filesystem, crypto and termination
@@ -50,5 +55,38 @@ jobs:
         run: node scripts/run-bounded.mjs --label m2-compose --timeout-seconds 55 --idle-seconds 45 -- node deployment-v2-agent/tools/compose.ts
       - name: Public privacy contracts
         run: npm run test:public-privacy
-      # No publication, signing credentials, production secrets, self-hosted runner,
-      # systemd installation, Rootless provisioning, reboot, or application deployment.
+      - name: Validation publication contract tests
+        run: node --test deployment-v2-agent/validation/contract.test.mjs
+
+  dynamic-linux:
+    # PR code never provisions a privileged fixture. This exact branch is published only
+    # after administrator review; hosted runners are disposable and have no production keys.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/validation/deployment-v2-m2.1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Disposable systemd and Rootless validation
+        timeout-minutes: 8
+        run: |
+          mkdir -p work/ci-private
+          bash deployment-v2-agent/validation/provision.sh > work/ci-private/deployment-v2-provision.log 2>&1
+      - name: Publish minimized validation summary
+        id: public_summary
+        if: always()
+        run: node deployment-v2-agent/validation/publish.mjs
+      - name: Upload reviewed validation summary
+        if: always() && steps.public_summary.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-v2-validation-summary
+          path: work/public-artifacts/deployment-v2-validation-summary.json
+          if-no-files-found: error
+          retention-days: 14
+      # No raw diagnostics or environment dumps, production credentials, self-hosted runner,
+      # reboot, database connection, application deployment, or production installation.
