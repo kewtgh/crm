@@ -1,28 +1,14 @@
-import { databaseJson, databaseRequest } from "./db/gateway";
+import {databaseJson} from "./db/gateway";
+import {approvalDatabaseTypes,approvalDefaults,approvalQuerySchema,approvalTypeKey,approvalPageSchema,approvalDecisionSchema,approvalDecisionResultSchema,type ApprovalQuery,type ApprovalDecision} from "./approval-contract";
+export type {ApprovalRecord,ApprovalSummary,ApprovalPage} from "./approval-contract";
 
-export type ApprovalRecord = {
-  id: string; requesterId?:string; requestNumber: string; type: "contractSign"|"contractExport"|"performanceSummary"|"performanceAllocation"|"quoteDiscount"|"refund"|"marketingContactExport"|"crmExport"; object: string; requester: string; submitted: string; level: "teamLead"|"admin"|"superAdmin"; reason: string; status: "pending"|"approved"|"rejected"; executionStatus:"NOT_STARTED"|"SUCCEEDED"|"FAILED";
-};
-
-const approvalTypes: Record<string, ApprovalRecord["type"]> = { CONTRACT_SIGN:"contractSign", CONTRACT_EXPORT:"contractExport", PERFORMANCE_SUMMARY:"performanceSummary", PERFORMANCE_ALLOCATION:"performanceAllocation",QUOTE_DISCOUNT:"quoteDiscount",REFUND:"refund",MARKETING_CONTACT_EXPORT:"marketingContactExport",CRM_EXPORT:"crmExport" };
-const databaseApprovalTypes:Record<ApprovalRecord["type"],string>={contractSign:"CONTRACT_SIGN",contractExport:"CONTRACT_EXPORT",performanceSummary:"PERFORMANCE_SUMMARY",performanceAllocation:"PERFORMANCE_ALLOCATION",quoteDiscount:"QUOTE_DISCOUNT",refund:"REFUND",marketingContactExport:"MARKETING_CONTACT_EXPORT",crmExport:"CRM_EXPORT"};
-export type ApprovalSummary={pending:number;approved:number;rejected:number;highPrivilegePending:number};
-export type ApprovalPage={items:ApprovalRecord[];total:number;page:number;pageSize:number;summary:ApprovalSummary};
-
-function approvalFilters(options:{query?:string;type?:string;status?:string}){const params=new URLSearchParams();const clean=(options.query??"").replace(/[*,()]/g," ").trim().slice(0,100);if(clean)params.set("or",`(request_number.ilike.*${clean}*,business_object_type.ilike.*${clean}*,business_object_id.ilike.*${clean}*,reason.ilike.*${clean}*)`);if(options.type&&options.type!=="all"&&options.type in databaseApprovalTypes)params.set("request_type",`eq.${databaseApprovalTypes[options.type as ApprovalRecord["type"]]}`);if(options.status&&options.status!=="all")params.set("status",`eq.${options.status.toUpperCase()}`);return params;}
-async function approvalCount(filter:string){const response=await databaseRequest(`/db/table/approval_requests?select=id${filter}`,{headers:{Prefer:"count=exact",Range:"0-0"}});return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);}
-
-export async function listApprovals(options:{query?:string;type?:string;status?:string;page?:number;pageSize?:number}={}): Promise<ApprovalPage> {
-  const page=Math.max(1,Number(options.page??1));const pageSize=Math.max(1,Math.min(50,Number(options.pageSize??10)));const start=(page-1)*pageSize;const params=approvalFilters(options);params.set("select","id,request_number,request_type,business_object_type,business_object_id,requester_id,required_role,status,reason,execution_status,created_at");params.set("order","created_at.desc");
-  const response=await databaseRequest(`/db/table/approval_requests?${params}`,{headers:{Prefer:"count=exact",Range:`${start}-${start+pageSize-1}`}});const requests=await response.json() as Record<string,unknown>[];const total=Number((response.headers.get("content-range")??"*/0").split("/")[1]??requests.length);
-  const requesterIds=[...new Set(requests.map(item=>String(item.requester_id)).filter(Boolean))];
-  const [profiles,pending,approved,rejected,highPrivilegePending] = await Promise.all([
-    requesterIds.length?databaseJson<{user_id:string;display_name_zh:string;display_name_en:string}[]>(`/db/table/user_profiles?select=user_id,display_name_zh,display_name_en&user_id=in.(${requesterIds.join(",")})`):[],
-    approvalCount("&status=eq.PENDING"),approvalCount("&status=eq.APPROVED"),approvalCount("&status=eq.REJECTED"),approvalCount("&status=eq.PENDING&required_role=eq.SUPER_ADMIN"),
-  ]);
-  const names=new Map(profiles.map((item)=>[item.user_id,`${item.display_name_zh} / ${item.display_name_en}`]));
-  const items=requests.map((item)=>({ id:String(item.id),requesterId:String(item.requester_id),requestNumber:String(item.request_number),type:approvalTypes[String(item.request_type)]??"performanceSummary",object:`${item.business_object_type} · ${item.business_object_id}`,requester:names.get(String(item.requester_id))??String(item.requester_id).slice(0,8),submitted:String(item.created_at),level:item.required_role==="SUPER_ADMIN"?"superAdmin" as const:item.required_role==="TEAM_LEAD"?"teamLead" as const:"admin" as const,reason:String(item.reason),status:String(item.status).toLowerCase() as ApprovalRecord["status"],executionStatus:String(item.execution_status??"NOT_STARTED") as ApprovalRecord["executionStatus"] }));
-  return {items,total,page,pageSize,summary:{pending,approved,rejected,highPrivilegePending}};
+export async function listApprovals(options:Partial<ApprovalQuery>&{query?:string}={},request=databaseJson){
+ const query=approvalQuerySchema.parse({...approvalDefaults,...Object.fromEntries(Object.entries(options).filter(([key])=>key!=="query")),q:options.q??options.query??""});
+ const result=await request<Record<string,unknown>>("/db/rpc/query_approval_workspace",{method:"POST",body:JSON.stringify({p_query:query.q,p_type:query.type==="all"||query.type==="other"?query.type:approvalDatabaseTypes[query.type],p_status:query.status,p_scope:query.scope,p_execution:query.execution,p_page:query.page,p_page_size:query.pageSize})});
+ const items=Array.isArray(result.items)?result.items.map(item=>({...item,type:approvalTypeKey(item.requestType)})):result.items;
+ const parsed=approvalPageSchema.parse({...result,items});
+ if(parsed.page!==query.page||parsed.pageSize!==query.pageSize)throw new Error("INVALID_APPROVAL_RESPONSE");
+ return parsed;
 }
 
 export async function createApproval(input:
@@ -38,8 +24,11 @@ export async function createApproval(input:
   return databaseJson<Record<string,unknown>>("/db/rpc/create_approval",{method:"POST",body:JSON.stringify({request_kind:input.type,object_type:input.objectType,object_id:input.objectId,business_reason:input.reason})});
 }
 
-export async function decideApproval(id:string,decision:"APPROVED"|"REJECTED",comment?:string) {
-  return databaseJson<Record<string,unknown>>("/db/rpc/decide_approval",{method:"POST",body:JSON.stringify({request_id:id,decision,decision_comment:comment||null})});
+export async function decideApproval(id:string,input:ApprovalDecision,request=databaseJson) {
+ const command=approvalDecisionSchema.parse(input);
+ const result=approvalDecisionResultSchema.parse(await request("/db/rpc/decide_approval_command",{method:"POST",body:JSON.stringify({p_id:id,p_review_token:command.expectedReviewToken,p_decision:command.decision,p_comment:command.comment,p_request_key:command.requestKey})}));
+ if(result.id!==id||result.status!==command.decision.toLowerCase())throw new Error("INVALID_APPROVAL_RESPONSE");
+ return result;
 }
 
 export function approvalRecordId(item: unknown) {

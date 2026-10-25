@@ -1,4 +1,5 @@
 import { databaseJson, databaseRequest } from "./db/gateway";
+import {pendingApprovalCount} from "./pending-approval-count";
 
 export type AdminAuditEvent={id:string;action:string;entityType:string;entityId:string|null;actorZh:string;actorEn:string;createdAt:string};
 export type AdminDashboardData={staffTotal:number;activeStaff:number;mfaMissing:number;privilegedTotal:number;privilegedMfa:number;pendingApprovals:number;failedJobs:number;unreadNotifications:number;audits:AdminAuditEvent[]};
@@ -12,6 +13,6 @@ export async function listAdminAudits(options:{query?:string;page?:number;pageSi
 }
 
 export async function loadAdminDashboard():Promise<AdminDashboardData>{
-  const [metrics,audits]=await Promise.all([databaseJson<Record<string,number>>("/db/rpc/admin_dashboard_metrics",{method:"POST",body:"{}"}),listAdminAudits({page:1,pageSize:8})]);
-  return {staffTotal:Number(metrics.staff_total??0),activeStaff:Number(metrics.active_staff??0),mfaMissing:Number(metrics.mfa_missing??0),privilegedTotal:Number(metrics.privileged_total??0),privilegedMfa:Number(metrics.privileged_mfa??0),pendingApprovals:Number(metrics.pending_approvals??0),failedJobs:Number(metrics.failed_jobs??0),unreadNotifications:Number(metrics.unread_notifications??0),audits:audits.items};
+  const [metrics,audits,pendingApprovals]=await Promise.all([databaseJson<Record<string,number>>("/db/rpc/admin_dashboard_metrics",{method:"POST",body:"{}"}),listAdminAudits({page:1,pageSize:8}),pendingApprovalCount()]);
+  return {staffTotal:Number(metrics.staff_total??0),activeStaff:Number(metrics.active_staff??0),mfaMissing:Number(metrics.mfa_missing??0),privilegedTotal:Number(metrics.privileged_total??0),privilegedMfa:Number(metrics.privileged_mfa??0),pendingApprovals,failedJobs:Number(metrics.failed_jobs??0),unreadNotifications:Number(metrics.unread_notifications??0),audits:audits.items};
 }

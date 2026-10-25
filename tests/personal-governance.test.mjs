@@ -24,8 +24,10 @@ test('personal review actions enforce non-administrator independence without cha
  for(const role of APP_ROLES){
   const actor={id:'fictional-self',role};
   const administrator=['ADMIN','SUPER_ADMIN'].includes(role);
-  assert.equal(canReviewApproval(actor,{requesterId:actor.id,level:'teamLead'}),administrator);
-  assert.equal(canReviewApproval(actor,{requesterId:'fictional-other',level:'admin'}),administrator);
-  assert.equal(canReviewApproval(actor,{requesterId:'fictional-other',level:'teamLead'}),administrator||['SALES_DIRECTOR','SALES_MANAGER'].includes(role));
+  const current={canDecide:true,status:'pending',expiresAt:'2099-01-01T00:00:00Z'};
+  assert.equal(canReviewApproval(actor,{...current,requesterId:actor.id,level:'teamLead'}),administrator);
+  assert.equal(canReviewApproval(actor,{...current,requesterId:'fictional-other',level:'admin'}),administrator);
+  assert.equal(canReviewApproval(actor,{...current,requesterId:'fictional-other',level:'teamLead'}),administrator||['SALES_DIRECTOR','SALES_MANAGER'].includes(role));
+  assert.equal(canReviewApproval(actor,{...current,requesterId:'fictional-other',level:'teamLead',canDecide:false}),false);
  }
 });

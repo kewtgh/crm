@@ -1,4 +1,12 @@
-# Implementation status — v3.43.0 release candidate
+# Implementation status — v3.44.0 release candidate
+
+## v3.44.0 — Approval review integrity and complete history
+
+Migration 141 adds an invoker approval projection, snapshot-bound decision receipts and unexpired
+RLS pending counts. Independent workspace state, exact-request recovery, correct type/deadline/
+execution labels and shareable scopes are implemented. Existing revenue/custody authority and
+business functions remain authoritative. See [audit](FIRST_PRINCIPLES_AUDIT_V344.md),
+[plan](FIRST_PRINCIPLES_PLAN_V344.md) and [verification](V344_VERIFICATION.md).
 
 ## v3.43.0 — Communication command recovery and inbox triage
 

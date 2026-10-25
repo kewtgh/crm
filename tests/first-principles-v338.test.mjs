@@ -15,14 +15,14 @@ const data={todayTasks:3,overdueTasks:2,pendingApprovals:999,renewalsDue:4,riskC
 const fail=async()=>{throw new Error('Fictional private diagnostic must never be returned');};
 const adapter=(overrides={})=>({dashboard:async()=>data,privacy:async()=>6,readiness:async()=>({failedJobs:2,stuckJobs:1}),approvals:async()=>7,...overrides});
 
-test('pending approvals use the regular list RLS query and reject unavailable exact counts',async()=>{
+test('pending approvals use the invoker RLS count and reject unavailable results',async()=>{
  let request;
- assert.equal(await pendingApprovalCount(async(url,init)=>{request={url,init};return new Response('[]',{headers:{'content-range':'0-0/7'}});}),7);
- assert.equal(request.url,'/db/table/approval_requests?select=id&status=eq.PENDING');
- assert.equal(request.init.headers.Prefer,'count=exact');assert.equal(request.init.headers.Range,'0-0');
+ assert.equal(await pendingApprovalCount(async(url,init)=>{request={url,init};return Response.json({count:7});}),7);
+ assert.equal(request.url,'/db/rpc/approval_pending_count');
+ assert.equal(request.init.method,'POST');assert.equal(request.init.body,'{}');
  for(const range of ['0-0/0','*/0'])assert.equal(exactCount(new Response('[]',{headers:{'content-range':range}})),0);
- for(const range of [null,'','0-0/*','0-0/NaN','0-0/-1','0-0/1.5','0-0/9007199254740992']){
-  await assert.rejects(pendingApprovalCount(async()=>new Response('[]',{headers:range?{'content-range':range}:{}})),/COUNT_UNAVAILABLE/);
+ for(const value of [null,{},[],{count:-1},{count:1.5},{count:'0'},{count:9007199254740992}]){
+  await assert.rejects(pendingApprovalCount(async()=>Response.json(value)),/COUNT_UNAVAILABLE/);
  }
  assert.throws(()=>exactCount(new Response('[]',{status:503,headers:{'content-range':'0-0/0'}})),/COUNT_UNAVAILABLE/);
 });

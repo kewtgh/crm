@@ -3,6 +3,11 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  APPROVAL_SNAPSHOT_CONFLICT:"approvalReview.reload",
+  APPROVAL_NOT_PENDING:"approvalReview.reload",
+  APPROVAL_REQUEST_CONFLICT:"approvalReview.requestConflict",
+  APPROVAL_ACCESS_DENIED:"approvalReview.denied",
+  APPROVAL_DOMAIN_REVIEW_REQUIRED:"approvalReview.domainHelp",
   COMMUNICATION_VERSION_CONFLICT:"commsRecovery.reload",
   COMMUNICATION_REQUEST_CONFLICT:"commsRecovery.requestConflict",
   COMMUNICATION_ACCESS_DENIED:"commsRecovery.noAccess",

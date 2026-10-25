@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.43.0**
+Current release candidate: **v3.44.0**
+
+## v3.44.0 — Verifiable approval decisions and complete review history
+
+Approvals bind the reviewed snapshot to an atomic outcome receipt, with explicit confirmation after
+response loss and separate decision/execution/refresh outcomes. Expired and withdrawn requests,
+revenue-specific types, failed business actions and authorized pending counts are represented
+accurately. Shareable personal/reviewable/history views retain current role and financial boundaries.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V344.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V344.md),
+[release notes](docs/RELEASE_V3.44.0.md) and [verification](docs/V344_VERIFICATION.md).
 
 ## v3.43.0 — Recoverable communication and shareable inbox triage
 

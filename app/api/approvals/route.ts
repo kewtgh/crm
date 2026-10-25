@@ -3,14 +3,15 @@ import { z } from "zod";
 import { approvalRecordId, createApproval, executeSuperAdminApproval, listApprovals } from "@/lib/governance-repository";
 import { DatabaseRequestError } from "@/lib/db/gateway";
 import { mutationIsTrusted } from "@/lib/request-security";
-import { apiRoute, parsePagination, requireApiUser } from "@/lib/api";
+import { ApiError,apiRoute,requireApiUser } from "@/lib/api";
+import {approvalQuerySchema} from "@/lib/approval-contract";
 
 const schema=z.discriminatedUnion("type",[
   z.object({type:z.enum(["CONTRACT_SIGN","CONTRACT_EXPORT","PERFORMANCE_SUMMARY","PERFORMANCE_ALLOCATION"]),objectType:z.string().min(1).max(80),objectId:z.string().min(1).max(160),reason:z.string().trim().min(3).max(1000)}),
   z.object({type:z.literal("CRM_EXPORT"),resource:z.enum(["schools","people","tasks","students","households","leads","sales","finance"]),query:z.string().max(100).default(""),status:z.string().max(40).default("all"),sort:z.string().max(40).default("primary"),direction:z.enum(["asc","desc"]).default("asc"),format:z.enum(["CSV","XLSX","PDF"]).default("CSV"),reason:z.string().trim().min(3).max(1000)}),
 ]);
 const fail=(error:unknown)=>error instanceof DatabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_FAILED"},{status:500});
-async function get(request:Request){await requireApiUser();const params=new URL(request.url).searchParams;const{page,pageSize}=parsePagination(params,10);try{return NextResponse.json(await listApprovals({query:params.get("q")??"",type:params.get("type")??"all",status:params.get("status")??"pending",page,pageSize}));}catch(error){return fail(error);}}
+async function get(request:Request){await requireApiUser();const parsed=approvalQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));if(!parsed.success)throw new ApiError("APPROVAL_INPUT_INVALID",400);try{return NextResponse.json(await listApprovals(parsed.data));}catch(error){return fail(error);}}
 async function post(request:Request){
   if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});
   const user=await requireApiUser();const parsed=schema.safeParse(await request.json().catch(()=>({})));

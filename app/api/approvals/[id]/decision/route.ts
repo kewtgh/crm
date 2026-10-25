@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { decideApproval } from "@/lib/governance-repository";
 import { DatabaseRequestError } from "@/lib/db/gateway";
-import { apiRoute, parseUuid, requireApiAal2, requireApiRole } from "@/lib/api";
+import { ApiError,apiRoute,parseUuid,requireApiAal2,requireApiRole } from "@/lib/api";
 import { mutationIsTrusted } from "@/lib/request-security";
-
-const schema=z.object({decision:z.enum(["APPROVED","REJECTED"]),comment:z.string().trim().max(1000).optional()})
-  .refine(value=>value.decision!=="REJECTED"||Boolean(value.comment),{path:["comment"],message:"REJECTION_REASON_REQUIRED"});
+import {approvalDecisionSchema} from "@/lib/approval-contract";
 
 async function post(request:Request,context:{params:Promise<{id:string}>}){
   if(!mutationIsTrusted(request))return NextResponse.json({code:"UNTRUSTED_ORIGIN"},{status:403});
-  const parsed=schema.safeParse(await request.json().catch(()=>({})));
+  const parsed=approvalDecisionSchema.safeParse(await request.json().catch(()=>({})));
   if(!parsed.success)return NextResponse.json({code:parsed.error.issues[0]?.message??"INVALID_INPUT",field:String(parsed.error.issues[0]?.path[0]??"form")},{status:400});
   await requireApiRole("SUPER_ADMIN","ADMIN","SALES_DIRECTOR","SALES_MANAGER");await requireApiAal2();
   const id=parseUuid((await context.params).id);
-  try{return NextResponse.json({item:await decideApproval(id,parsed.data.decision,parsed.data.comment)});}
-  catch(error){return error instanceof DatabaseRequestError?NextResponse.json({code:error.code,message:error.message},{status:error.status}):NextResponse.json({code:"APPROVAL_DECISION_FAILED"},{status:500});}
+  try{return NextResponse.json({item:await decideApproval(id,parsed.data)});}
+  catch(error){
+    if(error instanceof DatabaseRequestError){
+      if(["APPROVAL_ACCESS_DENIED","CASH_AUTHORITY_REQUIRED","REVENUE_AUTHORITY_REQUIRED","CASH_INDEPENDENT_REFUND_REVIEW","REVENUE_AAL2_REQUIRED"].includes(error.code))throw new ApiError(error.code,403);
+      if(["APPROVAL_SNAPSHOT_CONFLICT","APPROVAL_REQUEST_CONFLICT","APPROVAL_NOT_PENDING","APPROVAL_DOMAIN_REVIEW_REQUIRED"].includes(error.code))throw new ApiError(error.code,409);
+      if(error.code==="APPROVAL_INPUT_INVALID")throw new ApiError(error.code,400);
+      throw error;
+    }
+    throw new ApiError("APPROVAL_DECISION_FAILED",500);
+  }
 }
 export const POST=apiRoute(post,"APPROVAL_DECISION_FAILED");
