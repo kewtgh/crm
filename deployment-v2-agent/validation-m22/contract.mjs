@@ -95,7 +95,7 @@ export function summary(raw, context) {
     .map(item => ({ kind: item.kind, exitCode: item.exitCode,
       result: ['exit-code', 'signal', 'timeout', 'resources', 'protocol', 'start-limit-hit'].includes(item.result) ? item.result : 'OTHER' }));
   const daemonFailure = {};
-  if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING',
+  if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING', 'RUNTIME_DIRECTORY_UNAVAILABLE', 'EXECUTION_IDENTITY_INVALID',
     'ENGINE_CONFIGURATION_REJECTED', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.daemonFailure?.reason)) daemonFailure.reason = raw.daemonFailure.reason;
   if (integer(raw.daemonFailure?.exitCode) && raw.daemonFailure.exitCode <= 255) daemonFailure.exitCode = raw.daemonFailure.exitCode;
   return { schemaVersion: 1, scope: 'NONPRODUCTION_ALPHA', productionApproved: false,

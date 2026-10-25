@@ -139,13 +139,17 @@ finally {
 process.exitCode = errors.length || !report.completed ? 1 : 0;
 
 async function rootless() {
-  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\n`;
+  const script = `[Service]\nType=simple\nEnvironment=PATH=${engineDirs}\nExecStart=${rootlessScript} --host=unix://${socket} --data-root=${dataRoot} --exec-opt native.cgroupdriver=systemd\nDelegate=yes\nKillMode=mixed\nTimeoutStopSec=10s\nRestart=no\nStandardOutput=append:${lab}/daemon-start.private.log\nStandardError=append:${lab}/daemon-start.private.log\n`;
   install(daemonUnit, script); ctl(['start', '--no-block', daemonUnit]);
   try { await until(() => fs.existsSync(socket) && JSON.parse(docker(['info', '--format', '{{json .}}'])), 30000); }
   catch {
-    const r = spawnSync('/usr/bin/journalctl', ['--user', '--unit', daemonUnit, '--no-pager', '--output=cat', '--lines=60'], { encoding: 'utf8', timeout: 3000, maxBuffer: 32768 });
-    const log = r.stdout ?? ''; fs.writeFileSync(`${lab}/daemon-start.private.log`, log, { mode: 0o600 });
-    const reason = /operation not permitted|userns|AppArmor/i.test(log) ? 'ROOTLESSKIT_USERNS_DENIED'
+    const file = `${lab}/daemon-start.private.log`, size = fs.existsSync(file) ? fs.statSync(file).size : 0;
+    const fd = size ? fs.openSync(file, 'r') : null, bytes = Buffer.alloc(Math.min(size, 32768));
+    if (fd !== null) { try { fs.readSync(fd, bytes, 0, bytes.length, Math.max(0, size - bytes.length)); } finally { fs.closeSync(fd); } }
+    const log = bytes.toString();
+    const reason = /XDG_RUNTIME_DIR needs to be set and writable/i.test(log) ? 'RUNTIME_DIRECTORY_UNAVAILABLE'
+      : /must be executed as a non-privileged user/i.test(log) ? 'EXECUTION_IDENTITY_INVALID'
+      : /operation not permitted|userns|AppArmor/i.test(log) ? 'ROOTLESSKIT_USERNS_DENIED'
       : /Failed to connect to bus|cgroup.*delegat/i.test(log) ? 'CGROUP_USER_BUS_UNAVAILABLE'
       : /executable file not found|command not found|no such file/i.test(log) ? 'ENGINE_RUNTIME_MISSING'
       : /failed to start daemon|invalid argument/i.test(log) ? 'ENGINE_CONFIGURATION_REJECTED' : 'UNCLASSIFIED_PRIVATE_LOG';
