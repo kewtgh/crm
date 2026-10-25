@@ -1,0 +1,69 @@
+name: V1 deployment stabilization
+on:
+  push:
+    branches: [validation/deployment-v1-stabilization]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v1-deployment-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ubuntu:
+    if: github.ref == 'refs/heads/validation/deployment-v1-stabilization' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@12.2.1
+      - run: npm ci --no-audit --no-fund
+        timeout-minutes: 5
+      - name: Extract Ubuntu clients without installing or replacing a daemon
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          mkdir -p work/ubuntu-client-packages work/ubuntu-clients
+          cd work/ubuntu-client-packages
+          for spec in 'docker.io:^29[.]1[.]3-' 'docker-buildx:^0[.]30[.]1-'; do
+            package="${spec%%:*}"
+            pattern="${spec#*:}"
+            version="$(apt-cache madison "$package" | awk -v pattern="$pattern" '$3 ~ pattern {print $3; exit}')"
+            test -n "$version"
+            apt-get download "$package=$version"
+          done
+          sha256sum ./*.deb
+          for package in ./*.deb; do dpkg-deb -x "$package" ../ubuntu-clients; done
+          cd ../..
+          test -x work/ubuntu-clients/usr/bin/docker
+          buildx="$(find work/ubuntu-clients/usr -type f -name docker-buildx -print -quit)"
+          test -n "$buildx"
+          echo "$GITHUB_WORKSPACE/work/ubuntu-clients/usr/bin" >> "$GITHUB_PATH"
+          echo "LUMINA_UBUNTU_BUILDX_PATH=$GITHUB_WORKSPACE/$buildx" >> "$GITHUB_ENV"
+          echo 'LUMINA_V1_UBUNTU_PROFILE=1' >> "$GITHUB_ENV"
+      - name: Typecheck, scoped lint and privacy
+        run: |
+          npm run typecheck
+          node node_modules/eslint/bin/eslint.js scripts/lib/host-preflight.mjs scripts/lib/host-capabilities.mjs scripts/lib/controller-entry.mjs scripts/lib/rootless-docker.mjs scripts/deploy-production.mjs scripts/deploy-production-bootstrap.mjs scripts/deploy-production-runner.mjs tests/host-control-plane.test.mjs tests/host-linux-integration.test.mjs tests/compose-capabilities-integration.test.mjs
+          npm run test:public-privacy
+      - name: Existing V1 recovery and real Ubuntu client integration
+        timeout-minutes: 3
+        run: |
+          node scripts/prepare-compose-capability-runtime.mjs
+          git fetch --no-tags --depth=1 origin 796cc43e63784eb8891ca6420572cd563cb2ac80 c164ff1524192b7d699dae1962c02bf72566407b 44b2ff8c05a89986fa05e650aa368b009983e2d6
+          npm run test:deploy
+          node --test tests/host-linux-integration.test.mjs
+      - name: Record evidence boundary
+        run: |
+          printf 'V1_TEST_SHA=%s\nV1_RUN_ID=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID"
+          sha256sum scripts/lib/host-preflight.mjs scripts/lib/host-capabilities.mjs scripts/lib/controller-entry.mjs
+          printf '%s\n' 'ROOTLESS_DAEMON=NOT_RUN' 'PRODUCTION_DEPLOYMENT=NOT_RUN' 'No production credentials, connections, units or services used.'

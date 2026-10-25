@@ -1,13 +1,18 @@
 # Lumina CRM v3.40 production deployment and host control plane
 
-The host workflow is **Host Preflight → Operator-approved Host Upgrade → Production Deploy**.
+Routine releases use `npm run deploy:production`: admission → target deployment preflight → Bootstrap → controller entry → the existing release/acceptance/recovery workflow.
+First installation and host maintenance separately use **full Host Preflight → operator-approved host work**.
+The [V1 stabilization audit and plan](deployment-v1-stabilization/audit-and-plan.md) records the scoped changes and evidence boundaries.
 The versioned [host contract](../deploy/libexec/host-runtime-contract.json) is authoritative.
 See [implementation/verification](HOST_CONTROL_PLANE_PLAN.md) and the
 [Chinese production runbook](LUMINA_PRODUCTION_DEPLOYMENT_RUNBOOK.md).
 
-The [Deployment V2 phase-one audit and design](deployment-v2/README.md) defines an
-independent Agent and isolated Ubuntu verification milestones. It is a design
-baseline; the existing V1 production entry points remain in place.
+Deployment V2 is paused. Its [archived design](deployment-v2/README.md) does not change this V1 production workflow or authorize installation.
+
+`npm run deploy:production:host-check -- --scope=deployment` runs the read-only checks used by routine releases.
+The default `host-check` and `host-upgrade-plan` retain the full maintenance checks; their maintenance-only failures do not silently become application-release requirements.
+Both release boundaries still check the CRM Rootless socket/UID/data-root, cgroup v2, Compose security fields, builder ownership/image/network/proxy, deploy unit, locks, disk and unfinished host operations.
+Only the daemon data root permits `0700/0710/0711`, matching Docker's traversal requirements; Docker and Buildx client configuration remain private. No release automatically changes modes, installs tools or updates installed maintenance code.
 
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).

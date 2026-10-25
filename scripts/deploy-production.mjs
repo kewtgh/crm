@@ -80,6 +80,7 @@ Usage:
   npm run deploy:production:reconcile    Reconcile terminal journal/archive only; never replay deployment
   npm run deploy:production:dry-run      Validate repository deployment assets without side effects
   npm run deploy:production:host-check   Read-only structured host diagnostics (works on incompatible Node)
+    -- --scope=deployment              Routine-release checks; default remains full maintenance diagnostics
   npm run deploy:production:host-upgrade-plan
                                         Plan operator host upgrades; never install system packages
   npm run deploy:production:archive-early -- --request=UUID [--approve=SHA256]
@@ -283,7 +284,7 @@ async function followRequest(requestId, initial) {
 }
 
 async function start(mode, { detached = false, resume = false } = {}) {
-  assertHostPreflight();
+  assertHostPreflight({scope:"admission"});
   assertDeploymentRuntime();
   assertProductionController();
   if (isServiceActive()) {
@@ -471,7 +472,9 @@ const [action = "start", ...options] = process.argv.slice(2);
 if (["start", "initialize", "rollback", "recover", "accept", "reconcile", "archive-early"].includes(action)
   && !options.some(option => ["--help", "-h"].includes(option))
   && !(process.env.LUMINA_DEPLOY_CLI_LOCKED === "1" && hostLocksHeld([HOST_PATHS.admissionLock]))) {
-  if(!["archive-early","reconcile"].includes(action)){try{assertHostPreflight();}catch(error){if(error.diagnostics)process.stdout.write(`${JSON.stringify(error.diagnostics,null,2)}\n`);process.stderr.write(`${error.code??"HOST_PREFLIGHT_FAILED"}\n`);process.exit(1);}}
+  // Check only the admission boundary before taking its lock. Docker/target checks
+  // run under that lock, then again at the actual controller execution boundary.
+  if(!["archive-early","reconcile"].includes(action)){try{assertHostPreflight({scope:"admission"});}catch(error){if(error.diagnostics)process.stdout.write(`${JSON.stringify(error.diagnostics,null,2)}\n`);process.stderr.write(`${error.code??"HOST_PREFLIGHT_FAILED"}\n`);process.exit(1);}}
   if(!["archive-early","reconcile"].includes(action))assertDeploymentRuntime();
   assertProductionController();
   const exitCode = await new Promise((resolve, reject) => {
@@ -489,8 +492,9 @@ if (action === "--help" || action === "-h" || action === "help" || options.inclu
 } else {
   try {
     if(action==="host-check"||action==="host-upgrade-plan"){
-      if(options.some(value=>!/^--target=[0-9a-f]{40}$/.test(value))||options.length>1)throw new Error("HOST_TARGET_INVALID");
-      let report;if(options.length){try{const target=await readStaticHostTarget(async args=>command("git",args).stdout,options[0].slice(9));report=hostPreflight({target});}catch{report=hostPreflight();report.ready=false;report.diagnostics.push({component:"target.contract",current:options[0].slice(9),required:"versioned static host contract schema 1",status:"UNSUPPORTED",blocking:true,remediation:"Use an operator-reviewed control-plane release with the static contract; never execute a fetched target to discover requirements"});}}else report=hostPreflight();
+      if(options.some(value=>!/^--target=[0-9a-f]{40}$/.test(value)&&!(action==="host-check"&&/^--scope=(full|deployment)$/.test(value)))||new Set(options.map(value=>value.split("=")[0])).size!==options.length)throw new Error("HOST_CHECK_ARGUMENT_INVALID");
+      const targetSha=options.find(value=>value.startsWith("--target="))?.slice(9),scope=options.find(value=>value.startsWith("--scope="))?.slice(8)??"full";
+      let report;if(targetSha){try{const target=await readStaticHostTarget(async args=>command("git",args).stdout,targetSha);report=hostPreflight({target,scope});}catch{report=hostPreflight({scope});report.ready=false;report.diagnostics.push({component:"target.contract",current:targetSha,required:"versioned static host contract schema 1",status:"UNSUPPORTED",blocking:true,remediation:"Use an operator-reviewed control-plane release with the static contract; never execute a fetched target to discover requirements"});}}else report=hostPreflight({scope});
       process.stdout.write(`${JSON.stringify(action==="host-check"?report:hostUpgradePlan(report),null,2)}\n`);if(action==="host-check"&&!report.ready)process.exitCode=1;
     } else if(action==="archive-early"){
       if(options.some(value=>!value.startsWith("--request=")&&!value.startsWith("--approve=")))throw new Error("EARLY_ARCHIVE_ARGUMENT_INVALID");

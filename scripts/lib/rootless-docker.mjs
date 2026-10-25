@@ -1,4 +1,14 @@
+import {userInfo} from "node:os";
+
 export const LUMINA_ROOTLESS_DOCKER_DATA_ROOT = "/var/lib/lumina-crm/docker";
+
+// Both read-only probes and the release runner use the actual Unix account,
+// independent of a caller's HOME or inherited session variables.
+export function rootlessUserEnvironment(uid=process.getuid?.(),home=userInfo().homedir){
+  expectedRootlessDockerHost(uid);
+  if(typeof home!=="string"||!home.startsWith("/")||home.includes("\0"))throw new Error("LUMINA_ROOTLESS_HOME_INVALID");
+  return{HOME:home,XDG_RUNTIME_DIR:`/run/user/${uid}`,DBUS_SESSION_BUS_ADDRESS:`unix:path=/run/user/${uid}/bus`};
+}
 
 export function expectedRootlessDockerHost(uid) {
   if (!Number.isSafeInteger(uid) || uid <= 0) {

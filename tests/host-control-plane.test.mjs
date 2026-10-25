@@ -5,6 +5,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm,rename} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {EventEmitter} from "node:events";
+import {spawnSync} from "node:child_process";
 import {HOST_CONTRACT,HOST_PATHS,HOST_CONTRACT_PATH,MAINTENANCE_ASSETS,componentDiagnostic,sha256,validateOwnedBuilder,maintenanceBundle} from "../deploy/libexec/lumina-host-contract.mjs";
 import {builderReplacementPlan,replaceOwnedBuilder,hostLocksHeld,hostLockArguments} from "../deploy/libexec/lumina-host-upgrade.mjs";
 import {localHostTarget,readStaticHostTarget,evaluateHostSnapshot,collectHostSnapshot,hostUpgradePlan} from "../scripts/lib/host-preflight.mjs";
@@ -13,6 +14,7 @@ import {REQUIRED_DOCKER_CAPABILITIES} from "../scripts/lib/host-capabilities.mjs
 import {runControllerEntry,controllerEntryIdentity,validateEarlyRejection} from "../scripts/lib/controller-entry.mjs";
 import {earlyArchivePlan,archiveEarlyRequest,assertNoIncompleteEarlyArchive} from "../scripts/lib/early-request-archive.mjs";
 import {runBootstrap,spawnTargetController,updateSourceAndResolveTarget} from "../scripts/deploy-production-bootstrap.mjs";
+import {rootlessUserEnvironment} from "../scripts/lib/rootless-docker.mjs";
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`,commit="a".repeat(40),next="b".repeat(40),endpoint="unix:///run/user/1001/docker.sock",fingerprint="f".repeat(64);
@@ -53,7 +55,7 @@ function collectorDouble(){
  for(const unit of ["lumina-crm.service","lumina-crm-deploy.service","lumina-crm-storage-prepare.service","lumina-crm-build-cache-cleanup.service","lumina-crm-storage-cleanup.service"]){const text=readFileSync(new URL(`../deploy/systemd/${unit}`,import.meta.url),"utf8");values.set(`/etc/systemd/system/${unit}`,text);values.set(path.join("fixture-source","deploy/systemd",unit),text);}
  const directories=[HOST_PATHS.dockerConfig,HOST_PATHS.buildxConfig,HOST_PATHS.dockerRoot],locks=[HOST_PATHS.admissionLock,HOST_PATHS.deployLock,HOST_PATHS.maintenanceLock];
  const missing=()=>{throw Object.assign(new Error("missing fixture"),{code:"ENOENT"});};
- const options={platform:"linux",uid:1001,executable:"/usr/bin/node",sourceRoot:"fixture-source",environment:{DOCKER_HOST:endpoint},
+ const options={platform:"linux",uid:1001,accountHome:()=>"/home/fictional-deploy",executable:"/usr/bin/node",sourceRoot:"fixture-source",environment:{DOCKER_HOST:endpoint},
   read:file=>values.get(file)??missing(),realpath:file=>file,
   stat:file=>{if(!values.has(file)&&!directories.includes(file)&&!locks.includes(file)&&file!=="/run/user/1001/docker.sock")return missing();return{uid:file.endsWith("builder-owner.json")||directories.includes(file)||locks.includes(file)||file.endsWith("docker.sock")?1001:0,mode:directories.includes(file)?0o40700:file.endsWith("builder-owner.json")?0o100600:0o100644,isFile:()=>!directories.includes(file)&&!file.endsWith("docker.sock"),isDirectory:()=>directories.includes(file),isSocket:()=>file.endsWith("docker.sock"),isSymbolicLink:()=>false};},
   statfs:()=>({bavail:100_000_000,blocks:200_000_000,bsize:4096}),
@@ -68,6 +70,93 @@ test("read-only collector validates root-owned installed bytes and fixed rootles
 test("wrong user/socket/config never contacts a foreign Docker daemon",()=>{
  for(const environment of [{DOCKER_HOST:"unix:///run/user/2002/docker.sock"},{DOCKER_CONFIG:"/home/other/.docker"},{BUILDX_CONFIG:"/home/other/.docker/buildx"},{DOCKER_CONTEXT:"other"}]){const f=collectorDouble();const result=collectHostSnapshot({...f.options,environment});assert.equal(result.isolated,false);assert.equal(f.calls.some(call=>call.command==="/usr/bin/docker"),false);}
  const f=collectorDouble(),stat=f.options.stat;assert.equal(collectHostSnapshot({...f.options,stat:file=>{const value=stat(file);return file.endsWith("docker.sock")?{...value,uid:2002}:value;}}).isolated,false);
+});
+
+test("isolation reports the first condition and safe metadata without echoing private input",()=>{
+ const secret="fictional-private-probe-value",cases=[
+  [f=>({...f.options,environment:{DOCKER_HOST:`tcp://${secret}:2375`}}),"environment","ENVIRONMENT_CONFLICT",{key:"DOCKER_HOST"}],
+  [f=>({...f.options,environment:{XDG_RUNTIME_DIR:`/${secret}`}}),"environment","ENVIRONMENT_CONFLICT",{key:"XDG_RUNTIME_DIR"}],
+  [f=>({...f.options,environment:{DBUS_SESSION_BUS_ADDRESS:secret}}),"environment","ENVIRONMENT_CONFLICT",{key:"DBUS_SESSION_BUS_ADDRESS"}],
+  [f=>({...f.options,stat:file=>{if(file.endsWith("docker.sock"))throw Object.assign(new Error(secret),{code:"EACCES"});return f.options.stat(file);}}),"socket","SOCKET_UNREADABLE",{errno:"EACCES"}],
+  [f=>({...f.options,stat:file=>{const meta=f.options.stat(file);return file.endsWith("docker.sock")?{...meta,uid:2002}:meta;}}),"socket","SOCKET_OWNER_MISMATCH",{ownerMatches:false}],
+  [f=>({...f.options,stat:file=>{const meta=f.options.stat(file);return file===HOST_PATHS.buildxConfig?{...meta,mode:0o40750}:meta;}}),"directory","DIRECTORY_NOT_PRIVATE",{role:"buildx-config",mode:"0750",ownerMatches:true}],
+  [f=>({...f.options,realpath:file=>file===HOST_PATHS.dockerRoot?`/${secret}`:file}),"directory","DIRECTORY_NOT_CANONICAL",{role:"docker-data"}],
+  [f=>({...f.options,run:(cmd,args,env)=>cmd==="/usr/bin/docker"?{status:1,stdout:secret,stderr:secret}:f.options.run(cmd,args,env)}),"daemon","DOCKER_INFO_COMMAND_FAILED",{exitCode:1}],
+  [f=>({...f.options,run:(cmd,args,env)=>cmd==="/usr/bin/docker"?{status:null,error:Object.assign(new Error(secret),{code:"ETIMEDOUT"}),stderr:secret}:f.options.run(cmd,args,env)}),"daemon","DOCKER_INFO_COMMAND_FAILED",{errno:"ETIMEDOUT"}],
+  [f=>({...f.options,run:(cmd,args,env)=>cmd==="/usr/bin/docker"?{status:0,stdout:secret}:f.options.run(cmd,args,env)}),"daemon","DOCKER_INFO_JSON_INVALID",{}],
+ ];
+ for(const [options,stage,code,details] of cases){
+  const f=collectorDouble(),snapshot=collectHostSnapshot(options(f)),report=evaluateHostSnapshot(snapshot,target);
+  assert.equal(snapshot.isolated,false);assert.equal(snapshot.isolation.stage,stage);assert.equal(snapshot.isolation.code,code);
+  for(const [key,value] of Object.entries(details))assert.equal(snapshot.isolation[key],value);
+  assert.equal(report.ready,false);assert.equal(JSON.stringify(report).includes(secret),false);
+  assert.deepEqual(hostUpgradePlan(report).requiredActions.find(row=>row.component==="docker.isolation").cause,snapshot.isolation);
+  for(const name of ["docker.service","buildkit","buildkit.daemon","docker.capabilities"]){const row=report.diagnostics.find(row=>row.component===name);assert.equal(row.status,"DEPENDENCY_BLOCKED");assert.equal(row.dependsOn,"docker.isolation");}
+ }
+});
+
+test("daemon rootless/data-root/cgroup failures stay distinct and fail closed",()=>{
+ for(const [patch,code] of [[{DockerRootDir:"/fictional/foreign"},"DAEMON_DATA_ROOT_MISMATCH"],[{CgroupDriver:"cgroupfs"},"CGROUP_DRIVER_MISMATCH"],[{CgroupVersion:"1"},"CGROUP_V2_REQUIRED"],[{SecurityOptions:[]},"ROOTLESS_REQUIRED"]]){
+  const f=collectorDouble(),run=f.options.run;
+  const snapshot=collectHostSnapshot({...f.options,run:(cmd,args,env)=>{const result=run(cmd,args,env);return cmd==="/usr/bin/docker"&&args[0]==="info"?{...result,stdout:JSON.stringify({...JSON.parse(result.stdout),...patch})}:result;}});
+  assert.equal(snapshot.isolation.code,code);assert.equal(snapshot.isolated,false);assert.equal(f.calls.filter(call=>call.command==="/usr/bin/docker").length,1);
+ }
+});
+
+test("daemon-managed data-root traversal is accepted without weakening private client config or ownership",()=>{
+ for(const [role,modes,ok] of [[HOST_PATHS.dockerRoot,[0o700,0o710,0o711],true],[HOST_PATHS.dockerRoot,[0o750,0o755,0o770,0o777,0o1711],false],[HOST_PATHS.dockerConfig,[0o710,0o711,0o750],false],[HOST_PATHS.buildxConfig,[0o710,0o711,0o750],false]]){
+  for(const mode of modes){const f=collectorDouble(),stat=f.options.stat;
+   const snapshot=collectHostSnapshot({...f.options,stat:file=>{const meta=stat(file);return file===role?{...meta,mode:0o40000|mode}:meta;}});
+   assert.equal(snapshot.isolated,ok,`${role}: ${mode.toString(8)}`);if(!ok)assert.equal(snapshot.isolation.code,role===HOST_PATHS.dockerRoot?"DATA_ROOT_MODE_INVALID":"DIRECTORY_NOT_PRIVATE");
+  }
+ }
+ for(const patch of [{uid:2002},{isSymbolicLink:()=>true}]){const f=collectorDouble(),stat=f.options.stat;const snapshot=collectHostSnapshot({...f.options,stat:file=>file===HOST_PATHS.dockerRoot?{...stat(file),mode:0o40711,...patch}:stat(file)});assert.equal(snapshot.isolated,false);assert.equal(f.calls.some(call=>call.command==="/usr/bin/docker"),false);}
+});
+
+test("Docker probes use the account home and fixed user runtime instead of inherited caller settings",()=>{
+ const f=collectorDouble();const snapshot=collectHostSnapshot({...f.options,environment:{HOME:"/fictional/foreign",HTTP_PROXY:"http://proxy.example.test:8080",DOCKER_TLS_VERIFY:"1"}});
+ assert.equal(snapshot.isolated,true);
+ for(const call of f.calls.filter(call=>call.command==="/usr/bin/docker"||call.args.includes("--user"))){assert.equal(call.env.HOME,"/home/fictional-deploy");assert.equal(call.env.XDG_RUNTIME_DIR,"/run/user/1001");assert.equal(call.env.DBUS_SESSION_BUS_ADDRESS,"unix:path=/run/user/1001/bus");assert.equal(call.env.HTTP_PROXY,undefined);assert.equal(call.env.DOCKER_TLS_VERIFY,undefined);}
+});
+
+test("runner and host probes share fixed user session settings and reject invalid account identities",()=>{
+ assert.deepEqual(rootlessUserEnvironment(1001,"/home/fictional-deploy"),{HOME:"/home/fictional-deploy",XDG_RUNTIME_DIR:"/run/user/1001",DBUS_SESSION_BUS_ADDRESS:"unix:path=/run/user/1001/bus"});
+ for(const uid of [0,-1,NaN,1.5,"1001"])assert.throws(()=>rootlessUserEnvironment(uid,"/home/fictional-deploy"));
+ for(const home of ["relative",null,"/fictional\0home"])assert.throws(()=>rootlessUserEnvironment(1001,home));
+ const runner=readFileSync(new URL("../scripts/deploy-production-runner.mjs",import.meta.url),"utf8");assert.match(runner,/\.\.\.process\.env, \.\.\.overrides, \.\.\.rootlessUserEnvironment\(\)/);
+});
+
+test("missing or untrusted deployment configuration has its own cause before any Docker command",()=>{
+ const f=collectorDouble();f.values.delete("/etc/lumina-crm/deploy.env");
+ const snapshot=collectHostSnapshot(f.options);assert.deepEqual(snapshot.isolation,{stage:"configuration",code:"DEPLOY_CONFIGURATION_UNREADABLE",errno:"ENOENT"});
+ assert.equal(f.calls.some(call=>call.command==="/usr/bin/docker"),false);
+ assert.equal(evaluateHostSnapshot(snapshot,target).diagnostics.find(row=>row.component==="host.configuration").blocking,true);
+ const admission=collectHostSnapshot({...f.options,scope:"admission"});assert.deepEqual(evaluateHostSnapshot(admission,target,{scope:"admission"}).diagnostics.find(row=>row.component==="host.configuration").cause,snapshot.isolation);
+});
+
+test("deployment scope does not require unused maintenance code, units or cache flags",()=>{
+ const f=collectorDouble();f.values.set(HOST_PATHS.program,"unknown maintenance bytes");f.values.delete("/etc/systemd/system/lumina-crm-storage-cleanup.service");
+ const run=f.options.run,options={...f.options,run:(cmd,args,env)=>args.includes("--help")&&["prune","inspect"].includes(args[1])?{status:0,stdout:"fictional inspect help without bootstrap"}:run(cmd,args,env)};
+ const snapshot=collectHostSnapshot({...options,scope:"deployment"}),report=evaluateHostSnapshot(snapshot,target,{scope:"deployment"});
+ assert.equal(report.ready,true);assert.equal(report.diagnostics.some(row=>row.component==="maintenance.bundle"),false);
+ assert.equal(f.calls.some(call=>call.command==="/usr/bin/systemctl"&&call.args.some(arg=>arg.includes("cleanup"))),false);
+ assert.equal(f.calls.some(call=>call.args.includes("prune")),false);
+ assert.equal(evaluateHostSnapshot(collectHostSnapshot(options),target).ready,false);
+ const broken=collectorDouble();broken.values.set("/etc/systemd/system/lumina-crm-deploy.service","unreviewed deployment bytes");
+ assert.equal(evaluateHostSnapshot(collectHostSnapshot({...broken.options,scope:"deployment"}),target,{scope:"deployment"}).diagnostics.find(row=>row.component==="systemd.units").blocking,true);
+});
+
+test("admission avoids Docker probes but preserves unit, lock, operation and disk gates",()=>{
+ const f=collectorDouble(),snapshot=collectHostSnapshot({...f.options,scope:"admission"});
+ assert.equal(evaluateHostSnapshot(snapshot,target,{scope:"admission"}).ready,true);assert.equal(f.calls.some(call=>call.command==="/usr/bin/docker"),false);
+ for(const [key,value] of [["unitsReady",false],["configurationReady",false],["deployLockFree",false],["maintenanceLockFree",false],["admissionLockReady",false],["operationPending",true],["diskReady",false]])assert.equal(evaluateHostSnapshot({...snapshot,[key]:value},target,{scope:"admission"}).ready,false,key);
+ assert.throws(()=>collectHostSnapshot({...f.options,scope:"skip-security"}),/SCOPE_INVALID/);
+});
+
+test("public host diagnostics cannot select admission or ambiguously override target/scope",()=>{
+ for(const args of [["host-check","--scope=admission"],["host-check","--scope=deployment","--scope=full"],["host-check",`--target=${commit}`,`--target=${next}`],["host-upgrade-plan","--scope=deployment"]]){
+  const result=spawnSync(process.execPath,["scripts/deploy-production.mjs",...args],{encoding:"utf8",timeout:3000});assert.equal(result.status,1);assert.match(result.stderr,/HOST_CHECK_ARGUMENT_INVALID/);
+ }
 });
 
 test("target static requirements are read by fixed git-show paths and never executed",async()=>{
@@ -140,6 +229,12 @@ const request={requestId:uuid(1),launchId:uuid(2),mode:"deploy",sourceRoot:HOST_
 test("controller writes a bound rejection before effects and an admitted receipt before normal work",async()=>{
  let receipt=null,checked=false;await assert.rejects(runControllerEntry({request,environment,nodeVersion:"v24.22.0",validateSource:()=>{},preflight:()=>{checked=true;},write:(_file,value)=>{receipt=value;}}),/NODE_RUNTIME_INCOMPATIBLE/);assert.equal(checked,false);assert.ok(validateEarlyRejection(receipt,controllerEntryIdentity(request,environment)));
  const order=[];await runControllerEntry({request,environment,validateSource:()=>order.push("source"),preflight:()=>order.push("preflight"),write:(_file,value)=>{receipt=value;order.push(value.outcome);}});order.push("business");assert.deepEqual(order,["source","preflight","ADMITTED","business"]);assert.throws(()=>validateEarlyRejection(receipt,controllerEntryIdentity(request,environment)));
+});
+
+test("controller rejection preserves safe first-cause diagnostics without changing the receipt protocol",async()=>{
+ let receipt;const diagnostics={ready:false,diagnostics:[{component:"docker.isolation",cause:{stage:"directory",code:"DIRECTORY_NOT_PRIVATE",role:"buildx-config",mode:"0750"}}]};
+ await assert.rejects(runControllerEntry({request,environment,validateSource:()=>{},preflight:()=>{throw Object.assign(new Error("HOST_PREFLIGHT_FAILED"),{code:"HOST_PREFLIGHT_FAILED",diagnostics});},write:(_file,value)=>{receipt=value;}}),error=>error.code==="HOST_PREFLIGHT_FAILED"&&error.diagnostics===diagnostics&&/^[0-9a-f]{64}$/.test(error.entryReceiptSha256));
+ assert.ok(validateEarlyRejection(receipt,controllerEntryIdentity(request,environment)));assert.equal(receipt.businessEffects,"NOT_STARTED");assert.equal(receipt.diagnostics,undefined);
 });
 
 async function rejectionFixture(t){

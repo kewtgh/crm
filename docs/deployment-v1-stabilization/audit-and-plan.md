@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 控制平面诊断缺陷 | host-preflight 的隔离检查把身份、环境、deploy.env、socket、三个目录、Docker 命令及 JSON 全部 catch 成 false；原错误与路径类别丢失 | 在同一模块返回固定阶段 / 条件码、受限元数据与依赖关系；保留 fail-closed |
 | 环境继承不一致 | Host Preflight 自建 Docker env 缺 HOME / XDG_RUNTIME_DIR / user bus；Runner 继承实际 service 环境；调用端 DOCKER_CONTEXT / config / endpoint 冲突也被压成 false | 固定实际账户的 home / runtime / bus；冲突键明确报错，不回退 rootful、默认 context 或另一 config |
-| 权限变化来源 | systemd deploy unit 使用 UMask=0027；维护 prepare 只保证 Docker config 根目录私有，其他目录可能由 Docker / Buildx 创建；preflight 对每个目录统一要求零 group / other 位 | 分开报告目录角色、mode、owner 是否匹配；先验证写入方，不直接 chmod 生产或放宽所有权限 |
+| 权限变化来源与错误门禁 | systemd deploy unit 使用 UMask=0027；维护 prepare 保证 Docker config 根目录私有；Docker 29.1.3 的 setupDaemonRoot 在启动时设置 0711 并调用 0710 的目录创建/权属函数，V1 对 data-root 也要求零 group / other 位，与 daemon 行为冲突 | 仅 data-root 接受 0700/0710/0711；配置目录仍私有，禁止非 owner 读写，UID / canonical / symlink / daemon 证据不变；不 chmod 生产 |
 | 非必要阻断 | CLI 外层、start、静态 target 校验、Bootstrap、Controller Entry 多次执行完整 preflight；包含 buildx prune / bootstrap、全部维护 unit 和维护 bundle | 保留接管前与 Controller Entry 的检查；按准入 / 发布 / 完整维护区分所需能力，移出普通发布不调用的维护能力 |
 | 已修复的错误安全输入 | 现有 Compose 探针已修正 tmpfs 引号与 512m 归一化；其字段门禁仍必要 | 保留真实 Compose 2.40.3 回归和全部容器隔离字段，不再次弱化 |
 | 应用构建失败 | Runner 的 verification / application / operations Buildx 阶段有独立阶段与退出；与 host isolation 不能混为一类 | 保留构建 gate；本次不改业务代码 / npm 依赖，不声称已复现未知生产构建失败 |
@@ -33,3 +33,5 @@
 5. 保存最终变更与验证结果并独立提交；如需推送新验证分支，先形成候选再取得授权。不运行生产命令、不修改 HunterAI、不引入新服务 / DB / 分发设施。
 
 本次验收是 V1 路径更少重复门禁且失败可解释；不是远程生产发布成功证明。未知生产故障仍需管理员提供受限只读证据，不能靠猜测归因。
+
+实施时核对的权限依据：[Moby Docker 29.1.3 setupDaemonRoot](https://github.com/moby/moby/blob/docker-v29.1.3/daemon/daemon_unix.go#L1285-L1318)。这是确定的上游写入方与门禁冲突；生产是否恰好因此失败仍需新诊断确认。不能将 UMask=0027 或 Buildx 作为已经证实的生产权限变更来源，也不能在部署过程中反复 chmod 对抗 daemon。
