@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { aptReason, failureDetail, initial, selectPackage, summary } from './contract.mjs';
+import { aptReason, failureDetail, failureWords, initial, selectPackage, summary } from './contract.mjs';
 const context = { sha: 'a'.repeat(40), runId: '123456789', attempt: '1', profile: '26.04' };
 const fixture = () => initial({ ...context, sourceDigest: 'b'.repeat(64) });
 test('Ubuntu package selection respects epochs, exact upstream and revision', () => {
@@ -41,6 +41,9 @@ test('publication removes raw errors, environment, unit names, paths and identif
 test('a failed socket without ExecMainStatus does not invent a process exit code', () => {
   const raw = fixture(); raw.managerFailures = [{ kind: 'GPG', unitType: 'socket', result: 'exit-code' }];
   assert.deepEqual(summary(raw, context).managerFailures, [{ kind: 'GPG', unitType: 'socket', result: 'exit-code' }]);
+});
+test('unknown daemon failure emits only reviewed words, never paths, names or numbers', () => {
+  assert.deepEqual(failureWords('error: FICTIONAL_PRIVATE_MARKER /home/private/secret 12345 permission denied'), ['error', 'permission', 'denied']);
 });
 test('M2.1 evidence and runtime are excluded from the M2.2 mutation surface', () => {
   const provision = fs.readFileSync(new URL('provision.sh', import.meta.url), 'utf8');

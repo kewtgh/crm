@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { failureDetail, sha256 } from './contract.mjs';
+import { failureDetail, failureWords, sha256 } from './contract.mjs';
 
 assert(process.platform === 'linux' && process.getuid() !== 0);
 assert(process.env.M22_ACK === 'NONPRODUCTION_DISPOSABLE' && process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_ENVIRONMENT === 'github-hosted');
@@ -154,7 +154,7 @@ async function rootless() {
       : /Failed to connect to bus|cgroup.*delegat/i.test(log) ? 'CGROUP_USER_BUS_UNAVAILABLE'
       : /executable file not found|command not found|no such file/i.test(log) ? 'ENGINE_RUNTIME_MISSING'
       : /failed to start daemon|invalid argument/i.test(log) ? 'ENGINE_CONFIGURATION_REJECTED' : 'UNCLASSIFIED_PRIVATE_LOG';
-    report.daemonFailure = { reason, exitCode: Number(show(daemonUnit).ExecMainStatus) };
+    report.daemonFailure = { reason, exitCode: Number(show(daemonUnit).ExecMainStatus), words: failureWords(log) };
     missingRootless('DAEMON_START_FAILED'); return;
   }
   const sampleDaemon = suffix => { const s = sample(daemonUnit); Object.assign(report.metrics,

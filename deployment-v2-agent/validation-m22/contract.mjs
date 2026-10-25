@@ -21,6 +21,15 @@ export const METRICS = Object.freeze(['agentMemoryPeakBytes', 'agentRssBytes', '
   'baselineFailedUnits', 'injectedFailedUnits', 'remainingFixtureFailures', 'baselineFailuresAfter',
   'legacyUpdateExit', 'legacyHelpersExit', 'legacyExtrasExit']);
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+const FAILURE_WORDS = Object.freeze(['rootlesskit', 'newuidmap', 'newgidmap', 'subuid', 'subgid', 'ranges',
+  'unshare', 'namespace', 'slirp4netns', 'sandbox', 'seccomp', 'error', 'failed', 'unknown', 'flag',
+  'permission', 'denied', 'writable', 'HOME', 'XDG_RUNTIME_DIR', 'mount', 'socket', 'bus', 'network',
+  'cgroup', 'iptables', 'unprivileged', 'shared', 'libraries', 'not', 'found', 'required', 'cannot',
+  'no', 'such', 'file', 'exec', 'executable', 'incompatible', 'command', 'directory', 'options', 'option', 'needs']);
+export function failureWords(text) {
+  return text.split('\n').filter(line => /error|failed|denied|needs|not found|cannot|unknown flag|No subuid/i.test(line)).slice(-3)
+    .join(' ').replace(/\S*[\/\\]\S*/g, '').split(/[^a-zA-Z]+/).filter(word => FAILURE_WORDS.includes(word)).slice(-32);
+}
 export function failureDetail(error) {
   const detail = {};
   if (['ERR_ASSERTION', 'OBSERVATION_TIMEOUT', 'COMMAND_FAILED'].includes(error.code ?? error.message)) detail.condition = error.code ?? error.message;
@@ -100,6 +109,7 @@ export function summary(raw, context) {
   if (['ROOTLESSKIT_USERNS_DENIED', 'CGROUP_USER_BUS_UNAVAILABLE', 'ENGINE_RUNTIME_MISSING', 'RUNTIME_DIRECTORY_UNAVAILABLE', 'EXECUTION_IDENTITY_INVALID',
     'ENGINE_CONFIGURATION_REJECTED', 'UNCLASSIFIED_PRIVATE_LOG'].includes(raw.daemonFailure?.reason)) daemonFailure.reason = raw.daemonFailure.reason;
   if (integer(raw.daemonFailure?.exitCode) && raw.daemonFailure.exitCode <= 255) daemonFailure.exitCode = raw.daemonFailure.exitCode;
+  if (Array.isArray(raw.daemonFailure?.words)) daemonFailure.words = raw.daemonFailure.words.filter(word => FAILURE_WORDS.includes(word)).slice(0, 32);
   return { schemaVersion: 1, scope: 'NONPRODUCTION_ALPHA', productionApproved: false,
     ...context, sourceDigest: raw.sourceDigest,
     payloadDigest: /^[a-f0-9]{64}$/.test(raw.payloadDigest) ? raw.payloadDigest : null,
