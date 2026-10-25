@@ -75,7 +75,7 @@ V2 采用以下设计基线：
 
 外部 M1 Linux CI 尚未执行，systemd / cgroup / Rootless / 重启门槛仍 NOT_RUN；M2 可继续离线 alpha，生产发行和现场诊断 NO_GO。本次生产新增文件 / 服务 / 进程 / 数据库 / 磁盘均为 0。设计保持 v0.2，CRM 仍为 `3.44.0`；M1 实验独立为 `0.1.0-experimental`。
 
-## 当前 M2 状态
+## M2 历史状态
 
 [Agent `0.2.0-alpha.1`](../../deployment-v2-agent/README.md) 已实现独立私有 Node / JavaScript 包、SQLite 单一事务、一次性 grant、固定 oneshot 导出 / 派发、只读状态诊断和离线目录 v1 verifier。M1 全部保留，并新增本地 Docker Desktop 隔离 Linux 的实际 flock / 文件系统 / SQLite / Compose 证据；这不是外部 CI 或目标 Ubuntu / Rootless 认证。
 
@@ -84,3 +84,5 @@ V2 采用以下设计基线：
 ## M2.1 动态验证
 
 [执行计划与安全边界](m2.1/plan.md) 复用 GitHub 托管的独立可丢弃 Linux VM，验证现有 Alpha 的 user oneshot、真实 PTY 断线、内核锁、恢复和 Rootless 资源边界。Agent 版本与应用版本保持不变。必须先获准推送候选，再取得该 SHA 对应 run；准备代码不构成动态验收。
+
+[M2.1 最终验收](m2.1/acceptance.md)：获准执行候选 `19589e4` 的 Run 40211829783，两个 job 成功，动态 16 PASS / 0 FAIL / 9 NOT_RUN。Rootless、重启 / 磁盘故障和目标发行包线未认证，M3 完整集成继续 NO_GO；生产新增资源为 0。

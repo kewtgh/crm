@@ -9,7 +9,7 @@
 | 执行身份 | GitHub 托管 Ubuntu 24.04 临时 VM，非 self-hosted；动态操作使用全新 fixture UID，Agent worker 为该 UID 的固定 user oneshot |
 | Token / secrets | contents:read；两个 checkout 均 persist-credentials:false；无 secrets、environment、生产 SSH / socket mount / 数据库 URL；harness env -i 只传固定运行元数据和私有 user bus |
 | 依赖边界 | Node 固定 .nvmrc 24.22.1；Compose 固定 2.40.3 / SHA-256；虚构 workload 镜像固定 OCI digest。Runner 系统 / Docker 包线浮动，必须记录实际版本，不能认证生产发行版 |
-| 权限与临时写入 | 只在托管 VM 分配新用户、linger / user manager、fixture unit、必要 user namespace helper；不改 Docker 系统安装、全局 user@ 模板、sysctl 或 AppArmor；已有名字冲突停止 |
+| 权限与临时写入 | 仅托管 VM 的新用户、linger / manager、fixture unit、user namespace helper；extras 只尝试匹配既有 Engine 的版本、禁止升级 / 移除，不重装 Engine；不改全局 user@ 模板、sysctl 或 AppArmor；名字冲突停止 |
 | 超时 | native-linux 20 分钟，dynamic-linux 15 分钟，provision 步骤 8 分钟，harness 300 秒；Agent 原 unit 15 秒 start / 2 秒 stop 不变 |
 | 失败与收尾 | 原始输出只写 work/ci-private；EXIT trap 回收 fixture user manager / linger，VM 最终由平台销毁。任务失败保留 exit 非零，always 发布最小化失败摘要；stale SHA / run / attempt 拒绝发布 |
 | 公开制品 | 只上传固定 deployment-v2-validation-summary.json，14 天保留；无原始日志、状态库、PTY 输出、环境转储或路径。公开隐私测试对白名单精确匹配，不支持通配符上传 |
@@ -27,4 +27,4 @@
 
 源码聚合摘要覆盖 Agent / validation、保留的 M1 和当前 workflow 的已跟踪文件，按排序的路径与各文件 SHA-256 聚合。完整 Git SHA 另外绑定整个仓库提交。runtime-manifest SHA-256 绑定本次构建的逐文件摘要和私有 Node 内容，不能作为独立签名或生产来源 attestation。
 
-当前 GitHub API 中最近的 CRM CI 属于旧应用 SHA `926819e566c5736e83817cd55e45dbf3e5337e66`，不计入 M2.1；没有推送当前候选，也没有当前候选 Run ID。推送和 CI 执行需要用户按本任务明确授权。
+初审历史 CRM CI 的旧应用 SHA `926819e566c5736e83817cd55e45dbf3e5337e66` 不计入 M2.1。用户随后明确授权验证分支推送及必要最小修复重跑；实际 run、完整 SHA、失败历史及未测项见 [M2.1 验收](acceptance.md)。最终报告提交与已测候选分开记录。

@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "scope": "NONPRODUCTION_ALPHA",
+  "productionApproved": false,
+  "sha": "19589e49106dd98efa369951685b4022a88c37d1",
+  "runId": "40211829783",
+  "attempt": "1",
+  "runner": "github-hosted-ubuntu-24.04-x64",
+  "sourceDigest": "d2f2a579cd30afd1eb6ca87fdac4c6d48b2fa6c7673ba79596bffb96f5e1ba54",
+  "payloadDigest": "6b4ee77c0c92769423f32dd46530b1da48be9174bbff91cfb43e04101e3b019c",
+  "completed": true,
+  "result": "PASS",
+  "environment": {
+    "ubuntu": "24.04",
+    "kernel": "6.17.0",
+    "systemd": "255",
+    "node": "24.22.1",
+    "managerState": "degraded"
+  },
+  "metrics": {
+    "agentMemoryPeakBytes": 18456576,
+    "agentTasksPeak": 7,
+    "agentCpuUsageUsec": 153644,
+    "agentProcessPeak": 1,
+    "agentRssPeakBytes": 62488576,
+    "stateBytes": 75557,
+    "payloadBytes": 126940053,
+    "memoryMaxBytes": 134217728,
+    "cpuQuotaUsec": 100000,
+    "cpuPeriodUsec": 100000,
+    "tasksMax": 32,
+    "pressureMemoryCurrentBytes": 134107136,
+    "pressureMemoryMaxEvents": 7,
+    "pressureSwapCurrentBytes": 2158592
+  },
+  "cases": [
+    {
+      "id": "fixed-oneshot",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "cli-exit",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "pty-hangup",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "concurrent-admission",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "concurrent-dispatch",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "kernel-flock",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "grant-once",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "timeout",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "explicit-reconcile",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "receipt-reconcile",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "idle-zero-agent",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "unit-budget-config",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "unit-memory-enforced",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "unit-cpu-enforced",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "unit-tasks-enforced",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "child-group-cleanup",
+      "status": "PASS",
+      "code": "OBSERVED"
+    },
+    {
+      "id": "rootless-isolation",
+      "status": "NOT_RUN",
+      "code": "ROOTLESS_PREREQUISITE_MISSING"
+    },
+    {
+      "id": "rootless-budget-config",
+      "status": "NOT_RUN",
+      "code": "ROOTLESS_PREREQUISITE_MISSING"
+    },
+    {
+      "id": "rootless-memory-enforced",
+      "status": "NOT_RUN",
+      "code": "ROOTLESS_PREREQUISITE_MISSING"
+    },
+    {
+      "id": "rootless-cpu-enforced",
+      "status": "NOT_RUN",
+      "code": "ROOTLESS_PREREQUISITE_MISSING"
+    },
+    {
+      "id": "rootless-tasks-enforced",
+      "status": "NOT_RUN",
+      "code": "ROOTLESS_PREREQUISITE_MISSING"
+    },
+    {
+      "id": "reboot",
+      "status": "NOT_RUN",
+      "code": "EXTERNAL_FIXTURE_REQUIRED"
+    },
+    {
+      "id": "power-loss",
+      "status": "NOT_RUN",
+      "code": "EXTERNAL_FIXTURE_REQUIRED"
+    },
+    {
+      "id": "disk-fault",
+      "status": "NOT_RUN",
+      "code": "EXTERNAL_FIXTURE_REQUIRED"
+    },
+    {
+      "id": "target-ubuntu-profile",
+      "status": "NOT_RUN",
+      "code": "TARGET_PROFILE_NOT_MATCHED"
+    }
+  ],
+  "rootlessMissing": [
+    "dockerd-rootless.sh",
+    "rootlesskit"
+  ]
+}
