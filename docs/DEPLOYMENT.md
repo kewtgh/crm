@@ -5,6 +5,10 @@ The versioned [host contract](../deploy/libexec/host-runtime-contract.json) is a
 See [implementation/verification](HOST_CONTROL_PLANE_PLAN.md) and the
 [Chinese production runbook](LUMINA_PRODUCTION_DEPLOYMENT_RUNBOOK.md).
 
+The [Deployment V2 phase-one audit and design](deployment-v2/README.md) defines an
+independent Agent and isolated Ubuntu verification milestones. It is a design
+baseline; the existing V1 production entry points remain in place.
+
 > v3.37.7 deployment recovery update: [current operator commands and safety rules](DEPLOYMENT_RELIABILITY_OPERATIONS.md)
 > supersede historical unconditional rollback/retry guidance below. [Release notes](RELEASE_V3.37.7.md).
 > Forward migrations require proven image/schema compatibility; public-edge failure can leave a healthy candidate pending acceptance.
