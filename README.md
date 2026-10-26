@@ -1,6 +1,15 @@
 # ewaya CRM
 
-Current release candidate: **v3.45.0**
+Current release candidate: **v3.46.0**
+
+## v3.46.0 — Trustworthy personal settings and device review
+
+Security and privacy remain available independently of preference reads. Device/MFA failures stay
+unknown, revocation reports independent outcomes, and accepted saves are separated from email and
+display recovery. Custom quiet hours support compact time input, overnight intervals and existing
+security-channel policy. Account timezone/date-format previews show the selected presentation.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V346.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V346.md),
+[release notes](docs/RELEASE_V3.46.0.md) and [verification](docs/V346_VERIFICATION.md).
 
 ## v3.45.0 — Reliable discovery and scheduling
 

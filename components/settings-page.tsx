@@ -1,13 +1,13 @@
 "use client";
 import {WorkspaceHeading} from "./workspace-heading";
 
-import { BilingualNameHint } from "@/components/structured-inputs";
+import { BilingualNameHint, DateInput } from "@/components/structured-inputs";
 /* eslint-disable @next/next/no-img-element -- private avatar and MFA QR images are served by authenticated endpoints. */
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { BellRing, Camera, Check, ChevronRight, Copy, Download, Eye, KeyRound, Languages, Laptop, LockKeyhole, Mail, MonitorSmartphone, RefreshCcw, Save, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BellRing, Camera, Check, ChevronRight, Copy, Download, Eye, KeyRound, Languages, LockKeyhole, Mail, RefreshCcw, Save, ShieldCheck, UserRound } from "lucide-react";
 import { ConfirmDialog, InlineMessage, SearchableSelect, StatusBadge, Toast } from "@/components/ui";
 import { useAppUser } from "@/components/app-user-context";
 import type { AppUser } from "@/lib/user";
@@ -21,6 +21,10 @@ import { presentApiError } from "@/lib/api-error-presenter";
 import { passwordValueSchema } from "@/lib/validation";
 import { MfaAuthenticatorGuide } from "./mfa-authenticator-guide";
 import { isSupportedTimezone } from "@/lib/timezone";
+import {accountSaveSchema,mfaReadSchema,notificationSettingsSchema,preferencePreview,settingsReadSchema} from "@/lib/settings-contract";
+import {isDefinitiveMutationFailure} from "@/lib/mutation-outcome";
+import {useRemoteSearch} from "@/hooks/use-remote-search";
+import {TrustedDevicesSettings} from "./trusted-devices-settings";
 
 const tabs = [
   { href: "/settings/profile", key: "settings.profile", icon: UserRound }, { href: "/settings/account", key: "settings.accountLanguage", icon: Languages },
@@ -33,15 +37,29 @@ function fallbackSettings(user: AppUser): UserSettings { return { username: user
 export function SettingsPage({ section }: { section: string }) {
   const { t } = useI18n(); const pathname = usePathname(); const user = useAppUser();
   const [settings, setSettings] = useState(() => fallbackSettings(user)); const [email, setEmail] = useState(user.email); const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading"); const [loadAttempt, setLoadAttempt] = useState(0); const [toast, setToast] = useState("");
-  useEffect(() => { let active = true; void apiFetch<{ settings?: UserSettings; email?: string }>("/api/settings").then((result) => { if (!result.settings) throw new Error(); if (active) { setSettings(result.settings); setEmail(result.email ?? user.email); setLoadState("ready"); } }).catch(() => active && setLoadState("error")); return () => { active = false; }; }, [loadAttempt, user.email]);
-  const persist = async (body: unknown, successKey: string) => { await apiFetch("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); setToast(t(successKey)); };
-  return <div className="page-stack settings-page"><section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.personalSettings")}</p><WorkspaceHeading>{t("settings.title")}</WorkspaceHeading><p>{t("settings.description")}</p></div><StatusBadge tone={user.accountStatus === "ACTIVE" ? "green" : "amber"}>{t("settings.accountNormal")}</StatusBadge></section><div className="settings-layout"><aside className="settings-nav">{tabs.map(({ href, key, icon: Icon }) => <Link key={href} className={pathname === href ? "active" : ""} aria-current={pathname===href?"page":undefined} href={href}><Icon size={17} /><span>{t(key)}</span><ChevronRight size={14} /></Link>)}<div className="settings-role-note"><LockKeyhole size={17} /><div><b>{t("settings.protected")}</b><p>{t("settings.protectedHelp")}</p></div></div></aside><section className="settings-content">{loadState === "loading" && <InlineMessage type="warning">{t("settings.loading")}</InlineMessage>}{loadState === "error" && <div className="settings-load-error"><InlineMessage type="error">{t("settings.loadFailed")}</InlineMessage><button className="secondary-button" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>{t("common.retry")}</button></div>}{loadState === "ready" && <>{section === "profile" && <ProfileSettings user={user} settings={settings} setSettings={setSettings} persist={persist} />}{section === "account" && <AccountSettings user={user} email={email} settings={settings} setSettings={setSettings} setEmail={setEmail} persist={persist} />}{section === "notifications" && <NotificationSettings settings={settings} setSettings={setSettings} persist={persist} />}{section === "security" && <SecuritySettings />}{section === "privacy" && <PrivacySettings />}</>}</section></div>{toast && <Toast message={toast} onClose={() => setToast("")} />}</div>;
+  const {setPreferences}=useUserPreferences();
+  const needsPreferences=section!=="security"&&section!=="privacy";
+  useEffect(()=>{
+    if(!needsPreferences)return;
+    const controller=new AbortController();
+    const timer=setTimeout(()=>{setLoadState("loading");void apiFetch<unknown>("/api/settings",{signal:controller.signal}).then(value=>{
+      const result=settingsReadSchema.parse(value);if(!controller.signal.aborted){setSettings(result.settings);setEmail(result.email);setPreferences({timezone:result.settings.timezone,dateFormat:result.settings.dateFormat});setLoadState("ready");}
+    }).catch(()=>{if(!controller.signal.aborted)setLoadState("error");});},0);
+    return()=>{clearTimeout(timer);controller.abort();};
+  },[loadAttempt,needsPreferences,setPreferences,user.email]);
+  const persist=async(body:unknown,successKey:string)=>{
+    const result=await apiFetch<{ok?:boolean}>("/api/settings",{method:"PATCH",body:JSON.stringify(body)});
+    if(typeof body==="object"&&body!==null&&"section" in body&&body.section==="account")accountSaveSchema.parse(result);
+    else if(result.ok!==true)throw new Error("SETTINGS_RESPONSE_INVALID");
+    setToast(t(successKey));return result;
+  };
+  return <div className="page-stack settings-page"><section className="page-heading-row"><div><p className="eyebrow">{t("eyebrow.personalSettings")}</p><WorkspaceHeading>{t("settings.title")}</WorkspaceHeading><p>{t("settings.description")}</p></div><StatusBadge tone={user.accountStatus === "ACTIVE" ? "green" : "amber"}>{t("settings.accountNormal")}</StatusBadge></section><div className="settings-layout"><aside className="settings-nav">{tabs.map(({ href, key, icon: Icon }) => <Link key={href} className={pathname === href ? "active" : ""} aria-current={pathname===href?"page":undefined} href={href}><Icon size={17} /><span>{t(key)}</span><ChevronRight size={14} /></Link>)}<div className="settings-role-note"><LockKeyhole size={17} /><div><b>{t("settings.protected")}</b><p>{t("settings.protectedHelp")}</p></div></div></aside><section className="settings-content">{needsPreferences && loadState === "loading" && <InlineMessage type="warning">{t("settings.loading")}</InlineMessage>}{needsPreferences && loadState === "error" && <div className="settings-load-error"><InlineMessage type="error">{t("settings.loadFailed")}</InlineMessage><button className="secondary-button" type="button" onClick={() => {setLoadState("loading");setLoadAttempt((value) => value + 1);}}>{t("common.retry")}</button></div>}{!needsPreferences && <>{section === "security" && <SecuritySettings />}{section === "privacy" && <TrustedDevicesSettings />}</>}{needsPreferences && loadState === "ready" && <>{section === "profile" && <ProfileSettings user={user} settings={settings} setSettings={setSettings} persist={persist} />}{section === "account" && <AccountSettings user={user} email={email} settings={settings} setSettings={setSettings} setEmail={setEmail} persist={persist} />}{section === "notifications" && <NotificationSettings settings={settings} setSettings={setSettings} persist={persist} />}</>}</section></div>{toast && <Toast message={toast} onClose={() => setToast("")} />}</div>;
 }
 
 const settingsEyebrowKeys: Record<string, string> = { PROFILE: "eyebrow.profile", ACCOUNT: "eyebrow.accountLanguage", NOTIFICATIONS: "eyebrow.notifications", SECURITY: "eyebrow.passwordSecurity", PRIVACY: "eyebrow.privacyDevices" };
 function SettingsHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { const { t } = useI18n(); return <div className="settings-section-heading"><p className="eyebrow">{t(settingsEyebrowKeys[eyebrow] ?? eyebrow)}</p><h2>{title}</h2><p>{description}</p></div>; }
 type Setter = React.Dispatch<React.SetStateAction<UserSettings>>;
-type Persist = (body: unknown, successKey: string) => Promise<void>;
+type Persist = (body: unknown, successKey: string) => Promise<unknown>;
 
 function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUser; settings: UserSettings; setSettings: Setter; persist: Persist }) {
   const { t } = useI18n();
@@ -105,10 +123,28 @@ function ProfileSettings({ user, settings, setSettings, persist }: { user: AppUs
 function ProtectedFields({ user }: { user: AppUser }) { const { t } = useI18n(); return <div className="protected-field-grid"><div><span>{t("settings.role")}</span><b>{t(roleMessageKey[user.role])}</b><small>{t("settings.immutable")}</small></div><div><span>{t("settings.verificationLevel")}</span><b>{t(user.aal==="aal2"?"settings.highPrivilege":"settings.byRole")} · {t(user.mfaEnabled ? "nav.mfaEnabled" : "nav.mfaNotEnabled")}</b><small>{t("settings.immutable")}</small></div><div><span>{t("settings.accountStatus")}</span><b className="good-text">{t("settings.activeVerified")}</b><small>{t("settings.immutable")}</small></div></div>; }
 
 function AccountSettings({ user, email, setEmail, settings, setSettings, persist }: { user: AppUser; email: string; setEmail: (value: string) => void; settings: UserSettings; setSettings: Setter; persist: Persist }) {
-  const { locale, setLocale, t } = useI18n(); const {setPreferences}=useUserPreferences(); const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); setSaving(true); try { await persist({ section: "account", email, locale: settings.locale, timezone: settings.timezone, dateFormat: settings.dateFormat }, "settings.accountSaved"); await setLocale(settings.locale as Locale);setPreferences({timezone:settings.timezone,dateFormat:settings.dateFormat}); } catch(caught) { setError(presentApiError(caught,t,"settings.saveFailed").message); } finally { setSaving(false); } };
-  const emailIsVerified = email.trim().toLowerCase() === user.email.trim().toLowerCase() && user.emailVerified;
-  return <form onSubmit={submit}><SettingsHeader eyebrow="ACCOUNT" title={t("settings.accountLanguage")} description={t("settings.languageHelp")} /><div className="form-grid two-column"><label className="field"><span>{t("settings.username")}</span><input value={settings.username} readOnly aria-readonly="true" /></label><label className="field"><span>{t("settings.internalId")}</span><input value={user.id} readOnly aria-readonly="true" /><small className="field-help">{t("settings.internalIdHelp")}</small></label></div><label className="field"><span>{t("settings.loginEmail")}</span><span className="input-with-status"><Mail size={17} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /><b><Check size={14} />{t(emailIsVerified ? "nav.emailVerified" : "settings.pendingVerification")}</b></span></label><InlineMessage type="warning">{t("settings.emailWarning")}</InlineMessage><div className="form-grid two-column"><SearchableSelect label={t("settings.language")} required options={[{ value: "zh-CN", label: "简体中文" }, { value: "en", label: "English" }]} value={settings.locale || locale} onChange={(value) => setSettings((current) => ({ ...current, locale: value as Locale }))} /><SearchableSelect label={t("settings.timezone")} required options={[{ value: "Asia/Taipei", label: "Asia/Taipei (UTC+8)" }, { value: "Asia/Shanghai", label: "Asia/Shanghai (UTC+8)" }, { value: "Asia/Singapore", label: "Asia/Singapore (UTC+8)" }, { value: "Europe/London", label: "Europe/London" }, { value: "America/New_York", label: "America/New_York" }]} value={settings.timezone} onChange={(timezone) => { if (isSupportedTimezone(timezone)) setSettings((current) => ({ ...current, timezone })); }} /></div><label className="field"><span>{t("settings.dateFormat")}</span><select value={settings.dateFormat} onChange={(event) => setSettings((current) => ({ ...current, dateFormat: event.target.value as UserSettings["dateFormat"] }))}><option value="yyyy-MM-dd">2026-07-16</option><option value="dd/MM/yyyy">16/07/2026</option><option value="MM/dd/yyyy">07/16/2026</option></select></label>{user.role.startsWith("SALES_")&&<TeamMembershipSettings/>}{error && <InlineMessage type="error">{error}</InlineMessage>}<SaveRow saving={saving} /></form>;
+  const {locale,setLocale,t}=useI18n(),{setPreferences}=useUserPreferences();
+  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false),inFlight=useRef(false);
+  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();if(inFlight.current)return;inFlight.current=true;setSaving(true);setError("");setNotice("");
+    const snapshot={section:"account",email,locale:settings.locale,timezone:settings.timezone,dateFormat:settings.dateFormat};let accepted=false;
+    try{
+      const result=accountSaveSchema.parse(await persist(snapshot,"settings.accountSaved"));accepted=true;
+      setNotice(result.emailVerification==="UNCONFIRMED"?"personalSettings.emailUnconfirmed":result.emailVerification==="SENT"?"personalSettings.emailSent":"");
+      setPreferences({timezone:snapshot.timezone,dateFormat:snapshot.dateFormat});await setLocale(snapshot.locale);
+    }catch(caught){setError(accepted?t("personalSettings.displayFailed"):isDefinitiveMutationFailure(caught)?presentApiError(caught,t,"settings.saveFailed").message:t("personalSettings.saveUnknown"));}
+    finally{inFlight.current=false;setSaving(false);}
+  };
+  const emailIsVerified=email.trim().toLowerCase()===user.email.trim().toLowerCase()&&user.emailVerified,instant=new Date();
+  return <form onSubmit={submit}><fieldset className="settings-edit-fields" disabled={saving}>
+    <SettingsHeader eyebrow="ACCOUNT" title={t("settings.accountLanguage")} description={t("settings.languageHelp")}/>
+    <div className="form-grid two-column"><label className="field"><span>{t("settings.username")}</span><input value={settings.username} readOnly aria-readonly="true"/></label><label className="field"><span>{t("settings.internalId")}</span><input value={user.id} readOnly aria-readonly="true"/><small className="field-help">{t("settings.internalIdHelp")}</small></label></div>
+    <label className="field"><span>{t("settings.loginEmail")}</span><span className="input-with-status"><Mail size={17}/><input name="email" type="email" value={email} onChange={event=>setEmail(event.target.value)} required/><b><Check size={14}/>{t(emailIsVerified?"nav.emailVerified":"settings.pendingVerification")}</b></span></label><InlineMessage type="warning">{t("settings.emailWarning")}</InlineMessage>
+    <div className="form-grid two-column"><SearchableSelect label={t("settings.language")} required options={[{value:"zh-CN",label:"简体中文"},{value:"en",label:"English"}]} value={settings.locale||locale} onChange={value=>setSettings(current=>({...current,locale:value as Locale}))}/><SearchableSelect label={t("settings.timezone")} required options={[{value:"Asia/Taipei",label:"Asia/Taipei (UTC+8)"},{value:"Asia/Shanghai",label:"Asia/Shanghai (UTC+8)"},{value:"Asia/Singapore",label:"Asia/Singapore (UTC+8)"},{value:"Europe/London",label:"Europe/London"},{value:"America/New_York",label:"America/New_York"}]} value={settings.timezone} onChange={timezone=>{if(isSupportedTimezone(timezone))setSettings(current=>({...current,timezone}));}}/></div>
+    <label className="field"><span>{t("settings.dateFormat")}</span><select name="dateFormat" value={settings.dateFormat} onChange={event=>setSettings(current=>({...current,dateFormat:event.target.value as UserSettings["dateFormat"]}))}>{["yyyy-MM-dd","dd/MM/yyyy","MM/dd/yyyy"].map(format=><option key={format} value={format}>{preferencePreview(settings.timezone,format,instant).split(" ")[0]}</option>)}</select></label>
+    <section className="settings-preference-preview"><b>{t("personalSettings.preview")}</b><output data-preference-preview aria-live="polite">{preferencePreview(settings.timezone,settings.dateFormat,instant)} · {settings.timezone}</output><small>{t("personalSettings.previewHelp")}</small></section>
+    {notice&&<InlineMessage type={notice==="personalSettings.emailUnconfirmed"?"warning":"success"}>{t(notice)}</InlineMessage>}{error&&<InlineMessage type="error">{error}</InlineMessage>}<SaveRow saving={saving}/>
+  </fieldset>{user.role.startsWith("SALES_")&&<TeamMembershipSettings/>}</form>;
 }
 
 type SelfTeamOverview={teams:Array<{id:string;code:string;nameZh:string;nameEn:string}>;memberships:Array<{teamId:string;nameZh:string;nameEn:string;role:"MEMBER"|"LEAD";status:"PENDING"|"ACTIVE"|"REJECTED"}>};
@@ -121,13 +157,31 @@ function TeamMembershipSettings(){
 
 function NotificationSettings({ settings, setSettings, persist }: { settings: UserSettings; setSettings: Setter; persist: Persist }) {
   const { t } = useI18n(); const [error, setError] = useState(""); const [saving, setSaving] = useState(false); const rows = ["tasks", "relationship", "sales", "security"];
+  const inFlight=useRef(false);
   const updateChannel = (key: string, channel: "email" | "inApp", value: boolean) => setSettings((current) => ({ ...current, notifications: { ...current.notifications, [key]: { ...(current.notifications[key] ?? { email: false, inApp: false }), [channel]: value } } }));
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); setSaving(true); try { await persist({ section: "notifications", notifications: settings.notifications, quietHoursStart: settings.quietHoursStart, quietHoursEnd: settings.quietHoursEnd }, "settings.notificationSaved"); } catch(caught) { setError(presentApiError(caught,t,"settings.saveFailed").message); } finally { setSaving(false); } };
-  return <form onSubmit={submit}><SettingsHeader eyebrow="NOTIFICATIONS" title={t("settings.notifications")} description={t("settings.notificationHelp")} /><div className="notification-settings-head"><span>{t("settings.notificationType")}</span><span>{t("settings.emailChannel")}</span><span>{t("settings.inApp")}</span></div>{rows.map((key) => {
+  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();if(inFlight.current)return;setError("");
+    const parsed=notificationSettingsSchema.safeParse({section:"notifications",notifications:settings.notifications,quietHoursStart:settings.quietHoursStart,quietHoursEnd:settings.quietHoursEnd});
+    if(!parsed.success){setError(t(parsed.error.issues.some(issue=>issue.message==="SECURITY_NOTIFICATION_REQUIRED")?"personalSettings.securityRequired":"personalSettings.quietInvalid"));return;}
+    inFlight.current=true;setSaving(true);
+    try{await persist(parsed.data,"settings.notificationSaved");}catch(caught){setError(isDefinitiveMutationFailure(caught)?presentApiError(caught,t,"settings.saveFailed").message:t("personalSettings.saveUnknown"));}finally{inFlight.current=false;setSaving(false);}
+  };
+  return <form onSubmit={submit}><fieldset className="settings-edit-fields" disabled={saving}><SettingsHeader eyebrow="NOTIFICATIONS" title={t("settings.notifications")} description={t("settings.notificationHelp")} /><div className="notification-settings-head"><span>{t("settings.notificationType")}</span><span>{t("settings.emailChannel")}</span><span>{t("settings.inApp")}</span></div>{rows.map((key) => {
     const channels = settings.notifications[key] ?? { email: false, inApp: false };
     const policyId = key === "security" ? "security-notification-policy" : undefined;
     return <div className="notification-setting-row" key={key}><div><b>{t(`settings.notify.${key}`)}</b><small id={policyId}>{t(`settings.notify.${key}Help`)}</small></div><label className="switch"><input aria-label={`${t(`settings.notify.${key}`)} · ${t("settings.emailChannel")}`} aria-describedby={policyId} type="checkbox" checked={channels.email} disabled={key === "security" && channels.email && !channels.inApp} onChange={(event) => updateChannel(key, "email", event.target.checked)} /><span /></label><label className="switch"><input aria-label={`${t(`settings.notify.${key}`)} · ${t("settings.inApp")}`} aria-describedby={policyId} type="checkbox" checked={channels.inApp} disabled={key === "security" && channels.inApp && !channels.email} onChange={(event) => updateChannel(key, "inApp", event.target.checked)} /><span /></label></div>;
-  })}<label className="field"><span>{t("settings.quietHours")}</span><select value={settings.quietHoursStart?.slice(0, 5) ?? "off"} onChange={(event) => setSettings((current) => ({ ...current, quietHoursStart: event.target.value === "off" ? null : `${event.target.value}:00`, quietHoursEnd: event.target.value === "off" ? null : event.target.value === "22:00" ? "08:00:00" : "09:00:00" }))}><option value="off">{t("settings.off")}</option><option value="22:00">22:00–08:00</option><option value="21:00">21:00–09:00</option></select></label>{error && <InlineMessage type="error">{error}</InlineMessage>}<SaveRow saving={saving} /></form>;
+  })}<QuietHoursFields settings={settings} setSettings={setSettings}/>{error && <InlineMessage type="error">{error}</InlineMessage>}<SaveRow saving={saving} /></fieldset></form>;
+}
+
+function QuietHoursFields({settings,setSettings}:{settings:UserSettings;setSettings:Setter}){
+ const {t}=useI18n();
+ const preset=settings.quietHoursStart==="22:00:00"&&settings.quietHoursEnd==="08:00:00"?"22:00":settings.quietHoursStart==="21:00:00"&&settings.quietHoursEnd==="09:00:00"?"21:00":settings.quietHoursStart===null&&settings.quietHoursEnd===null?"off":"custom";
+ const [custom,setCustom]=useState(preset==="custom"),mode=custom?"custom":preset;
+ const start=settings.quietHoursStart??"",end=settings.quietHoursEnd??"",valid=notificationSettingsSchema.safeParse({section:"notifications",notifications:settings.notifications,quietHoursStart:start,quietHoursEnd:end}).success;
+ return <section className="settings-quiet-hours"><label className="field"><span>{t("personalSettings.quietMode")}</span><select name="quietMode" value={mode} onChange={event=>{const next=event.target.value;setCustom(next==="custom");setSettings(current=>({...current,quietHoursStart:next==="off"?null:next==="custom"?current.quietHoursStart??"22:00:00":next+":00",quietHoursEnd:next==="off"?null:next==="custom"?current.quietHoursEnd??"08:00:00":next==="22:00"?"08:00:00":"09:00:00"}));}}><option value="off">{t("settings.off")}</option><option value="22:00">22:00–08:00</option><option value="21:00">21:00–09:00</option><option value="custom">{t("personalSettings.quietCustom")}</option></select></label>
+  {mode==="custom"&&<div className="form-grid two-column"><label className="field"><span>{t("personalSettings.quietStart")}</span><DateInput name="quietHoursStart" type="time" step="1" required value={start} onChange={event=>setSettings(current=>({...current,quietHoursStart:event.target.value}))}/></label><label className="field"><span>{t("personalSettings.quietEnd")}</span><DateInput name="quietHoursEnd" type="time" step="1" required value={end} onChange={event=>setSettings(current=>({...current,quietHoursEnd:event.target.value}))}/></label></div>}
+  <p className="field-help">{t("personalSettings.quietHelp",{timezone:settings.timezone})}</p>{mode!=="off"&&valid&&<p role="status">{t(start>end?"personalSettings.quietOvernight":"personalSettings.quietSameDay",{start:start.slice(0,5),end:end.slice(0,5),timezone:settings.timezone})}</p>}
+ </section>;
 }
 
 type Factor = { id: string; status: string; friendly_name?: string };
@@ -141,17 +195,22 @@ function SecuritySettings() {
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [factors, setFactors] = useState<Factor[]>([]);
   const [enrollment, setEnrollment] = useState<{ factorId: string; challengeId: string; qrCode: string; secret?: string }>();
-  const [recoveryCodesRemaining, setRecoveryCodesRemaining] = useState(0);
+  const [recoveryCodesRemaining, setRecoveryCodesRemaining] = useState<number|null>(null);
+  const [mfaReadState,setMfaReadState]=useState<"loading"|"ready"|"error">("loading"),runMfaRead=useRemoteSearch();
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [recoveryCopied, setRecoveryCopied] = useState(false);
   const [rotateConfirm, setRotateConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const passwordChangeInFlight = useRef(false);
 
-  const loadMfa = () => apiFetch<{ factors?: Factor[]; recoveryCodesRemaining?: number }>("/api/settings/mfa")
-    .then((result) => { setFactors(result.factors ?? []); setRecoveryCodesRemaining(result.recoveryCodesRemaining ?? 0); })
-    .catch(() => setMfaError(t("settings.mfaFailed")));
-  useEffect(() => { loadMfa(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadMfa=useCallback(async(parentSignal?:AbortSignal)=>{
+    setMfaReadState("loading");const result=await runMfaRead(signal=>apiFetch<unknown>("/api/settings/mfa",{signal}),parentSignal);
+    if(!result.current)return;
+    const parsed="value" in result?mfaReadSchema.safeParse(result.value):null;
+    if(!parsed?.success){setMfaReadState("error");return;}
+    setFactors(parsed.data.factors);setRecoveryCodesRemaining(parsed.data.recoveryCodesRemaining);setMfaReadState("ready");
+  },[runMfaRead]);
+  useEffect(()=>{const controller=new AbortController(),timer=setTimeout(()=>void loadMfa(controller.signal),0);return()=>{clearTimeout(timer);controller.abort();};},[loadMfa]);
 
   const enroll = async () => {
     setBusy(true); setMfaError(""); setMfaSuccess("");
@@ -287,11 +346,12 @@ function SecuritySettings() {
     <SettingsHeader eyebrow="SECURITY" title={t("settings.security")} description={t("settings.securityHelp")} />
     <section className="mfa-card">
       <span><ShieldCheck size={25} /></span>
-      <div><b>{verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div>
-      <StatusBadge tone={verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>
-      {!verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}
-      {verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}
+      <div><b>{mfaReadState!=="ready"?t("personalSettings.mfaUnknown"):verifiedFactor ? t("settings.mfaEnabled") : t("settings.mfaReady")}</b><p>{t("settings.mfaReadyHelp")}</p></div>
+      <StatusBadge tone={mfaReadState!=="ready"?"gray":verifiedFactor ? "green" : administrator ? "amber" : "gray"}>{t(mfaReadState!=="ready"?"personalSettings.mfaUnknown":verifiedFactor ? "common.enabled" : administrator ? "settings.setupRequired" : "settings.optional")}</StatusBadge>
+      {mfaReadState==="ready" && !verifiedFactor && !enrollment && <button className="secondary-button" type="button" disabled={busy} onClick={enroll}>{t("settings.manageMfa")}</button>}
+      {mfaReadState==="ready" && verifiedFactor && !administrator && <button className="danger-button" type="button" disabled={busy} onClick={() => void disableMfa(verifiedFactor.id)}>{t("settings.disableMfa")}</button>}
     </section>
+    {mfaReadState==="loading"&&<p role="status">{t("common.loading")}</p>}{mfaReadState==="error"&&<InlineMessage type="error">{t("settings.mfaFailed")}</InlineMessage>}<button className="secondary-button" type="button" disabled={busy||mfaReadState==="loading"} onClick={()=>void loadMfa()}>{t("personalSettings.mfaRetry")}</button>
     <MfaAuthenticatorGuide />
     {mfaError && <InlineMessage type="error">{mfaError}</InlineMessage>}
     {mfaSuccess && <InlineMessage type="success">{mfaSuccess}</InlineMessage>}
@@ -302,7 +362,7 @@ function SecuritySettings() {
       <div className="settings-actions"><button className="secondary-button" type="button" disabled={busy} onClick={() => void cancelEnrollment()}>{t("common.cancel")}</button><button className="primary-button" disabled={busy}>{t("settings.verifyMfa")}</button></div>
     </form>}
     {verifiedFactor && <section className="recovery-section">
-      <div className="recovery-section__heading"><div><h3>{t("settings.recoveryCodes")}</h3><p>{t("settings.recoveryStatus", { count: recoveryCodesRemaining })}</p></div><button className="secondary-button" type="button" disabled={busy} onClick={() => setRotateConfirm(true)}><RefreshCcw size={16}/>{t("settings.regenerateRecovery")}</button></div>
+      <div className="recovery-section__heading"><div><h3>{t("settings.recoveryCodes")}</h3><p>{mfaReadState!=="ready"||recoveryCodesRemaining===null?t("personalSettings.recoveryUnknown"):t("settings.recoveryStatus", { count: recoveryCodesRemaining })}</p></div><button className="secondary-button" type="button" disabled={busy||mfaReadState!=="ready"} onClick={() => setRotateConfirm(true)}><RefreshCcw size={16}/>{t("settings.regenerateRecovery")}</button></div>
       {recoveryCodes.length > 0 && <>
         <InlineMessage type="warning">{t("settings.recoveryShownOnce")}</InlineMessage>
         <div className="recovery-code-grid">{recoveryCodes.map(code => <code key={code}>{code}</code>)}</div>
@@ -325,75 +385,4 @@ function SecuritySettings() {
   </div>;
 }
 
-type TrustedDeviceView = { id: string; label: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean };
-function PrivacySettings() {
-  const { locale, t } = useI18n();
-  const [status, setStatus] = useState<"" | "success" | "error">("");
-  const [devices, setDevices] = useState<TrustedDeviceView[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(true);
-  const loadDevices = () => {
-    setLoadingDevices(true);
-    void apiFetch<{ devices?: TrustedDeviceView[] }>("/api/settings/trusted-devices")
-      .then((result) => setDevices(result.devices ?? []))
-      .catch(() => setStatus("error"))
-      .finally(() => setLoadingDevices(false));
-  };
-  useEffect(() => {
-    let active = true;
-    void apiFetch<{ devices?: TrustedDeviceView[] }>("/api/settings/trusted-devices")
-      .then((result) => { if (active) setDevices(result.devices ?? []); })
-      .catch(() => { if (active) setStatus("error"); })
-      .finally(() => { if (active) setLoadingDevices(false); });
-    return () => { active = false; };
-  }, []);
-  const revoke = async () => {
-    setStatus("");
-    try {
-      await apiFetch("/api/settings/sessions", { method: "DELETE" });
-      setStatus("success");
-      loadDevices();
-    } catch {
-      setStatus("error");
-    }
-  };
-  const revokeDevice = async (id: string) => {
-    setStatus("");
-    try {
-      await apiFetch("/api/settings/trusted-devices", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope: "device", id }),
-      });
-      setDevices((current) => current.filter((device) => device.id !== id));
-    } catch {
-      setStatus("error");
-    }
-  };
-  const formatDate = (value: string) => new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-  return <div>
-    <SettingsHeader eyebrow="PRIVACY" title={t("settings.privacyDevices")} description={t("settings.privacyDevicesHelp")} />
-    <section className="privacy-links">
-      <Link href="/privacy-requests"><span><ShieldCheck size={18} /></span><div><b>{t("settings.privacyRequests")}</b><p>{t("settings.privacyRequestsHelp")}</p></div><ChevronRight size={16} /></Link>
-      <Link href="/privacy"><span><Eye size={18} /></span><div><b>{t("settings.privacyPolicy")}</b><p>{t("settings.privacyPolicyHelp")}</p></div><ChevronRight size={16} /></Link>
-    </section>
-    <h3 className="device-heading">{t("settings.loginDevices")}</h3>
-    <InlineMessage type="warning">{t("settings.sessionPrivacyNote")}</InlineMessage>
-    <div className="device-list">
-      {loadingDevices && <div className="device-row"><span><Laptop size={20}/></span><div><b>{t("settings.devicesLoading")}</b></div></div>}
-      {!loadingDevices && devices.length === 0 && <div className="device-row"><span><Laptop size={20}/></span><div><b>{t("settings.currentBrowser")}</b><small>{t("settings.currentDevice")} · {t("settings.now")}</small></div><StatusBadge tone="green">{t("settings.currentDevice")}</StatusBadge></div>}
-      {devices.map((device) => <div className="device-row" key={device.id}>
-        <span><Laptop size={20}/></span>
-        <div><b>{device.label}</b><small>{t("settings.deviceLastUsed", { date: formatDate(device.lastUsedAt) })} · {t("settings.deviceExpires", { date: formatDate(device.expiresAt) })}</small></div>
-        {device.current && <StatusBadge tone="green">{t("settings.currentDevice")}</StatusBadge>}
-        <button type="button" onClick={() => void revokeDevice(device.id)} aria-label={t("settings.forgetDevice", { device: device.label })}><Trash2 size={16}/>{t("settings.forget")}</button>
-      </div>)}
-    </div>
-    {status === "success" && <InlineMessage type="success">{t("settings.otherDevicesRevoked")}</InlineMessage>}
-    {status === "error" && <InlineMessage type="error">{t("settings.sessionRevokeFailed")}</InlineMessage>}
-    <button className="danger-button" type="button" onClick={revoke}><MonitorSmartphone size={17} />{t("settings.signOutOthers")}</button>
-  </div>;
-}
 function SaveRow({ saving }: { saving: boolean }) { const { t } = useI18n(); return <div className="settings-actions"><span>{t("settings.requiredHelp")}</span><button className="primary-button" type="submit" disabled={saving}><Save size={16} />{saving ? t("settings.saving") : t("settings.saveChanges")}</button></div>; }

@@ -1,4 +1,5 @@
 "use client";
+import {PreferencesUnavailableNotice} from "./preferences-unavailable-notice";
 
 import {WorkspaceIconContext} from "./workspace-heading";
 import {destinationIcon} from "@/lib/workspace-visuals";
@@ -64,7 +65,7 @@ function navigationFor(role: AppUser["role"]): NavigationGroup[] {
   })).filter(group => group.items.length);
 }
 
-export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferences, preferredLocale, avatarSource = null, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; preferredLocale:UserSettings["locale"]; avatarSource?:string|null; children: React.ReactNode }) {
+export function AppShell({ user, relationshipHealth, relationshipHealthUnavailable = false, preferencesUnavailable = false, preferences, preferredLocale, avatarSource = null, children }: { user: AppUser; relationshipHealth: RelationshipHealth; relationshipHealthUnavailable?: boolean; preferencesUnavailable?:boolean; preferences:Pick<UserSettings,"timezone"|"dateFormat">; preferredLocale:UserSettings["locale"]; avatarSource?:string|null; children: React.ReactNode }) {
   const [avatarOverride,setAvatarOverride]=useState<string|null>(null);
   useEffect(()=>{const update=(event:Event)=>{const url=(event as CustomEvent<{url:string}>).detail?.url;if(url?.startsWith("/api/settings/avatar"))setAvatarOverride(url);};window.addEventListener("lumina:avatar-updated",update);return()=>window.removeEventListener("lumina:avatar-updated",update);},[]);
   const { locale, setLocale, t } = useI18n();
@@ -237,7 +238,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
 
   return (
     <AppUserProvider user={user}>
-    <UserPreferencesProvider initialPreferences={preferences}>
+    <UserPreferencesProvider initialPreferences={preferences} initialUnavailable={preferencesUnavailable}>
     <a className="skip-link" href="#main-content">{t("nav.skipContent")}</a>
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
       {mobileOpen && <button className="mobile-overlay" onClick={closeMobile} aria-label={t("nav.close")} />}
@@ -288,7 +289,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
             </div>
           </div>
         </header>
-        <main id="main-content" tabIndex={-1} className="app-content" data-workspace-space={currentDestination?.space??"work"} data-workspace-destination={currentDestination?.id??"other"}><WorkspaceIconContext.Provider value={destinationIcon(currentDestination?.id)}>{children}</WorkspaceIconContext.Provider></main>
+        <main id="main-content" tabIndex={-1} className="app-content" data-workspace-space={currentDestination?.space??"work"} data-workspace-destination={currentDestination?.id??"other"}><WorkspaceIconContext.Provider value={destinationIcon(currentDestination?.id)}><PreferencesUnavailableNotice/>{children}</WorkspaceIconContext.Provider></main>
       </div>
     </div>
     {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus maxLength={80} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={searchResults[activeResult]?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<GlobalSearchResults className="mobile-global-results" id="mobile-global-search-results" itemIdPrefix="mobile-global-result" {...searchScopeProps} results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>{setMobileSearchOpen(false);changeSearch("");}}/>}</div></AccessibleDrawer>}

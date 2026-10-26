@@ -1,0 +1,4 @@
+import type {UserSettings} from "../../lib/settings-repository";
+export const personalId=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
+export const personalSettings:UserSettings={username:"fictional-reviewer",displayNameZh:"示例用户",displayNameEn:"Fictional Reviewer",honorific:"mx",bio:"Fictional settings review",avatarPath:null,locale:"en",timezone:"Asia/Taipei",dateFormat:"yyyy-MM-dd",quietHoursStart:"23:15:00",quietHoursEnd:"07:45:00",notifications:{tasks:{email:true,inApp:true},relationship:{email:true,inApp:true},sales:{email:false,inApp:true},security:{email:true,inApp:true}}};
+export const personalDevice={id:personalId(1),label:"Fictional browser · Fictional device",createdAt:"2026-10-01T00:00:00Z",lastUsedAt:"2026-10-25T23:30:00Z",expiresAt:"2026-11-01T00:00:00Z",current:false};

@@ -25,7 +25,7 @@ async function get() {
     accessToken,
     cookieStore.get(securityCookieNames.trustedDevice)?.value,
   );
-  return NextResponse.json({ devices });
+  return NextResponse.json({ devices },{headers:{"cache-control":"private, no-store"}});
 }
 
 async function del(request: Request) {

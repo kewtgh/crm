@@ -1,3 +1,4 @@
+import {personalSettingsEn} from "./personal-settings";
 import {communicationsRecoveryEn} from "./communications-recovery";
 import {approvalReviewEn} from "./approval-review";
 import {globalDiscoveryEn} from "./global-discovery";
@@ -521,7 +522,7 @@ export const en: Messages = {
   "settings.protectedHelp": "Only administrators can change roles, verification levels, and account status.",
   "settings.profile": "Profile", "settings.notifications": "Notification preferences", "settings.security": "Password & security", "settings.privacy": "Privacy & devices",
   "settings.accountNormal": "Account active",
-  "settings.loginEmail": "Sign-in email", "settings.emailWarning": "After an email change, confirmation notices are sent to both the old and new addresses.", "settings.timezone": "Time zone", "settings.dateFormat": "Date format",
+  "settings.loginEmail": "Sign-in email", "settings.emailWarning": "Verification is sent to the new address. Your sign-in email changes only after verification.", "settings.timezone": "Time zone", "settings.dateFormat": "Date format",
   "settings.username": "Username", "settings.internalId": "Internal user ID", "settings.internalIdHelp": "System-generated and immutable. It is used for relationships, permissions, and audits; names are never used as IDs.",
   "legal.privacy": "Privacy Policy",
   "legal.terms": "Terms of Service",
@@ -550,5 +551,6 @@ export const en: Messages = {
   ...qualityTriageEn,
   ...communicationsRecoveryEn,
   ...approvalReviewEn,
+  ...personalSettingsEn,
   ...globalDiscoveryEn,
 };

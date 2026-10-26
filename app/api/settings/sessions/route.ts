@@ -13,14 +13,15 @@ async function del(request: Request) {
   const token = cookieStore.get(authCookieNames.session)?.value;
   if (!token) return NextResponse.json({ code: "AUTH_REQUIRED" }, { status: 401 });
   try {
-    await Promise.all([
+    const [sessions,devices]=await Promise.allSettled([
       revokeOtherSessions(user.id, token),
       revokeOtherTrustedDevices(
         token,
         cookieStore.get(securityCookieNames.trustedDevice)?.value,
       ),
     ]);
-    return NextResponse.json({ ok: true });
+    const sessionsRevoked=sessions.status==="fulfilled",trustedDevicesRevoked=devices.status==="fulfilled";
+    return NextResponse.json({ok:sessionsRevoked&&trustedDevicesRevoked,sessionsRevoked,trustedDevicesRevoked});
   } catch {
     return NextResponse.json({ code: "SESSION_REVOKE_FAILED" }, { status: 500 });
   }

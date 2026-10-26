@@ -37,9 +37,9 @@ async function get() {
   const user = await requireApiUser();
   const [factors, recoveryCodesRemaining] = await Promise.all([
     listTotpFactors(user.id),
-    countMfaRecoveryCodes(user.id).catch(() => 0),
+    countMfaRecoveryCodes(user.id).catch(() => null),
   ]);
-  return NextResponse.json({ factors, recoveryCodesRemaining });
+  return NextResponse.json({ factors, recoveryCodesRemaining },{headers:{"cache-control":"private, no-store"}});
 }
 
 async function post(request: Request) {

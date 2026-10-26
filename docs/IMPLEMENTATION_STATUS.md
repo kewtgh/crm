@@ -1,4 +1,14 @@
-# Implementation status — v3.45.0 release candidate
+# Implementation status — v3.46.0 release candidate
+
+## v3.46.0 — Trustworthy personal settings and device review
+
+Independent security/privacy access, validated settings/MFA/device reads, explicit recovery and
+serialized device actions are implemented. Session and trusted-device revocation expose separate
+outcomes. Custom quiet hours preserve arbitrary intervals and security-channel policy. Account
+preview and save feedback separate preference acceptance, verification delivery and local display.
+No schema migration, new service or production infrastructure is required. V2 remains paused.
+See [audit](FIRST_PRINCIPLES_AUDIT_V346.md), [plan](FIRST_PRINCIPLES_PLAN_V346.md),
+[release notes](RELEASE_V3.46.0.md) and [verification](V346_VERIFICATION.md).
 
 ## v3.45.0 — Discovery coverage and schedule creation
 

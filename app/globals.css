@@ -724,6 +724,14 @@ body { overflow-x:hidden; }
  .staff-directory-filters { width: 100%; }
 }
 
+.settings-edit-fields { border:0; padding:0; margin:0; min-width:0; display:grid; gap:20px; }
+.settings-preference-preview,.settings-quiet-hours { display:grid; gap:12px; min-width:0; }
+.settings-preference-preview { padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.settings-preference-preview output { overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.settings-preference-preview small { color:var(--muted); }
+.trusted-devices-settings > .secondary-button { margin:12px 0; }
+.trusted-devices-settings .device-row > div { min-width:0; overflow-wrap:anywhere; }
+
 @media(min-width:681px) and (max-width:1050px) {
  .staff-user-head { display:none; }
  .staff-user-row { grid-template-columns:repeat(3,minmax(0,1fr)); }

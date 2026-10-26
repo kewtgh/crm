@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import type { UserSettings } from "@/lib/settings-repository";
+import {requireConfirmedPreferences} from "@/lib/settings-contract";
 import {
   dateTimePartsFor,
   localDateTimeKey,
@@ -12,6 +13,7 @@ import {
 type Preferences = Pick<UserSettings, "timezone" | "dateFormat">;
 type FormatOptions = { includeTime?: boolean; dateOnly?: boolean };
 type UserPreferencesContextValue = Preferences & {
+  available:boolean;
   setPreferences: (preferences: Preferences) => void;
   formatDate: (value: string | number | Date, options?: FormatOptions) => string;
   formatFullDate: (value: string | number | Date) => string;
@@ -24,13 +26,16 @@ const UserPreferencesContext = createContext<UserPreferencesContextValue | null>
 
 export function UserPreferencesProvider({
   initialPreferences,
+  initialUnavailable=false,
   children,
 }: {
   initialPreferences: Preferences;
+  initialUnavailable?:boolean;
   children: React.ReactNode;
 }) {
   const { locale } = useI18n();
-  const [preferences, setPreferences] = useState(initialPreferences);
+  const [preferences, setPreferenceState] = useState({...initialPreferences,available:!initialUnavailable});
+  const setPreferences=useCallback((next:Preferences)=>setPreferenceState({...next,available:true}),[]);
   const formatDate = useCallback((value: string | number | Date, options: FormatOptions = {}) => {
     const dateOnly = options.dateOnly && typeof value === "string";
     const date = dateOnly ? new Date(`${value.slice(0, 10)}T00:00:00Z`) : new Date(value);
@@ -53,8 +58,8 @@ export function UserPreferencesProvider({
     return `${parts.year}-${parts.month}-${parts.day}`;
   }, [preferences.timezone]);
   const localDateTimeToIso = useCallback(
-    (value: string) => zonedLocalDateTimeToUtc(value, preferences.timezone).toISOString(),
-    [preferences.timezone],
+    (value: string) => {requireConfirmedPreferences(preferences.available);return zonedLocalDateTimeToUtc(value, preferences.timezone).toISOString();},
+    [preferences.available,preferences.timezone],
   );
   const localDateTimeInput = useCallback((value: string | number | Date = new Date()) => {
     return localDateTimeKey(new Date(value), preferences.timezone);
@@ -67,7 +72,7 @@ export function UserPreferencesProvider({
     todayKey,
     localDateTimeToIso,
     localDateTimeInput,
-  }), [formatDate, formatFullDate, localDateTimeInput, localDateTimeToIso, preferences, todayKey]);
+  }), [formatDate, formatFullDate, localDateTimeInput, localDateTimeToIso, preferences, setPreferences, todayKey]);
   return <UserPreferencesContext.Provider value={context}>{children}</UserPreferencesContext.Provider>;
 }
 

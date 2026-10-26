@@ -1,0 +1,10 @@
+# v3.46.0 — Trustworthy personal settings and device review
+
+- Security and privacy open independently of preference storage in the server shell and client workspace. Editable preference reads are validated and expose loading/retry rather than editable fallback data. Unavailable display preferences are explicitly labeled; local-to-UTC conversion is blocked until the account timezone is confirmed. A validated preference read restores the shared context.
+- Trusted-device review separates failed, stale and confirmed empty lists. It does not invent a current device or present trusted devices as every active session. Dates use the account timezone/format; revocation and refresh are serialized and duplicate actions are guarded immediately.
+- Sign-out reports login-session and trusted-device revocation independently. Partial/unconfirmed outcomes remain visible. Accepted device revocation followed by a failed refresh offers display-only recovery; no mutation retries automatically.
+- Quiet hours retain existing arbitrary intervals and add preset/custom/off controls with shared compact time entry. Paired, distinct endpoints and at least one security-notification channel are required. Overnight guidance uses the account timezone without changing reminder-worker policy.
+- Account settings show a live timezone/date-format preview. Preference acceptance, verification-email submission and local language application have separate outcomes. Failed/unconfirmed delivery does not turn accepted preferences into a failed save, and the login email still changes only after verification. No automatic resend is added.
+- MFA reads have explicit retry and gate factor actions on confirmed data. An unavailable recovery-code count remains unknown while valid factors stay visible. Password, administrator MFA and verification rules remain unchanged.
+
+Node 24.22.1 LTS and existing dependency pins remain unchanged. No migration, new infrastructure, persistent service, production operation or V2 implementation is introduced. See [audit](FIRST_PRINCIPLES_AUDIT_V346.md), [plan](FIRST_PRINCIPLES_PLAN_V346.md) and [verification](V346_VERIFICATION.md).

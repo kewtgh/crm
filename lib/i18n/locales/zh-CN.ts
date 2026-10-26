@@ -1,3 +1,4 @@
+import {personalSettingsZh} from "./personal-settings";
 import {communicationsRecoveryZh} from "./communications-recovery";
 import {approvalReviewZh} from "./approval-review";
 import {globalDiscoveryZh} from "./global-discovery";
@@ -519,7 +520,7 @@ export const zhCN: Messages = {
   "settings.protectedHelp": "角色、认证等级与账号状态只能由管理员修改。",
   "settings.profile": "个人资料", "settings.notifications": "通知偏好", "settings.security": "密码与安全", "settings.privacy": "隐私与设备",
   "settings.accountNormal": "账户正常",
-  "settings.loginEmail": "登录邮箱", "settings.emailWarning": "修改邮箱后，我们会同时向新旧邮箱发送确认通知。", "settings.timezone": "时区", "settings.dateFormat": "日期格式",
+  "settings.loginEmail": "登录邮箱", "settings.emailWarning": "验证邮件将发送至新地址；完成验证前，登录邮箱保持不变。", "settings.timezone": "时区", "settings.dateFormat": "日期格式",
   "settings.username": "账户名", "settings.internalId": "内部用户 ID", "settings.internalIdHelp": "系统生成且不可修改；用于关联、权限和审计，不使用姓名作为 ID。",
   "legal.privacy": "隐私政策",
   "legal.terms": "服务条款",
@@ -548,6 +549,7 @@ export const zhCN: Messages = {
   ...qualityTriageZh,
   ...communicationsRecoveryZh,
   ...approvalReviewZh,
+  ...personalSettingsZh,
   ...globalDiscoveryZh,
 };
 import {operationsRepairZh} from "./operations-repair";

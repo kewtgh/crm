@@ -3,6 +3,9 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  INVALID_QUIET_HOURS:"personalSettings.quietInvalid",
+  USER_PREFERENCES_UNAVAILABLE:"personalSettings.preferencesUnavailable",
+  SECURITY_NOTIFICATION_REQUIRED:"personalSettings.securityRequired",
   INVALID_APPOINTMENT:"calendarCreate.invalid",
   APPOINTMENT_INVALID:"calendarCreate.invalid",
   APPOINTMENT_RELATION_INVALID:"calendarCreate.relation",
