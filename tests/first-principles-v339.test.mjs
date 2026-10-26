@@ -22,7 +22,8 @@ test('appointment creation uses supported relation pairs, stable minutes and exp
  assert.equal(appointmentCreateSchema.safeParse(input).success,true);
  assert.equal(appointmentCreateSchema.safeParse({...input,relatedType:'CONTACT',relatedId:id}).success,true);
  for(const patch of [{relatedType:'STUDENT',relatedId:id},{relatedType:'CONTACT'},{reminder:'1 day'},{attendees:[{email:'attendee@example.test',consentConfirmed:false}]}])assert.equal(appointmentCreateSchema.safeParse({...input,...patch}).success,false);
- assert.deepEqual(calendarRelationTypes,['ORGANIZATION','CONTACT']);assert.equal(reminderKeys[1440],'calendar.reminder.day');
+ assert.equal(appointmentCreateSchema.safeParse({...input,relatedType:'USER',relatedId:id}).success,true);
+ assert.deepEqual(calendarRelationTypes,['ORGANIZATION','CONTACT','USER']);assert.equal(reminderKeys[1440],'calendar.reminder.day');
 });
 test('exact request recovery retains original bytes across edited content and locale switches',()=>{
  let keys=0;const attempt=createReceiptAttempt(()=>`fictional-${++keys}`),first=attempt.prepare({title:'Original',reminder:1440,locale:'en'});

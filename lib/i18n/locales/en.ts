@@ -1,3 +1,4 @@
+import {privacyCalendarEn} from "./privacy-calendar";
 import {personalSettingsEn} from "./personal-settings";
 import {communicationsRecoveryEn} from "./communications-recovery";
 import {approvalReviewEn} from "./approval-review";
@@ -553,4 +554,5 @@ export const en: Messages = {
   ...approvalReviewEn,
   ...personalSettingsEn,
   ...globalDiscoveryEn,
+  ...privacyCalendarEn,
 };

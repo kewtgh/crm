@@ -1,62 +1,22 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { ApiError, apiRoute, parsePagination, requireApiCapability, requireApiUser } from "@/lib/api";
-import { mutationIsTrusted } from "@/lib/request-security";
-import { createPrivacyRequest, listPrivacyRequests, managePrivacyRequest } from "@/lib/v200-repository";
-
-const createSchema = z.object({
-  operation: z.literal("create").default("create"),
-  type: z.enum(["ACCESS", "EXPORT", "CORRECTION", "RESTRICTION", "DELETION"]),
-  note: z.string().trim().min(10).max(2000),
-  contactId: z.uuid(),
-  changes: z.object({
-    nameZh: z.string().trim().min(1).max(160).optional(),
-    nameEn: z.string().trim().min(1).max(160).optional(),
-    email: z.union([z.email(), z.literal("")]).optional(),
-    phone: z.string().trim().max(80).optional(),
-    title: z.string().trim().max(160).optional(),
-  }).optional(),
-}).superRefine((value, context) => {
-  const count = Object.keys(value.changes ?? {}).length;
-  if (value.type === "CORRECTION" && count === 0) {
-    context.addIssue({ code: "custom", path: ["changes"], message: "correction_requires_changes" });
-  }
-  if (value.type !== "CORRECTION" && count > 0) {
-    context.addIssue({ code: "custom", path: ["changes"], message: "changes_only_apply_to_correction" });
-  }
-});
-const manageSchema = z.object({
-  operation: z.literal("manage"),
-  id: z.uuid(),
-  status: z.enum(["IDENTITY_REVIEW", "IN_PROGRESS", "WAITING_APPROVAL", "FULFILLED", "REJECTED", "CANCELLED"]),
-  identityStatus: z.enum(["PENDING", "VERIFIED", "FAILED"]),
-  decision: z.string().trim().min(3).max(2000),
-});
-
-async function get(request: Request) {
-  await requireApiUser();
-  const url = new URL(request.url);
-  const pagination = parsePagination(url.searchParams);
-  return NextResponse.json(await listPrivacyRequests({
-    ...pagination,
-    status: url.searchParams.get("status") ?? undefined,
-  }));
+import {NextResponse} from "next/server";
+import {ApiError,apiRoute,requireApiCapability,requireApiUser} from "@/lib/api";
+import {mutationIsTrusted} from "@/lib/request-security";
+import {DatabaseRequestError} from "@/lib/db/gateway";
+import {executePrivacyCommand,listPrivacyRequests} from "@/lib/privacy-request-repository";
+import {privacyCommandSchema,privacyViewSchema} from "@/lib/privacy-request-contract";
+async function get(request:Request){
+ await requireApiUser();const params=new URL(request.url).searchParams;
+ if([...params.keys()].length!==new Set(params.keys()).size)throw new ApiError("PRIVACY_VIEW_INVALID",400);
+ const parsed=privacyViewSchema.safeParse(Object.fromEntries(params));if(!parsed.success)throw new ApiError("PRIVACY_VIEW_INVALID",400);
+ return NextResponse.json(await listPrivacyRequests(parsed.data),{headers:{"cache-control":"private, no-store"}});
 }
-
-async function post(request: Request) {
-  if (!mutationIsTrusted(request)) throw new ApiError("UNTRUSTED_ORIGIN", 403);
-  await requireApiUser();
-  const body = await request.json().catch(() => ({}));
-  if (body?.operation === "manage") {
-    await requireApiCapability("privacyRequests.manage");
-    const parsed = manageSchema.safeParse(body);
-    if (!parsed.success) throw new ApiError("INVALID_PRIVACY_DECISION", 400, "INVALID_PRIVACY_DECISION", { field: String(parsed.error.issues[0]?.path[0] ?? "form") });
-    return NextResponse.json({ item: await managePrivacyRequest(parsed.data) });
-  }
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) throw new ApiError("INVALID_PRIVACY_REQUEST", 400, "INVALID_PRIVACY_REQUEST", { field: String(parsed.error.issues[0]?.path[0] ?? "form") });
-  return NextResponse.json({ item: await createPrivacyRequest(parsed.data) }, { status: 201 });
+async function post(request:Request){
+ if(!mutationIsTrusted(request))throw new ApiError("UNTRUSTED_ORIGIN",403);
+ await requireApiUser();const parsed=privacyCommandSchema.safeParse(await request.json().catch(()=>null));
+ if(!parsed.success)throw new ApiError("PRIVACY_INPUT_INVALID",400);
+ if(parsed.data.operation==="manage")await requireApiCapability("privacyRequests.manage");
+ try{return NextResponse.json({item:await executePrivacyCommand(parsed.data)},{status:parsed.data.operation==="create"?201:200});}
+ catch(error){if(error instanceof DatabaseRequestError&&["PRIVACY_SNAPSHOT_CONFLICT","PRIVACY_REQUEST_CONFLICT"].includes(error.code))throw new ApiError(error.code,409);throw error;}
 }
-
-export const GET = apiRoute(get, "PRIVACY_REQUEST_LOAD_FAILED");
-export const POST = apiRoute(post, "PRIVACY_REQUEST_CREATE_FAILED");
+export const GET=apiRoute(get,"PRIVACY_REQUEST_LOAD_FAILED");
+export const POST=apiRoute(post,"PRIVACY_REQUEST_CREATE_FAILED");

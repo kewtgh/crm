@@ -1,3 +1,4 @@
+import {privacyCalendarZh} from "./privacy-calendar";
 import {personalSettingsZh} from "./personal-settings";
 import {communicationsRecoveryZh} from "./communications-recovery";
 import {approvalReviewZh} from "./approval-review";
@@ -551,5 +552,6 @@ export const zhCN: Messages = {
   ...approvalReviewZh,
   ...personalSettingsZh,
   ...globalDiscoveryZh,
+  ...privacyCalendarZh,
 };
 import {operationsRepairZh} from "./operations-repair";

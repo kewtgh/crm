@@ -17,7 +17,7 @@ module.exports=async({browser,base,output,report})=>{
     const data={items:[...items],total:items.length,truncated:false};if(holdRead){holdRead=false;held={route,data};return;}
     return route.fulfill({json:data});
    }
-   if(url.pathname==="/api/search/related"){relatedRequests.push(url.searchParams.get("types"));return route.fulfill({json:{items:[{value:"CONTACT:00000000-0000-4000-8000-000000000098",labelZh:"示例联系人",labelEn:"Fictional Contact",type:"CONTACT"},{value:"STUDENT:00000000-0000-4000-8000-000000000097",labelZh:"不支持对象",labelEn:"Unsupported Student",type:"STUDENT"}]}});}
+   if(url.pathname==="/api/calendar/relations"){relatedRequests.push(url.pathname);return route.fulfill({json:{items:[{value:"CONTACT:00000000-0000-4000-8000-000000000098",labelZh:"示例联系人",labelEn:"Fictional Contact",type:"CONTACT"},{value:"STUDENT:00000000-0000-4000-8000-000000000097",labelZh:"不支持对象",labelEn:"Unsupported Student",type:"STUDENT"}]}});}
    if(url.pathname==="/api/calendar"&&method==="POST"){
     creates.push(request.postData());const data=request.postDataJSON();
     if(!created.has(data.requestKey)){const id="00000000-0000-4000-8000-000000000050";created.set(data.requestKey,id);items.push({id,eventVersion:1,date:data.date,time:data.time,title:data.title,titleEn:data.title,related:data.related,type:data.type,channel:data.channel,reminder:"calendar.reminder.30m",deliveryStatus:"NONE"});}
@@ -55,7 +55,7 @@ module.exports=async({browser,base,output,report})=>{
   failRead=false;await page.getByRole("button",{name:"Refresh calendar",exact:true}).click();await page.waitForFunction(()=>!document.querySelector(".calendar-page > .inline-message.error"));
   holdRead=true;await page.getByRole("button",{name:"Refresh calendar",exact:true}).click();await page.getByRole("button",{name:"Schedule event",exact:true}).click();
   const dialog=page.getByRole("dialog");await dialog.locator('input[name="title"]').fill("Fictional recovered appointment");await dialog.locator('select[name="reminder"]').selectOption("30");
-  await dialog.locator(".select-trigger").click();await dialog.getByRole("option",{name:/Fictional Contact/}).click();assert.ok(relatedRequests.every(value=>value==="ORGANIZATION,CONTACT"));assert.equal(await dialog.getByText("Unsupported Student",{exact:true}).count(),0);
+  await dialog.locator(".select-trigger").click();await dialog.getByRole("option",{name:/Fictional Contact/}).click();assert.ok(relatedRequests.every(value=>value==="/api/calendar/relations"));assert.equal(await dialog.getByText("Unsupported Student",{exact:true}).count(),0);
   loseCreate=true;await dialog.locator('button[type="submit"]').evaluate(button=>{button.click();button.click();});await dialog.locator("fieldset:disabled").waitFor();await dialog.getByText(/result is unconfirmed/).waitFor();assert.equal(creates.length,1);await page.keyboard.press("Escape");assert.equal(await page.getByRole("dialog").count(),1);
   await page.evaluate(()=>window.workflowLocale("zh-CN"));await dialog.locator('button[type="submit"]').click();await dialog.waitFor({state:"hidden"});assert.equal(creates[0],creates[1]);assert.equal(JSON.parse(creates[1]).reminder,30);
   if(held){await held.route.fulfill({json:held.data}).catch(()=>{});held=null;}await page.locator(".reminder-item").filter({hasText:"Fictional recovered appointment"}).waitFor();

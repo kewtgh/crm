@@ -1,4 +1,12 @@
-# Implementation status — v3.46.0 release candidate
+# Implementation status — v3.47.0 release candidate
+
+## v3.47.0 — Privacy review and calendar collaboration
+
+Privacy requests now use atomic command receipts, stale-review detection, complete filters and
+explicit accepted/executing states. Completed appointments remain stored and can be displayed for
+one week, one month, three months, six months or one year. Internal member invitations reuse
+existing reminders and in-app notifications, with recipient read-only access and relation labels.
+See [release notes](RELEASE_V3.47.0.md) and [verification](V347_VERIFICATION.md).
 
 ## v3.46.0 — Trustworthy personal settings and device review
 

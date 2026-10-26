@@ -3,6 +3,14 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  PRIVACY_SNAPSHOT_CONFLICT:"privacyFlow.reloadReview",
+  PRIVACY_REQUEST_CONFLICT:"privacyFlow.conflict",
+  PRIVACY_INPUT_INVALID:"privacyFlow.invalid",
+  PRIVACY_CONTACT_UNAVAILABLE:"privacyFlow.contactsFailed",
+  PRIVACY_ACCESS_DENIED:"privacyFlow.denied",
+  PRIVACY_IDENTITY_VERIFICATION_REQUIRED:"privacyRequests.identityHelp",
+  PRIVACY_SECOND_REVIEWER_REQUIRED:"privacyFlow.secondReviewer",
+  APPOINTMENT_MEMBER_UNAVAILABLE:"calendarInvite.unavailable",
   INVALID_QUIET_HOURS:"personalSettings.quietInvalid",
   USER_PREFERENCES_UNAVAILABLE:"personalSettings.preferencesUnavailable",
   SECURITY_NOTIFICATION_REQUIRED:"personalSettings.securityRequired",

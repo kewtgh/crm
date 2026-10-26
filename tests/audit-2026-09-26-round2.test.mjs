@@ -34,7 +34,8 @@ test("notification links route valid tasks directly and unknown sources safely",
   assert.equal(notificationHref({sourceType:"TASK",sourceId:id}),`/tasks/${id}`);
   assert.equal(notificationHref({sourceType:"TASK",sourceId:"//example.com"}),"/tasks");
   assert.equal(notificationHref({sourceType:"CONTRACT",sourceId:id}),"/contracts");
-  assert.equal(notificationHref({sourceType:"APPOINTMENT",sourceId:id}),"/calendar");
+  assert.equal(notificationHref({sourceType:"APPOINTMENT",sourceId:id}),`/calendar?event=${id}`);
+  assert.equal(notificationHref({sourceType:"APPOINTMENT",sourceId:"//example.test"}),"/calendar");
   assert.equal(notificationHref({sourceType:"EXPORT",sourceId:id}),"/reports/exports");
   assert.equal(notificationHref({sourceType:null,sourceId:null}),"/notifications");
   for(const messages of [zhCN,en]) {

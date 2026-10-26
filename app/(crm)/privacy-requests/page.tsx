@@ -1,12 +1,10 @@
-import { DataLoadError } from "@/components/data-state";
-import { PrivacyRequestsWorkspace } from "@/components/v200-workspaces";
-import { requireUser } from "@/lib/auth";
-import { localizedPageMetadata } from "@/lib/page-metadata";
-import { listPrivacyRequests } from "@/lib/v200-repository";
-
-export const generateMetadata = () => localizedPageMetadata("meta.privacyRequests");
-export default async function Page() {
-  await requireUser();
-  const data = await listPrivacyRequests().catch(() => null);
-  return data ? <PrivacyRequestsWorkspace initial={data}/> : <DataLoadError/>;
+import {PrivacyRequestsWorkspace} from "@/components/privacy-requests-workspace";
+import {requireUser} from "@/lib/auth";
+import {localizedPageMetadata} from "@/lib/page-metadata";
+import {listPrivacyRequests} from "@/lib/privacy-request-repository";
+import {readPrivacyView} from "@/lib/privacy-request-contract";
+export const generateMetadata=()=>localizedPageMetadata("meta.privacyRequests");
+export default async function Page({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
+ await requireUser();const view=readPrivacyView(await searchParams),data=await listPrivacyRequests(view).catch(()=>null);
+ return <PrivacyRequestsWorkspace initial={data} initialView={view}/>;
 }
