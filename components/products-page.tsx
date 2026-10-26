@@ -22,9 +22,9 @@ import { presentApiError } from "@/lib/api-error-presenter";
 import { executeProductMutation } from "@/lib/product-mutation";
 
 export function ProductsPage({initialProducts,initialBundles,initialExchangeRates,initialCatalogError=false,initialFocus}:{initialProducts:ProductRecord[];initialBundles:ProductBundle[];initialExchangeRates:ExchangeRateSnapshot[];initialCatalogError?:boolean;initialFocus?:string}){
-  const [editProduct,setEditProduct]=useState<ProductRecord|null>(initialProducts.find(p=>p.id===initialFocus)??null);
+  const [editProduct,setEditProduct]=useState<ProductRecord|null>(null);
   const [templateProduct,setTemplateProduct]=useState<ProductRecord|null>(null);
-  const [detailProduct,setDetailProduct]=useState<ProductRecord|null>(null);
+  const [detailProduct,setDetailProduct]=useState<ProductRecord|null>(initialProducts.find(p=>p.id===initialFocus)??null);
   const [deleteProduct,setDeleteProduct]=useState<ProductRecord|null>(null);
   const [productPending,setProductPending]=useState(false);
   const [listError,setListError]=useState("");

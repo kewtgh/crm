@@ -1,6 +1,7 @@
 import {qualityDefaults,type QualityFilters} from "./quality-contract";
 import {applyReportFilter,type ReportFilter} from "./management-trend-contract";
 import { databaseJson, databaseRequest } from "./db/gateway";
+import {z} from "zod";
 
 export type TimelineEvent={occurredAt:string;type:string;entityId:string;titleZh:string;titleEn:string;summary:string;metadata:Record<string,unknown>};
 export type TimelinePage={items:TimelineEvent[];total:number;page:number;pageSize:number};
@@ -86,12 +87,13 @@ async function countFinanceRows(path:string){
   return Number((response.headers.get("content-range")??"*/0").split("/")[1]??0);
 }
 
-export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string;buyerType?:string;buyerId?:string;reportFilter?:ReportFilter}={}):Promise<FinanceOverview>{
+export async function loadFinanceOverview(options:{query?:string;page?:number;pageSize?:number;quoteId?:string}&FinancePages&{studentId?:string;productId?:string;cohortId?:string;enrollmentId?:string;buyerType?:string;buyerId?:string;reportFilter?:ReportFilter}={}):Promise<FinanceOverview>{
   const pageSize=Math.min(50,Math.max(5,options.pageSize??10));
   const page=(value:number|undefined)=>Math.max(1,value??1);
   const quotePage=page(options.quotePage??options.page);
   const quoteParams=new URLSearchParams({select:"id,product_id,cohort_id,revision,quote_number,organization_id,household_id,buyer_contact_id,representative_contact_id,currency,valid_until,status,current_version,created_at",order:"created_at.desc"});
   const query=(options.query??"").replace(/[*,()]/g," ").trim();
+  if(options.quoteId){quoteParams.set("id",`eq.${z.uuid().parse(options.quoteId)}`);quoteParams.set("archived_at","is.null");}
   if(query)quoteParams.set("quote_number",`ilike.*${query}*`);
   const context=Object.fromEntries((["studentId","productId","cohortId","enrollmentId"] as const).flatMap(key=>options[key]?[[key,options[key]]]:[]));
   const financePath=(path:string)=>{

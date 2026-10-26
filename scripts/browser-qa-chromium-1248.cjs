@@ -25,7 +25,7 @@ if(process.env.CI==="true"&&gitState!=="clean")throw new Error(`CI browser evide
 
 function envFile(){
   const values={};
-  if(["approval-review","communications-recovery","recycle-recovery","task-completion","notification-integrity","quality-triage","calendar-exports","action-review","staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
+  if(["global-discovery","approval-review","communications-recovery","recycle-recovery","task-completion","notification-integrity","quality-triage","calendar-exports","action-review","staff-lifecycle","personal-governance"].includes(process.env.QA_SCOPE))return values;
   const filename=path.resolve(".env.local");
   if(!fs.existsSync(filename))return values;
   for(const raw of fs.readFileSync(filename,"utf8").split(/\r?\n/)){
@@ -360,7 +360,8 @@ async function main(){
   const identities=[];
   const scenarios=new Map();
   try{
-    if(env.QA_SCOPE==="approval-review"){await require("./qa-approval-review.cjs")({browser,base,output,report});}
+    if(env.QA_SCOPE==="global-discovery"){await require("./qa-global-discovery.cjs")({browser,base,output,report});}
+    else if(env.QA_SCOPE==="approval-review"){await require("./qa-approval-review.cjs")({browser,base,output,report});}
     else if(env.QA_SCOPE==="communications-recovery"){await require("./qa-communications-recovery.cjs")({browser,base,output,report});}
     else if(env.QA_SCOPE==="recycle-recovery"){await require("./qa-recycle-recovery.cjs")({browser,base,output,report});}
     else if(["task-completion","notification-integrity"].includes(env.QA_SCOPE)){await require("./qa-daily-work.cjs")({browser,base,output,report});}

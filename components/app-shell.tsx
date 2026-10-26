@@ -42,6 +42,8 @@ import { UserPreferencesProvider } from "./user-preferences-context";
 import { useUserPreferences } from "./user-preferences-context";
 import { apiFetch } from "@/lib/api-client";
 import { AccessibleDrawer } from "./ui";
+import {useGlobalSearch} from "@/hooks/use-global-search";
+import {globalRecordHref,visibleGlobalRecordTypes,type GlobalRecordType,type GlobalSearchScope} from "@/lib/global-search-contract";
 import { UserAvatar } from "./user-avatar";
 
 type NavItem = { labelKey: string; href?: string; icon: React.ElementType; badge?: string; documentChildNavigation?: boolean; children?: { labelKey: string; href: string; badge?: string }[] };
@@ -73,10 +75,11 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState("");
-  const [recordSearchResults, setRecordSearchResults] = useState<GlobalSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState("");
+  const discovery=useGlobalSearch(user.role);
+  const {query:globalSearch,setQuery:setGlobalSearch,loading:searchLoading}=discovery;
+  const recordSearchResults:GlobalSearchResult[]=(discovery.result?.items??[]).map(item=>({title:(locale==="zh-CN"?item.labelZh:item.labelEn)||item.labelZh||item.labelEn||item.id,detail:t(`search.type.${item.type.toLowerCase()}`),href:globalRecordHref(item),source:"record"}));
+  const failedSources=discovery.result?.sources.filter(source=>source.status==="FAILED")??[];
+  const searchError=discovery.failed?t("discovery.failed"):failedSources.length?t(failedSources.length===discovery.result?.sources.length?"discovery.failed":"discovery.partial"):"";
   const [activeResult, setActiveResult] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
@@ -146,52 +149,19 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
   const matchingPageCommands=useMemo(()=>{
     const query=globalSearch.trim().toLocaleLowerCase(locale);
     if(query.length<2)return[];
-    return pageCommands.filter(item=>`${item.title} ${item.href}`.toLocaleLowerCase(locale).includes(query)).slice(0,6);
-  },[globalSearch,locale,pageCommands]);
-  const searchResults=useMemo(()=>{
+    if(discovery.scope!=="all"&&discovery.scope!=="pages")return[];
+    return Array.from(new Map(pageCommands.map(item=>[item.href,item])).values()).filter(item=>`${item.title} ${item.href}`.toLocaleLowerCase(locale).includes(query)).slice(0,6);
+  },[globalSearch,locale,pageCommands,discovery.scope]);
+  const searchResults=(()=>{
     const hrefs=new Set(matchingPageCommands.map(item=>item.href));
-    return[...matchingPageCommands,...recordSearchResults.filter(item=>!hrefs.has(item.href))].slice(0,12);
-  },[matchingPageCommands,recordSearchResults]);
-  useEffect(() => {
-    const query = globalSearch.trim();
-    if (query.length < 2) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setSearchLoading(true);
-      setSearchError("");
-      try {
-        const result = await apiFetch<{ items: Array<{ value:string;labelZh: string; labelEn: string; type: "ORGANIZATION" | "CONTACT" | "USER" | "OPPORTUNITY" | "TASK" | "CONTRACT" | "QUOTE" | "PRODUCT" | "STUDENT" | "HOUSEHOLD" | "LEAD" }> }>(`/api/search/related?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-        if(controller.signal.aborted)return;
-        setRecordSearchResults(result.items
-          .filter((item): item is typeof item & { type: Exclude<typeof item.type, "USER"> } => item.type !== "USER")
-          .map((item) => ({
-          title: locale === "zh-CN" ? item.labelZh : item.labelEn,
-          detail: t(`search.type.${item.type.toLowerCase()}`),
-          href: searchHref(item.type,item.value.split(":")[1]??""),
-          source: "record",
-          })));
-        setActiveResult(-1);
-      } catch {
-        if (!controller.signal.aborted) {
-          setRecordSearchResults([]);
-          setSearchError(t("nav.searchFailed"));
-        }
-      } finally {
-        if (!controller.signal.aborted) setSearchLoading(false);
-      }
-    }, 200);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [globalSearch, locale, t]);
+    return[...matchingPageCommands,...recordSearchResults.filter(item=>!hrefs.has(item.href))];
+  })();
   const changeSearch = (value: string) => {
     setGlobalSearch(value);
-    setRecordSearchResults([]);
-    setSearchError("");
     setActiveResult(-1);
-    if (value.trim().length < 2) {
-      setSearchLoading(false);
-      setActiveResult(-1);
-    }
   };
+  const changeScope=(scope:GlobalSearchScope)=>{discovery.setScope(scope);setActiveResult(-1);};
+  const searchScopeProps={scope:discovery.scope,types:visibleGlobalRecordTypes(user.role),onScope:changeScope,retry:()=>{setActiveResult(-1);discovery.retry();},failedTypes:failedSources.map(source=>t(`search.type.${source.type.toLowerCase()}`)).join(" · "),limited:discovery.result?.truncated??false};
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -205,7 +175,6 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         setNotificationsOpen(false);
         setMobileSearchOpen(false);
         setGlobalSearch("");
-        setRecordSearchResults([]);
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -214,7 +183,6 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       if (!notificationsRef.current?.contains(target)) setNotificationsOpen(false);
       if (!searchWrapRef.current?.contains(target)&&!mobileSearchRef.current?.contains(target)) {
         setGlobalSearch("");
-        setRecordSearchResults([]);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -223,7 +191,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
     };
-  }, []);
+  }, [setGlobalSearch]);
   useEffect(()=>{
     if(!mobileOpen)return;
     const previousOverflow=document.body.style.overflow;
@@ -243,6 +211,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
     return()=>{document.body.style.overflow=previousOverflow;document.removeEventListener("keydown",trap);trigger?.focus();};
   },[mobileOpen]);
   const searchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if(event.nativeEvent.isComposing||event.keyCode===229)return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveResult((current) => Math.min(searchResults.length - 1, current + 1));
@@ -254,11 +223,14 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
       window.location.assign(searchResults[activeResult].href);
     } else if (event.key === "Escape") {
       setGlobalSearch("");
-      setRecordSearchResults([]);
       setMobileSearchOpen(false);
       searchInputRef.current?.blur();
     }
   };
+  useEffect(()=>{
+    const id=activeResult>=0?`${mobileSearchOpen?"mobile-global-result":"global-result"}-${activeResult}`:null;
+    if(id)document.getElementById(id)?.scrollIntoView({block:"nearest"});
+  },[activeResult,mobileSearchOpen]);
   const closeMobile = () => setMobileOpen(false);
   const closeNotifications=useCallback(()=>setNotificationsOpen(false),[]);
   const closeProfile=useCallback(()=>setProfileOpen(false),[]);
@@ -298,8 +270,8 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
             <button ref={mobileMenuRef} className="mobile-menu" type="button" onClick={() => setMobileOpen(true)} aria-label={t("nav.open")} aria-expanded={mobileOpen} aria-controls="main-navigation"><Menu size={21} /></button>
             <button className="mobile-search-trigger" type="button" onClick={()=>setMobileSearchOpen(true)} aria-label={t("nav.globalSearch")}><Search size={20}/><span>{t("nav.globalSearch")}</span></button>
             <div className="global-search-wrap" ref={searchWrapRef}>
-              <label className="global-search"><Search size={18} /><input ref={searchInputRef} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length >= 2} aria-controls="global-search-results" aria-activedescendant={activeResult >= 0 ? `global-result-${activeResult}` : undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={(event) => changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>Ctrl/⌘ K</kbd></label>
-              {globalSearch.trim().length >= 2 && <GlobalSearchResults className="global-results" id="global-search-results" itemIdPrefix="global-result" results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>changeSearch("")}/>}
+              <label className="global-search"><Search size={18} /><input ref={searchInputRef} maxLength={80} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length >= 2} aria-controls="global-search-results" aria-activedescendant={searchResults[activeResult] ? `global-result-${activeResult}` : undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={(event) => changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")} /><kbd>Ctrl/⌘ K</kbd></label>
+              {globalSearch.trim().length >= 2 && <GlobalSearchResults className="global-results" id="global-search-results" itemIdPrefix="global-result" {...searchScopeProps} results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>changeSearch("")}/>}
             </div>
           </div>
           <div className="topbar-actions">
@@ -319,7 +291,7 @@ export function AppShell({ user, relationshipHealth, relationshipHealthUnavailab
         <main id="main-content" tabIndex={-1} className="app-content" data-workspace-space={currentDestination?.space??"work"} data-workspace-destination={currentDestination?.id??"other"}><WorkspaceIconContext.Provider value={destinationIcon(currentDestination?.id)}>{children}</WorkspaceIconContext.Provider></main>
       </div>
     </div>
-    {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={activeResult>=0?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<GlobalSearchResults className="mobile-global-results" id="mobile-global-search-results" itemIdPrefix="mobile-global-result" results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>{setMobileSearchOpen(false);changeSearch("");}}/>}</div></AccessibleDrawer>}
+    {mobileSearchOpen&&<AccessibleDrawer title={t("nav.globalSearch")} onClose={()=>{setMobileSearchOpen(false);changeSearch("");}}><div ref={mobileSearchRef} className="mobile-global-search"><label className="global-search"><Search size={18}/><input autoFocus maxLength={80} role="combobox" aria-autocomplete="list" aria-expanded={globalSearch.trim().length>=2} aria-controls="mobile-global-search-results" aria-activedescendant={searchResults[activeResult]?`mobile-global-result-${activeResult}`:undefined} value={globalSearch} onKeyDown={searchKeyDown} onChange={event=>changeSearch(event.target.value)} placeholder={t("nav.globalSearch")} aria-label={t("nav.globalSearch")}/></label>{globalSearch.trim().length>=2&&<GlobalSearchResults className="mobile-global-results" id="mobile-global-search-results" itemIdPrefix="mobile-global-result" {...searchScopeProps} results={searchResults} activeResult={activeResult} loading={searchLoading} error={searchError} onActive={setActiveResult} onChoose={()=>{setMobileSearchOpen(false);changeSearch("");}}/>}</div></AccessibleDrawer>}
     </UserPreferencesProvider>
     </AppUserProvider>
   );
@@ -335,6 +307,7 @@ function GlobalSearchResults({
   error,
   onActive,
   onChoose,
+  scope,types,onScope,retry,failedTypes,limited,
 }: {
   className:string;
   id:string;
@@ -345,13 +318,24 @@ function GlobalSearchResults({
   error:string;
   onActive:(index:number)=>void;
   onChoose:()=>void;
+  scope:GlobalSearchScope;
+  types:GlobalRecordType[];
+  onScope:(scope:GlobalSearchScope)=>void;
+  retry:()=>void;
+  failedTypes:string;
+  limited:boolean;
 }) {
   const {t}=useI18n();
-  return <div className={className} id={id} role="listbox" aria-label={t("nav.globalSearch")}>
-    {results.map((item,index)=><Link id={`${itemIdPrefix}-${index}`} data-source={item.source} role="option" aria-selected={activeResult===index} className={activeResult===index?"active":""} key={`${item.source}:${item.href}:${item.title}`} href={item.href} onMouseEnter={()=>onActive(index)} onClick={onChoose}>{item.source==="page"?<LayoutDashboard size={16}/>:<Search size={16}/>}<span><b>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={16}/></Link>)}
+  return <div className={className}>
+    <label className="global-search-scope"><span>{t("discovery.scope")}</span><select value={scope} onChange={event=>onScope(event.target.value as GlobalSearchScope)}><option value="all">{t("discovery.all")}</option><option value="pages">{t("discovery.pages")}</option>{types.map(type=><option key={type} value={type}>{t(`search.type.${type.toLowerCase()}`)}</option>)}</select></label>
+    <div className="global-search-options" id={id} role="listbox" aria-label={t("nav.globalSearch")} aria-busy={loading}>
+    {results.map((item,index)=><Link id={`${itemIdPrefix}-${index}`} data-source={item.source} role="option" aria-selected={activeResult===index} className={activeResult===index?"active":""} key={`${item.source}:${item.href}:${item.title}`} href={item.href} onMouseEnter={()=>onActive(index)} onClick={onChoose}>{item.source==="page"?<LayoutDashboard size={16}/>:<Search size={16}/>}<span><b title={item.title}>{item.title}</b><small>{item.detail}</small></span><ChevronRight size={16}/></Link>)}
+    </div>
     {loading&&<p role="status">{t("nav.searchLoading")}</p>}
-    {error&&<p role="alert">{error}</p>}
+    {error&&<div className="global-search-recovery" role="status"><p>{error}</p>{failedTypes&&<p>{t("discovery.unavailable",{types:failedTypes})}</p>}<button type="button" className="secondary-button" disabled={loading} onClick={retry}>{t("discovery.retry")}</button></div>}
+    {limited&&<p role="status">{t("discovery.limited")}</p>}
     {!loading&&!error&&!results.length&&<p>{t("nav.noResults")}</p>}
+    <p className="global-search-hint">{t("discovery.hint")}</p>
   </div>;
 }
 
@@ -398,19 +382,6 @@ function ProfilePopover({ user, close,triggerRef,avatarSource }: { user: AppUser
     {signOutError&&<p className="profile-signout-error" role="alert">{signOutError}</p>}
     <button className="profile-signout" role="menuitem" type="button" disabled={signingOut} aria-busy={signingOut} onClick={()=>void signOut()}><LogOut size={17} />{t(signingOut?"nav.signingOut":"nav.signOut")}</button>
   </div>;
-}
-
-function searchHref(type:"ORGANIZATION"|"CONTACT"|"OPPORTUNITY"|"TASK"|"CONTRACT"|"QUOTE"|"PRODUCT"|"STUDENT"|"HOUSEHOLD"|"LEAD",id:string){
-  if(type==="ORGANIZATION")return`/schools/${id}`;
-  if(type==="CONTACT")return`/people/${id}`;
-  if(type==="TASK")return`/tasks/${id}`;
-  if(type==="OPPORTUNITY")return`/opportunities?focus=${id}`;
-  if(type==="CONTRACT")return`/contracts?focus=${id}`;
-  if(type==="QUOTE")return`/finance?quote=${id}`;
-  if(type==="STUDENT")return`/students?focus=${id}`;
-  if(type==="HOUSEHOLD")return`/households?tab=families&focus=${id}`;
-  if(type==="LEAD")return`/leads?focus=${id}`;
-  return`/products?focus=${id}`;
 }
 
 function findAdjacentFocusable(trigger:HTMLElement|null,popover:HTMLElement|null,backwards:boolean){

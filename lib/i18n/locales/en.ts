@@ -1,5 +1,6 @@
 import {communicationsRecoveryEn} from "./communications-recovery";
 import {approvalReviewEn} from "./approval-review";
+import {globalDiscoveryEn} from "./global-discovery";
 import {recoveryEn} from "./recovery-workspace";
 import {qualityTriageEn} from "./quality-triage";
 import {calendarRecoveryEn} from "./calendar-recovery";
@@ -549,4 +550,5 @@ export const en: Messages = {
   ...qualityTriageEn,
   ...communicationsRecoveryEn,
   ...approvalReviewEn,
+  ...globalDiscoveryEn,
 };

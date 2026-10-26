@@ -3,6 +3,7 @@ import {randomBytes,randomUUID} from "node:crypto";
 import {spawnSync} from "node:child_process";
 import {mkdirSync,writeFileSync} from "node:fs";
 import pg from "pg";
+import {rpcArgumentValues} from "../lib/db/rpc-arguments.ts";
 
 // Fresh loopback-only, temporary storage. Never reads dotenv or an application database URL.
 const container=`lumina-crm-calendar-it-${randomBytes(5).toString("hex")}`,password=randomBytes(32).toString("hex");
@@ -28,6 +29,21 @@ try{
  await client.query("insert into public.workspaces(id,slug,name) values($1,'calendar-other','Fictional Calendar Workspace')",[otherWs]);
  await client.query("insert into public.workspace_memberships(workspace_id,user_id,role) values($1,$2,'SALES_SPECIALIST'),($1,$3,'SALES_SPECIALIST'),($4,$5,'ADMIN')",[ws,actor,other,otherWs,foreign]);
  const context=async(connection=client,user=actor,workspace=ws)=>{await connection.query("reset role");await connection.query("select set_config('app.user_id',$1,false),set_config('app.workspace_id',$2,false),set_config('app.aal','aal2',false)",[user,workspace]);await connection.query("set role crm_app");};
+ await context();
+ const creationEntries=(attendees=[],key=randomUUID())=>Object.entries({title_zh:"示例日程",title_en:"Fictional schedule",event_type:"MEETING",relation_type:null,relation_id:null,relation_label:"",starts:"2030-01-01T02:00:00Z",ends:"2030-01-01T03:00:00Z",event_channel:"Teams",reminders:[1440],attendees,target_request_key:key});
+ const creationSql=entries=>`select * from public.create_appointment_with_delivery(${entries.map(([name],index)=>`"${name}" => $${index+1}`).join(",")})`;
+ const createViaGateway=async(entries,connection=client)=>(await connection.query(creationSql(entries),await rpcArgumentValues(connection,"create_appointment_with_delivery",entries))).rows[0];
+ assert.equal((await client.query("select jsonb_typeof($1::jsonb) kind",[[]])).rows[0].kind,"object","unencoded JS arrays reproduce PostgreSQL-array transport instead of JSON arrays");
+ const emptyEntries=creationEntries();
+ await assert.rejects(client.query(creationSql(emptyEntries),emptyEntries.map(([,value])=>value)),/appointment_invalid|cannot get array length|invalid input syntax for type json/);
+ const created=await createViaGateway(emptyEntries);assert.ok(created.id);assert.equal(created.event_version,1);assert.deepEqual(await createViaGateway(emptyEntries),created);
+ const attendedEntries=creationEntries([{email:"attendee@example.test",consentConfirmed:true}]);
+ const attended=await createViaGateway(attendedEntries);assert.ok(attended.id);assert.deepEqual(await createViaGateway(attendedEntries),attended);
+ await assert.rejects(createViaGateway(creationEntries([{email:"attendee@example.test",consentConfirmed:false}])),/appointment_attendee_consent_required/);
+ await client.query("reset role");
+ const creationFacts=(await client.query("select (select count(*)::int from public.appointment_attendees where appointment_id=$1) attendees,(select count(*)::int from public.calendar_deliveries where appointment_id=$1) deliveries",[attended.id])).rows[0];
+ assert.deepEqual(creationFacts,{attendees:1,deliveries:1});await context();
+ console.log("PASS reproduced original JSONB array failure; real empty-attendee and invited appointment creation, exact replay, SQL-array reminders and consent denial now verified.");
  const seed=async()=>{await client.query("reset role");const id=randomUUID();await client.query("insert into public.appointments(id,workspace_id,title_zh,title_en,appointment_type,starts_at,ends_at,owner_id,created_by) values($1,$2,'示例预约','Fictional appointment','MEETING','2030-01-01T02:00Z','2030-01-01T03:00Z',$3,$3)",[id,ws,actor]);await client.query("insert into public.appointment_attendees(workspace_id,appointment_id,email,name,consent_confirmed,created_by) values($1,$2,'attendee@example.test','Fictional Attendee',true,$3)",[ws,id,actor]);await context();return id;};
  const mutate=async(id,action,version,key=randomUUID(),connection=client)=>{const start=action==="UPDATE"?"2030-01-02T02:00Z":null,end=action==="UPDATE"?"2030-01-02T03:00Z":null;return (await connection.query("select public.mutate_calendar_appointment($1,$2,$3,$4,$5,$6) item",[id,action,version,key,start,end])).rows[0].item;};
  const facts=async id=>{await client.query("reset role");const row=(await client.query("select event_version,status,completed_at,(select count(*)::int from public.calendar_deliveries where appointment_id=a.id) deliveries,(select count(*)::int from public.audit_events where entity_id=a.id::text and action in ('APPOINTMENT_UPDATE','APPOINTMENT_CANCEL','APPOINTMENT_COMPLETE')) audits from public.appointments a where id=$1",[id])).rows[0];await context();return row;};

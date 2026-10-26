@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { PoolClient } from "pg";
+import {rpcArgumentValues} from "./rpc-arguments";
 import { preciseTimestampTypes } from "./timestamp";
 import { loadSession, sessionCookieName } from "../auth/session-store";
 import { withDatabaseContext, type DatabaseContext } from "./context";
@@ -459,9 +460,10 @@ async function callFunction(client: PoolClient, name: string, init: RequestInit)
   const argumentsSql = entries
     .map(([argument], index) => `${quoteIdentifier(argument)} => $${index + 1}`)
     .join(", ");
+  const values=await rpcArgumentValues(client,name,entries);
   const result = await client.query<Record<string, unknown>>(
     `select * from public.${quoteIdentifier(name)}(${argumentsSql})`,
-    entries.map(([, value]) => value),
+    values,
   );
   const returnsSet = await functionReturnsSet(client, name);
   if (returnsSet) return jsonResponse(result.rows, 200);

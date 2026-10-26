@@ -3,6 +3,11 @@ import { ApiClientError } from "./api-client";
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 const codeKeys: Record<string, string> = {
+  INVALID_APPOINTMENT:"calendarCreate.invalid",
+  APPOINTMENT_INVALID:"calendarCreate.invalid",
+  APPOINTMENT_RELATION_INVALID:"calendarCreate.relation",
+  APPOINTMENT_ATTENDEE_CONSENT_REQUIRED:"calendarCreate.consent",
+  APPOINTMENT_CONTACT_EVENT_CONSENT_REQUIRED:"calendarCreate.consent",
   APPROVAL_SNAPSHOT_CONFLICT:"approvalReview.reload",
   APPROVAL_NOT_PENDING:"approvalReview.reload",
   APPROVAL_REQUEST_CONFLICT:"approvalReview.requestConflict",

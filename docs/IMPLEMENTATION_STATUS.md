@@ -1,4 +1,15 @@
-# Implementation status — v3.44.0 release candidate
+# Implementation status — v3.45.0 release candidate
+
+## v3.45.0 — Discovery coverage and schedule creation
+
+Bounded federated record search reuses existing RLS queries with independent source outcomes,
+fair suggestions, capability-scoped type focus, page-only navigation and explicit recovery.
+Contract/product/quote links preserve the intended read context. RPC array transport distinguishes
+JSON/JSONB from native PostgreSQL arrays, fixing attendee creation without changing receipt or
+delivery semantics. Single native date/time pickers support compact HHmm/MMDD entry and strict
+calendar validation. No production infrastructure or schema migration is added. V2 remains paused.
+See [audit](FIRST_PRINCIPLES_AUDIT_V345.md), [plan](FIRST_PRINCIPLES_PLAN_V345.md),
+and [verification](V345_VERIFICATION.md).
 
 ## v3.44.0 — Approval review integrity and complete history
 

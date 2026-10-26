@@ -1,5 +1,6 @@
 import {communicationsRecoveryZh} from "./communications-recovery";
 import {approvalReviewZh} from "./approval-review";
+import {globalDiscoveryZh} from "./global-discovery";
 import {recoveryZh} from "./recovery-workspace";
 import {qualityTriageZh} from "./quality-triage";
 import {calendarRecoveryZh} from "./calendar-recovery";
@@ -547,5 +548,6 @@ export const zhCN: Messages = {
   ...qualityTriageZh,
   ...communicationsRecoveryZh,
   ...approvalReviewZh,
+  ...globalDiscoveryZh,
 };
 import {operationsRepairZh} from "./operations-repair";

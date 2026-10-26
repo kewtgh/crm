@@ -76,3 +76,6 @@ export function useUserPreferences() {
   if (!context) throw new Error("useUserPreferences must be used inside UserPreferencesProvider");
   return context;
 }
+
+/** Shared inputs may also render in standalone/public forms without account preferences. */
+export function useOptionalUserPreferences(){return useContext(UserPreferencesContext);}

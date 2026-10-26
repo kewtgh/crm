@@ -1,6 +1,16 @@
 # ewaya CRM
 
-Current release candidate: **v3.44.0**
+Current release candidate: **v3.45.0**
+
+## v3.45.0 — Reliable discovery and scheduling
+
+Global search preserves healthy record sources, fairly displays record types, and provides type focus,
+pages-only navigation, explicit coverage/retry and accurate contract/product/quote destinations.
+Schedule creation correctly transports JSON attendee arrays while preserving PostgreSQL reminder arrays.
+Date and time fields share one native picker and recognize compact input: `2215` → `22:15`,
+`0803` → `08:03`, and `1005` → October 5 of the current year. Invalid dates/times are rejected.
+See [audit](docs/FIRST_PRINCIPLES_AUDIT_V345.md), [plan](docs/FIRST_PRINCIPLES_PLAN_V345.md),
+[release notes](docs/RELEASE_V3.45.0.md) and [verification](docs/V345_VERIFICATION.md).
 
 ## v3.44.0 — Verifiable approval decisions and complete review history
 
