@@ -9,6 +9,11 @@ import { importFieldsByResource } from "../lib/import-fields.ts";
 import { parseCsvDocument } from "../lib/csv.ts";
 import { compressAvatar,AVATAR_MAX_BYTES } from "../lib/avatar-image.ts";
 import sharp from "sharp";
+import React from "react";
+import {renderToStaticMarkup} from "react-dom/server";
+import {DateInput} from "../components/structured-inputs.tsx";
+import {I18nProvider} from "../components/i18n-provider.tsx";
+import {en} from "../lib/i18n/locales/en.ts";
 import { queueCustomerEmail,previewCustomerEmail } from "../lib/customer-email-repository.ts";
 import { loadCustomerOperations } from "../lib/customer-operations-repository.ts";
 import { followUpCompletionPath } from "../lib/customer-operations-view.ts";
@@ -112,7 +117,13 @@ test("migration guards contact assignment, writes, workspace isolation and relat
   const api=await source("app/api/customer-operations/route.ts");assert.match(api,/hasCapability\(user.role,"contracts.view"\)/);assert.match(api,/hasCapability\(user.role,"opportunities.view"\)/);
 });
 test("date view is controllable and searches accept empty/single-character suggestions without second filtering",async()=>{
-  const inputs=await source("components/structured-inputs.tsx");assert.match(inputs,/setView\("days"\)/);assert.match(inputs,/dispatchEvent\(new Event\("input"/);assert.match(inputs,/event.stopPropagation\(\)/);
+  for(const value of ["2030-10-05","2031-01-09"]){
+    const html=renderToStaticMarkup(React.createElement(I18nProvider,{initialLocale:"en",initialMessages:en},React.createElement("form",{id:"review-form"},React.createElement(DateInput,{name:"reviewDate",value,defaultValue:"2029-01-01",onChange:()=>{}}))));
+    const inputs=(html.match(/<input\b[^>]*>/g)??[]).map(tag=>Object.fromEntries([...tag.matchAll(/\s([\w:-]+)="([^"]*)"/g)].map(([,name,value])=>[name,value]))),named=inputs.filter(input=>input.name==="reviewDate"),pickers=inputs.filter(input=>input.type==="date");
+    assert.equal(named.length,1,"one submitted date field");assert.equal(named[0].type,"text");assert.equal(named[0].value,value,"controlled value takes precedence");
+    assert.equal(pickers.length,1,"one native picker");assert.equal(pickers[0].value,value);assert.equal(pickers[0].name,undefined);assert.ok(pickers[0].form&&pickers[0].form!=="review-form","auxiliary picker cannot submit with the owning form");assert.equal(pickers[0]["aria-hidden"],"true");
+    assert.equal((html.match(/<button\b/g)??[]).length,1,"one visible picker trigger");assert.ok(html.includes(en["input.chooseDate"]));
+  }
   const panel=await source("components/customer-operations-panel.tsx");assert.doesNotMatch(panel,/\} \*<\/span>/,"required labels rely on the shared marker, without duplicate stars");
   const select=await source("components/ui.tsx");assert.match(select,/onSearch \? options : options.filter/);assert.match(select,/search \? 120 : 0/);assert.match(select,/selectedOption/);
   const search=await source("lib/related-search-repository.ts");assert.doesNotMatch(search,/clean.length\s*<\s*2/);assert.match(search,/types.includes\(type\)/);assert.match(search,/short_name.ilike/);

@@ -21,3 +21,15 @@ test("repository metadata is aligned and CI runs preflight before npm ci",async(
   assert.ok(ci.indexOf('node scripts/check-release-metadata.mjs')<ci.indexOf('npm ci --no-audit --no-fund'));
   for(const command of ['test:raw','test:contracts:raw'])assert.match(JSON.parse(packageText).scripts[command],/tests\/structured-inputs.test.mjs tests\/release-metadata.test.mjs/);
 });
+
+test("production candidates retain the complete Docker verification gate in development and CI",async()=>{
+  const [packageText,docker,ci]=await Promise.all(["package.json","Dockerfile",".github/workflows/ci.yml"].map(file=>readFile(new URL(`../${file}`,import.meta.url),"utf8")));
+  const command="docker build --progress=plain --target verification .";
+  assert.equal(JSON.parse(packageText).scripts["release:verify"],command);
+  const start=docker.indexOf("FROM build AS verification"),end=docker.indexOf("FROM node-toolchain AS production-dependencies",start);
+  assert.ok(start>=0&&end>start);
+  const stage=docker.slice(start,end),commands=["npm run typecheck:raw","npm run lint:raw","npm run test:contracts:raw","npm run test:deploy:raw"];
+  for(let index=0;index<commands.length;index++){assert.ok(stage.includes(commands[index]),commands[index]);if(index)assert.ok(stage.indexOf(commands[index-1])<stage.indexOf(commands[index]));}
+  assert.match(ci,/candidate-verification:[\s\S]*?runs-on: ubuntu-latest/);
+  assert.ok(ci.includes(`run: ${command}`));
+});

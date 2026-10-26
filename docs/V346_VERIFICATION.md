@@ -1,5 +1,9 @@
 # Verification for v3.46
 
+This is the original scoped feature report, not production-candidate sign-off. The complete
+historical contract suite was not run in that pass. See [the production-build correction](V346_PRODUCTION_BUILD_FIX.md)
+and [the mandatory candidate checklist](RELEASE_CANDIDATE_CHECKLIST.md) for the later full-gate evidence.
+
 Date: 2026-10-26. Baseline v3.45.0 at `6708104ec6c31f1ead127f46057f8a0a625dff71`. Node 24.22.1 LTS. Evidence is scoped to the adopted personal-settings plan; no production or existing database is used.
 
 ## Implementation evidence

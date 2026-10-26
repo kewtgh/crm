@@ -5,6 +5,19 @@
 - Use the Node.js 24 LTS version pinned in `.nvmrc` for development and verification.
   Keep package engines, Docker images and CI aligned with that LTS version.
 
+## Production candidate verification
+
+- Targeted feature QA is not production-candidate acceptance. Before committing or handing off a
+  production candidate, run the complete `npm run test:contracts:raw` without removing tests.
+- Run `npm run release:verify` in development Docker, or obtain a successful CI Docker verification
+  for the same candidate. This uses the production Dockerfile's `verification` target, including
+  build, typecheck, lint, full contracts and deployment contracts in their actual order.
+- Record the tested source, results and any pre-existing conditional skips. Do not substitute a
+  previous SHA's CI result. Documentation-only candidates skipped by automatic CI require manual
+  workflow dispatch or local verification. A failed/NOT_RUN gate cannot be reported as passed.
+- See [the production candidate checklist](docs/RELEASE_CANDIDATE_CHECKLIST.md). This verification
+  does not authorize a production deployment or replay of an archived request.
+
 ## Public repository privacy gate
 
 - Conversation content and local operational files are not automatically Git-safe.

@@ -182,7 +182,8 @@
     "test:approval-review:postgres": "node scripts/run-bounded.mjs --label approval-review-postgres --timeout-seconds 55 --idle-seconds 25 -- node scripts/test-approval-review-postgres.mjs",
     "test:discovery": "node scripts/run-bounded.mjs --label discovery --timeout-seconds 55 --idle-seconds 35 -- node --import tsx --test --test-isolation=none tests/first-principles-v345.test.mjs tests/first-principles-v339.test.mjs tests/first-principles-v338.test.mjs tests/structured-inputs.test.mjs",
     "test:calendar:postgres": "node scripts/run-bounded.mjs --label calendar-postgres --timeout-seconds 55 --idle-seconds 45 -- node scripts/test-calendar-actions-postgres.mjs",
-    "test:personal-settings": "node scripts/run-bounded.mjs --label personal-settings --timeout-seconds 55 --idle-seconds 35 -- node --import tsx --test --test-isolation=none tests/first-principles-v346.test.mjs tests/request-security.test.mjs"
+    "test:personal-settings": "node scripts/run-bounded.mjs --label personal-settings --timeout-seconds 55 --idle-seconds 35 -- node --import tsx --test --test-isolation=none tests/first-principles-v346.test.mjs tests/request-security.test.mjs",
+    "release:verify": "docker build --progress=plain --target verification ."
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
